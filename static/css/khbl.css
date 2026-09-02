@@ -332,6 +332,67 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-ban__sum{display:grid;grid-template-columns:auto 20px auto 20px auto minmax(0,1fr) auto auto;
   align-items:center;height:100%;overflow:hidden}
 
+/* trang tổng quan */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:14px}
+.dash-kpi{position:relative;background:var(--white);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh-card);padding:13px 15px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+.dash-kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;
+  background:linear-gradient(90deg,var(--gold-700),var(--gold-500) 55%,var(--gold-300))}
+.dash-kpi__lbl{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--gold-700)}
+.dash-kpi__val{font-size:27px;font-weight:600;line-height:1.15;
+  font-variant-numeric:tabular-nums lining-nums}
+.dash-kpi__sub{font-size:12.5px;color:var(--ink-600)}
+.dash-2col{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;align-items:start}
+@media (max-width:1100px){.dash-2col{grid-template-columns:1fr}}
+/* biểu đồ cột vẽ thuần CSS — dự án không có thư viện chart và không có bước build npm */
+.dash-bars{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;padding-top:8px}
+.dash-bar{display:flex;flex-direction:column;align-items:center;gap:4px}
+.dash-bar__v{font-size:11px;color:var(--ink-600);height:14px}
+/* KHUNG MỐC chiều cao cố định — cột con dùng % nên PHẢI có cha cao xác định, thiếu là cột dẹp lép */
+.dash-bar__track{width:100%;max-width:54px;height:104px;display:flex;align-items:flex-end;
+  background:linear-gradient(180deg,transparent,var(--gold-100));border-radius:var(--r-sm)}
+.dash-bar__col{width:100%;border-radius:var(--r-sm) var(--r-sm) 0 0;min-height:3px;
+  background:linear-gradient(180deg,var(--gold-300),var(--gold-500));
+  transform-origin:bottom;animation:dash-rise var(--dur-slow) var(--ease) both}
+.dash-bar.is-now .dash-bar__col{background:linear-gradient(180deg,var(--gold-500),var(--gold-700))}
+.dash-bar__x{font-size:11.5px;color:var(--ink-600)}
+.dash-bar__n{font-size:11px;color:var(--ink-400)}
+@keyframes dash-rise{from{transform:scaleY(.02);opacity:.4}to{transform:scaleY(1);opacity:1}}
+.dash-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));gap:10px;padding-top:8px}
+.dash-links a{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--line);
+  border-radius:var(--r);text-decoration:none;color:var(--ink-900);background:var(--white);
+  transition:border-color var(--dur) var(--ease),transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
+.dash-links a:hover{border-color:var(--gold-500);transform:translateY(-2px);box-shadow:var(--sh-lift)}
+.dash-links a svg{color:var(--gold-700);margin-bottom:4px}
+.dash-links b{font-size:14.5px}
+.dash-links span{font-size:12px;color:var(--ink-600)}
+/* vào trang: hiện lên so le, rất nhẹ */
+.dash-in{animation:dash-in var(--dur-slow) var(--ease) both;animation-delay:calc(var(--i,0)*45ms)}
+@keyframes dash-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* trang khách hàng */
+.kh-loc{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:var(--white);
+  border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;margin-bottom:12px}
+.kh-pager{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--ink-600)}
+.kh-pager .num{font-variant-numeric:tabular-nums}
+.kh-qr{display:flex;gap:9px;align-items:flex-end;background:var(--gold-100);border:1px solid var(--gold-300);
+  border-radius:var(--r);padding:10px 12px;margin-bottom:14px}
+.kh-qr input{font-family:var(--f-mono);letter-spacing:.02em}
+.kh-anh{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kh-anh label{display:flex;flex-direction:column;gap:5px;cursor:pointer}
+.kh-anh__khung{aspect-ratio:16/10;border:1.5px dashed var(--line-2);border-radius:var(--r);
+  display:grid;place-items:center;background:#FAF7F0;color:var(--ink-400);font-size:12px;
+  overflow:hidden;transition:border-color var(--dur) var(--ease)}
+.kh-anh label:hover .kh-anh__khung{border-color:var(--gold-500);color:var(--gold-700)}
+.kh-anh__khung img{width:100%;height:100%;object-fit:cover}
+.kh-loai{display:flex;gap:8px;flex-wrap:wrap}
+.kh-loai label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  border-radius:var(--r);padding:6px 12px;cursor:pointer;font-size:13.5px;font-weight:600;
+  background:var(--white);transition:border-color var(--dur) var(--ease),background var(--dur) var(--ease)}
+.kh-loai input{accent-color:var(--gold-500)}
+.kh-loai label:has(input:checked){border-color:var(--gold-500);background:var(--gold-100);color:var(--gold-700)}
+.kh-loai label.kh-loai--do:has(input:checked){border-color:var(--flame-500);background:#FBEFEC;color:var(--flame-500)}
+
 /* ─────────────────────────── ⑥ IN ─────────────────────────── */
 @media print{
   .khbl-rail,.khbl-strip,.khbl-keys,.khbl-bar,.khbl-toast,.no-print{display:none!important}

@@ -1,5 +1,10 @@
 {% extends "partials/modal_shell.html" %}{% load pos_extras %}
 {% block modal_title %}{{ k.CustName|default:"Khách hàng" }}{% endblock %}
+{% block modal_foot %}
+  {% if k %}<button class="khbl-btn khbl-btn--outline" type="button"
+      hx-get="{% url 'pos:khach_sua' k.CustID %}" hx-target="#modal-root">Sửa thông tin</button>{% endif %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+{% endblock %}
 {% block modal_body %}
 {% if k %}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">

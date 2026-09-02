@@ -3,6 +3,7 @@ Màn hình bán lẻ. v1 = TRA CỨU + TÍNH TOÁN + dựng PHIẾU TẠM (kênh
 Mọi phép tính tiền gọi apps/pmv/money.py; mọi truy vấn gọi apps/pos/services.py.
 """
 import datetime
+import re
 
 from django.contrib import messages
 from django.http import HttpResponse
@@ -11,12 +12,26 @@ from django.views.decorators.http import require_POST
 
 from apps.pmv import money as M
 
-from . import cart, services as S
+from . import cart, cccd, services as S
+
+
+# ─────────────────────────── TỔNG QUAN ───────────────────────────
+
+def dashboard(request):
+    ngay = request.GET.get("ngay") or datetime.date.today().isoformat()
+    try:
+        tq = S.tong_quan(ngay)
+        loi = ""
+    except Exception as exc:
+        tq, loi = None, str(exc)
+    return render(request, "pos/dashboard.html", {
+        "nav_active": "tong", "ngay": ngay, "tq": tq, "loi_kk": loi,
+        "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc(),
+    })
 
 
 def _so(x):
     """Bóc chữ số từ ô tiền có chấm nghìn ('1.234.000' → 1234000)."""
-    import re
     s = re.sub(r"[^0-9\-]", "", str(x or ""))
     return M.dec(s or 0)
 
@@ -180,15 +195,93 @@ def gia_nhip(request):
 
 # ─────────────────────────── KHÁCH HÀNG ───────────────────────────
 
+MOI_TRANG = 50
+
+
+def _ctx_khach(request):
+    key = request.GET.get("key", "")
+    addr = request.GET.get("addr", "")
+    sinh = request.GET.get("sinh", "")
+    try:
+        trang = max(1, int(request.GET.get("trang") or 1))
+    except ValueError:
+        trang = 1
+    ds, tong, so_trang = S.khach_loc(key, addr, sinh, trang, MOI_TRANG)
+    trang = min(trang, so_trang)
+    qs = request.GET.copy()
+    qs.pop("trang", None)
+    return {
+        "nav_active": "khach", "ds": ds, "tong": tong, "trang": trang, "so_trang": so_trang,
+        "key": key, "addr": addr, "sinh": sinh, "qstring": qs.urlencode(),
+        "tu": (trang - 1) * MOI_TRANG + 1, "den": min(trang * MOI_TRANG, tong),
+        "truoc": trang - 1 if trang > 1 else 0, "sau": trang + 1 if trang < so_trang else 0,
+        "loai_ds": S.CUST_TYPES,
+    }
+
+
 def khach_hang(request):
-    q = request.GET.get("q", "")
-    return render(request, "pos/khach_hang.html",
-                  {"nav_active": "khach", "ds": S.danh_sach_khach(q), "q": q})
+    ctx = _ctx_khach(request)
+    if request.headers.get("HX-Request") and request.GET.get("partial"):
+        return render(request, "pos/_khach_bang.html", ctx)
+    return render(request, "pos/khach_hang.html", ctx)
 
 
 def khach_chi_tiet(request, cust_id):
     return render(request, "pos/_khach_modal.html", {
         "k": S.khach_theo_id(cust_id), "ls": S.lich_su_khach(cust_id)})
+
+
+def khach_form(request, cust_id=None):
+    """Popup THÊM / SỬA khách hàng — UI đầy đủ, có ô quét QR thẻ CCCD."""
+    return render(request, "pos/_khach_form.html", {
+        "k": S.khach_theo_id(cust_id) if cust_id else None,
+        "loai_ds": S.CUST_TYPES, "duong_dan_anh": S.DUONG_DAN_ANH,
+    })
+
+
+@require_POST
+def khach_luu(request):
+    """v1 CHƯA GHI sang PMV (RULE 2). Kiểm tra dữ liệu, dựng đúng bộ tham số sẽ gửi cho
+    I_CUSTOMER_Ins/_Upd rồi hiện lại để đối chiếu — mở kênh ghi ở giai đoạn sau."""
+    d = request.POST
+    ten = (d.get("CustName") or "").strip()
+    loi = []
+    if not ten:
+        loi.append("Chưa nhập họ tên khách")
+    phone = re.sub(r"[^\d]", "", d.get("Phone") or "")
+    if phone and not (9 <= len(phone) <= 11):
+        loi.append(f"Số điện thoại {phone} không hợp lệ (9–11 số)")
+    cmnd = re.sub(r"[^\d]", "", d.get("CMND") or "")
+    if cmnd and len(cmnd) not in (9, 12):
+        loi.append(f"Số CCCD/CMND {cmnd} phải 9 hoặc 12 số")
+    loai = (d.get("CustType") or "").strip().upper()
+    if loai not in S.CUST_TYPE_MAP:
+        loai = ""
+
+    tham_so = {
+        "p_CustID": (d.get("CustID") or "").strip(),
+        "p_CustName": ten, "p_Phone": phone, "p_Address": (d.get("Address") or "").strip(),
+        "p_CMND": cmnd, "p_BirthDate": _ngay_vn(d.get("BirthDate")),
+        "p_Gender": "1" if d.get("Gender") == "1" else "0",
+        "p_Email": (d.get("Email") or "").strip(),
+        "p_NgayCap": _ngay_vn(d.get("NgayCap")), "p_NoiCap": (d.get("NoiCap") or "").strip(),
+        "p_Notes": (d.get("Notes") or "").strip(),
+        "CustType": loai or "(trống = Thường)",
+        "p_Active": "1" if d.get("Active", "1") == "1" else "0",
+    }
+    return render(request, "pos/_khach_luu_kq.html", {
+        "loi": loi, "tham_so": tham_so, "sua": bool(tham_so["p_CustID"]),
+        "anh": [k for k in ("anh_dai_dien", "anh_truoc", "anh_sau") if request.FILES.get(k)],
+    })
+
+
+def _ngay_vn(s):
+    """yyyy-mm-dd (ô date của trình duyệt) → dd/MM/yyyy như app gửi cho proc."""
+    s = (s or "").strip()
+    try:
+        return datetime.date.fromisoformat(s).strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
 
 
 # ─────────────────────────── THÂU VÀO ───────────────────────────

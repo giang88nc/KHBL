@@ -14,6 +14,8 @@ from apps.pmv.client import PmvClient
 # Bảng giá dùng ShopID = CHUỖI RỖNG (khác ShopID hóa đơn 'TSP141100000001')
 XRATE_SHOP = ""
 WALK_IN = "CU0000000000000"
+# Ảnh khách lưu bằng ĐƯỜNG DẪN trên máy KK (SYS_PARAMETERS LuuAnhBangDuongDan=1)
+DUONG_DAN_ANH = r"D:\PHANMEMVANG\HINHANHKH\\"
 
 # 4 loại lên bảng giá đầu màn, theo số dòng bán thật (N9999 16.033 · 18K 8.250 · 24K 4.339 · BK 56)
 GIA_NOI_BAT = ["N9999", "18K", "24K", "BK"]
@@ -179,9 +181,68 @@ def tim_khach(q="", limit=25):
 def khach_theo_id(cust_id):
     r = client("khach").query(
         "SELECT TOP 1 c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, c.CMND, c.BirthDate, "
+        "c.Gender, c.CustType, c.Email, c.Notes, c.NgayCap, c.NoiCap, c.Company, c.Masothue, "
+        "c.ImagePath, c.ImagePathMatTruoc, c.ImagePathMatSau, c.Active, "
         "c.LastTradingDate, ISNULL(d.DiemDoiQua,0) AS Diem FROM I_CUSTOMER c WITH (NOLOCK) "
         "LEFT JOIN I_DIEMTICHLUY d WITH (NOLOCK) ON d.CustID = c.CustID WHERE c.CustID = ?", (cust_id,))
-    return r[0] if r else None
+    return _dep_khach(r[0]) if r else None
+
+
+# Loại khách — cột I_CUSTOMER.CustType varchar(10). Bảng I_CUSTOMER_TYPE của vendor RỖNG
+# nên không dùng CustTypeID. TRỐNG/NULL = Thường (mặc định, 56.312/56.312 khách hiện nay).
+CUST_TYPES = [
+    {"ma": "", "ten": "Thường", "badge": ""},
+    {"ma": "VIP", "ten": "VIP", "badge": "khbl-badge--cam"},
+    {"ma": "VVIP", "ten": "VVIP", "badge": "khbl-badge--xanh"},
+    {"ma": "CANHBAO", "ten": "Cảnh báo", "badge": "khbl-badge--do"},
+]
+CUST_TYPE_MAP = {t["ma"]: t for t in CUST_TYPES}
+
+
+# Xưng hô đầu tên — dùng để CẢNH BÁO lệch giới tính, KHÔNG dùng để sửa dữ liệu
+_TIEN_TO_NAM = ("anh ", "ông ", "chú ", "a ", "chu ", "ong ", "chau trai ")
+_TIEN_TO_NU = ("chị ", "cô ", "bà ", "chi ", "co ", "ba ", "e ", "em gai ")
+
+
+def _dep_khach(r):
+    """Bổ sung trường hiển thị: loại khách, giới tính (bit: 1 = Nam, 0 = Nữ — đã đối chiếu
+    106 khách Gender=1 đều là 'Anh/Chú'). ⚠ Phần mềm để MẶC ĐỊNH 0 nên 13.805 khách tên
+    'Anh …' vẫn đang mang giới tính Nữ — đánh dấu `gt_lech` để UI báo, KHÔNG tự sửa."""
+    loai = (r.get("CustType") or "").strip().upper()
+    r["loai"] = CUST_TYPE_MAP.get(loai, CUST_TYPE_MAP[""])
+    g = r.get("Gender")
+    la_nam = g is True or str(g) in ("1", "True")
+    r["gioi_tinh"] = "Nam" if la_nam else "Nữ"
+    ten = (r.get("CustName") or "").strip().lower() + " "
+    goi_nam = ten.startswith(_TIEN_TO_NAM)
+    goi_nu = ten.startswith(_TIEN_TO_NU)
+    r["gt_lech"] = (goi_nam and not la_nam) or (goi_nu and la_nam)
+    return r
+
+
+def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50):
+    """Lọc khách: key = SĐT / CCCD / họ tên · addr = địa chỉ · ngay_sinh = ISO yyyy-mm-dd.
+    Phân trang bằng ROW_NUMBER (SQL 2005 không có OFFSET/FETCH). Trả (dòng, tổng, số trang)."""
+    key = (key or "").strip()
+    addr = (addr or "").strip()
+    ngay = (ngay_sinh or "").strip()
+    dk = ("WHERE c.CustID <> ? "
+          "AND (? = '' OR c.Phone LIKE ? OR c.CMND LIKE ? OR c.CustName LIKE ? OR c.CustCode LIKE ?) "
+          "AND (? = '' OR c.Address LIKE ?) "
+          "AND (? = '' OR c.BirthDate = CAST(? AS datetime))")
+    ps = (WALK_IN, key, f"%{key}%", f"%{key}%", f"%{key}%", f"{key}%", addr, f"%{addr}%", ngay, ngay)
+    c = client("khach_loc")
+    tong = c.query(f"SELECT COUNT(*) AS n FROM I_CUSTOMER c WITH (NOLOCK) {dk}", ps)[0]["n"]
+    tu = (max(1, int(trang)) - 1) * moi_trang + 1
+    den = tu + moi_trang - 1
+    rows = c.query(
+        "SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY c.LastTradingDate DESC, c.CustName) AS rn, "
+        "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.BirthDate, c.CustType, "
+        "c.Gender, c.LastTradingDate, c.Active "
+        f"FROM I_CUSTOMER c WITH (NOLOCK) {dk}) t WHERE t.rn BETWEEN ? AND ? ORDER BY t.rn",
+        ps + (tu, den))
+    so_trang = max(1, -(-tong // moi_trang))
+    return [_dep_khach(r) for r in rows], tong, so_trang
 
 
 def lich_su_khach(cust_id, limit=15):
@@ -241,6 +302,62 @@ def hoa_don_ngay(ngay_iso, limit=200):
         "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID "
         "WHERE t.TrnDate = CAST(? AS datetime)"
         ") x ORDER BY x.TrnTime DESC", (ngay_iso, ngay_iso))
+
+
+def tong_quan(ngay_iso, so_ngay=7):
+    """Số liệu trang Tổng quan — gộp trong ÍT truy vấn nhất có thể (nguồn là máy KK qua LAN)."""
+    import datetime as _dt
+
+    c = client("tong_quan")
+    d0 = _dt.date.fromisoformat(ngay_iso)
+    tu = (d0 - _dt.timedelta(days=so_ngay - 1)).isoformat()
+
+    ban = c.query(
+        "SELECT CONVERT(VARCHAR(10), TrnDate, 23) AS ngay, COUNT(*) AS so, "
+        "SUM(ISNULL(PayAmount,0)) AS tien, SUM(ISNULL(SellTotalAmount,0)) AS ban_ra, "
+        "SUM(ISNULL(BuyTotalAmount,0)) AS vang_cu "
+        "FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+        "WHERE TrnDate >= CAST(? AS datetime) AND TrnDate <= CAST(? AS datetime) AND IsDel = '0' "
+        "GROUP BY CONVERT(VARCHAR(10), TrnDate, 23) ORDER BY 1", (tu, ngay_iso))
+    thau = c.query(
+        "SELECT CONVERT(VARCHAR(10), TrnDate, 23) AS ngay, COUNT(*) AS so, "
+        "SUM(ISNULL(TotalAmount,0)) AS tien FROM TRN_RT_BUYGOLD WITH (NOLOCK) "
+        "WHERE TrnDate >= CAST(? AS datetime) AND TrnDate <= CAST(? AS datetime) AND IsDel = '0' "
+        "GROUP BY CONVERT(VARCHAR(10), TrnDate, 23) ORDER BY 1", (tu, ngay_iso))
+    mb = {r["ngay"]: r for r in ban}
+    mt = {r["ngay"]: r for r in thau}
+
+    ngays = [(d0 - _dt.timedelta(days=i)).isoformat() for i in range(so_ngay - 1, -1, -1)]
+    chuoi, dinh = [], M.D0
+    for n in ngays:
+        b = mb.get(n) or {}
+        t = mt.get(n) or {}
+        tien = M.dec(b.get("tien"))
+        dinh = max(dinh, tien)
+        chuoi.append({"ngay": n, "nhan": n[8:10] + "/" + n[5:7],
+                      "so_ban": b.get("so") or 0, "tien_ban": tien,
+                      "so_thau": t.get("so") or 0, "tien_thau": M.dec(t.get("tien"))})
+    for x in chuoi:
+        x["pct"] = int(x["tien_ban"] / dinh * 100) if dinh > 0 else 0
+
+    hom_nay = chuoi[-1]
+    khach_moi = c.query(
+        "SELECT COUNT(*) AS n FROM I_CUSTOMER WITH (NOLOCK) WHERE DateOfJoining = CAST(? AS datetime)",
+        (ngay_iso,))[0]["n"]
+    ton = c.query(
+        "SELECT ISNULL(ms.MainSectionName, N'Khác') AS nhom, SUM(ISNULL(b.Qty_Bal,0)) AS sl, "
+        "SUM(ISNULL(b.GoldWei_Bal,0)) AS tl FROM I_GOLD_BAL b WITH (NOLOCK) "
+        "LEFT JOIN T_SECTION s WITH (NOLOCK) ON s.SectionID = b.SectionID "
+        "LEFT JOIN T_MAINSECTION ms WITH (NOLOCK) ON ms.MainSectionID = s.MainSectionID "
+        "GROUP BY ms.MainSectionName ORDER BY 1")
+    return {
+        "chuoi": chuoi, "hom_nay": hom_nay, "khach_moi": khach_moi, "ton": ton,
+        "tuan_ban": sum((x["tien_ban"] for x in chuoi), M.D0),
+        "tuan_thau": sum((x["tien_thau"] for x in chuoi), M.D0),
+        "tuan_so_ban": sum(x["so_ban"] for x in chuoi),
+        "tong_khach": c.query("SELECT COUNT(*) AS n FROM I_CUSTOMER WITH (NOLOCK)")[0]["n"],
+        "hang_ton": c.query("SELECT COUNT(*) AS n FROM T_PRODUCT WITH (NOLOCK) WHERE Status = 'I'")[0]["n"],
+    }
 
 
 def tong_ngay(rows):

@@ -1,0 +1,48 @@
+{% load pos_extras %}<div class="khbl-wrap">
+  <table class="khbl-tbl">
+    <thead><tr>
+      <th style="width:88px">Mã KH</th><th>Họ tên</th><th>Địa chỉ</th>
+      <th style="width:118px">CCCD</th><th style="width:106px">Điện thoại</th>
+      <th style="width:96px">Ngày sinh</th><th style="width:88px">Loại</th>
+      <th style="width:62px">Giới tính</th><th style="width:106px" class="num">GD cuối</th>
+    </tr></thead>
+    <tbody>
+    {% for k in ds %}
+      <tr style="cursor:pointer" hx-get="{% url 'pos:khach_chi_tiet' k.CustID %}" hx-target="#modal-root"
+          {% if k.Active != "1" %}style="opacity:.55"{% endif %}>
+        <td class="mono" style="font-size:12.5px">{{ k.CustCode|default:"—" }}</td>
+        <td><b>{{ k.CustName }}</b></td>
+        <td class="dim">{{ k.Address|default:"—"|truncatechars:46 }}</td>
+        <td class="mono">{{ k.CMND|default:"—" }}</td>
+        <td class="mono">{{ k.Phone|default:"—" }}</td>
+        <td class="num">{{ k.BirthDate|date:"d/m/Y"|default:"—" }}</td>
+        <td>{% if k.loai.ma %}<span class="khbl-badge {{ k.loai.badge }}">{{ k.loai.ten }}</span>
+            {% else %}<span class="dim">Thường</span>{% endif %}</td>
+        <td class="dim">{{ k.gioi_tinh }}{% if k.gt_lech %}<span style="color:var(--warn-500);font-weight:700;margin-left:3px"
+            title="Phần mềm để mặc định — cách xưng hô trong tên gợi ý giới tính khác. Sửa lại khi tiện.">?</span>{% endif %}</td>
+        <td class="num">{{ k.LastTradingDate|date:"d/m/Y"|default:"—" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="9"><div class="khbl-empty">{% icon "khach" 36 %}
+        <b>Không có khách nào khớp bộ lọc</b>
+        <span>Thử vài số cuối điện thoại, hoặc bấm “Xóa lọc”</span></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if so_trang > 1 %}
+<div class="kh-pager">
+  <span class="num">{{ tu }}–{{ den }} / {{ tong|sokhong }} khách</span>
+  <span class="khbl-card__rule" style="flex:1"></span>
+  {% if truoc %}
+    <button class="khbl-btn khbl-btn--outline khbl-btn--sm" hx-get="{% url 'pos:khach_hang' %}?partial=1&{{ qstring }}&trang={{ truoc }}" hx-target="#kh-bang">‹ Trước</button>
+  {% endif %}
+  <span class="num">Trang <b>{{ trang }}</b> / {{ so_trang }}</span>
+  {% if sau %}
+    <button class="khbl-btn khbl-btn--outline khbl-btn--sm" hx-get="{% url 'pos:khach_hang' %}?partial=1&{{ qstring }}&trang={{ sau }}" hx-target="#kh-bang">Sau ›</button>
+  {% endif %}
+</div>
+{% else %}
+<div class="kh-pager"><span class="num">{{ tong|sokhong }} khách</span></div>
+{% endif %}

@@ -1,0 +1,28 @@
+{% load pos_extras %}
+{% if loi %}
+  <div class="khbl-alert khbl-alert--do" style="margin-top:14px">
+    {% icon "hethong" 16 %}
+    <div><b>Chưa lưu được — kiểm tra lại:</b>
+      <ul style="margin:4px 0 0 16px;padding:0">{% for l in loi %}<li>{{ l }}</li>{% endfor %}</ul></div>
+  </div>
+{% else %}
+  <div class="khbl-alert khbl-alert--cam" style="margin-top:14px;display:block">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      {% icon "hethong" 16 %}
+      <div><b>Dữ liệu hợp lệ — nhưng kênh ghi sang PMV chưa mở.</b>
+        Đây là bộ tham số sẽ gửi cho <span class="mono">I_CUSTOMER_{% if sua %}Upd{% else %}Ins{% endif %}</span>
+        khi mở kênh ghi. Hiện tại hãy nhập lại bên PMVGoldRT.</div>
+    </div>
+    <table class="khbl-tbl" style="margin-top:10px;background:var(--white)">
+      <thead><tr><th style="width:180px">Tham số</th><th>Giá trị</th></tr></thead>
+      <tbody>
+      {% for ten, gt in tham_so.items %}
+        <tr><td class="mono" style="font-size:12.5px">{{ ten }}</td>
+            <td>{% if gt %}{{ gt }}{% else %}<span class="dim">(trống)</span>{% endif %}</td></tr>
+      {% endfor %}
+      {% if anh %}<tr><td class="mono" style="font-size:12.5px">ảnh đính kèm</td>
+        <td>{{ anh|join:", " }} <span class="dim">— sẽ ghi bằng đường dẫn khi mở kênh ghi</span></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

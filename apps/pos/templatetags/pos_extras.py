@@ -8,7 +8,9 @@ from apps.pmv import money as M
 register = template.Library()
 
 _ICONS = {
-    # mua bán: tem hàng
+    # tổng quan: 4 ô số liệu
+    "tong": '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
+    # bán hàng: tem hàng
     "ban": '<path d="M20.6 13.4 12 4.8H4.8V12l8.6 8.6a2 2 0 0 0 2.8 0l4.4-4.4a2 2 0 0 0 0-2.8Z"/><circle cx="8.5" cy="8.5" r="1.3"/>',
     # thâu vào: mũi tên vào két
     "thau": '<path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
@@ -47,6 +49,23 @@ def tien(x, suffix=" ₫"):
 @register.filter
 def tien_tran(x):
     return M.money_vn(x, "")
+
+
+@register.filter
+def tien_gon(x):
+    """Tiền rút gọn cho biểu đồ/thẻ số: 2.155.000.000 → '2,16 tỷ' · 155.400.000 → '155 tr'."""
+    d = M.dec(x)
+    if d == 0:
+        return ""
+    am = "−" if d < 0 else ""
+    d = abs(d)
+    if d >= 1_000_000_000:
+        return f"{am}{M._vn(d / 1_000_000_000, 2)} tỷ"
+    if d >= 1_000_000:
+        return f"{am}{M._vn(d / 1_000_000, 0)} tr"
+    if d >= 1000:
+        return f"{am}{M._vn(d / 1000, 0)} ng"
+    return am + M._vn(d, 0)
 
 
 @register.filter

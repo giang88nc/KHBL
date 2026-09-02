@@ -1,0 +1,114 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_style %}width:min(1020px,96vw){% endblock %}
+{% block modal_title %}{% if k %}Sửa khách hàng{% else %}Thêm khách hàng{% endif %}{% endblock %}
+
+{% block modal_body %}
+<form id="kh-form" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="hidden" name="CustID" value="{{ k.CustID|default:'' }}">
+
+  {# ── quét thẻ CCCD: máy quét gõ thẳng vào ô này, JS tự tách 7 trường ── #}
+  <div class="kh-qr">
+    {% icon "khach" 20 %}
+    <div class="khbl-field" style="flex:1">
+      <label>Quét mã QR trên thẻ căn cước — tự điền họ tên, ngày sinh, giới tính, địa chỉ, CCCD</label>
+      <input class="khbl-input" id="kh-qr-in" placeholder="Đặt con trỏ vào đây rồi quét thẻ…" autocomplete="off">
+    </div>
+    <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-btn">Điền vào biểu mẫu</button>
+  </div>
+  <div id="kh-qr-msg" style="margin:-8px 0 12px;font-size:12.5px"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px">
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Họ và tên <span style="color:var(--flame-500)">*</span></label>
+      <input class="khbl-input" name="CustName" id="f-ten" value="{{ k.CustName|default:'' }}" required>
+    </div>
+    <div class="khbl-field">
+      <label>Mã khách</label>
+      <input class="khbl-input mono" value="{{ k.CustCode|default:'— tự cấp khi lưu' }}" disabled>
+    </div>
+
+    <div class="khbl-field">
+      <label>Điện thoại</label>
+      <input class="khbl-input mono" name="Phone" id="f-dt" value="{{ k.Phone|default:'' }}" inputmode="tel" autocomplete="off">
+    </div>
+    <div class="khbl-field">
+      <label>CCCD / CMND</label>
+      <input class="khbl-input mono" name="CMND" id="f-cccd" value="{{ k.CMND|default:'' }}" inputmode="numeric" autocomplete="off">
+    </div>
+    <div class="khbl-field">
+      <label>Ngày sinh</label>
+      <input class="khbl-input" type="date" name="BirthDate" id="f-sinh" value="{{ k.BirthDate|date:'Y-m-d' }}">
+    </div>
+
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Địa chỉ</label>
+      <input class="khbl-input" name="Address" id="f-dc" value="{{ k.Address|default:'' }}">
+    </div>
+    <div class="khbl-field">
+      <label>Giới tính</label>
+      <select class="khbl-select" name="Gender" id="f-gt">
+        <option value="0" {% if k.gioi_tinh != "Nam" %}selected{% endif %}>Nữ</option>
+        <option value="1" {% if k.gioi_tinh == "Nam" %}selected{% endif %}>Nam</option>
+      </select>
+    </div>
+
+    <div class="khbl-field">
+      <label>Ngày cấp</label>
+      <input class="khbl-input" type="date" name="NgayCap" id="f-cap" value="{{ k.NgayCap|date:'Y-m-d' }}">
+    </div>
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Nơi cấp</label>
+      <input class="khbl-input" name="NoiCap" value="{{ k.NoiCap|default:'Cục Cảnh Sát QLHC về TTXH' }}">
+    </div>
+
+    <div class="khbl-field">
+      <label>Email</label>
+      <input class="khbl-input" type="email" name="Email" value="{{ k.Email|default:'' }}">
+    </div>
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Ghi chú</label>
+      <input class="khbl-input" name="Notes" value="{{ k.Notes|default:'' }}">
+    </div>
+  </div>
+
+  <div class="khbl-field" style="margin-top:13px">
+    <label>Loại khách <span class="dim" style="font-weight:400;text-transform:none;letter-spacing:0">— mặc định Thường</span></label>
+    <div class="kh-loai">
+      {% for lt in loai_ds %}
+        <label {% if lt.ma == "CANHBAO" %}class="kh-loai--do"{% endif %}>
+          <input type="radio" name="CustType" value="{{ lt.ma }}"
+                 {% if k.loai.ma == lt.ma or not k and not lt.ma %}checked{% endif %}>{{ lt.ten }}
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="khbl-field" style="margin-top:13px">
+    <label>Ảnh — đại diện và hai mặt căn cước</label>
+    <div class="kh-anh">
+      <label><span class="dim" style="font-size:12px">Ảnh đại diện</span>
+        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
+        <input type="file" name="anh_dai_dien" accept="image/*" hidden></label>
+      <label><span class="dim" style="font-size:12px">CCCD mặt trước</span>
+        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
+        <input type="file" name="anh_truoc" accept="image/*" hidden></label>
+      <label><span class="dim" style="font-size:12px">CCCD mặt sau</span>
+        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
+        <input type="file" name="anh_sau" accept="image/*" hidden></label>
+    </div>
+    <p class="dim" style="font-size:11.5px;margin:6px 0 0">
+      Phần mềm đang đặt lưu ảnh bằng đường dẫn về <span class="mono">{{ duong_dan_anh }}</span> trên máy KK —
+      ảnh chỉ ghi được khi mở kênh ghi ở giai đoạn sau.
+    </p>
+  </div>
+
+  <div id="kh-luu-kq"></div>
+</form>
+{% endblock %}
+
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  <button class="khbl-btn khbl-btn--cho" type="submit" form="kh-form"
+          title="Kênh ghi sang PMV mở ở giai đoạn sau">LƯU KHÁCH · chờ mở kênh ghi</button>
+{% endblock %}

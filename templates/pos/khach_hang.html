@@ -1,37 +1,30 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Khách hàng{% endblock %}
 {% block page_title %}Khách hàng{% endblock %}
-{% block page_sub %}Tra theo số điện thoại hoặc tên · bấm dòng để xem lịch sử mua bán{% endblock %}
+{% block page_sub %}{{ tong|sokhong }} khách trong máy KK · bấm dòng để xem lịch sử mua bán{% endblock %}
 {% block page_tools %}
-  <form method="get" style="display:flex;gap:8px">
-    <input class="khbl-input" name="q" value="{{ q }}" placeholder="Số điện thoại / tên khách" style="width:260px" autofocus>
-    <button class="khbl-btn khbl-btn--gold" type="submit">Tìm</button>
-  </form>
-  <span class="khbl-badge khbl-badge--cam">Thêm/sửa — chờ mở kênh ghi</span>
+  <button class="khbl-btn khbl-btn--gold" type="button"
+          hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">+ THÊM KHÁCH</button>
 {% endblock %}
 
 {% block content %}
-<div class="khbl-wrap">
-  <table class="khbl-tbl">
-    <thead><tr>
-      <th>Khách hàng</th><th>Điện thoại</th><th>Địa chỉ</th>
-      <th class="num">Điểm</th><th class="num">Giao dịch cuối</th>
-    </tr></thead>
-    <tbody>
-    {% for k in ds %}
-      <tr style="cursor:pointer" hx-get="{% url 'pos:khach_chi_tiet' k.CustID %}" hx-target="#modal-root">
-        <td class="khbl-tbl__name"><b>{{ k.CustName }}</b>
-          <span class="mono dim">{{ k.CustCode }}</span></td>
-        <td class="mono">{{ k.Phone|default:"—" }}</td>
-        <td class="dim">{{ k.Address|default:"—"|truncatechars:60 }}</td>
-        <td class="num">{{ k.Diem|floatformat:0 }}</td>
-        <td class="num">{{ k.LastTradingDate|date:"d/m/Y"|default:"—" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5"><div class="khbl-empty">{% icon "khach" 36 %}<b>Chưa tìm thấy khách nào</b>
-        <span>Gõ vài số cuối của điện thoại rồi bấm Tìm</span></div></td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<form class="kh-loc" hx-get="{% url 'pos:khach_hang' %}?partial=1" hx-target="#kh-bang"
+      hx-trigger="submit, keyup changed delay:350ms from:input" hx-push-url="false">
+  <div class="khbl-field" style="width:280px">
+    <label>Tìm theo điện thoại · CCCD · họ tên</label>
+    <input class="khbl-input" name="key" value="{{ key }}" placeholder="vd 0906 · 096088 · Nguyễn" autofocus autocomplete="off">
+  </div>
+  <div class="khbl-field" style="width:230px">
+    <label>Địa chỉ</label>
+    <input class="khbl-input" name="addr" value="{{ addr }}" placeholder="vd Thủ Đức" autocomplete="off">
+  </div>
+  <div class="khbl-field" style="width:160px">
+    <label>Ngày sinh</label>
+    <input class="khbl-input" type="date" name="sinh" value="{{ sinh }}">
+  </div>
+  <button class="khbl-btn khbl-btn--outline" type="submit">Lọc</button>
+  <a class="khbl-btn khbl-btn--ghost" href="{% url 'pos:khach_hang' %}">Xóa lọc</a>
+</form>
+
+<div id="kh-bang">{% include "pos/_khach_bang.html" %}</div>
 {% endblock %}

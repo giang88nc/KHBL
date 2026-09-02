@@ -137,6 +137,11 @@ def bot_le(total, buoc=10000):
 
 # ----------------------------- trọng lượng -----------------------------
 
+def vn_so(x, max_dp=3):
+    """Số kiểu VN dùng được từ ngoài (alias công khai của _vn)."""
+    return _vn(x, max_dp)
+
+
 def _vn(x, max_dp=3):
     """Số kiểu VN: bỏ số 0 thừa, dấu phẩy thập phân."""
     q = dec(x).quantize(Decimal(1).scaleb(-max_dp), rounding=ROUND_HALF_UP).normalize()

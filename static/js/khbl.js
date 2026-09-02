@@ -90,6 +90,73 @@
     pendingGia = null;
   });
 
+  /* ---------- quét QR thẻ CCCD ----------
+     Khuôn 7 trường: CCCD|CMND cũ|họ tên|ddmmyyyy sinh|giới tính|địa chỉ|ddmmyyyy cấp
+     Máy quét gõ như bàn phím nên vừa quét xong là điền luôn, không cần bấm nút. */
+  function docCCCD(raw) {
+    var p = String(raw || "").trim().split("|").map(function (x) { return x.trim(); });
+    if (p.length < 6 || !/^\d{9,12}$/.test(p[0])) return null;
+    return { cccd: p[0], ten: hoaDauTu(p[2]), sinh: ngayISO(p[3]),
+             nam: /^nam/i.test(p[4] || ""), diaChi: p[5], cap: ngayISO(p[6] || "") };
+  }
+  function ngayISO(s) {
+    s = String(s || "").replace(/\D/g, "");
+    if (s.length !== 8) return "";
+    var d = s.slice(0, 2), m = s.slice(2, 4), y = s.slice(4);
+    return y + "-" + m + "-" + d;
+  }
+  function hoaDauTu(t) {
+    t = String(t || "").replace(/\s+/g, " ").trim();
+    if (t !== t.toUpperCase()) return t;
+    return t.toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); });
+  }
+  function dienCCCD(raw) {
+    var msg = document.getElementById("kh-qr-msg");
+    var d = docCCCD(raw);
+    if (!d) {
+      if (msg) msg.innerHTML = '<span style="color:var(--flame-500)">Chuỗi không đúng khuôn thẻ căn cước (cần 7 trường ngăn bằng dấu |).</span>';
+      return false;
+    }
+    var set = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
+    set("f-ten", d.ten); set("f-cccd", d.cccd); set("f-sinh", d.sinh);
+    set("f-dc", d.diaChi); set("f-cap", d.cap);
+    var gt = document.getElementById("f-gt"); if (gt) gt.value = d.nam ? "1" : "0";
+    if (msg) msg.innerHTML = '<span style="color:var(--jade-500)">Đã điền từ thẻ căn cước: <b>' +
+      d.ten + '</b> · ' + d.cccd + (d.sinh ? ' · sinh ' + d.sinh.split("-").reverse().join("/") : "") + '</span>';
+    return true;
+  }
+  function bindQR(root) {
+    var el = root.querySelector ? root.querySelector("#kh-qr-in") : null;
+    if (!el || el.dataset.qr) return;
+    el.dataset.qr = "1";
+    var t = null;
+    el.addEventListener("input", function () {
+      if (t) clearTimeout(t);
+      if (el.value.indexOf("|") < 0) return;
+      t = setTimeout(function () { if (dienCCCD(el.value)) el.select(); }, 150);
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); dienCCCD(el.value); }
+    });
+    var btn = root.querySelector("#kh-qr-btn");
+    if (btn) btn.addEventListener("click", function () { dienCCCD(el.value); });
+  }
+
+  /* ---------- xem trước ảnh chọn ---------- */
+  function bindAnh(root) {
+    root.querySelectorAll('.kh-anh input[type=file]:not([data-anh])').forEach(function (inp) {
+      inp.dataset.anh = "1";
+      inp.addEventListener("change", function () {
+        var khung = inp.parentElement.querySelector("[data-xem]");
+        var f = inp.files && inp.files[0];
+        if (!khung || !f) return;
+        var url = URL.createObjectURL(f);
+        khung.innerHTML = '<img alt="">';
+        khung.firstChild.src = url;
+      });
+    });
+  }
+
   /* ---------- điểm vào ---------- */
   window.khblBind = function (root) {
     root = root || document;
@@ -97,6 +164,8 @@
     bindMoney(root);
     bindScan(root);
     bindModal(root);
+    bindQR(root);
+    bindAnh(root);
     var f = root.querySelector("[data-autofocus]");
     if (f) { try { f.focus(); f.select && f.select(); } catch (_) {} }
   };
