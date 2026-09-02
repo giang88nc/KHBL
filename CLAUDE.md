@@ -137,9 +137,24 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 **PHẠM VI CHỐT 03/09/2026 + LỘ TRÌNH CHI TIẾT: `docs/LO_TRINH_KHBL.md`** — làm: bán–đổi
 (1 giao dịch BUYSELL+_BUYGOLD; TRN_RT_CHANGE không dùng), thâu, CRUD khách, sửa product,
 bảng giá (+HIST), in GIẤY ĐẢM BẢO; KHÔNG: thẻ/CK, SMS/Zalo, HĐĐT phát hành, nhập/xuất.
-Tài khoản: license app nằm ở client (`tbh_NguoiDungDangNhap`), SQL không giới hạn → web
-dùng auth MySQL riêng + 1 user `webapp` + 1 két `WEB` trên app (GĐ tạo). Phân tích nền:
+Tài khoản (GĐ chốt 03/09/2026 — thay đề xuất user `webapp`): web dùng ĐÚNG 2 tài khoản
+app **admin / kimhanh2** — bảng MySQL `sys_users` (model `PmvUser`: UserID, UserName,
+Password=BĂM Django, FirstName, LastName, FullName, IsAdmin, Active, ShopID, EmpID + TillID/
+TillCode) đồng bộ bằng `manage.py sync_pmv_users` (đọc SYS_USERS + T_TILL.OpenUserID; mật
+khẩu app chỉ dùng để băm, không lưu plain); user Django cùng tên để đăng nhập
+(`LoginRequiredMiddleware`, `/dang-nhap/`). Hệ quả: web stamp UserID/TillID của chính user
+→ tiền web VÀO CHUNG két app (admin → két `ad`, kimhanh2 → két `KH`). License app nằm ở
+client (`tbh_NguoiDungDangNhap`) nên web không tốn/không đụng. `HoaDonDienTu_UpdateMa`:
+GĐ chốt gọi với THAM SỐ TRỐNG y app (không phát hành). Phân tích nền:
 `docs/PHAN_TICH_HOAT_DONG_PMVGOLDRT.md`.
+
+**TRACK A — ✅ code xong 03/09/2026 (chờ nghiệm thu)**: `sys_users` + auth web ·
+kênh **`pmv_call(proc, params, write=)`** trong gateway (`PROC_READ_ALLOW` proc Get/Lst ·
+`PROC_WRITE_ALLOW` mở dần theo Track B, ghi ngày duyệt · chặn khi `pmv_write_lock`) ·
+**`apps/pmv/client.py` PmvClient** (target pmv|sandbox: `fmt_date/fmt_time/money/xml_dataset`,
+`params_of` từ sys.parameters — tham số sai tên chặn sớm, `call()` trả (rc, sets), rc≠0 →
+`PmvProcError`, `bill()` = TRN_RT_BUYSELL_Get 3 result set, `retail_log()`, `sys_param()`) ·
+`sandbox_call` · `manage.py smoke_pmv_client` **18/18 PASS**. Audit kind mới `EXEC`.
 
 **Việc treo**: hỏi vendor về bộ proc `*_Mobile_Ins`/`*_API` (có phải cổng tích hợp
 chính thức?) — GĐ hỏi khi tiện, không chặn tiến độ.
