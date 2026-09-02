@@ -74,8 +74,9 @@ def _connect(database=None, autocommit=False, timeout=15):
     return pyodbc.connect(conn_str, timeout=timeout, autocommit=autocommit)
 
 
-def pmv_read(sql, params=(), *, tag, database=None, timeout=30):
-    """Chạy 1 câu SELECT trên PMV, trả list[dict]. Lệnh khác SELECT → PmvBlocked."""
+def pmv_read(sql, params=(), *, tag, database=None, timeout=30, audit=True):
+    """Chạy 1 câu SELECT trên PMV, trả list[dict]. Lệnh khác SELECT → PmvBlocked.
+    audit=False: job lặp (collect 2 phút/lần) không ghi dòng READ thành công — lỗi vẫn ghi."""
     s = sql.strip()
     if not s.lower().startswith("select") or _WRITE_WORDS.search(s):
         _audit("BLOCKED", tag, f"VƯỢT QUYỀN (kênh đọc): {s[:400]}", ok=False)
@@ -87,7 +88,8 @@ def pmv_read(sql, params=(), *, tag, database=None, timeout=30):
             cur.execute(s, params)
             cols = [c[0] for c in cur.description] if cur.description else []
             rows = [dict(zip(cols, r)) for r in cur.fetchall()] if cols else []
-        _audit("READ", tag, s, ms=int((time.monotonic() - t0) * 1000))
+        if audit:
+            _audit("READ", tag, s, ms=int((time.monotonic() - t0) * 1000))
         return rows
     except PmvBlocked:
         raise
@@ -123,6 +125,53 @@ def pmv_admin(sql, params=(), *, tag, database="master", timeout=1800, fetch=Fal
         raise
     except Exception as exc:
         _audit("ADMIN", tag, s, ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise
+
+
+# Kênh TRACE (theo dõi hành vi PMVGoldRT): server-side trace của SQL Server — CHỈ các
+# lệnh sp_trace_* đúng khuôn, file trace khóa trong D:\KHJ_PMV_BACKUP\trace\.
+_TRACE_STMT_ALLOW = (
+    re.compile(r"(?is)^DECLARE\s+@tid\s+INT$"),
+    re.compile(r"(?is)^DECLARE\s+@maxsize\s+BIGINT$"),
+    re.compile(r"(?is)^SET\s+@maxsize\s*=\s*\d{1,3}$"),
+    re.compile(r"(?is)^EXEC\s+sp_trace_create\s+@tid\s+OUTPUT\s*,\s*2\s*,\s*N'D:\\KHJ_PMV_BACKUP\\trace\\[A-Za-z0-9_]+'\s*,\s*@maxsize\s*,\s*NULL\s*,\s*\d{1,2}$"),
+    re.compile(r"(?is)^DECLARE\s+@on\s+BIT$"),
+    re.compile(r"(?is)^SET\s+@on\s*=\s*1$"),
+    re.compile(r"(?is)^EXEC\s+sp_trace_setevent\s+@tid\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*@on$"),
+    re.compile(r"(?is)^EXEC\s+sp_trace_setfilter\s+@tid\s*,\s*\d{1,3}\s*,\s*[01]\s*,\s*\d\s*,\s*N'[A-Za-z0-9_%]*'$"),
+    re.compile(r"(?is)^EXEC\s+sp_trace_setstatus\s+(?:@tid|\d{1,4})\s*,\s*[012]$"),
+    re.compile(r"(?is)^SELECT\s+@tid\s+AS\s+tid$"),
+)
+
+
+def pmv_trace_batch(sql, *, tag):
+    """Chạy 1 batch sp_trace_* (bật/tắt trace hành vi). Từng câu lệnh phải khớp khuôn."""
+    stmts = [x.strip() for x in sql.split(";") if x.strip()]
+    for st in stmts:
+        if not any(rx.match(st) for rx in _TRACE_STMT_ALLOW):
+            _audit("BLOCKED", tag, f"VƯỢT QUYỀN (kênh trace): {st[:400]}", ok=False)
+            raise PmvBlocked(f"Gateway CHẶN (ngoài khuôn trace): {st[:120]}")
+    t0 = time.monotonic()
+    try:
+        cn = _connect(database="master", autocommit=True, timeout=60)
+        try:
+            cur = cn.cursor()
+            cur.execute(";\n".join(stmts))
+            rows = []
+            while True:
+                if cur.description:
+                    cols = [c[0] for c in cur.description]
+                    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+                if not cur.nextset():
+                    break
+        finally:
+            cn.close()
+        _audit("ADMIN", tag, sql, ms=int((time.monotonic() - t0) * 1000))
+        return rows
+    except PmvBlocked:
+        raise
+    except Exception as exc:
+        _audit("ADMIN", tag, sql, ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
         raise
 
 

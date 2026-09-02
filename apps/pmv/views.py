@@ -117,6 +117,114 @@ def sync_now(request):
     return redirect(f"{reverse('pmv:diff')}?a=pmv&b=sandbox&only=1&so=1")
 
 
+CATEGORY_COLORS = {
+    "HĐ bán": "#B3402A", "HĐ thâu": "#C07A1A", "HĐ đổi": "#7C3AED", "Đặt cọc": "#9A3412",
+    "Khách hàng": "#2E7D46", "Bảng giá": "#C9A02C", "Sản phẩm/kho": "#0F766E", "Sổ quỹ": "#1D4ED8",
+    "Nhật ký ngày": "#6B7280", "Đồng bộ": "#0891B2", "HĐ điện tử": "#BE123C", "Tin nhắn": "#A16207",
+    "Hệ thống": "#78716C", "Nhân viên": "#4338CA", "Báo cáo": "#57534E", "Khác": "#A8A29E",
+}
+
+
+def behavior_view(request):
+    """Trang HÀNH VI PMVGoldRT: bộ lọc, thẻ tổng quan, thanh nhóm, dòng thời gian."""
+    import datetime
+
+    from django.core.paginator import Paginator
+    from django.db.models import Count, Sum
+
+    from .management.commands.pmv_trace import trace_status
+    from .models import PmvBehavior
+
+    today = timezone.localdate()
+    d1 = request.GET.get("d1") or today.isoformat()
+    d2 = request.GET.get("d2") or today.isoformat()
+    try:
+        start = timezone.make_aware(datetime.datetime.fromisoformat(d1))
+        end = timezone.make_aware(datetime.datetime.fromisoformat(d2)) + datetime.timedelta(days=1)
+    except ValueError:
+        start = timezone.make_aware(datetime.datetime.combine(today, datetime.time.min))
+        end = start + datetime.timedelta(days=1)
+        d1 = d2 = today.isoformat()
+    cat = request.GET.get("cat", "")
+    src = request.GET.get("src", "")
+    act = request.GET.get("act", "")
+    q = (request.GET.get("q") or "").strip()
+    auto = request.GET.get("auto") == "1"
+
+    qs = PmvBehavior.objects.filter(event_time__gte=start, event_time__lt=end)
+    if cat:
+        qs = qs.filter(category=cat)
+    if src:
+        qs = qs.filter(source=src)
+    if act:
+        qs = qs.filter(action=act)
+    if q:
+        from django.db.models import Q
+        qs = qs.filter(Q(proc_name__icontains=q) | Q(text__icontains=q) | Q(host__icontains=q))
+
+    base = PmvBehavior.objects.filter(event_time__gte=start, event_time__lt=end)
+    by_cat = list(base.values("category").annotate(n=Count("id"), calls=Sum("exec_delta")).order_by("-n"))
+    max_n = max((c["n"] for c in by_cat), default=1)
+    for c in by_cat:
+        c["pct"] = int(c["n"] * 100 / max_n)
+        c["color"] = CATEGORY_COLORS.get(c["category"], "#A8A29E")
+    top_procs = list(base.exclude(proc_name="").values("proc_name").annotate(n=Count("id"), calls=Sum("exec_delta")).order_by("-n")[:12])
+    cards = {
+        "trace_rows": base.filter(source="TRACE").count(),
+        "stats_rows": base.filter(source="STATS").count(),
+        "ghi": base.filter(action="ghi").count(),
+        "hd": base.filter(category__in=["HĐ bán", "HĐ thâu", "HĐ đổi"], action="ghi", source="TRACE").count(),
+        "hosts": list(base.exclude(host="").values_list("host", flat=True).distinct()),
+    }
+    page = Paginator(qs, 100).get_page(request.GET.get("page"))
+    for r in page:
+        r.color = CATEGORY_COLORS.get(r.category, "#A8A29E")
+
+    try:
+        tstat = trace_status()
+    except Exception as exc:
+        tstat = {"error": str(exc)}
+    state = {s.key: s.value for s in PmvState.objects.filter(key__in=["pmv_behavior_last", "pmv_trace_started", "pmv_trace_stopped"])}
+
+    return render(request, "pmv/behavior.html", {
+        "d1": d1, "d2": d2, "cat": cat, "src": src, "act": act, "q": q, "auto": auto,
+        "categories": list(CATEGORY_COLORS.keys()), "colors": CATEGORY_COLORS,
+        "by_cat": by_cat, "top_procs": top_procs, "cards": cards, "page": page,
+        "tstat": tstat, "state": state, "total": qs.count(),
+        "qstring": request.GET.urlencode(),
+    })
+
+
+@require_POST
+def trace_toggle(request, action):
+    from django.core.management import call_command
+
+    if action not in ("start", "stop"):
+        messages.error(request, "Hành động không hợp lệ.")
+        return redirect("pmv:behavior")
+    try:
+        call_command("pmv_trace", action)
+        messages.success(request, "Đã BẬT trace chi tiết trên SQL KK." if action == "start" else "Đã TẮT trace chi tiết.")
+    except Exception as exc:
+        messages.error(request, f"Trace {action} lỗi: {exc}")
+    return redirect("pmv:behavior")
+
+
+@require_POST
+def collect_now(request):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    out = StringIO()
+    try:
+        call_command("collect_pmv_behavior", stdout=out, stderr=out)
+        messages.success(request, out.getvalue().strip() or "Đã thu thập.")
+    except Exception as exc:
+        messages.error(request, f"Thu thập lỗi: {exc}")
+    return redirect(f"{reverse('pmv:behavior')}?{request.POST.get('qstring', '')}")
+
+
 @require_POST
 def snapshot_delete(request, pk):
     PmvSnapshot.objects.filter(pk=pk).delete()

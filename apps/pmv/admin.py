@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import PmvAudit, PmvSnapshot, PmvState
+from .models import PmvAudit, PmvBehavior, PmvSnapshot, PmvState
+
+
+@admin.register(PmvBehavior)
+class PmvBehaviorAdmin(admin.ModelAdmin):
+    list_display = ("event_time", "source", "category", "action", "proc_name", "host", "duration_ms", "exec_delta")
+    list_filter = ("source", "category", "action")
+    search_fields = ("proc_name", "text", "host")
 
 
 @admin.register(PmvSnapshot)

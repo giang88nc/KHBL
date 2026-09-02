@@ -78,6 +78,15 @@ danh sách này.
   `I_TEMPLATE_HDDT`, cột `MAHDDienTu/InvoiceGUID/SoHDDienTu/KyHieuHDDienTu...`.
 - `T_EMPLOYEE.DBUserName/DBPassword` (credential per-shop) — không SELECT * bảng này.
 
+## 5b. LOG HÀNH VI THẬT (từ 02/09/2026 — nguồn tốt nhất cho GĐ3)
+
+Trang `/hanh-vi/` + bảng `pmv_behavior_logs`: trace SQL đang ghi TỪNG lời gọi proc của
+app kèm THAM SỐ THẬT (login sa, host KK/QQ). Trước khi code 1 nghiệp vụ ghi:
+1. Lọc nhóm (vd "HĐ bán", hành động "ghi") trong ngày tiệm bán → thấy đúng CHUỖI proc
+   app gọi + thứ tự + giá trị tham số (đây là spec API chính xác hơn mọi suy luận).
+2. Ghép với snapshot sandbox trước/sau (`/so-sanh/`) khi replay chuỗi đó trên sandbox.
+Lệnh: `manage.py pmv_trace start|stop|status`, `collect_pmv_behavior` (2 phút/lần).
+
 ## 6. KHẢO SÁT THÊM KHI CẦN
 
 - `tools/khaosat/khao_sat_thong_so.py` — thông số server/DB/quyền/2 bảng chính.

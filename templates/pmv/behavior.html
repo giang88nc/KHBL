@@ -1,0 +1,147 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if auto %}<meta http-equiv="refresh" content="30">{% endif %}
+<title>KHBL — Hành vi PMVGoldRT</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  .wrap { max-width:1280px; margin:0 auto; padding:20px 16px; }
+  h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0 0 2px; font-size:26px; }
+  .nav { margin-bottom:14px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
+  .nav a.active { font-weight:700; border-bottom:2px solid var(--gold-500); }
+  .msg { padding:8px 12px; border-radius:6px; margin-bottom:10px; }
+  .msg.success { background:#EAF4EC; color:#2E7D46; border:1px solid #B7DCC0; }
+  .msg.error { background:#FDF2F0; color:#B3402A; border:1px solid #E4B5AC; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-bottom:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold-500); border-radius:8px; padding:10px 12px; }
+  .card .lbl { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  .card .val { font-size:22px; font-weight:700; margin-top:2px; font-family:"Cormorant Garamond",serif; }
+  .card .sub { font-size:11px; color:#78716c; }
+  .two { display:grid; grid-template-columns:1.1fr 1fr; gap:12px; margin-bottom:14px; }
+  @media (max-width:900px){ .two { grid-template-columns:1fr; } }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .panel h3 { margin:0 0 8px; font-family:"Cormorant Garamond",serif; color:var(--gold-700); font-size:17px; }
+  .bar { display:grid; grid-template-columns:120px 1fr 70px; gap:8px; align-items:center; margin:4px 0; font-size:12px; }
+  .bar .track { background:#F3EFE6; border-radius:4px; height:14px; overflow:hidden; }
+  .bar .fill { height:100%; border-radius:4px; }
+  .bar .n { text-align:right; font-variant-numeric:tabular-nums; }
+  .proc { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px dashed var(--line); font-family:Consolas,monospace; }
+  form.filter { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:12px; }
+  .fld { display:flex; flex-direction:column; gap:2px; } .fld label { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  select, input { padding:5px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; background:#fff; }
+  button { padding:6px 12px; border:0; border-radius:6px; background:var(--gold-500); color:#fff; font-weight:600; cursor:pointer; font-size:12.5px; }
+  button.ghost { background:#fff; color:var(--gold-700); border:1px solid var(--gold-500); }
+  button.stop { background:#fff; color:#B3402A; border:1px solid #E4B5AC; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th { background:var(--gold-100); color:var(--gold-700); text-align:left; padding:7px 8px; font-size:11.5px; white-space:nowrap; }
+  td { padding:5px 8px; border-top:1px solid var(--line); vertical-align:top; font-size:12px; }
+  .tag { display:inline-block; color:#fff; border-radius:10px; padding:1px 8px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .act-ghi { color:#B3402A; font-weight:700; } .act-đọc { color:#57534e; } .act-hệ { color:#78716c; }
+  .mono { font-family:Consolas,monospace; font-size:11.5px; word-break:break-all; }
+  details summary { cursor:pointer; color:var(--gold-700); font-size:11px; }
+  .src-TRACE { color:#1D4ED8; font-weight:600; font-size:11px; } .src-STATS { color:#78716c; font-size:11px; }
+  .muted { color:#a8a29e; } .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tr-on { color:#2E7D46; font-weight:700; } .tr-off { color:#B3402A; font-weight:700; }
+  .pager a { color:var(--gold-700); margin-right:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Hành vi PMVGoldRT</h1>
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}" class="active">Hành vi PMV</a>
+  </div>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <div class="two">
+    <div class="panel">
+      <h3>Trace chi tiết trên SQL KK
+        {% if tstat and tstat.status == 1 %}<span class="tr-on">● ĐANG GHI</span>{% elif tstat.error %}<span class="tr-off">lỗi</span>{% else %}<span class="tr-off">○ TẮT</span>{% endif %}
+      </h3>
+      {% if tstat and not tstat.error %}
+        <div class="sub" style="font-size:12px">Trace #{{ tstat.id }} · {{ tstat.event_count|unlocalize }} sự kiện đã ghi · rớt {{ tstat.dropped_event_count|unlocalize }} · từ {{ tstat.start_time }} · sự kiện cuối {{ tstat.last_event_time|default:"—" }}<br><span class="mono">{{ tstat.path }}</span></div>
+      {% elif tstat.error %}<div class="sub" style="color:#B3402A">{{ tstat.error }}</div>
+      {% else %}<div class="sub" style="font-size:12px">Chưa ghi. Bật để thấy TỪNG lời gọi proc + tham số thật của app desktop (xoay vòng 5×20MB trên ổ D KK, overhead không đáng kể).</div>{% endif %}
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        {% if tstat and tstat.status == 1 %}
+          <form method="post" action="{% url 'pmv:trace_toggle' 'stop' %}" onsubmit="return confirm('Tắt trace chi tiết?')">{% csrf_token %}<button class="stop">■ Tắt trace</button></form>
+        {% else %}
+          <form method="post" action="{% url 'pmv:trace_toggle' 'start' %}">{% csrf_token %}<button>● Bật trace</button></form>
+        {% endif %}
+        <form method="post" action="{% url 'pmv:collect_now' %}">{% csrf_token %}<input type="hidden" name="qstring" value="{{ qstring }}"><button class="ghost">⟳ Thu thập ngay</button></form>
+        <a href="?{{ qstring }}{% if not auto %}&auto=1{% endif %}" style="align-self:center;font-size:12px;color:var(--gold-700)">{% if auto %}⏸ Tắt tự làm mới{% else %}▶ Tự làm mới 30s{% endif %}</a>
+      </div>
+      <div class="sub" style="margin-top:6px">Thu thập gần nhất: {{ state.pmv_behavior_last|default:"—" }} (scheduler 2 phút/lần)</div>
+    </div>
+    <div class="panel">
+      <h3>Nhóm nghiệp vụ ({{ d1 }}{% if d2 != d1 %} → {{ d2 }}{% endif %})</h3>
+      {% for c in by_cat %}
+        <a class="bar" href="?d1={{ d1 }}&d2={{ d2 }}&cat={{ c.category|urlencode }}" style="text-decoration:none;color:inherit">
+          <span><span class="tag" style="background:{{ c.color }}">{{ c.category }}</span></span>
+          <span class="track"><span class="fill" style="width:{{ c.pct }}%;background:{{ c.color }}"></span></span>
+          <span class="n">{{ c.n|unlocalize }}{% if c.calls %} <span class="muted">/{{ c.calls|unlocalize }}</span>{% endif %}</span>
+        </a>
+      {% empty %}<div class="muted">Chưa có dữ liệu trong khoảng ngày này.</div>{% endfor %}
+      <div class="sub" style="margin-top:4px">số dòng log / tổng lần gọi (lớp thống kê)</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="lbl">Lời gọi chi tiết (trace)</div><div class="val">{{ cards.trace_rows|unlocalize }}</div><div class="sub">dòng có tham số thật</div></div>
+    <div class="card"><div class="lbl">Dòng thống kê</div><div class="val">{{ cards.stats_rows|unlocalize }}</div><div class="sub">proc tăng lượt gọi</div></div>
+    <div class="card"><div class="lbl">Hành động GHI</div><div class="val" style="color:#B3402A">{{ cards.ghi|unlocalize }}</div><div class="sub">Ins/Upd/Del/Complete…</div></div>
+    <div class="card"><div class="lbl">Ghi hóa đơn (trace)</div><div class="val">{{ cards.hd|unlocalize }}</div><div class="sub">bán · thâu · đổi</div></div>
+    <div class="card"><div class="lbl">Máy trạm</div><div class="val" style="font-size:16px">{{ cards.hosts|join:", "|default:"—" }}</div><div class="sub">host gọi tới SQL</div></div>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <h3>Proc gọi nhiều nhất</h3>
+      {% for p in top_procs %}<div class="proc"><span>{{ p.proc_name }}</span><span>{{ p.n|unlocalize }}{% if p.calls %} <span class="muted">/{{ p.calls|unlocalize }}</span>{% endif %}</span></div>{% empty %}<div class="muted">—</div>{% endfor %}
+    </div>
+    <form class="filter" method="get" style="align-content:flex-start">
+      <div class="fld"><label>Từ ngày</label><input type="date" name="d1" value="{{ d1 }}"></div>
+      <div class="fld"><label>Đến ngày</label><input type="date" name="d2" value="{{ d2 }}"></div>
+      <div class="fld"><label>Nhóm</label><select name="cat"><option value="">Tất cả</option>{% for c in categories %}<option value="{{ c }}" {% if c == cat %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+      <div class="fld"><label>Hành động</label><select name="act"><option value="">Tất cả</option><option value="ghi" {% if act == "ghi" %}selected{% endif %}>ghi</option><option value="đọc" {% if act == "đọc" %}selected{% endif %}>đọc</option><option value="hệ thống" {% if act == "hệ thống" %}selected{% endif %}>hệ thống</option></select></div>
+      <div class="fld"><label>Nguồn</label><select name="src"><option value="">Cả 2</option><option value="TRACE" {% if src == "TRACE" %}selected{% endif %}>Trace</option><option value="STATS" {% if src == "STATS" %}selected{% endif %}>Thống kê</option></select></div>
+      <div class="fld"><label>Tìm (proc / tham số / máy)</label><input type="text" name="q" value="{{ q }}" size="26"></div>
+      {% if auto %}<input type="hidden" name="auto" value="1">{% endif %}
+      <button type="submit">Lọc</button>
+      <a href="{% url 'pmv:behavior' %}" style="align-self:center;font-size:12px;color:var(--gold-700)">Xóa lọc</a>
+    </form>
+  </div>
+
+  <div class="sub" style="margin:0 0 6px;color:#78716c">{{ total|unlocalize }} dòng · trang {{ page.number }}/{{ page.paginator.num_pages }} · giờ hiển thị = giờ máy KK (chậm ~38s)</div>
+  <table>
+    <thead><tr><th>Thời điểm</th><th>Nguồn</th><th>Nhóm</th><th>HĐ</th><th>Proc</th><th>Lệnh + tham số</th><th>Máy/app</th><th class="num">ms</th><th class="num">R/W</th><th class="num">Dòng</th></tr></thead>
+    <tbody>
+      {% for r in page %}
+      <tr>
+        <td class="mono" style="white-space:nowrap">{{ r.event_time|date:"d/m H:i:s" }}</td>
+        <td class="src-{{ r.source }}">{{ r.source }}</td>
+        <td><span class="tag" style="background:{{ r.color }}">{{ r.category }}</span></td>
+        <td class="act-{{ r.action|slice:':3' }}">{{ r.action }}</td>
+        <td class="mono">{{ r.proc_name }}{% if r.exec_delta %} <span class="muted">+{{ r.exec_delta|unlocalize }}</span>{% endif %}</td>
+        <td class="mono">{% if r.text %}{% if r.text|length > 140 %}<details><summary>{{ r.text|truncatechars:140 }}</summary><div style="white-space:pre-wrap">{{ r.text }}</div></details>{% else %}{{ r.text }}{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td style="white-space:nowrap">{{ r.host }}{% if r.app %}<br><span class="muted">{{ r.app|truncatechars:28 }}</span>{% endif %}</td>
+        <td class="num">{% if r.duration_ms is not None %}{{ r.duration_ms|unlocalize }}{% endif %}</td>
+        <td class="num">{% if r.reads is not None %}{{ r.reads|unlocalize }}/{{ r.writes|unlocalize }}{% endif %}</td>
+        <td class="num">{% if r.row_count is not None %}{{ r.row_count|unlocalize }}{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="10" class="muted">Không có dòng nào. Bật trace + đợi tiệm bán hàng, hoặc bấm “Thu thập ngay”.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <div class="pager" style="margin-top:8px">
+    {% if page.has_previous %}<a href="?{{ qstring }}&page={{ page.previous_page_number }}">‹ Trước</a>{% endif %}
+    {% if page.has_next %}<a href="?{{ qstring }}&page={{ page.next_page_number }}">Sau ›</a>{% endif %}
+  </div>
+</div>
+</body>
+</html>

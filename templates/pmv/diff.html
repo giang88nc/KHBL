@@ -50,6 +50,7 @@
   <div class="nav">
     <a href="{% url 'pmv:status' %}">Trạng thái</a>
     <a href="{% url 'pmv:diff' %}" class="active">So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
   </div>
 
   {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}

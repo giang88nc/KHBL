@@ -53,6 +53,41 @@ class PmvState(models.Model):
         cls.objects.update_or_create(key=key, defaults={"value": str(value)})
 
 
+class PmvBehavior(models.Model):
+    """1 dòng = 1 hành vi của PMVGoldRT quan sát được (lớp THỐNG KÊ hoặc lớp TRACE)."""
+
+    class Source(models.TextChoices):
+        STATS = "STATS", "Thống kê (bộ đếm SQL)"
+        TRACE = "TRACE", "Trace (từng lời gọi + tham số)"
+
+    event_time = models.DateTimeField(db_index=True, verbose_name="Thời điểm (giờ KK)")
+    collected_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=6, choices=Source.choices, db_index=True)
+    category = models.CharField(max_length=30, db_index=True, verbose_name="Nhóm")
+    action = models.CharField(max_length=10, verbose_name="Hành động")  # ghi | đọc | hệ thống
+    proc_name = models.CharField(max_length=128, db_index=True, blank=True, default="")
+    text = models.TextField(blank=True, default="", verbose_name="Lệnh + tham số")
+    login = models.CharField(max_length=64, blank=True, default="")
+    host = models.CharField(max_length=64, blank=True, default="")
+    app = models.CharField(max_length=128, blank=True, default="")
+    spid = models.IntegerField(null=True, blank=True)
+    duration_ms = models.IntegerField(null=True, blank=True)
+    reads = models.IntegerField(null=True, blank=True)
+    writes = models.IntegerField(null=True, blank=True)
+    row_count = models.IntegerField(null=True, blank=True)
+    exec_delta = models.IntegerField(null=True, blank=True, verbose_name="Số lần gọi thêm")
+    event_seq = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "pmv_behavior_logs"
+        ordering = ["-event_time", "-id"]
+        verbose_name = "Hành vi PMV"
+        verbose_name_plural = "Hành vi PMV"
+
+    def __str__(self):
+        return f"[{self.source}] {self.event_time:%d/%m %H:%M:%S} {self.proc_name or self.text[:40]}"
+
+
 class PmvSnapshot(models.Model):
     """Vân tay toàn bộ bảng của 1 nguồn tại 1 thời điểm — để so TRƯỚC/SAU (diff.py)."""
 
