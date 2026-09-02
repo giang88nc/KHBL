@@ -23,13 +23,15 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--usernames", nargs="+", default=["admin", "kimhanh2"])
         parser.add_argument("--reset-password", action="store_true",
-                            help="Đặt lại mật khẩu web = mật khẩu app hiện tại (mặc định chỉ đặt khi tạo mới)")
+                            help="Đặt lại mật khẩu web (mặc định chỉ đặt khi tạo mới)")
+        parser.add_argument("--password", default="123456",
+                            help="Mật khẩu web khi tạo mới / --reset-password (GĐ chốt 03/09: mặc định 123456, KHÔNG lấy từ app)")
 
     def handle(self, *args, **opts):
         names = opts["usernames"]
         marks = ",".join("?" * len(names))
         rows = pmv_read(
-            "SELECT u.UserID, u.UserName, u.Password, u.FirstName, u.LastName, u.FullName, "
+            "SELECT u.UserID, u.UserName, u.FirstName, u.LastName, u.FullName, "
             "u.IsAdmin, u.Active, u.ShopID, u.EmpID, t.TillID, t.TillCode "
             "FROM SYS_USERS u WITH (NOLOCK) LEFT JOIN T_TILL t WITH (NOLOCK) ON t.OpenUserID = u.UserID AND t.Active = '1' "
             f"WHERE u.UserName IN ({marks})",
@@ -45,7 +47,7 @@ class Command(BaseCommand):
                 "is_superuser": uname == "admin", "is_active": (r["Active"] or "1") == "1",
             })
             if created or opts["reset_password"]:
-                dj.set_password(r["Password"] or "")
+                dj.set_password(opts["password"])
             dj.first_name = (r["FullName"] or "")[:150]
             dj.is_active = (r["Active"] or "1") == "1"
             dj.is_staff = True
