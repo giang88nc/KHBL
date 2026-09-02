@@ -128,6 +128,93 @@ def pmv_admin(sql, params=(), *, tag, database="master", timeout=1800, fetch=Fal
         raise
 
 
+# ---------------------------------------------------------------------------
+# Kênh GỌI PROC (Track A3, 03/09/2026). 2 danh sách:
+#   PROC_READ_ALLOW : proc CHỈ ĐỌC của vendor (Get/Lst) — được gọi bất cứ lúc nào.
+#   PROC_WRITE_ALLOW: proc GHI — mở dần theo Track B, mỗi dòng ghi ngày GĐ duyệt.
+# Proc ngoài 2 danh sách → BLOCKED. Ghi khi pmv_write_lock=1 → BLOCKED + cảnh báo.
+# ---------------------------------------------------------------------------
+PROC_READ_ALLOW = frozenset({
+    "TRN_RT_BUYSELL_Get", "TRN_RT_BUYSELL_Lst", "TRN_RT_BUYSELL_SELL_Lst",
+    "TRN_RT_BUYGOLD_Get", "TRN_RT_BUYGOLD_Lst",
+    "T_PRODUCT_GetByCodeForSell", "T_PRODUCT_GetByCodeForOut",
+    "I_CUSTOMER_Lst", "I_XRATE_GetAll", "I_XRATE_Lst", "I_XRATE_HIST_Lst", "I_GOLD_GetAll", "I_GOLDCCY_GetAll",
+    "T_TILL_TXN_DETAIL_GetByTrnID", "T_CUSTOMER_DEBT_Lst", "SYS_LOADCOMBO", "T_TILL_GetBySYS_USERS",
+})
+PROC_WRITE_ALLOW = frozenset({
+    # (chưa mở — B1 sẽ thêm "I_XRATE_Ins" sau khi sandbox + GĐ duyệt)
+})
+_PROC_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def pmv_call(proc, params=None, *, tag, write=False, timeout=120):
+    """Gọi 1 stored proc vendor trên PMV THẬT với tham số ĐẶT TÊN.
+    Trả (rc, result_sets): rc = giá trị RETURN của proc (0 = OK theo quy ước vendor),
+    result_sets = list[list[dict]]. Proc phải nằm trong allowlist; write=True mới được
+    gọi proc ghi (và bị khóa khi pmv_write_lock=1)."""
+    params = dict(params or {})
+    if not _PROC_NAME_RE.match(proc or ""):
+        _audit("BLOCKED", tag, f"VƯỢT QUYỀN (tên proc lạ): {proc!r}", ok=False)
+        raise PmvBlocked(f"Tên proc không hợp lệ: {proc!r}")
+    allowed = PROC_WRITE_ALLOW if write else (PROC_READ_ALLOW | PROC_WRITE_ALLOW)
+    if proc not in allowed:
+        _audit("BLOCKED", tag, f"VƯỢT QUYỀN (proc ngoài allowlist {'GHI' if write else 'ĐỌC'}): {proc} {list(params)}", ok=False)
+        raise PmvBlocked(f"Gateway CHẶN: proc {proc} chưa được duyệt cho kênh {'GHI' if write else 'ĐỌC'}")
+    if write:
+        from .models import PmvState
+
+        if PmvState.get("pmv_write_lock") == "1":
+            _audit("BLOCKED", tag, f"KHÓA GHI đang bật (vendor đổi version) — từ chối {proc}", ok=False)
+            raise PmvBlocked("pmv_write_lock=1 — vendor vừa đổi version DB, kiểm tra lại bản đồ proc trước khi ghi")
+    for k in params:
+        if not _PROC_NAME_RE.match(k):
+            _audit("BLOCKED", tag, f"VƯỢT QUYỀN (tên tham số lạ): {proc} {k!r}", ok=False)
+            raise PmvBlocked(f"Tên tham số không hợp lệ: {k!r}")
+    sql = _proc_sql(proc, params)
+    summary = f"EXEC {proc} " + ", ".join(f"@{k}={_short(v)}" for k, v in params.items())
+    t0 = time.monotonic()
+    try:
+        cn = _connect(autocommit=True, timeout=timeout)
+        try:
+            cur = cn.cursor()
+            cur.execute(sql, list(params.values()))
+            rc, sets = _drain(cur)
+        finally:
+            cn.close()
+        _audit("EXEC", tag, summary + f" → rc={rc}", ok=(rc == 0), ms=int((time.monotonic() - t0) * 1000))
+        return rc, sets
+    except PmvBlocked:
+        raise
+    except Exception as exc:
+        _audit("EXEC", tag, summary, ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise
+
+
+def _proc_sql(proc, params):
+    named = ", ".join(f"@{k}=?" for k in params)
+    return f"DECLARE @__rc INT; EXEC @__rc = [{proc}] {named}; SELECT @__rc AS __rc"
+
+
+def _drain(cur):
+    """Rút mọi result set; set cuối là RETURN value."""
+    sets = []
+    while True:
+        if cur.description:
+            cols = [c[0] for c in cur.description]
+            sets.append([dict(zip(cols, r)) for r in cur.fetchall()])
+        if not cur.nextset():
+            break
+    rc = None
+    if sets and sets[-1] and "__rc" in sets[-1][0]:
+        rc = sets.pop()[0]["__rc"]
+    return rc, sets
+
+
+def _short(v, n=60):
+    s = str(v)
+    return (s[:n] + "…") if len(s) > n else s
+
+
 # Kênh TRACE (theo dõi hành vi PMVGoldRT): server-side trace của SQL Server — CHỈ các
 # lệnh sp_trace_* đúng khuôn, file trace khóa trong D:\KHJ_PMV_BACKUP\trace\.
 _TRACE_STMT_ALLOW = (

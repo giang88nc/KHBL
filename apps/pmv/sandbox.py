@@ -39,6 +39,24 @@ def restore_sandbox_from(bak_path):
     return data_dir
 
 
+def sandbox_call(proc, params=None, timeout=120):
+    """Gọi proc trên SANDBOX (bản sao local — được ghi thoải mái để thử). Trả (rc, sets)."""
+    from .gateway import _drain, _proc_sql  # noqa: PLC0415
+
+    params = dict(params or {})
+    cn = pyodbc.connect(
+        f"DRIVER={{{settings.PMV_MSSQL_ODBC_DRIVER}}};SERVER={settings.PMV_LOCAL_MSSQL};"
+        f"DATABASE={settings.PMV_SANDBOX_DB};Trusted_Connection=yes;Encrypt=no;TrustServerCertificate=yes;",
+        timeout=timeout, autocommit=True,
+    )
+    try:
+        cur = cn.cursor()
+        cur.execute(_proc_sql(proc, params), list(params.values()))
+        return _drain(cur)
+    finally:
+        cn.close()
+
+
 def sandbox_query(sql, params=()):
     """SELECT trên sandbox local (không đi gateway — không phải PMV thật)."""
     cn = pyodbc.connect(

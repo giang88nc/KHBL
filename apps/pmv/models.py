@@ -6,6 +6,7 @@ class PmvAudit(models.Model):
 
     class Kind(models.TextChoices):
         READ = "READ", "Đọc"
+        EXEC = "EXEC", "Gọi proc"
         ADMIN = "ADMIN", "Quản trị (backup/tiện ích)"
         BLOCKED = "BLOCKED", "CHẶN — vượt quyền"
         CANHBAO = "CANHBAO", "Cảnh báo"
@@ -86,6 +87,37 @@ class PmvBehavior(models.Model):
 
     def __str__(self):
         return f"[{self.source}] {self.event_time:%d/%m %H:%M:%S} {self.proc_name or self.text[:40]}"
+
+
+class PmvUser(models.Model):
+    """Bản sao SYS_USERS của app KK cho 2 tài khoản web dùng (GĐ chốt 03/09/2026: admin,
+    kimhanh2). Web stamp UserID/TillID/EmpID này khi gọi proc → app KK hiện đúng tên/két.
+    Password = MÃ BĂM Django (khởi tạo từ mật khẩu app), không chép plain text."""
+
+    user_id = models.CharField("UserID", max_length=15, primary_key=True)
+    user_name = models.CharField("UserName", max_length=50, unique=True)
+    password = models.CharField("Password (băm)", max_length=128, blank=True, default="")
+    first_name = models.CharField("FirstName", max_length=100, blank=True, default="")
+    last_name = models.CharField("LastName", max_length=100, blank=True, default="")
+    full_name = models.CharField("FullName", max_length=200, blank=True, default="")
+    is_admin = models.CharField("IsAdmin", max_length=1, default="0")
+    active = models.CharField("Active", max_length=1, default="1")
+    shop_id = models.CharField("ShopID", max_length=15, blank=True, default="")
+    emp_id = models.CharField("EmpID", max_length=15, blank=True, default="")
+    till_id = models.CharField("TillID (két của user — proc bán cần)", max_length=15, blank=True, default="")
+    till_code = models.CharField("TillCode", max_length=50, blank=True, default="")
+    django_user = models.OneToOneField(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="pmv_user",
+    )
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "sys_users"
+        verbose_name = "Tài khoản PMV (bản sao)"
+        verbose_name_plural = "Tài khoản PMV (bản sao)"
+
+    def __str__(self):
+        return f"{self.user_name} ({self.user_id})"
 
 
 class PmvSnapshot(models.Model):

@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import PmvAudit, PmvBehavior, PmvSnapshot, PmvState
+from .models import PmvAudit, PmvBehavior, PmvSnapshot, PmvState, PmvUser
+
+
+@admin.register(PmvUser)
+class PmvUserAdmin(admin.ModelAdmin):
+    list_display = ("user_name", "user_id", "full_name", "emp_id", "till_id", "till_code", "active", "django_user", "synced_at")
+    readonly_fields = ("password",)
 
 
 @admin.register(PmvBehavior)

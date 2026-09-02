@@ -38,7 +38,13 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Mọi trang phải đăng nhập (trừ view gắn @login_not_required) — Track A2
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
 ]
+
+LOGIN_URL = "/dang-nhap/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/dang-nhap/"
 
 ROOT_URLCONF = "config.urls"
 
