@@ -1,0 +1,33 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_title %}{{ k.CustName|default:"Khách hàng" }}{% endblock %}
+{% block modal_body %}
+{% if k %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+    <div class="khbl-item__w"><span>Điện thoại</span><b class="mono">{{ k.Phone|default:"—" }}</b></div>
+    <div class="khbl-item__w"><span>Mã khách</span><b class="mono">{{ k.CustCode|default:"—" }}</b></div>
+    <div class="khbl-item__w"><span>CCCD/CMND</span><b class="mono">{{ k.CMND|default:"—" }}</b></div>
+    <div class="khbl-item__w"><span>Điểm tích lũy</span><b>{{ k.Diem|floatformat:0 }}</b></div>
+    <div class="khbl-item__w"><span>Giao dịch cuối</span><b>{{ k.LastTradingDate|date:"d/m/Y"|default:"—" }}</b></div>
+  </div>
+  {% if k.Address %}<p class="dim" style="margin:0 0 12px">{{ k.Address }}</p>{% endif %}
+
+  <h3 style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-700);margin-bottom:6px">Giao dịch gần nhất</h3>
+  <table class="khbl-tbl">
+    <thead><tr><th>Loại</th><th>Số phiếu</th><th>Ngày</th><th>Giờ</th><th class="num">Số tiền</th></tr></thead>
+    <tbody>
+    {% for g in ls %}
+      <tr>
+        <td>{% if g.loai == "BAN" %}<span class="khbl-badge khbl-badge--xanh">Mua bán</span>
+            {% else %}<span class="khbl-badge" style="background:var(--ink-mua-bg);color:var(--ink-mua)">Thâu vào</span>{% endif %}</td>
+        <td class="mono">{{ g.BillCode }}</td>
+        <td>{{ g.TrnDate|date:"d/m/Y" }}</td>
+        <td class="mono">{{ g.TrnTime }}</td>
+        <td class="num"><b>{{ g.SoTien|tien }}</b></td>
+      </tr>
+    {% empty %}<tr><td colspan="5" class="dim">Chưa có giao dịch nào.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="dim">Không tìm thấy khách hàng này.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,113 @@
+{% load pos_extras %}<div class="pg-ban__body{% if gio.mua %} has-mua{% endif %}">
+
+  {# ───────── HÀNG BÁN RA ───────── #}
+  <section class="khbl-card">
+    <div class="khbl-card__head">
+      <h3>Hàng bán ra</h3><span class="khbl-card__rule"></span>
+      <span class="dim num" style="font-size:12.5px">{{ t.so_mon }} món{% if t.tl_ban %} · {{ t.tl_ban|tl_man }}{% endif %}</span>
+    </div>
+
+    <form class="khbl-scan" hx-post="{% url 'pos:ban_quet' %}" hx-trigger="khbl:scan" hx-swap="none">
+      <input class="khbl-scan__in" name="ma" placeholder="Quét tem hoặc gõ mã hàng rồi Enter"
+             autocomplete="off" data-autofocus value="{{ scan_val|default:'' }}">
+      <span class="khbl-scan__dots" aria-hidden="true">{% for i in "1234567890" %}<i></i>{% endfor %}</span>
+      <button id="nut-tim-hang" class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+              hx-get="{% url 'pos:ban_tim_hang' %}" hx-target="#modal-root">Tìm hàng · F3</button>
+    </form>
+
+    <div class="khbl-scan__msg">
+      {% if scan_err %}
+        <div class="khbl-alert khbl-alert--{{ scan_err.style }}" style="margin:0">
+          {% icon "tem" 16 %}<b>{{ scan_err.desc }}</b>{% if scan_err.code %}<code>{{ scan_err.code }}</code>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="khbl-card__body">
+      {% if not gio.ban %}
+        <div class="khbl-empty">
+          {% icon "tem" 40 %}
+          <b>Quét tem để bắt đầu</b>
+          <span>Enter thêm món · F3 tìm hàng theo tên · F4 nhận vàng cũ</span>
+        </div>
+      {% elif gio.ban|length == 1 %}
+        {% for m in gio.ban %}{% include "pos/_mon_the.html" %}{% endfor %}
+      {% else %}
+        <table class="khbl-tbl">
+          <thead><tr>
+            <th>Hàng</th><th class="num">TL vàng</th><th class="num">Giá</th>
+            <th class="num">Công</th><th class="num">Thành tiền</th><th></th>
+          </tr></thead>
+          <tbody>
+          {% for m in gio.ban %}
+            <tr>
+              <td class="khbl-tbl__name">
+                <span class="khbl-tbl__code">{{ m.code }}</span>
+                <b>{{ m.name }}</b>
+                <span class="khbl-chip khbl-chip--{{ m.age }}">{{ m.gold_desc }}</span>
+                <span class="dim">{{ m.section }}</span>
+              </td>
+              <td class="num">{{ m.gr|tl_man:m.unit }}</td>
+              <td class="num">{{ m.rate|nhan:1000|tien_tran }}</td>
+              <td class="num">{% if m.task != "0" %}{{ m.task|nhan:1000|tien_tran }}{% else %}<span class="dim">—</span>{% endif %}</td>
+              <td class="num"><b>{{ m.amount|tien_tran }}</b></td>
+              <td><button class="khbl-btn khbl-btn--ghost khbl-btn--sm" type="button" title="Bỏ món"
+                          hx-post="{% url 'pos:ban_xoa' %}" hx-vals='{"code": "{{ m.code }}"}' hx-swap="none">×</button></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+
+    <div class="khbl-card__foot">
+      <span class="dim" style="font-size:12.5px">{{ t.so_mon }} món</span>
+      <span class="khbl-card__rule"></span>
+      <span style="font-size:12px;color:var(--gold-700);font-weight:600;letter-spacing:.04em">TỔNG HÀNG BÁN</span>
+      <b class="num" style="font-size:18px">{{ t.sell_total|tien }}</b>
+    </div>
+  </section>
+
+  {# ───────── THÂU VÀO (vàng cũ khách đưa) ───────── #}
+  {% if gio.mua %}
+    <section class="khbl-card khbl-card--sunk">
+      <div class="khbl-card__head">
+        <h3 style="color:var(--ink-mua)">Vàng cũ khách đưa</h3><span class="khbl-card__rule"></span>
+        <span class="dim" style="font-size:12.5px">{{ t.so_mua }} dòng</span>
+      </div>
+      <div class="khbl-card__body">
+        <table class="khbl-tbl khbl-tbl--mua">
+          <thead><tr><th>Loại</th><th class="num">Trọng lượng</th><th class="num">Giá thâu</th><th class="num">%</th><th class="num">Thành tiền</th><th></th></tr></thead>
+          <tbody>
+          {% for m in gio.mua %}
+            <tr>
+              <td><span class="khbl-chip khbl-chip--{{ m.age }}">{{ m.gold_desc }}</span></td>
+              <td class="num">{{ m.gw|tl_man:m.unit }}</td>
+              <td class="num">{{ m.rate|nhan:1000|tien_tran }}</td>
+              <td class="num">{{ m.pct }}%</td>
+              <td class="num"><b>{{ m.amount|tien_tran }}</b></td>
+              <td><button class="khbl-btn khbl-btn--ghost khbl-btn--sm" type="button"
+                          hx-post="{% url 'pos:ban_mua_xoa' %}" hx-vals='{"i": "{{ forloop.counter0 }}"}' hx-swap="none">×</button></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% include "pos/_mua_form.html" %}
+      </div>
+      <div class="khbl-card__foot" style="background:var(--ink-mua-bg)">
+        <span class="khbl-card__rule"></span>
+        <span style="font-size:12px;color:var(--ink-mua);font-weight:600;letter-spacing:.04em">TỔNG VÀNG CŨ</span>
+        <b class="num" style="font-size:18px;color:var(--ink-mua)">{{ t.buy_total|tien }}</b>
+      </div>
+    </section>
+  {% else %}
+    <button id="nut-vang-cu" class="pg-ban__drawer-closed" type="button"
+            onclick="document.getElementById('mua-mo').classList.remove('sr');this.classList.add('sr');document.querySelector('#mua-mo input[name=gw]').focus()">
+      {% icon "thau" 20 %}<span>THÂU<br>VÀO</span><kbd style="font-size:10px">F4</kbd>
+    </button>
+    <section id="mua-mo" class="khbl-card khbl-card--sunk sr">
+      <div class="khbl-card__head"><h3 style="color:var(--ink-mua)">Vàng cũ khách đưa</h3></div>
+      <div class="khbl-card__body">{% include "pos/_mua_form.html" %}</div>
+    </section>
+  {% endif %}
+</div>

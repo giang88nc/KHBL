@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load pos_extras %}
+{% block title %}Khách hàng{% endblock %}
+{% block page_title %}Khách hàng{% endblock %}
+{% block page_sub %}Tra theo số điện thoại hoặc tên · bấm dòng để xem lịch sử mua bán{% endblock %}
+{% block page_tools %}
+  <form method="get" style="display:flex;gap:8px">
+    <input class="khbl-input" name="q" value="{{ q }}" placeholder="Số điện thoại / tên khách" style="width:260px" autofocus>
+    <button class="khbl-btn khbl-btn--gold" type="submit">Tìm</button>
+  </form>
+  <span class="khbl-badge khbl-badge--cam">Thêm/sửa — chờ mở kênh ghi</span>
+{% endblock %}
+
+{% block content %}
+<div class="khbl-wrap">
+  <table class="khbl-tbl">
+    <thead><tr>
+      <th>Khách hàng</th><th>Điện thoại</th><th>Địa chỉ</th>
+      <th class="num">Điểm</th><th class="num">Giao dịch cuối</th>
+    </tr></thead>
+    <tbody>
+    {% for k in ds %}
+      <tr style="cursor:pointer" hx-get="{% url 'pos:khach_chi_tiet' k.CustID %}" hx-target="#modal-root">
+        <td class="khbl-tbl__name"><b>{{ k.CustName }}</b>
+          <span class="mono dim">{{ k.CustCode }}</span></td>
+        <td class="mono">{{ k.Phone|default:"—" }}</td>
+        <td class="dim">{{ k.Address|default:"—"|truncatechars:60 }}</td>
+        <td class="num">{{ k.Diem|floatformat:0 }}</td>
+        <td class="num">{{ k.LastTradingDate|date:"d/m/Y"|default:"—" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5"><div class="khbl-empty">{% icon "khach" 36 %}<b>Chưa tìm thấy khách nào</b>
+        <span>Gõ vài số cuối của điện thoại rồi bấm Tìm</span></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

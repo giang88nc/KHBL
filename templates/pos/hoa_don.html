@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% load pos_extras %}
+{% block title %}Hóa đơn{% endblock %}
+{% block page_title %}Hóa đơn trong ngày{% endblock %}
+{% block page_sub %}Đọc thẳng từ máy KK — gồm cả phiếu do phần mềm PMVGoldRT lập{% if la_hom_nay %} · tự làm mới mỗi 3 giây{% endif %}{% endblock %}
+{% block page_tools %}
+  <form method="get" style="display:flex;gap:8px;align-items:center">
+    <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
+    <button class="khbl-btn khbl-btn--outline" type="submit">Xem</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div id="hd-bang"
+  {% if la_hom_nay %}hx-get="{% url 'pos:hoa_don_nhip' %}?ngay={{ ngay }}"
+     hx-trigger="every 3s [document.visibilityState === 'visible']" hx-sync="this:drop"
+     hx-vals='js:{sig: document.getElementById("hd-bang").dataset.sig}' hx-swap="none"{% endif %}
+  data-sig="">
+  {% include "pos/_hoa_don_bang.html" %}
+</div>
+{% endblock %}

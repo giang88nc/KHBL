@@ -1,0 +1,54 @@
+{% load static %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260903.1">
+<script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
+<script defer src="{% static 'js/khbl.js' %}?v=20260903.1"></script>
+{% block extra_head %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<div class="khbl-shell">
+
+  <nav class="khbl-rail" aria-label="Điều hướng">
+    <div class="khbl-rail__logo" title="Kim Hạnh 2">KH</div>
+    {% include "partials/rail_item.html" with url="pos:ban" active=nav_active key="ban" label="Mua bán" %}
+    {% include "partials/rail_item.html" with url="pos:thau" active=nav_active key="thau" label="Thâu vào" %}
+    {% include "partials/rail_item.html" with url="pos:bang_gia" active=nav_active key="gia" label="Bảng giá" %}
+    {% include "partials/rail_item.html" with url="pos:khach_hang" active=nav_active key="khach" label="Khách hàng" %}
+    <div class="khbl-rail__sep"></div>
+    {% include "partials/rail_item.html" with url="pos:hoa_don" active=nav_active key="hoadon" label="Hóa đơn hôm nay" %}
+    {% include "partials/rail_item.html" with url="pmv:status" active=nav_active key="hethong" label="Hệ thống" %}
+    <div class="khbl-rail__spacer"></div>
+    {% if pmv_user.till_code %}<div class="khbl-rail__till" title="Két {{ pmv_user.till_code }}">{{ pmv_user.till_code|truncatechars:5 }}</div>{% endif %}
+    <form method="post" action="{% url 'logout' %}" title="Đăng xuất — {{ request.user.first_name|default:request.user.username }}">
+      {% csrf_token %}<button class="khbl-rail__me" type="submit">{{ request.user.username|slice:":2"|upper }}</button>
+    </form>
+  </nav>
+
+  <div class="khbl-main{% block main_mod %}{% endblock %}">
+    {% block chrome %}{% endblock %}
+    {% block body %}
+    <div class="khbl-page">
+      {% if write_lock %}<div class="khbl-lock">⛔ Kênh ghi đang khóa — vendor vừa đổi phiên bản CSDL. Chỉ tra cứu, chưa gửi phiếu.</div>{% endif %}
+      <div class="khbl-page__head">
+        <div>
+          <div class="khbl-page__title">{% block page_title %}{% endblock %}</div>
+          <div class="khbl-page__sub">{% block page_sub %}{% endblock %}</div>
+        </div>
+        <div class="khbl-page__tools">{% block page_tools %}{% endblock %}</div>
+      </div>
+      {% block content %}{% endblock %}
+    </div>
+    {% endblock %}
+  </div>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root" class="khbl-toast">{% include "partials/messages.html" %}</div>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

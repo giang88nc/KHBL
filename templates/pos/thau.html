@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% load pos_extras %}
+{% block title %}Thâu vào{% endblock %}
+{% block page_title %}Thâu vàng vào{% endblock %}
+{% block page_sub %}Khách bán vàng cũ cho tiệm — phiếu thâu độc lập. Muốn nhận vàng cũ <b>trong cùng hóa đơn bán</b> thì dùng ngăn “Thâu vào” ở màn Mua bán.{% endblock %}
+{% block page_tools %}<span class="khbl-badge khbl-badge--cam">Lưu phiếu — chờ mở kênh ghi</span>{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:minmax(360px,460px) 1fr;gap:16px;align-items:start">
+  <section class="khbl-card khbl-card--sunk">
+    <div class="khbl-card__head"><h3 style="color:var(--ink-mua)">Phiếu thâu</h3></div>
+    <div class="khbl-card__body" style="padding-bottom:14px">
+      <form hx-post="{% url 'pos:thau_tinh' %}" hx-target="#thau-kq" hx-trigger="change, submit"
+            style="display:grid;gap:10px">
+        {% csrf_token %}
+        <div class="khbl-field">
+          <label>Loại vàng cũ</label>
+          <select class="khbl-select" name="gold">
+            {% for g in loai %}<option value="{{ g.GoldCcy }}">{{ g.GoldDesc }} — {{ g.mua_dong|tien_tran }} {{ g.don_vi }}</option>{% endfor %}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 90px;gap:10px">
+          <div class="khbl-field"><label>Trọng lượng (ly · 1 chỉ = 100)</label>
+            <input class="khbl-input num" name="gw" inputmode="decimal" placeholder="vd 1000 = 1 lượng" autofocus autocomplete="off"></div>
+          <div class="khbl-field"><label>Tuổi (%)</label>
+            <input class="khbl-input num" name="pct" value="100" inputmode="decimal"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:96px 1fr;gap:10px">
+          <div class="khbl-field"><label>Bù / bớt</label>
+            <select class="khbl-select" name="dau"><option value="+">+ bù</option><option value="-">− bớt</option></select></div>
+          <div class="khbl-field"><label>Số tiền bù/bớt</label>
+            <input class="khbl-input khbl-money num" name="add_money" placeholder="0" autocomplete="off"></div>
+        </div>
+        <button class="khbl-btn khbl-btn--gold" type="submit">Tính tiền thâu</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="thau-kq">
+    <div class="khbl-card khbl-card--flat"><div class="khbl-empty" style="padding:46px 12px">
+      {% icon "thau" 40 %}<b>Nhập trọng lượng để tính</b>
+      <span>Tiền = trọng lượng ÷ hệ số × giá thâu × tuổi vàng, cộng tiền bù/bớt sau cùng</span>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

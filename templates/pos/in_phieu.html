@@ -1,0 +1,81 @@
+{% load static pos_extras %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><title>Giấy đảm bảo (bản thử)</title>
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}">
+<style>
+  @page{size:A5 landscape;margin:10mm}
+  body{background:#fff;padding:14px 18px}
+  .gt{max-width:900px;margin:0 auto;position:relative}
+  .gt__head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--gold-500);padding-bottom:8px}
+  .gt__shop{font-family:var(--f-head);font-size:24px;color:var(--gold-700);font-weight:600}
+  .gt__wm{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-head);
+    font-size:64px;color:var(--flame-500);opacity:.09;transform:rotate(-18deg);pointer-events:none}
+  .gt table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+  .gt th{background:var(--gold-100);color:var(--gold-700);text-align:left;padding:5px 7px;font-size:11px;text-transform:uppercase}
+  .gt td{padding:5px 7px;border-bottom:1px solid var(--line)}
+  .gt .num{text-align:right;font-variant-numeric:tabular-nums}
+  .gt__ky{display:flex;justify-content:space-between;margin-top:26px;text-align:center;font-size:12px}
+  .no-print{margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="no-print" style="max-width:900px;margin:0 auto 12px">
+  <button class="khbl-btn khbl-btn--gold" onclick="window.print()">In</button>
+  <span class="dim" style="font-size:12.5px;margin-left:10px">Bản THỬ — chờ Giám đốc gửi mẫu giấy đảm bảo đang dùng để dựng đúng khuôn.</span>
+</div>
+
+<div class="gt">
+  <div class="gt__wm">PHIẾU THỬ — CHƯA LƯU</div>
+  <div class="gt__head">
+    <div>
+      <div class="gt__shop">KIM HẠNH 2</div>
+      <div style="font-size:11.5px;color:var(--ink-600)">1276 Kha Vạn Cân, P. Linh Trung, TP. Thủ Đức · 028 3896 1484</div>
+    </div>
+    <div style="text-align:right;font-size:12px">
+      <div style="font-family:var(--f-head);font-size:19px;color:var(--gold-700)">GIẤY ĐẢM BẢO</div>
+      <div>Ngày {{ hom_nay|date:"d/m/Y" }}</div>
+      <div class="dim">Số phiếu: — cấp khi lưu</div>
+    </div>
+  </div>
+
+  <div style="font-size:12.5px;margin-top:8px">
+    Khách hàng: <b>{{ gio.cust.name|default:"Khách lẻ" }}</b>
+    {% if gio.cust.phone %} · ĐT {{ gio.cust.phone }}{% endif %}
+  </div>
+
+  <table>
+    <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th>Tuổi</th><th class="num">Trọng lượng</th><th class="num">Đơn giá</th><th class="num">Công</th><th class="num">Thành tiền</th></tr></thead>
+    <tbody>
+    {% for m in gio.ban %}
+      <tr><td>{{ m.code }}</td><td>{{ m.name }}</td><td>{{ m.gold_desc }}</td>
+          <td class="num">{{ m.gr|tl_giay:m.unit }}<br><span style="font-size:10.5px;color:var(--ink-600)">≈ {{ m.gr|tl_man:m.unit }}</span></td>
+          <td class="num">{{ m.rate|nhan:1000|tien_tran }}</td><td class="num">{{ m.task|nhan:1000|tien_tran }}</td>
+          <td class="num"><b>{{ m.amount|tien_tran }}</b></td></tr>
+    {% endfor %}
+    {% for m in gio.mua %}
+      <tr><td>—</td><td>Vàng cũ khách đưa</td><td>{{ m.gold_desc }}</td>
+          <td class="num">{{ m.gw|tl_giay:m.unit }}</td><td class="num">{{ m.rate|nhan:1000|tien_tran }}</td>
+          <td class="num">{{ m.pct }}%</td><td class="num"><b>− {{ m.amount|tien_tran }}</b></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="display:flex;justify-content:flex-end;gap:26px;margin-top:10px;font-size:13px">
+    <div style="text-align:right">
+      <div>Tổng hàng bán: <b>{{ t.sell_total|tien }}</b></div>
+      {% if t.buy_total %}<div>Trừ vàng cũ: <b>{{ t.buy_total|tien }}</b></div>{% endif %}
+      <div style="font-size:17px;margin-top:5px;border-top:2px double var(--line-2);padding-top:5px">
+        {% if t.pay < 0 %}Tiệm trả lại: <b>{{ t.tra_lai|tien }}</b>{% else %}Khách trả: <b>{{ t.pay|tien }}</b>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="gt__ky">
+    <div>Người mua<br><span class="dim">(ký, ghi rõ họ tên)</span></div>
+    <div>Người bán<br><span class="dim">(ký, ghi rõ họ tên)</span></div>
+  </div>
+</div>
+</body>
+</html>

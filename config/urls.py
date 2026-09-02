@@ -12,5 +12,6 @@ urlpatterns = [
         name="login",
     ),
     path("dang-xuat/", auth_views.LogoutView.as_view(), name="logout"),
-    path("", include("apps.pmv.urls")),
+    path("he-thong/", include("apps.pmv.urls")),
+    path("", include("apps.pos.urls")),
 ]

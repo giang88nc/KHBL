@@ -1,0 +1,27 @@
+{% load pos_extras %}<section class="khbl-card">
+  <div class="khbl-card__head">
+    <h3>{{ tieu_de }}</h3><span class="khbl-card__rule"></span>
+    <span class="dim" style="font-size:12px">{{ ghi_chu }}</span>
+  </div>
+  <div class="khbl-card__body" style="padding-bottom:8px">
+    <table class="khbl-tbl">
+      <thead><tr>
+        <th>Loại vàng</th><th class="num">Giá bán</th><th class="num">Giá thâu</th>
+        <th>Đơn vị</th><th class="num">Cập nhật</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr {% if r.Active != "1" %}style="opacity:.5"{% endif %}>
+          <td><span class="khbl-chip khbl-chip--{{ r.age }}">{{ r.GoldDesc }}</span>
+              <span class="mono dim" style="font-size:12px">{{ r.GoldCcy }}</span>
+              {% if r.Active != "1" %}<span class="khbl-badge">ẩn với app</span>{% endif %}</td>
+          <td class="num"><b>{{ r.ban_dong|tien_tran }}</b></td>
+          <td class="num" style="color:var(--ink-mua)">{{ r.mua_dong|tien_tran }}</td>
+          <td class="dim">{{ r.don_vi }}</td>
+          <td class="num mono" style="font-size:12px">{{ r.RateTime }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>

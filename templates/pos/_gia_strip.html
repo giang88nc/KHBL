@@ -1,0 +1,17 @@
+{% load pos_extras %}<div class="khbl-strip khbl-strip--top" id="gia-strip" data-sig="{{ gia_sig }}"
+     {% if oob %}hx-swap-oob="true"{% endif %}
+     hx-get="{% url 'pos:gia_nhip' %}" hx-trigger="every 15s [document.visibilityState === 'visible']"
+     hx-vals='js:{sig: document.getElementById("gia-strip").dataset.sig}' hx-swap="none">
+  {% for g in gia %}
+  <div class="khbl-strip__cell khbl-price{% if forloop.first %} khbl-price--lead{% endif %}">
+    <span class="khbl-price__lbl">{{ g.GoldDesc }}</span>
+    <span class="khbl-price__val">{{ g.ban_dong|tien_tran }}</span>
+    <span class="khbl-price__unit">{{ g.don_vi }}{% if g.mua_dong != g.ban_dong %} · mua {{ g.mua_dong|tien_tran }}{% endif %}</span>
+  </div>
+  {% endfor %}
+  <div class="khbl-strip__cell">
+    <span class="khbl-price__lbl"><span class="khbl-dot"></span> Cập nhật</span>
+    <span style="font-size:14px;color:#EDE7DA" class="num">{{ gia_moc.gio }}</span>
+    <a class="khbl-price__unit" href="{% url 'pos:bang_gia' %}" style="color:var(--gold-300);text-decoration:none">Bảng giá đầy đủ →</a>
+  </div>
+</div>

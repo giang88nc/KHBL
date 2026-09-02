@@ -1,0 +1,14 @@
+{% comment %}Khung popup dùng chung. Trang con override block modal_title / modal_body / modal_foot.{% endcomment %}
+<div class="khbl-modal" role="dialog" aria-modal="true">
+  <div class="khbl-modal__veil"></div>
+  <div class="khbl-modal__box" style="{% block modal_style %}{% endblock %}">
+    <div class="khbl-modal__head">
+      <h2>{% block modal_title %}{% endblock %}</h2>
+      <button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button>
+    </div>
+    <div class="khbl-modal__body">{% block modal_body %}{% endblock %}</div>
+    {% block modal_foot_wrap %}<div class="khbl-modal__foot">{% block modal_foot %}
+      <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+    {% endblock %}</div>{% endblock %}
+  </div>
+</div>

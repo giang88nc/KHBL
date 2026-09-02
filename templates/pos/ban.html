@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load pos_extras %}
+{% block title %}Mua bán{% endblock %}
+{% block main_mod %} khbl-main--pos{% endblock %}
+
+{% block chrome %}
+  {% include "pos/_gia_strip.html" %}
+  <div class="khbl-bar">
+    {% include "pos/_khach_o.html" %}
+    <div class="dim" style="font-size:12.5px">Số phiếu <b class="mono">— cấp khi lưu</b></div>
+    <form class="khbl-bar__nv" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
+      <select class="khbl-select" name="emp" style="padding:4px 8px" title="Nhân viên bán">
+        <option value="">— Nhân viên bán —</option>
+        {% for e in nvs %}<option value="{{ e.EmpID }}" {% if gio.emp == e.EmpID %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+      </select>
+    </form>
+    <button class="khbl-btn khbl-btn--ghost khbl-btn--sm" type="button"
+            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
+            hx-confirm="Bỏ phiếu đang lập và bắt đầu phiếu mới?">Phiếu mới</button>
+  </div>
+{% endblock %}
+
+{% block body %}
+  <div id="pos-work">{% include "pos/_work.html" %}</div>
+  <div id="dai-quyet-toan">{% include "pos/_dai.html" %}</div>
+  <div class="khbl-keys">
+    <span><kbd>Enter</kbd>Thêm món</span>
+    <span><kbd>F2</kbd>Khách hàng</span>
+    <span><kbd>F3</kbd>Tìm hàng</span>
+    <span><kbd>F4</kbd>Vàng cũ</span>
+    <span><kbd>F6</kbd>Bớt lẻ</span>
+    <span style="margin-left:auto" class="dim">Kênh ghi PMV chưa mở — phiếu chỉ để tra cứu và tính toán</span>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("keydown", function (e) {
+  if (e.target.matches("input,select,textarea") && e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "F6") return;
+  var map = { F2: "#o-khach", F3: "#nut-tim-hang", F4: "#nut-vang-cu", F6: "#nut-bot-le" };
+  var sel = map[e.key];
+  if (!sel) return;
+  var el = document.querySelector(sel);
+  if (el) { e.preventDefault(); el.focus(); if (el.tagName === "BUTTON") el.click(); }
+});
+</script>
+{% endblock %}

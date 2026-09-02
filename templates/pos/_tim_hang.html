@@ -1,0 +1,25 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_title %}Tìm hàng còn tồn{% endblock %}
+{% block modal_body %}
+<form hx-get="{% url 'pos:ban_tim_hang' %}" hx-target="#tim-hang-kq" style="display:flex;gap:8px;margin-bottom:12px">
+  <input class="khbl-input" name="q" value="{{ q }}" placeholder="Tên hàng hoặc mã (vd: nhẫn, cara, 9C6)"
+         style="flex:1" autofocus hx-get="{% url 'pos:ban_tim_hang' %}" hx-target="#tim-hang-kq"
+         hx-trigger="keyup changed delay:260ms">
+  <button class="khbl-btn khbl-btn--gold" type="submit">Tìm</button>
+</form>
+<div id="tim-hang-kq">
+  <table class="khbl-tbl">
+    <thead><tr><th>Mã</th><th>Tên hàng</th><th>Tuổi</th><th class="num">TL vàng</th><th class="num">Công</th><th>Quầy</th></tr></thead>
+    <tbody>
+    {% for p in ds %}
+      <tr><td class="khbl-tbl__code">{{ p.ProductCode }}</td>
+          <td><b>{{ p.ProductDesc }}</b></td>
+          <td><span class="khbl-chip">{{ p.GoldCode }}</span></td>
+          <td class="num">{{ p.GoldWeight|tl_man }}</td>
+          <td class="num">{{ p.TaskPrice|nhan:1000|tien_tran }}</td>
+          <td class="dim">{{ p.SectionName }}</td></tr>
+    {% empty %}<tr><td colspan="6" class="dim">Không có hàng nào khớp.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

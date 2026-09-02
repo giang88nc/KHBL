@@ -1,0 +1,45 @@
+{% load pos_extras %}<div class="khbl-strip khbl-strip--bot pg-ban__sum">
+  <div class="khbl-sum khbl-sum--t3">
+    <span class="khbl-sum__lbl">Tổng hàng bán</span>
+    <span class="khbl-sum__val">{{ t.sell_total|tien }}</span>
+  </div>
+  <div class="khbl-sum__op">−</div>
+  <div class="khbl-sum khbl-sum--t3 khbl-sum--mua">
+    <span class="khbl-sum__lbl">Vàng cũ khách đưa</span>
+    <span class="khbl-sum__val">{{ t.buy_total|tien }}</span>
+  </div>
+  <div class="khbl-sum__op">=</div>
+  <div class="khbl-sum khbl-sum--t2">
+    <span class="khbl-sum__lbl">Chênh lệch</span>
+    <span class="khbl-sum__val">{{ t.total|tien }}</span>
+  </div>
+
+  <form class="khbl-sum khbl-sum--t4" style="flex-direction:row;gap:7px;align-items:center;min-width:0"
+        hx-post="{% url 'pos:ban_dat' %}" hx-trigger="change" hx-swap="none">
+    <div class="khbl-field" style="width:94px">
+      <label style="color:var(--ash-300);font-size:11px">Giảm giá</label>
+      <input class="khbl-input khbl-money num" name="discount" value="{{ gio.discount|sokhong }}"
+             style="background:#1B1815;border-color:#332E28;color:#EDE7DA;padding:3px 7px;font-size:13px">
+    </div>
+    <div class="khbl-field" style="width:94px">
+      <label style="color:var(--ash-300);font-size:11px">Công thêm</label>
+      <input class="khbl-input khbl-money num" name="task_add" value="{{ gio.task_add|sokhong }}"
+             style="background:#1B1815;border-color:#332E28;color:#EDE7DA;padding:3px 7px;font-size:13px">
+    </div>
+    <button id="nut-bot-le" class="khbl-btn khbl-btn--dark khbl-btn--sm" type="button" style="margin-top:14px"
+            hx-post="{% url 'pos:ban_bot_le' %}" hx-swap="none" title="Bớt lẻ cho tròn chục nghìn">Bớt lẻ</button>
+  </form>
+
+  <div class="khbl-sum {% if t.pay < 0 %}khbl-sum--neg{% endif %} khbl-sum--t1 khbl-rule2" style="text-align:right;padding-left:18px">
+    <span class="khbl-sum__lbl">{% if t.pay < 0 %}Tiệm trả lại khách{% else %}Khách trả{% endif %}</span>
+    <span class="khbl-sum__val">{% if t.pay < 0 %}{{ t.tra_lai|tien }}{% else %}{{ t.pay|tien }}{% endif %}</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:5px;padding-left:14px">
+    <button class="khbl-btn khbl-btn--dark khbl-btn--sm" type="button"
+            hx-get="{% url 'pos:ban_phieu' %}" hx-target="#modal-root">Xem phiếu</button>
+    <button class="khbl-btn khbl-btn--cho khbl-btn--sm" type="button"
+            title="Kênh ghi sang PMV mở ở giai đoạn sau — hiện chỉ tra cứu và tính toán"
+            hx-get="{% url 'pos:ban_phieu' %}" hx-target="#modal-root">LƯU PHIẾU · chờ mở kênh</button>
+  </div>
+</div>

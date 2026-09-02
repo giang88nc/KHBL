@@ -1,0 +1,12 @@
+{% if ds %}
+<div class="khbl-card khbl-card--flat" style="box-shadow:var(--sh-lift);width:420px;max-height:300px;overflow:auto">
+  {% for k in ds %}
+  <button type="button" style="all:unset;cursor:pointer;display:block;padding:7px 11px;border-bottom:1px solid var(--line);width:100%"
+          hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": "{{ k.CustID }}"}' hx-swap="none">
+    <div style="font-weight:600">{{ k.CustName }}</div>
+    <div class="dim" style="font-size:12px"><span class="mono">{{ k.Phone }}</span>
+      {% if k.Address %}· {{ k.Address|truncatechars:44 }}{% endif %}</div>
+  </button>
+  {% endfor %}
+</div>
+{% endif %}

@@ -1,0 +1,43 @@
+{% load pos_extras %}<div id="hd-bang" data-sig="{{ sig }}" {% if oob %}hx-swap-oob="true"{% endif %}>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:12px">
+  <div class="khbl-card khbl-card--flat" style="padding:10px 13px">
+    <div class="dim" style="font-size:11px;letter-spacing:.05em;text-transform:uppercase">Hóa đơn bán</div>
+    <div class="num" style="font-size:24px;font-weight:600">{{ tong.so_ban }}</div>
+    <div class="dim" style="font-size:12.5px">{{ tong.tien_ban|tien }}</div>
+  </div>
+  <div class="khbl-card khbl-card--flat" style="padding:10px 13px;border-left:2px solid var(--ink-mua)">
+    <div class="dim" style="font-size:11px;letter-spacing:.05em;text-transform:uppercase">Phiếu thâu</div>
+    <div class="num" style="font-size:24px;font-weight:600;color:var(--ink-mua)">{{ tong.so_thau }}</div>
+    <div class="dim" style="font-size:12.5px">{{ tong.tien_thau|tien }}</div>
+  </div>
+</div>
+
+<div class="khbl-wrap">
+  <table class="khbl-tbl">
+    <thead><tr>
+      <th>Giờ</th><th>Loại</th><th>Số phiếu</th><th>Khách hàng</th><th>Nhân viên</th>
+      <th class="num">Bán ra</th><th class="num">Vàng cũ</th><th class="num">Khách trả</th><th>Trạng thái</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr {% if r.IsDel != "0" %}style="opacity:.5;text-decoration:line-through"{% endif %}>
+        <td class="mono">{{ r.TrnTime }}</td>
+        <td>{% if r.loai == "BAN" %}<span class="khbl-badge khbl-badge--xanh">Mua bán</span>
+            {% else %}<span class="khbl-badge" style="background:var(--ink-mua-bg);color:var(--ink-mua)">Thâu vào</span>{% endif %}</td>
+        <td class="mono">{{ r.BillCode }}</td>
+        <td>{{ r.CustName|default:"Khách lẻ" }}</td>
+        <td class="dim">{{ r.EmpName }}</td>
+        <td class="num">{% if r.TienBan %}{{ r.TienBan|tien_tran }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num" style="color:var(--ink-mua)">{% if r.TienMua %}{{ r.TienMua|tien_tran }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="num"><b>{{ r.SoTien|tien_tran }}</b></td>
+        <td>{% if r.IsDel != "0" %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>
+            {% elif r.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Hoàn tất</span>
+            {% else %}<span class="khbl-badge khbl-badge--cam">Đang lập</span>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="9"><div class="khbl-empty">{% icon "hoadon" 36 %}<b>Ngày này chưa có phiếu nào</b></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+</div>
