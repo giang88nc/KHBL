@@ -134,6 +134,13 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 | GĐ3 | Mở kênh GHI `pmv_exec` từng nghiệp vụ trên SANDBOX: bảng giá → customer → product sửa → HĐ thâu → bán → đổi (chuỗi `*_Ins` → `CARDPAY_Ins` → `*_Complete`) — mỗi cái 1 bộ smoke + diff | ⏳ |
 | GĐ4 | Go-live từng chức năng, có công tắc riêng, đối soát cuối ngày với PMVGoldRT | ⏳ |
 
+**PHẠM VI CHỐT 03/09/2026 + LỘ TRÌNH CHI TIẾT: `docs/LO_TRINH_KHBL.md`** — làm: bán–đổi
+(1 giao dịch BUYSELL+_BUYGOLD; TRN_RT_CHANGE không dùng), thâu, CRUD khách, sửa product,
+bảng giá (+HIST), in GIẤY ĐẢM BẢO; KHÔNG: thẻ/CK, SMS/Zalo, HĐĐT phát hành, nhập/xuất.
+Tài khoản: license app nằm ở client (`tbh_NguoiDungDangNhap`), SQL không giới hạn → web
+dùng auth MySQL riêng + 1 user `webapp` + 1 két `WEB` trên app (GĐ tạo). Phân tích nền:
+`docs/PHAN_TICH_HOAT_DONG_PMVGOLDRT.md`.
+
 **Việc treo**: hỏi vendor về bộ proc `*_Mobile_Ins`/`*_API` (có phải cổng tích hợp
 chính thức?) — GĐ hỏi khi tiện, không chặn tiến độ.
 
