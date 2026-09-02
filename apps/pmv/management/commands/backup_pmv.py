@@ -105,7 +105,9 @@ class Command(BaseCommand):
         # 6) restore sandbox local (cần SQL Express local — .env PMV_LOCAL_MSSQL)
         if settings.PMV_LOCAL_MSSQL and local_bak:
             try:
-                self._restore_sandbox(local_bak)
+                from apps.pmv.sandbox import restore_sandbox_from
+
+                restore_sandbox_from(local_bak)
                 self.stdout.write(f"[6/6] Restore sandbox [{settings.PMV_SANDBOX_DB}] OK trên {settings.PMV_LOCAL_MSSQL}")
                 PmvState.set("pmv_last_sandbox", f"{now:%d/%m/%Y %H:%M} | {settings.PMV_SANDBOX_DB}")
             except Exception as exc:
@@ -114,28 +116,3 @@ class Command(BaseCommand):
             self.stdout.write("[6/6] Chưa restore sandbox (thiếu PMV_LOCAL_MSSQL hoặc chưa kéo được .bak về)")
 
         self.stdout.write(self.style.SUCCESS("backup_pmv HOÀN TẤT."))
-
-    def _restore_sandbox(self, local_bak):
-        """Restore .bak vào SQL Express TRÊN MÁY NÀY (không phải PMV — không đi gateway)."""
-        import pyodbc  # noqa: PLC0415 — ngoại lệ duy nhất: server LOCAL, không phải PMV
-
-        data_dir = Path(settings.PMV_BACKUP_DIR_LOCAL) / "sandbox"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        db = settings.PMV_SANDBOX_DB
-        cn = pyodbc.connect(
-            f"DRIVER={{{settings.PMV_MSSQL_ODBC_DRIVER}}};SERVER={settings.PMV_LOCAL_MSSQL};"
-            "DATABASE=master;Trusted_Connection=yes;Encrypt=no;TrustServerCertificate=yes;",
-            timeout=30, autocommit=True,
-        )
-        try:
-            cur = cn.cursor()
-            # tên file logic của PMV_BANLE_KH2 (đo 02/09/2026): GOLDRTDB + GOLDRTDB_log
-            cur.execute(
-                f"RESTORE DATABASE [{db}] FROM DISK = N'{local_bak}' WITH REPLACE, STATS = 25, "
-                f"MOVE N'GOLDRTDB' TO N'{data_dir}\\{db}.mdf', "
-                f"MOVE N'GOLDRTDB_log' TO N'{data_dir}\\{db}_log.ldf'"
-            )
-            while cur.nextset():
-                pass
-        finally:
-            cn.close()

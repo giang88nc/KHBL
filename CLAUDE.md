@@ -125,9 +125,8 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 
 | GĐ | Nội dung | Trạng thái |
 |---|---|---|
-| **GĐ0** | Vành đai an toàn: skeleton + gateway allowlist/cảnh báo vượt quyền + audit + backup đêm COPY_ONLY + check version vendor + trang trạng thái + CLAUDE.md/skill | ✅ code xong 02/09/2026 — chờ nghiệm thu |
-| GĐ0 còn lại | GĐ tạo **share thư mục backup trên PC KK** (khai vào `PMV_BACKUP_SHARE`) + chạy **`setup\INSTALL_SQL2014_EXPRESS.bat` Run as Administrator** (cài SQL 2014 Express nhận sandbox, khai `PMV_LOCAL_MSSQL`) | ⏳ chờ GĐ |
-| GĐ1 | Sandbox: restore tự động PMV_SANDBOX + bộ so sánh diff 2 DB (bản thật vs sandbox sau thao tác) | ⏳ |
+| **GĐ0** | Vành đai an toàn: skeleton + gateway allowlist/cảnh báo vượt quyền + audit + backup đêm COPY_ONLY + check version vendor + trang trạng thái + CLAUDE.md/skill. **SQL 2014 Express instance `localhost\SQL2014` GĐ đã cài (02/09)**; **GĐ chốt KHÔNG tạo share PC KK** — file `.bak` chép TAY về `D:\KHBL_BACKUP\pmv` khi cần refresh sandbox, lệnh `manage.py restore_sandbox [--file x.bak]` restore vào `PMV_SANDBOX` (lần đầu 02/09: 35 NV · 18.305 HĐ · 37.935 SP — khớp bản thật) | ✅ 02/09/2026 — chờ nghiệm thu |
+| GĐ1 | Bộ so sánh diff 2 DB (sandbox trước/sau thao tác — nền tảng kiểm chứng proc ghi) | ⏳ |
 | GĐ2 | Khung web nghiệp vụ: auth + layout KHJ + màn tra cứu ĐỌC (bảng giá, khách, hàng, hóa đơn trong ngày) | ⏳ |
 | GĐ3 | Mở kênh GHI `pmv_exec` từng nghiệp vụ trên SANDBOX: bảng giá → customer → product sửa → HĐ thâu → bán → đổi (chuỗi `*_Ins` → `CARDPAY_Ins` → `*_Complete`) — mỗi cái 1 bộ smoke + diff | ⏳ |
 | GĐ4 | Go-live từng chức năng, có công tắc riêng, đối soát cuối ngày với PMVGoldRT | ⏳ |
