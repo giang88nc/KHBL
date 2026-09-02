@@ -174,7 +174,7 @@ def behavior_view(request):
         "stats_rows": base.filter(source="STATS").count(),
         "ghi": base.filter(action="ghi").count(),
         "hd": base.filter(category__in=["HĐ bán", "HĐ thâu", "HĐ đổi"], action="ghi", source="TRACE").count(),
-        "hosts": list(base.exclude(host="").values_list("host", flat=True).distinct()),
+        "hosts": list(base.exclude(host="").order_by().values_list("host", flat=True).distinct()),
     }
     page = Paginator(qs, 100).get_page(request.GET.get("page"))
     for r in page:
