@@ -10,12 +10,16 @@ Bản Python này dùng cho phía máy chủ; bản JS trong static/js/khbl.js �
 import datetime
 import re
 
+from .vn_text import chuan_hoa, hoa_dau_tu
+
 
 def parse(raw):
-    """Trả dict các trường đọc được, hoặc None nếu không phải chuỗi CCCD."""
+    """Trả dict các trường đọc được (+ 'canh_bao'), hoặc None nếu không phải chuỗi CCCD.
+    Chuỗi được CHUẨN HÓA trước — máy quét đi qua clipboard/Excel hay trả về chữ hỏng mã."""
     if not raw:
         return None
-    parts = [p.strip() for p in str(raw).strip().split("|")]
+    sach, canh_bao = chuan_hoa(raw)
+    parts = [p.strip() for p in sach.split("|")]
     if len(parts) < 6:
         return None
     cccd, cmnd, ten, sinh, gt, dia_chi = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
@@ -25,11 +29,12 @@ def parse(raw):
     return {
         "cmnd": cccd,                      # CMND = CCCD (GĐ chốt): ô CMND lưu số CCCD 12 số
         "cmnd_cu": cmnd if re.fullmatch(r"\d{9}", cmnd or "") else "",
-        "ho_ten": _hoa_dau_tu(ten),
+        "ho_ten": hoa_dau_tu(ten),
         "ngay_sinh": _ngay(sinh),
         "gioi_tinh": "1" if (gt or "").strip().lower().startswith("nam") else "0",
         "dia_chi": dia_chi,
         "ngay_cap": _ngay(cap),
+        "canh_bao": canh_bao,
     }
 
 
@@ -44,7 +49,3 @@ def _ngay(s):
         return ""
 
 
-def _hoa_dau_tu(ten):
-    """Máy quét trả tên IN HOA — đổi về dạng Hoa đầu từ cho dễ đọc trong danh sách."""
-    ten = re.sub(r"\s+", " ", (ten or "").strip())
-    return ten.title() if ten.isupper() else ten

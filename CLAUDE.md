@@ -206,6 +206,13 @@ Tiền `1.234.567 ₫` · ngày `dd/mm/yyyy` · toàn bộ tiếng Việt · UI 
   ShopID thật thì SellRate về 0); result set có **cột trùng tên** (GoldReal/WeightUnit/InPrice ×2)
   → `gateway._dedupe_cols` giữ lần đầu, lần sau thêm `__2`; lỗi trả rc=−1 + ErrorCode/ErrorDesc
   tiếng Việt sẵn (P-002 không tồn tại · P-017 đã xuất) — UI in NGUYÊN VĂN, không tự dịch.
+- **CHỮ TIẾNG VIỆT TỪ NGUỒN NGOÀI PHẢI CHUẨN HÓA** — skill `.claude/skills/chuan-hoa-tieng-viet/`,
+  code `apps/pos/vn_text.py` + bản JS `static/js/vn_text.js` (sửa cái nào phải sửa cả hai).
+  Máy quét CCCD đi qua clipboard/Excel trả về chữ hỏng mã 4 kiểu (byte-số `0225 0187 0141`,
+  mojibake `TrÆ°Æ¡ng`, thực thể HTML, percent). Nguyên tắc **KHÔNG BỊA**: byte mất mà còn ≥2
+  khả năng thì để `?` + cảnh báo, chỉ điền khi duy nhất 1 khả năng hợp lệ. Bộ thử
+  `manage.py smoke_vn_text` (23 kịch bản, có chuỗi thật của GĐ). Gốc rễ: **quét THẲNG vào ô
+  nhập của web thì không hỏng gì** — hỏng là do đi vòng qua clipboard/Excel.
 - **`I_CUSTOMER.Gender` là bit: 1 = Nam · 0 = Nữ** (đã đối chiếu: 106 khách Gender=1 hầu hết
   tên "Anh/Chú/A"). ⚠ NHƯNG phần mềm để MẶC ĐỊNH 0 và nhân viên không sửa → **13.805 khách tên
   "Anh …" đang mang giới tính Nữ**. KHBL hiển thị ĐÚNG dữ liệu và gắn dấu `?` cam khi xưng hô

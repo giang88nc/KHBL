@@ -94,10 +94,14 @@
      Khuôn 7 trường: CCCD|CMND cũ|họ tên|ddmmyyyy sinh|giới tính|địa chỉ|ddmmyyyy cấp
      Máy quét gõ như bàn phím nên vừa quét xong là điền luôn, không cần bấm nút. */
   function docCCCD(raw) {
-    var p = String(raw || "").trim().split("|").map(function (x) { return x.trim(); });
+    // CHUẨN HÓA trước: máy quét đi qua clipboard/Excel hay trả chữ hỏng mã
+    // ('Tr0198017601980161ng' → 'Trương'). Thuật toán: static/js/vn_text.js
+    var ch = window.VNText ? window.VNText.chuanHoa(raw) : { text: String(raw || ""), canhBao: [] };
+    var p = ch.text.split("|").map(function (x) { return x.trim(); });
     if (p.length < 6 || !/^\d{9,12}$/.test(p[0])) return null;
     return { cccd: p[0], ten: hoaDauTu(p[2]), sinh: ngayISO(p[3]),
-             nam: /^nam/i.test(p[4] || ""), diaChi: p[5], cap: ngayISO(p[6] || "") };
+             nam: /^nam/i.test(p[4] || ""), diaChi: p[5], cap: ngayISO(p[6] || ""),
+             canhBao: ch.canhBao };
   }
   function ngayISO(s) {
     s = String(s || "").replace(/\D/g, "");
@@ -106,9 +110,7 @@
     return y + "-" + m + "-" + d;
   }
   function hoaDauTu(t) {
-    t = String(t || "").replace(/\s+/g, " ").trim();
-    if (t !== t.toUpperCase()) return t;
-    return t.toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); });
+    return window.VNText ? window.VNText.hoaDauTu(t) : String(t || "").trim();
   }
   function dienCCCD(raw) {
     var msg = document.getElementById("kh-qr-msg");
@@ -121,8 +123,14 @@
     set("f-ten", d.ten); set("f-cccd", d.cccd); set("f-sinh", d.sinh);
     set("f-dc", d.diaChi); set("f-cap", d.cap);
     var gt = document.getElementById("f-gt"); if (gt) gt.value = d.nam ? "1" : "0";
-    if (msg) msg.innerHTML = '<span style="color:var(--jade-500)">Đã điền từ thẻ căn cước: <b>' +
-      d.ten + '</b> · ' + d.cccd + (d.sinh ? ' · sinh ' + d.sinh.split("-").reverse().join("/") : "") + '</span>';
+    if (msg) {
+      var h = '<span style="color:var(--jade-500)">Đã điền từ thẻ căn cước: <b>' + d.ten +
+        '</b> · ' + d.cccd + (d.sinh ? ' · sinh ' + d.sinh.split("-").reverse().join("/") : "") + '</span>';
+      (d.canhBao || []).forEach(function (c) {
+        h += '<br><span style="color:var(--warn-500)">⚠ ' + c + '</span>';
+      });
+      msg.innerHTML = h;
+    }
     return true;
   }
   function bindQR(root) {
