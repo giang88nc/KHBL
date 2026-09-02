@@ -78,6 +78,15 @@ danh sách này.
   `I_TEMPLATE_HDDT`, cột `MAHDDienTu/InvoiceGUID/SoHDDienTu/KyHieuHDDienTu...`.
 - `T_EMPLOYEE.DBUserName/DBPassword` (credential per-shop) — không SELECT * bảng này.
 
+## 5a. PHÂN TÍCH TỪNG BƯỚC (02/09/2026, từ 4.394 lời gọi thật)
+
+**Đọc `docs/PHAN_TICH_HOAT_DONG_PMVGOLDRT.md` trước khi code bất kỳ nghiệp vụ ghi nào** —
+8 bước bán hàng (GetByCodeForSell → Ins XML → Upd lặp → Complete → CARDPAY → T_TILL_TXN_Proc
+→ SMS → HoaDonDienTu_UpdateMa tham số trống → PrintBill), thâu (TBG), nhập hàng 3 bước
+(Ins → GenProductCode → Appr — không có proc tạo T_PRODUCT trực tiếp), xuất, khách, giá,
+3 sổ cái (tồn quầy I_GOLD_BAL · két T_TILL_BAL · khách/điểm/công nợ), kiểu tham số (chuỗi,
+XML NewDataSet), khóa lạc quan TrnDateTime_Upd, đơn vị 1 chỉ = 100.
+
 ## 5b. LOG HÀNH VI THẬT (từ 02/09/2026 — nguồn tốt nhất cho GĐ3)
 
 Trang `/hanh-vi/` + bảng `pmv_behavior_logs`: trace SQL đang ghi TỪNG lời gọi proc của
