@@ -1,0 +1,72 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — Trạng thái hệ thống</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-family: "Cormorant Garamond", Georgia, serif; color: var(--gold-700); margin: 0 0 4px; }
+  .sub { color:#78716c; margin-bottom:20px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold-500); border-radius:8px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  .card .val { font-size:14px; margin-top:4px; word-break:break-all; }
+  .ok { color:#2E7D46; } .bad { color:#B3402A; font-weight:600; } .warn { color:#C07A1A; font-weight:600; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th { background:var(--gold-100); color:var(--gold-700); text-align:left; padding:8px 10px; font-size:12px; }
+  td { padding:7px 10px; border-top:1px solid var(--line); font-size:13px; vertical-align:top; }
+  .kind-BLOCKED { color:#B3402A; font-weight:700; }
+  .kind-CANHBAO { color:#C07A1A; font-weight:700; }
+  .kind-ADMIN { color:var(--gold-700); }
+  .kind-READ { color:#57534e; }
+  .mono { font-family:Consolas,monospace; font-size:12px; word-break:break-all; }
+  .banner { border:1px solid #B3402A; background:#FDF2F0; color:#B3402A; border-radius:8px; padding:10px 14px; margin-bottom:16px; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>KHBL — Bán lẻ Kim Hạnh 2</h1>
+  <div class="sub">GĐ0 · Gateway PMV + backup đêm · song song PMVGoldRT</div>
+
+  {% if write_lock %}
+  <div class="banner">⛔ pmv_write_lock đang BẬT — vendor vừa đổi version DB PMV, khóa mọi hướng ghi cho tới khi kiểm tra lại (skill pmv-proc-map).</div>
+  {% endif %}
+
+  <div class="cards">
+    <div class="card"><div class="lbl">Backup PMV gần nhất</div>
+      <div class="val">{{ state.pmv_last_backup|default:"— chưa chạy" }}</div></div>
+    <div class="card"><div class="lbl">Kiểm tra PMV gần nhất</div>
+      <div class="val">{{ state.pmv_last_check|default:"— chưa chạy" }}</div></div>
+    <div class="card"><div class="lbl">Kéo .bak về máy Mr Giang</div>
+      <div class="val">{{ state.pmv_last_pull|default:"— chưa cấu hình share" }}</div></div>
+    <div class="card"><div class="lbl">Sandbox local</div>
+      <div class="val">{{ state.pmv_last_sandbox|default:"— chưa cài SQL Express local" }}</div></div>
+    <div class="card"><div class="lbl">Lệnh bị CHẶN (vượt quyền)</div>
+      <div class="val {% if so_blocked %}bad{% else %}ok{% endif %}">{{ so_blocked }} lần</div></div>
+    <div class="card"><div class="lbl">Cảnh báo</div>
+      <div class="val {% if so_canhbao %}warn{% else %}ok{% endif %}">{{ so_canhbao }} dòng</div></div>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:135px">Thời điểm</th><th style="width:90px">Loại</th><th style="width:110px">Nghiệp vụ</th><th>Lệnh / nội dung</th><th style="width:70px">KQ</th></tr></thead>
+    <tbody>
+      {% for a in audits %}
+      <tr>
+        <td>{{ a.created_at|date:"d/m/Y H:i:s" }}</td>
+        <td class="kind-{{ a.kind }}">{{ a.get_kind_display }}</td>
+        <td>{{ a.tag }}</td>
+        <td class="mono">{{ a.summary }}{% if a.error %}<br><span class="bad">{{ a.error|truncatechars:200 }}</span>{% endif %}</td>
+        <td>{% if a.ok %}<span class="ok">✓ {{ a.duration_ms|unlocalize }}ms</span>{% else %}<span class="bad">✗</span>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">Chưa có nhật ký nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
