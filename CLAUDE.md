@@ -25,7 +25,7 @@
 | Quyết định | Hệ quả cho code |
 |---|---|
 | Dự án riêng `D:\PYTHON\KHBL`, mới toang | Không đụng gì sang `D:\PYTHON\KHJ` |
-| MySQL 8 chung instance **3308**, DB **RIÊNG `khj_bl`** (user `khj_bl`) | MySQL = trạng thái/audit/hàng đợi của web; PMV = nguồn sự thật bán hàng |
+| MySQL 8 chung instance **3308**, DB **RIÊNG `khj_bl`**; **tài khoản CHUNG `khj_admin`** (GĐ chốt 03/09/2026) quản MỌI DB `khj_*` — khj_hr, khj_bl và DB mới sau này (grant theo mẫu `khj\_%`, không phải cấp lại) | MySQL = trạng thái/audit/hàng đợi của web; PMV = nguồn sự thật bán hàng. Quản trị: phpMyAdmin `http://localhost/phpmyadmin/index.php?server=3` đăng nhập `khj_admin` (mật khẩu trong `.env`) |
 | **MSSQL PC KK là dữ liệu CHÍNH**; backup về máy Mr Giang | Job `backup_pmv` 02:00 đêm (COPY_ONLY); sẽ restore sandbox local |
 | **Vẫn dùng tài khoản `kimhanh2` (SYSADMIN)** | SQL Server không tự bảo vệ → RULE 1 gateway allowlist + CẢNH BÁO VƯỢT QUYỀN là hàng rào duy nhất |
 | Vendor không có tài liệu API | Bản đồ proc tự khảo sát = skill `.claude/skills/pmv-proc-map/` — tài liệu API duy nhất |
@@ -34,7 +34,7 @@
 
 | Thành phần | Chi tiết |
 |---|---|
-| Backend | Python 3.13 (venv) · **Django 5.2 LTS** · MySQL 8 @3308 DB `khj_bl` (`mysqlclient`) · serve **waitress** port **8100** |
+| Backend | Python 3.13 (venv) · **Django 5.2 LTS** · MySQL 8 @3308 DB `khj_bl` (`mysqlclient`, user chung `khj_admin`; dữ liệu `D:\PYTHON\mysql8\data\khj_bl`) · serve **waitress** port **8100** |
 | Frontend | Django Templates + HTMX + Tailwind (theo chuẩn KHJ — CRUD mở POPUP, OOB refresh) |
 | Job nền | APScheduler (`BlockingScheduler`, tiến trình riêng `manage.py run_scheduler`) |
 | PMV | SQL Server **2005 Express SP2** (9.00.3042, compat 90) @ `tcp:192.168.1.206,1430`, DB `PMV_BANLE_KH2`, instance `KK\SQLEXPRESS`, pyodbc + ODBC Driver 18, `Encrypt=no` |
