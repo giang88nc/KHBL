@@ -100,6 +100,24 @@ def snapshot_create(request):
 
 
 @require_POST
+def sync_now(request):
+    """Nút ⟳ SYNC: KK → Mr Giang (backup PMV thật, hút về, restore đè sandbox). ~1 phút."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    out = StringIO()
+    try:
+        call_command("sync_sandbox", stdout=out, stderr=out)
+        last = PmvState.get("pmv_last_sync")
+        messages.success(request, f"⟳ SYNC xong — {last}. Bảng dưới so PMV thật ↔ Sandbox ngay sau sync.")
+    except Exception as exc:
+        messages.error(request, f"SYNC LỖI: {exc} — xem nhật ký trang Trạng thái.")
+        return redirect("pmv:status")
+    return redirect(f"{reverse('pmv:diff')}?a=pmv&b=sandbox&only=1&so=1")
+
+
+@require_POST
 def snapshot_delete(request, pk):
     PmvSnapshot.objects.filter(pk=pk).delete()
     messages.success(request, f"Đã xóa snapshot #{pk}.")

@@ -43,7 +43,10 @@ _ADMIN_ALLOW = (
     re.compile(r"(?is)^\s*EXEC\s+master\.(sys|dbo)\.xp_dirtree\s"),
     re.compile(r"(?is)^\s*EXEC\s+master\.\.xp_fixeddrives"),
     re.compile(r"(?is)^\s*EXEC\s+master\.(sys|dbo)\.xp_delete_file\s"),
-    re.compile(r"(?is)^\s*SELECT\b"),
+    # Nút SYNC: hút file .bak trong THƯ MỤC BACKUP của mình về qua kết nối SQL
+    # (SQL KK đọc đĩa local của nó — không cần share, không cần đổi service account)
+    re.compile(r"(?is)^\s*SELECT\s+BulkColumn\s+FROM\s+OPENROWSET\(\s*BULK\s+N'D:\\KHJ_PMV_BACKUP\\[^']+\.bak'\s*,\s*SINGLE_BLOB\s*\)"),
+    re.compile(r"(?is)^\s*SELECT\b(?!.*OPENROWSET)"),
 )
 
 

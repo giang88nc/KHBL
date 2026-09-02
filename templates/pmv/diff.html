@@ -54,6 +54,16 @@
 
   {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
 
+  <form method="post" action="{% url 'pmv:sync_now' %}" class="bar" style="border-top:3px solid var(--gold-500)"
+        onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='⟳ Đang SYNC… (~1 phút, đừng tắt trang)'; return true;">
+    {% csrf_token %}
+    <div>
+      <div style="font-weight:700;color:var(--gold-700)">⟳ SYNC 1 chiều: KK → Mr Giang</div>
+      <div class="desc">Backup PMV thật (COPY_ONLY) → hút về qua kết nối SQL → restore đè Sandbox. Sau đó 2 SQL bằng nhau tại thời điểm sync. Không đụng dữ liệu PMV thật.</div>
+    </div>
+    <button type="submit" style="font-size:14px;padding:9px 18px">⟳ SYNC ngay</button>
+  </form>
+
   <form class="bar" method="get">
     <div class="fld">
       <label>Nguồn A</label>

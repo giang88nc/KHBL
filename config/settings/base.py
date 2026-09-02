@@ -103,6 +103,13 @@ PMV_BACKUP_DIR_LOCAL = env("PMV_BACKUP_DIR_LOCAL", default=r"D:\KHBL_BACKUP\pmv"
 PMV_BACKUP_RETENTION_LOCAL = env("PMV_BACKUP_RETENTION_LOCAL")                    # giữ bao nhiêu BẢN ở máy Mr Giang
 PMV_LOCAL_MSSQL = env("PMV_LOCAL_MSSQL", default="")                              # vd "localhost\\SQL2014" — trống = chưa restore sandbox
 PMV_SANDBOX_DB = env("PMV_SANDBOX_DB", default="PMV_SANDBOX")
+# Nút SYNC (KK -> Mr Giang), cơ chế mặc định KHÔNG CẦN SHARE (chốt 02/09/2026):
+#   SQL KK backup ra PMV_BACKUP_DIR_KK\KHBL_PMV_SYNC.bak (đĩa local KK — luôn ghi được)
+#   -> Mr Giang HÚT file về qua kết nối SQL (OPENROWSET BULK SINGLE_BLOB, ~11MB/s LAN)
+#   -> restore đè PMV_SANDBOX.
+# PMV_SYNC_BAK_READ (tùy chọn): nếu sau này có share đọc được file đó (UNC) thì copy
+# thay vì hút qua SQL — nhanh hơn. Trống = hút qua SQL.
+PMV_SYNC_BAK_READ = env("PMV_SYNC_BAK_READ", default="")
 
 SERVER_PORT = env("SERVER_PORT")
 

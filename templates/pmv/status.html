@@ -45,10 +45,15 @@
       <div class="val">{{ state.pmv_last_backup|default:"— chưa chạy" }}</div></div>
     <div class="card"><div class="lbl">Kiểm tra PMV gần nhất</div>
       <div class="val">{{ state.pmv_last_check|default:"— chưa chạy" }}</div></div>
-    <div class="card"><div class="lbl">Kéo .bak về máy Mr Giang</div>
-      <div class="val">{{ state.pmv_last_pull|default:"— chưa cấu hình share" }}</div></div>
+    <div class="card"><div class="lbl">SYNC gần nhất (KK → Mr Giang)</div>
+      <div class="val">{{ state.pmv_last_sync|default:"— chưa sync" }}</div></div>
     <div class="card"><div class="lbl">Sandbox local</div>
-      <div class="val">{{ state.pmv_last_sandbox|default:"— chưa cài SQL Express local" }}</div></div>
+      <div class="val">{{ state.pmv_last_sandbox|default:"— chưa cài SQL Express local" }}</div>
+      <form method="post" action="{% url 'pmv:sync_now' %}" style="margin-top:8px"
+            onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='⟳ Đang SYNC… (~1 phút)'; return true;">
+        {% csrf_token %}
+        <button type="submit" style="padding:5px 12px;border:0;border-radius:6px;background:var(--gold-500);color:#fff;font-weight:600;cursor:pointer;font-size:12px">⟳ SYNC KK → Mr Giang</button>
+      </form></div>
     <div class="card"><div class="lbl">Lệnh bị CHẶN (vượt quyền)</div>
       <div class="val {% if so_blocked %}bad{% else %}ok{% endif %}">{{ so_blocked }} lần</div></div>
     <div class="card"><div class="lbl">Cảnh báo</div>
