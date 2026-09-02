@@ -31,6 +31,10 @@
 <div class="wrap">
   <h1>KHBL — Bán lẻ Kim Hạnh 2</h1>
   <div class="sub">GĐ0 · Gateway PMV + backup đêm · song song PMVGoldRT</div>
+  <div style="margin-bottom:16px">
+    <a href="{% url 'pmv:status' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px;font-weight:700;border-bottom:2px solid var(--gold-500)">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">So sánh SQL</a>
+  </div>
 
   {% if write_lock %}
   <div class="banner">⛔ pmv_write_lock đang BẬT — vendor vừa đổi version DB PMV, khóa mọi hướng ghi cho tới khi kiểm tra lại (skill pmv-proc-map).</div>

@@ -51,3 +51,27 @@ class PmvState(models.Model):
     @classmethod
     def set(cls, key, value):
         cls.objects.update_or_create(key=key, defaults={"value": str(value)})
+
+
+class PmvSnapshot(models.Model):
+    """Vân tay toàn bộ bảng của 1 nguồn tại 1 thời điểm — để so TRƯỚC/SAU (diff.py)."""
+
+    class Source(models.TextChoices):
+        PMV = "pmv", "PMV thật"
+        SANDBOX = "sandbox", "Sandbox"
+
+    label = models.CharField(max_length=150, verbose_name="Nhãn")
+    source = models.CharField(max_length=10, choices=Source.choices, verbose_name="Nguồn")
+    mode = models.CharField(max_length=8, default="fast", verbose_name="Mức")  # fast | full
+    created_at = models.DateTimeField(auto_now_add=True)
+    table_count = models.IntegerField(default=0)
+    payload = models.JSONField(default=dict)  # {tbl: {rows, cs}}
+
+    class Meta:
+        db_table = "pmv_snapshots"
+        ordering = ["-id"]
+        verbose_name = "Snapshot PMV"
+        verbose_name_plural = "Snapshot PMV"
+
+    def __str__(self):
+        return f"#{self.pk} {self.label} ({self.get_source_display()}/{self.mode})"

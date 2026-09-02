@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import PmvAudit, PmvState
+from .models import PmvAudit, PmvSnapshot, PmvState
+
+
+@admin.register(PmvSnapshot)
+class PmvSnapshotAdmin(admin.ModelAdmin):
+    list_display = ("id", "label", "source", "mode", "table_count", "created_at")
+    list_filter = ("source", "mode")
 
 
 @admin.register(PmvAudit)

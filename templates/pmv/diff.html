@@ -1,0 +1,147 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — So sánh 2 SQL</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 16px; }
+  h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0 0 2px; }
+  .nav { margin-bottom:16px; }
+  .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; font-size:13px; }
+  .nav a.active { font-weight:700; border-bottom:2px solid var(--gold-500); }
+  .msg { padding:8px 12px; border-radius:6px; margin-bottom:10px; font-size:13px; }
+  .msg.success { background:#EAF4EC; color:#2E7D46; border:1px solid #B7DCC0; }
+  .msg.error { background:#FDF2F0; color:#B3402A; border:1px solid #E4B5AC; }
+  form.bar { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:16px; display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+  .fld { display:flex; flex-direction:column; gap:3px; }
+  .fld label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  select, input[type=text] { padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; }
+  button { padding:7px 14px; border:0; border-radius:6px; background:var(--gold-500); color:#fff; font-weight:600; cursor:pointer; font-size:13px; }
+  button.ghost { background:#fff; color:var(--gold-700); border:1px solid var(--gold-500); }
+  button.danger { background:#fff; color:#B3402A; border:1px solid #E4B5AC; padding:2px 8px; font-size:12px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip { background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 12px; font-size:13px; }
+  .chip b { font-size:15px; }
+  .c-diff b { color:#B3402A; } .c-onlya b,.c-onlyb b { color:#C07A1A; } .c-same b { color:#2E7D46; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th { background:var(--gold-100); color:var(--gold-700); text-align:left; padding:8px 10px; font-size:12px; }
+  td { padding:6px 10px; border-top:1px solid var(--line); font-size:13px; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.diff { background:#FDF2F0; } tr.diff td:first-child { border-left:3px solid #B3402A; font-weight:600; }
+  tr.only_a,tr.only_b { background:#FFF7EC; } tr.only_a td:first-child,tr.only_b td:first-child { border-left:3px solid #C07A1A; }
+  tr.same td:first-child { border-left:3px solid transparent; }
+  .badge { font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
+  .b-diff { background:#F6D9D2; color:#B3402A; } .b-onlya,.b-onlyb { background:#F7E6C8; color:#8a5a12; }
+  .b-same { background:#E3EFE6; color:#2E7D46; }
+  .up { color:#2E7D46; } .down { color:#B3402A; }
+  .desc { font-size:12px; color:#78716c; margin:2px 0 0; }
+  .snaps { margin-top:22px; }
+  .snaps table td { font-size:12px; }
+  .muted { color:#a8a29e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>So sánh 2 SQL</h1>
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}" class="active">So sánh SQL</a>
+  </div>
+
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <form class="bar" method="get">
+    <div class="fld">
+      <label>Nguồn A</label>
+      <select name="a">
+        <option value="pmv" {% if a_tok == "pmv" %}selected{% endif %}>PMV thật (live)</option>
+        <option value="sandbox" {% if a_tok == "sandbox" %}selected{% endif %}>Sandbox (live)</option>
+        {% for s in snapshots %}<option value="snap:{{ s.pk }}" {% if a_tok == "snap:"|add:s.pk|stringformat:'s' %}selected{% endif %}>#{{ s.pk }} {{ s.label }} ({{ s.mode }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label>Nguồn B</label>
+      <select name="b">
+        <option value="pmv" {% if b_tok == "pmv" %}selected{% endif %}>PMV thật (live)</option>
+        <option value="sandbox" {% if b_tok == "sandbox" %}selected{% endif %}>Sandbox (live)</option>
+        {% for s in snapshots %}<option value="snap:{{ s.pk }}" {% if b_tok == "snap:"|add:s.pk|stringformat:'s' %}selected{% endif %}>#{{ s.pk }} {{ s.label }} ({{ s.mode }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label>&nbsp;</label>
+      <label style="text-transform:none;font-size:13px;color:var(--ink)"><input type="checkbox" name="only" value="1" {% if only_diff %}checked{% endif %}> Chỉ hiện bảng khác</label>
+    </div>
+    <button type="submit" name="so" value="1">So sánh</button>
+  </form>
+
+  {% if ran and rows is not None %}
+    <p class="desc"><b>A:</b> {{ desc_a }} &nbsp;·&nbsp; <b>B:</b> {{ desc_b }}</p>
+    <div class="chips">
+      <div class="chip c-diff">Khác nội dung: <b>{{ summary.diff }}</b></div>
+      <div class="chip c-onlya">Chỉ có ở A: <b>{{ summary.only_a }}</b></div>
+      <div class="chip c-onlyb">Chỉ có ở B: <b>{{ summary.only_b }}</b></div>
+      <div class="chip c-same">Giống nhau: <b>{{ summary.same }}</b></div>
+      <div class="chip">Tổng bảng: <b>{{ summary.total }}</b></div>
+    </div>
+    <table>
+      <thead><tr><th>Bảng</th><th style="text-align:right">Dòng A</th><th style="text-align:right">Dòng B</th><th style="text-align:right">Δ (B−A)</th><th>Checksum</th><th>Trạng thái</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ r.status }}">
+          <td>{{ r.tbl }}</td>
+          <td class="num">{% if r.rows_a is not None %}{{ r.rows_a|unlocalize }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num">{% if r.rows_b is not None %}{{ r.rows_b|unlocalize }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num">{% if r.delta %}<span class="{% if r.delta > 0 %}up{% else %}down{% endif %}">{% if r.delta > 0 %}+{% endif %}{{ r.delta|unlocalize }}</span>{% elif r.delta == 0 %}0{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if r.cs_changed %}<span class="badge b-diff">đổi giá trị</span>{% elif r.status == "same" %}<span class="muted">khớp</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if r.status == "diff" %}<span class="badge b-diff">KHÁC</span>
+            {% elif r.status == "only_a" %}<span class="badge b-onlya">chỉ ở A</span>
+            {% elif r.status == "only_b" %}<span class="badge b-onlyb">chỉ ở B</span>
+            {% else %}<span class="badge b-same">giống</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% elif ran %}
+    <p class="muted">Không có dữ liệu để so sánh.</p>
+  {% else %}
+    <p class="muted">Chọn 2 nguồn rồi bấm <b>So sánh</b>. So <i>PMV thật ↔ Sandbox</i> để kiểm sandbox còn khớp; so <i>snapshot cũ ↔ Sandbox</i> để biết một thao tác vừa đụng bảng nào.</p>
+  {% endif %}
+
+  <div class="snaps">
+    <h3 style="color:var(--gold-700);font-family:'Cormorant Garamond',serif;margin-bottom:6px">Snapshot đã lưu</h3>
+    <form method="post" action="{% url 'pmv:snapshot_create' %}" class="bar" style="margin-bottom:12px">
+      {% csrf_token %}
+      <div class="fld"><label>Chụp nguồn</label>
+        <select name="source">
+          <option value="sandbox">Sandbox (đầy đủ — có checksum)</option>
+          <option value="pmv">PMV thật (nhanh — chỉ số dòng)</option>
+        </select>
+      </div>
+      <div class="fld"><label>Nhãn</label><input type="text" name="label" placeholder="vd: trước khi đổi giá vàng" size="28"></div>
+      <button type="submit" class="ghost">📸 Chụp snapshot</button>
+      <span class="desc" style="align-self:center">Chụp sandbox TRƯỚC rồi chạy proc rồi chụp SAU → so 2 snapshot thấy proc đụng bảng nào.</span>
+    </form>
+    <table>
+      <thead><tr><th>#</th><th>Nhãn</th><th>Nguồn</th><th>Mức</th><th style="text-align:right">Số bảng</th><th>Lúc</th><th></th></tr></thead>
+      <tbody>
+        {% for s in snapshots %}
+        <tr>
+          <td>{{ s.pk }}</td><td>{{ s.label }}</td><td>{{ s.get_source_display }}</td><td>{{ s.mode }}</td>
+          <td class="num">{{ s.table_count|unlocalize }}</td><td>{{ s.created_at|date:"d/m/Y H:i" }}</td>
+          <td><form method="post" action="{% url 'pmv:snapshot_delete' s.pk %}" onsubmit="return confirm('Xóa snapshot #{{ s.pk }}?')">{% csrf_token %}<button class="danger">Xóa</button></form></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="muted">Chưa có snapshot nào.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
