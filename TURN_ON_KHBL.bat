@@ -32,7 +32,7 @@ if %errorlevel%==0 (
     echo [KHBL] Web DA CHAY san tren port 8100. Bo qua.
 ) else (
     echo [KHBL] Dang bat web waitress...
-    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=*:8100 --threads=4 config.wsgi:application >> logs\server.log 2>&1"
+    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=*:8100 --threads=8 config.wsgi:application >> logs\server.log 2>&1"
 )
 
 REM --- 2) SCHEDULER: chua co tien trinh run_scheduler cua KHBL thi moi bat ---

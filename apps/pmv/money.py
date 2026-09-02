@@ -1,0 +1,206 @@
+"""
+CÔNG THỨC TIỀN — bản DUY NHẤT của KHBL. Mọi màn hình phải gọi vào đây.
+
+⚠ SQL KHÔNG TÍNH TIỀN HỘ: TRN_RT_BUYSELL_Ins/_Upd đọc thẳng SellAmount từ XML, nhận
+SellTotalAmount/TotalAmount qua tham số. Sai công thức = hóa đơn thật sai tiền, lệch sổ
+tồn và sổ quỹ, không có lưới an toàn phía SQL.
+
+Đã kiểm chứng trên dữ liệu thật (khảo sát 03/09/2026):
+- BÁN     28.678/28.678 dòng · SellAmount = tròn( GoldReal/HS × SellRate × 1000 + TaskPrice × 1000 )
+          GoldReal = TotalWeight − DiamondWeight (hột trừ TRƯỚC khi nhân giá)
+          TaskPrice tính THEO MÓN, KHÔNG nhân trọng lượng
+- ĐỔI     3.634/3.634 dòng vàng cũ trong hóa đơn bán · BuyAmount = tròn( GW/HS × BuyRate × 1000 × Pct/100 )
+          ⚠ dùng HẰNG 1000, KHÔNG dùng cột CcyRate (bảng này lưu CcyRate=1)
+- THÂU    5.986/5.986 phiếu · TotalAmount = tròn( GW/HS × BuyRate × 1000 × Pct/100 + AddMoney )
+          Pct nhân TRƯỚC, AddMoney cộng SAU
+- TỔNG    18.307/18.307 hóa đơn · SellTotal = Σ(dòng đã tròn) · TotalAmount = SellTotal − BuyTotal
+          (KHÔNG trừ Discount) · PayAmount = TotalAmount − Discount + TaskPriceAdd
+          PayAmount < 0 nghĩa là TIỆM TRẢ LẠI khách.
+
+Quy ước đơn vị: trọng lượng lưu theo LY. 1 phân = 10 · 1 chỉ = 100 · 1 lượng = 1000.
+HS (hệ số chia) = 100 khi PriceUnit ∈ ('L','M') — giá niêm yết theo CHỈ; = 1 khi 'G' (theo GRAM).
+Giá trong I_XRATE tính bằng NGHÌN đồng (14100 = 14.100.000 ₫/chỉ) → nhân 1000.
+
+BẮT BUỘC dùng Decimal, cấm float: sai số float lệch đúng ở các ca nửa nghìn.
+Làm tròn HALF-AWAY-FROM-ZERO như T-SQL ROUND (Python round() là banker's rounding — SAI).
+"""
+from decimal import ROUND_HALF_UP, Decimal
+
+from django.core.cache import cache
+
+D0 = Decimal("0")
+_THOUSAND = Decimal("1E3")
+_ONE = Decimal("1")
+# Hệ số nghìn→đồng: cột XRate (dòng bán) và CcyRate (phiếu thâu) đều = 1000 trên 100% dữ liệu
+RATE_SCALE = Decimal("1000")
+
+
+def dec(x):
+    """Về Decimal an toàn (None/'' → 0). Không bao giờ đi qua float."""
+    if x is None or x == "":
+        return D0
+    if isinstance(x, Decimal):
+        return x
+    if isinstance(x, float):  # chỉ khi lỡ nhận float — chuyển qua str để khỏi nhiễu nhị phân
+        return Decimal(repr(x))
+    return Decimal(str(x))
+
+
+def hs(price_unit):
+    """Hệ số chia theo đơn vị niêm yết giá: 'L'/'M' → 100 (giá theo chỉ), 'G' → 1 (theo gram)."""
+    return Decimal("100") if (price_unit or "L").upper() in ("L", "M") else _ONE
+
+
+# ----------------------------- làm tròn -----------------------------
+
+def _quy_cach_lam_tron(client=None):
+    """Đọc SYS_PARAMETERS['QuyCachLamTronVND'] (cache 60s). '3@499@0' = tròn NGHÌN,
+    '0@0@0' = tròn ĐỒNG. Đọc lúc chạy — GĐ đổi tham số là toàn bộ tiền đổi theo."""
+    v = cache.get("khbl:quycach_lamtron")
+    if v is None:
+        v = "3@499@0"
+        try:
+            if client is None:
+                from .client import PmvClient
+
+                client = PmvClient("pmv", tag="money")
+            v = client.sys_param("QuyCachLamTronVND") or v
+        except Exception:
+            pass  # mất kết nối KK → giữ mặc định đang dùng thực tế
+        cache.set("khbl:quycach_lamtron", v, 60)
+    return v
+
+
+def round_vnd(x, client=None):
+    """Làm tròn tiền y hệt dbo.fn_LamTronVND (T-SQL ROUND: nửa làm tròn RA XA số 0)."""
+    x = dec(x)
+    exp = _THOUSAND if str(_quy_cach_lam_tron(client)).startswith("3@") else _ONE
+    return x.quantize(exp, rounding=ROUND_HALF_UP)
+
+
+# ----------------------------- từng dòng -----------------------------
+
+def gold_real(total_weight, diamond_weight):
+    """Phần VÀNG của món = tổng trọng lượng − trọng lượng hột. Tiền chỉ tính trên phần này."""
+    return dec(total_weight) - dec(diamond_weight)
+
+
+def sell_amount(total_weight, diamond_weight, sell_rate, task_price=0, price_unit="L", client=None):
+    """Thành tiền 1 dòng hàng BÁN RA."""
+    gr = gold_real(total_weight, diamond_weight)
+    tien_vang = gr / hs(price_unit) * dec(sell_rate) * RATE_SCALE
+    tien_cong = dec(task_price) * RATE_SCALE
+    return round_vnd(tien_vang + tien_cong, client)
+
+
+def buy_amount_in_bill(gold_weight, buy_rate, percent_value=100, price_unit="L", client=None):
+    """Tiền 1 dòng VÀNG CŨ khách đưa vào trong hóa đơn bán (TRN_RT_BUYSELL_BUYGOLD).
+    ⚠ hằng 1000 — bảng này lưu CcyRate=1, dùng cột đó sẽ sai 1000 lần."""
+    tien = dec(gold_weight) / hs(price_unit) * dec(buy_rate) * RATE_SCALE * dec(percent_value) / Decimal("100")
+    return round_vnd(tien, client)
+
+
+def buy_amount_standalone(gold_weight, buy_rate, percent_value=100, add_money=0, weight_unit="L", client=None):
+    """Tiền PHIẾU THÂU độc lập (TRN_RT_BUYGOLD). % nhân TRƯỚC, tiền bù/bớt cộng SAU (có thể âm)."""
+    tien = dec(gold_weight) / hs(weight_unit) * dec(buy_rate) * RATE_SCALE * dec(percent_value) / Decimal("100")
+    return round_vnd(tien + dec(add_money), client)
+
+
+# ----------------------------- tổng hóa đơn -----------------------------
+
+def bill_totals(sell_amounts, buy_amounts=(), discount=0, task_price_add=0):
+    """Gộp tổng 1 hóa đơn bán–đổi. Các dòng truyền vào PHẢI đã làm tròn từng dòng.
+
+    Trả dict: sell_total · buy_total · total (Sell − Buy, KHÔNG trừ giảm giá) ·
+              pay (total − giảm giá + công thêm) · tra_lai (|pay| khi pay < 0)."""
+    sell_total = sum((dec(x) for x in sell_amounts), D0)
+    buy_total = sum((dec(x) for x in buy_amounts), D0)
+    total = sell_total - buy_total
+    pay = total - dec(discount) + dec(task_price_add)
+    return {
+        "sell_total": sell_total,
+        "buy_total": buy_total,
+        "total": total,
+        "pay": pay,
+        "tra_lai": -pay if pay < 0 else D0,
+    }
+
+
+def bot_le(total, buoc=10000):
+    """Số tiền bớt lẻ để tròn chục nghìn (nút F6): Discount = total mod 10.000."""
+    t = dec(total)
+    b = dec(buoc)
+    if t <= 0 or b <= 0:
+        return D0
+    return t - (t // b) * b
+
+
+# ----------------------------- trọng lượng -----------------------------
+
+def _vn(x, max_dp=3):
+    """Số kiểu VN: bỏ số 0 thừa, dấu phẩy thập phân."""
+    q = dec(x).quantize(Decimal(1).scaleb(-max_dp), rounding=ROUND_HALF_UP).normalize()
+    s = format(q, "f")
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s.replace(".", ",")
+
+
+def weight_screen(w, price_unit="L"):
+    """Chuỗi trọng lượng NGẮN cho màn hình: '7 ly' · '5 phân' · '1,05 chỉ' · '1,037 lượng' · '8,11 g'."""
+    w = dec(w)
+    if (price_unit or "L").upper() == "G":
+        return f"{_vn(w)} g"
+    a = abs(w)
+    if a >= 1000:
+        return f"{_vn(a / 1000)} lượng"
+    if a >= 100:
+        return f"{_vn(a / 100)} chỉ"
+    if a >= 10:
+        return f"{_vn(a / 10)} phân"
+    return f"{_vn(a)} ly"
+
+
+def weight_bill(w, price_unit="L"):
+    """Chuỗi ĐẦY ĐỦ để in giấy đảm bảo — chép ĐÚNG từng nhánh của dbo.GoldWeightToChar_Bill
+    (đã đọc source + đối chiếu 120 giá trị thật), kể cả các nét riêng của vendor:
+      1037→'1L0C3P7Ly' · 1100→'1L1C0P0Ly' · 100→'1C' · 101→'1C0P1Ly' · 285→'2C8P5Ly'
+      50→'5P0Ly' (nhánh PHÂN luôn in 'Ly' vì dòng IF trong proc bị comment)
+      3→'3Ly' · 0.5→'0Ly.5D' · 106.2→'1C0P6Ly.2D'
+    Phần lẻ: lấy ĐÚNG 2 chữ số sau dấu chấm rồi bỏ số 0 đuôi, thêm hậu tố 'D'."""
+    w = abs(dec(w))
+    n = int(w)
+    if (price_unit or "L").upper() in ("G", "K"):
+        # vendor cắt hụt 1 ký tự phần lẻ (LEN − charindex) → 8.11 ra '8g1100000'
+        frac8 = format(w.quantize(Decimal("1E-8")), "f").split(".")[1]
+        hau_to = (price_unit or "G").lower()
+        return f"{n}{hau_to}00" if not frac8.strip("0") else f"{n}{hau_to}{frac8[:-1]}"
+
+    s = ""
+    if n // 1000 > 0:
+        s += f"{n // 1000}L"
+        if n % 1000 > 0:
+            d3 = str(n).rjust(3, "0")[-3:]
+            s += f"{d3[0]}C{d3[1]}P{d3[2]}Ly"
+    elif n // 100 > 0:
+        s += f"{n // 100}C"
+        if n % 100 > 0:
+            d2 = str(n).rjust(2, "0")[-2:]
+            s += f"{d2[0]}P{d2[1]}Ly"
+    elif n // 10 > 0:
+        s += f"{n // 10}P{n % 10}Ly"   # luôn có 'Ly' — đúng như proc
+    else:
+        s += f"{n}Ly"
+
+    le2 = format(w.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f").split(".")[1].rstrip("0")
+    if le2:
+        s += f".{le2}D"
+    return s
+
+
+def money_vn(x, suffix=" ₫"):
+    """Tiền kiểu VN: 1.234.567 ₫ · số âm dùng dấu trừ thật U+2212."""
+    x = dec(x).quantize(_ONE, rounding=ROUND_HALF_UP)
+    am = x < 0
+    s = f"{abs(int(x)):,}".replace(",", ".")
+    return ("−" if am else "") + s + suffix

@@ -195,12 +195,23 @@ def _proc_sql(proc, params):
     return f"DECLARE @__rc INT; EXEC @__rc = [{proc}] {named}; SELECT @__rc AS __rc"
 
 
+def _dedupe_cols(cols):
+    """Proc vendor có result set TRÙNG TÊN CỘT (T_PRODUCT_GetByCodeForSell: GoldReal,
+    WeightUnit, InPrice mỗi cái 2 lần) — dict() thường để lần sau ĐÈ lần đầu, mà lần sau
+    hay là hằng 0 → mất giá trị thật. Giữ lần đầu tên trần, lần sau thêm __2, __3."""
+    seen, out = {}, []
+    for c in cols:
+        seen[c] = seen.get(c, 0) + 1
+        out.append(c if seen[c] == 1 else f"{c}__{seen[c]}")
+    return out
+
+
 def _drain(cur):
     """Rút mọi result set; set cuối là RETURN value."""
     sets = []
     while True:
         if cur.description:
-            cols = [c[0] for c in cur.description]
+            cols = _dedupe_cols([c[0] for c in cur.description])
             sets.append([dict(zip(cols, r)) for r in cur.fetchall()])
         if not cur.nextset():
             break
