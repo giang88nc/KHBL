@@ -1,128 +1,78 @@
-{% extends "base.html" %}{% load static pos_extras %}
+{% extends "base.html" %}{% load pos_extras %}
 {% block title %}Tổng quan{% endblock %}
-{% block shell_mod %} khbl-shell--home{% endblock %}
-{% block main_mod %} khbl-main--home{% endblock %}
-{% block rail %}{% endblock %}
+{% block page_title %}Tổng quan bán lẻ{% endblock %}
+{% block page_sub %}Số liệu đọc thẳng từ máy KK · ngày {{ ngay|slice:"8:10" }}/{{ ngay|slice:"5:7" }}/{{ ngay|slice:":4" }}{% endblock %}
+{% block page_tools %}
+  <form method="get" style="display:flex;gap:8px;align-items:center">
+    <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
+    <button class="khbl-btn khbl-btn--outline" type="submit">Xem</button>
+  </form>
+  <a class="khbl-btn khbl-btn--gold" href="{% url 'pos:ban' %}">Vào bán hàng →</a>
+{% endblock %}
 
-{% block body %}
-<header class="home-top">
-  <a class="home-brand" href="{% url 'pos:dashboard' %}">
-    <img src="{% static 'img/logo_icon.png' %}" alt="Kim Hạnh 2" width="56" height="56">
-    <span>
-      <b>KIM HẠNH 2</b>
-      <i>Bán lẻ vàng · trang tổng quan</i>
-    </span>
-  </a>
+{% block content %}
+{% if loi_kk %}
+  <div class="khbl-alert khbl-alert--do">{% icon "hethong" 18 %}
+    <div><b>Không đọc được số liệu từ máy KK</b><br><span class="dim">{{ loi_kk }}</span></div></div>
+{% else %}
 
-  <div class="home-me">
-    <div class="home-me__info">
-      <b>{{ request.user.first_name|default:request.user.username }}</b>
-      <span>
-        <span class="mono">{{ request.user.username }}</span>
-        {% if pmv_user %} · NV <span class="mono">{{ pmv_user.emp_id }}</span>
-          {% if pmv_user.till_code %} · két <span class="mono">{{ pmv_user.till_code }}</span>{% endif %}
-        {% endif %}
-      </span>
-    </div>
-    <div class="home-me__anh">{{ request.user.username|slice:":2"|upper }}</div>
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-      <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="submit">Đăng xuất</button>
-    </form>
+{% include "pos/_gia_strip.html" %}
+
+<div class="dash-grid" style="margin-top:14px">
+  <div class="dash-kpi dash-in" style="--i:0">
+    <span class="dash-kpi__lbl">Bán ra hôm nay</span>
+    <b class="dash-kpi__val num">{{ tq.hom_nay.tien_ban|tien_tran }}</b>
+    <span class="dash-kpi__sub">{{ tq.hom_nay.so_ban }} hóa đơn</span>
   </div>
-</header>
-
-<nav class="home-menu" aria-label="Chức năng chính">
-  <a href="{% url 'pos:ban' %}" class="home-menu__i home-menu__i--chinh">
-    {% icon "ban" 34 %}<b>BÁN HÀNG</b><span>Quét tem · nhận vàng cũ · tính tiền</span></a>
-  <a href="{% url 'pos:thau' %}" class="home-menu__i">
-    {% icon "thau" 34 %}<b>THÂU VÀO</b><span>Khách bán vàng cũ</span></a>
-  <a href="{% url 'pos:bang_gia' %}" class="home-menu__i">
-    {% icon "gia" 34 %}<b>BẢNG GIÁ</b><span>15 loại vàng · lịch sử</span></a>
-  <a href="{% url 'pos:khach_hang' %}" class="home-menu__i">
-    {% icon "khach" 34 %}<b>KHÁCH HÀNG</b><span>Tra cứu · quét CCCD</span></a>
-  <a href="{% url 'pos:hoa_don' %}" class="home-menu__i">
-    {% icon "hoadon" 34 %}<b>HÓA ĐƠN</b><span>Phiếu trong ngày</span></a>
-  <a href="{% url 'pmv:status' %}" class="home-menu__i home-menu__i--phu">
-    {% icon "hethong" 34 %}<b>HỆ THỐNG</b><span>Sao lưu · nhật ký</span></a>
-</nav>
-
-<div class="khbl-page">
-  {% if write_lock %}<div class="khbl-lock">Kênh ghi đang khóa — vendor vừa đổi phiên bản CSDL. Chỉ tra cứu, chưa gửi phiếu.</div>{% endif %}
-
-  {% if loi_kk %}
-    <div class="khbl-alert khbl-alert--do">{% icon "hethong" 18 %}
-      <div><b>Không đọc được số liệu từ máy KK</b><br><span class="dim">{{ loi_kk }}</span></div></div>
-  {% else %}
-
-  {% include "pos/_gia_strip.html" %}
-
-  <div class="home-head">
-    <div>
-      <div class="khbl-page__title">Số liệu hôm nay</div>
-      <div class="khbl-page__sub">Đọc thẳng từ máy KK · ngày {{ ngay|slice:"8:10" }}/{{ ngay|slice:"5:7" }}/{{ ngay|slice:":4" }}</div>
-    </div>
-    <form method="get" style="margin-left:auto;display:flex;gap:8px;align-items:center">
-      <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
-      <button class="khbl-btn khbl-btn--outline" type="submit">Xem</button>
-    </form>
+  <div class="dash-kpi dash-in" style="--i:1">
+    <span class="dash-kpi__lbl">Thâu vào hôm nay</span>
+    <b class="dash-kpi__val num" style="color:var(--ink-mua)">{{ tq.hom_nay.tien_thau|tien_tran }}</b>
+    <span class="dash-kpi__sub">{{ tq.hom_nay.so_thau }} phiếu</span>
   </div>
-
-  <div class="dash-grid">
-    <div class="dash-kpi dash-in" style="--i:0">
-      <span class="dash-kpi__lbl">Bán ra hôm nay</span>
-      <b class="dash-kpi__val num">{{ tq.hom_nay.tien_ban|tien_tran }}</b>
-      <span class="dash-kpi__sub">{{ tq.hom_nay.so_ban }} hóa đơn</span>
-    </div>
-    <div class="dash-kpi dash-in" style="--i:1">
-      <span class="dash-kpi__lbl">Thâu vào hôm nay</span>
-      <b class="dash-kpi__val num" style="color:var(--ink-mua)">{{ tq.hom_nay.tien_thau|tien_tran }}</b>
-      <span class="dash-kpi__sub">{{ tq.hom_nay.so_thau }} phiếu</span>
-    </div>
-    <div class="dash-kpi dash-in" style="--i:2">
-      <span class="dash-kpi__lbl">Khách mới hôm nay</span>
-      <b class="dash-kpi__val num">{{ tq.khach_moi }}</b>
-      <span class="dash-kpi__sub">tổng {{ tq.tong_khach|sokhong }} khách</span>
-    </div>
-    <div class="dash-kpi dash-in" style="--i:3">
-      <span class="dash-kpi__lbl">Hàng còn tồn</span>
-      <b class="dash-kpi__val num">{{ tq.hang_ton|sokhong }}</b>
-      <span class="dash-kpi__sub">món đang bày bán</span>
-    </div>
+  <div class="dash-kpi dash-in" style="--i:2">
+    <span class="dash-kpi__lbl">Khách mới hôm nay</span>
+    <b class="dash-kpi__val num">{{ tq.khach_moi }}</b>
+    <span class="dash-kpi__sub">tổng {{ tq.tong_khach|sokhong }} khách</span>
   </div>
-
-  <div class="dash-2col">
-    <section class="khbl-card dash-in" style="--i:4">
-      <div class="khbl-card__head"><h3>Doanh số 7 ngày</h3><span class="khbl-card__rule"></span>
-        <span class="dim num" style="font-size:12.5px">{{ tq.tuan_so_ban }} hóa đơn · {{ tq.tuan_ban|tien }}</span></div>
-      <div class="khbl-card__body" style="padding-bottom:14px">
-        <div class="dash-bars">
-          {% for d in tq.chuoi %}
-            <div class="dash-bar{% if forloop.last %} is-now{% endif %}" title="{{ d.nhan }} — {{ d.so_ban }} hóa đơn · bán {{ d.tien_ban|tien }} · thâu {{ d.tien_thau|tien }}">
-              <span class="dash-bar__v num">{{ d.tien_ban|tien_gon }}</span>
-              <span class="dash-bar__track"><span class="dash-bar__col" style="height:{{ d.pct }}%"></span></span>
-              <span class="dash-bar__x">{{ d.nhan }}</span>
-              <span class="dash-bar__n num">{{ d.so_ban }} HĐ</span>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-
-    <section class="khbl-card khbl-card--flat dash-in" style="--i:5">
-      <div class="khbl-card__head"><h3>Tồn theo nhóm vàng</h3></div>
-      <div class="khbl-card__body" style="padding-bottom:10px">
-        <table class="khbl-tbl">
-          <thead><tr><th>Nhóm</th><th class="num">Số món</th><th class="num">TL vàng</th></tr></thead>
-          <tbody>
-          {% for t in tq.ton %}
-            <tr><td><b>{{ t.nhom }}</b></td><td class="num">{{ t.sl|sokhong }}</td>
-                <td class="num">{{ t.tl|tl_man }}</td></tr>
-          {% empty %}<tr><td colspan="3" class="dim">Chưa có số liệu tồn.</td></tr>{% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
+  <div class="dash-kpi dash-in" style="--i:3">
+    <span class="dash-kpi__lbl">Hàng còn tồn</span>
+    <b class="dash-kpi__val num">{{ tq.hang_ton|sokhong }}</b>
+    <span class="dash-kpi__sub">món đang bày bán</span>
   </div>
-  {% endif %}
 </div>
+
+<div class="dash-2col">
+  <section class="khbl-card dash-in" style="--i:4">
+    <div class="khbl-card__head"><h3>Doanh số 7 ngày</h3><span class="khbl-card__rule"></span>
+      <span class="dim num" style="font-size:12.5px">{{ tq.tuan_so_ban }} hóa đơn · {{ tq.tuan_ban|tien }}</span></div>
+    <div class="khbl-card__body" style="padding-bottom:14px">
+      <div class="dash-bars">
+        {% for d in tq.chuoi %}
+          <div class="dash-bar{% if forloop.last %} is-now{% endif %}" title="{{ d.nhan }} — {{ d.so_ban }} hóa đơn · bán {{ d.tien_ban|tien }} · thâu {{ d.tien_thau|tien }}">
+            <span class="dash-bar__v num">{{ d.tien_ban|tien_gon }}</span>
+            <span class="dash-bar__track"><span class="dash-bar__col" style="height:{{ d.pct }}%"></span></span>
+            <span class="dash-bar__x">{{ d.nhan }}</span>
+            <span class="dash-bar__n num">{{ d.so_ban }} HĐ</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="khbl-card khbl-card--flat dash-in" style="--i:5">
+    <div class="khbl-card__head"><h3>Tồn theo nhóm vàng</h3></div>
+    <div class="khbl-card__body" style="padding-bottom:10px">
+      <table class="khbl-tbl">
+        <thead><tr><th>Nhóm</th><th class="num">Số món</th><th class="num">TL vàng</th></tr></thead>
+        <tbody>
+        {% for t in tq.ton %}
+          <tr><td><b>{{ t.nhom }}</b></td><td class="num">{{ t.sl|sokhong }}</td>
+              <td class="num">{{ t.tl|tl_man }}</td></tr>
+        {% empty %}<tr><td colspan="3" class="dim">Chưa có số liệu tồn.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endif %}
 {% endblock %}

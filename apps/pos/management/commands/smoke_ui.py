@@ -51,29 +51,33 @@ class Command(BaseCommand):
             check(f"GET {url}", r.status_code == 200 and phai_co in body(r), f"status={r.status_code}")
         check("URL thiếu dấu / cuối vẫn vào được", c.get("/banle/ban-hang", follow=True).status_code == 200)
 
-        # ── 2. TRANG CHỦ: logo · menu ngang icon to · tài khoản · chân trang đồng hồ ──
+        # ── 2. KHUNG CHUNG: topbar + chân trang có ở MỌI trang, KHÔNG còn rail dọc ──
+        TRANG = ["/", "/banle/ban-hang/", "/banle/thau-vao/", "/banle/bang-gia/",
+                 "/banle/khach-hang/", "/banle/hoa-don/"]
+        for url in TRANG:
+            b = body(c.get(url))
+            check(f"topbar có ở {url}", 'class="khbl-top"' in b and "img/logo_icon.png" in b)
+            check(f"  chân trang có ở {url}", 'class="khbl-foot"' in b and 'id="khbl-dongho"' in b)
+            check(f"  KHÔNG còn thanh menu đứng ở {url}", 'khbl-rail' not in b)
+
         b = body(c.get("/"))
-        check("trang chủ: có logo", 'img/logo_icon.png' in b and 'class="home-brand"' in b)
-        check("trang chủ: MENU NGANG đủ 6 mục", b.count('class="home-menu__i') == 6)
-        for nhan in ("BÁN HÀNG", "THÂU VÀO", "BẢNG GIÁ", "KHÁCH HÀNG", "HÓA ĐƠN", "HỆ THỐNG"):
-            check(f"  mục '{nhan}'", f"<b>{nhan}</b>" in b)
-        check("trang chủ: icon to 34px trong menu", b.count('width="34" height="34"') >= 6)
-        check("trang chủ: KHÔNG còn rail bên trái", 'class="khbl-rail"' not in b)
-        check("trang chủ: hiện tên người đăng nhập", 'class="home-me' in b and TK in b)
-        check("trang chủ: hiện nhân viên + két của tài khoản",
-              "NV <span" in b and ("két" in b or "khong-co-ket" in b))
-        check("trang chủ: có nút Đăng xuất", "Đăng xuất" in b)
+        check("topbar: đủ 7 mục menu", b.count('class="khbl-top__i') == 7)
+        for nhan in ("TỔNG QUAN", "BÁN HÀNG", "THÂU VÀO", "BẢNG GIÁ", "KHÁCH HÀNG", "HÓA ĐƠN", "HỆ THỐNG"):
+            check(f"  mục '{nhan}'", f"<span>{nhan}</span>" in b)
+        check("topbar: icon 24px", b.count('width="24" height="24"') >= 7)
+        check("topbar: tên người đăng nhập + két", "khbl-top__me" in b and TK in b)
+        check("topbar: nút Đăng xuất", "Đăng xuất" in b)
+        check("topbar: đánh dấu trang đang mở (Tổng quan)", 'khbl-top__i is-on' in b)
+        check("topbar: trang Bán hàng tự đánh dấu đúng mục",
+              'khbl-top__i khbl-top__i--chinh is-on' in body(c.get("/banle/ban-hang/")))
+
+        # ── 3. nội dung trang chủ + chân trang ──
         check("trang chủ: 4 thẻ số liệu", b.count("dash-kpi__val") == 4)
         check("trang chủ: biểu đồ 7 cột", b.count("dash-bar__col") == 7)
         check("trang chủ: bảng tồn theo nhóm vàng", "Tồn theo nhóm vàng" in b)
-
-        # ── 3. CHÂN TRANG ──
-        check("chân trang: tên công ty", "khbl-foot__co" in b and "KIM HẠNH" in b.upper())
+        check("chân trang: tên công ty từ T_SHOP", "khbl-foot__co" in b and "KIM HẠNH" in b.upper())
         check("chân trang: thông tin phần mềm", "khbl-foot__pm" in b and "KHBL" in b)
-        check("chân trang: ô đồng hồ thời gian thực", 'id="khbl-dongho"' in b and "data-gio" in b)
-        check("chân trang có mặt ở trang khác (khách hàng)", "khbl-foot" in body(c.get("/banle/khach-hang/")))
-        check("màn BÁN HÀNG không chèn chân trang (đã có thanh phím)",
-              "khbl-foot" not in body(c.get("/banle/ban-hang/")))
+        check("chân trang: ô đồng hồ", 'id="khbl-dongho"' in b and "data-gio" in b)
 
         # ── 4. bán hàng: quét mã thật + vàng cũ + tổng ──
         c.post("/banle/ban-hang/moi/")
@@ -125,9 +129,14 @@ class Command(BaseCommand):
                                                   "add_money": "0", "dau": "+"}))
         check(f"thâu 1 lượng D9999 = {mong}", mong in b)
 
-        # ── 8. tài nguyên tĩnh ──
-        for f in ("css/khbl.css", "js/khbl.js", "js/vn_text.js", "img/logo_icon.png", "img/favicon.png"):
-            check(f"static {f}", c.get("/static/" + f).status_code == 200)
+        # ── 8. tài nguyên tĩnh: vừa PHẢI TỒN TẠI vừa PHẢI ĐƯỢC NHÚNG vào trang ──
+        # (03/09/2026 từng làm rơi thẻ nạp htmx khi viết lại base.html → mọi tương tác chết
+        #  mà bộ kiểm cũ vẫn xanh vì chỉ kiểm phản hồi máy chủ)
+        b = body(c.get("/"))
+        for f in ("css/khbl.css", "css/fonts.css", "js/vendor/htmx.min.js", "js/khbl.js",
+                  "js/vn_text.js", "img/logo_icon.png", "img/favicon.png"):
+            check(f"static {f} tải được", c.get("/static/" + f).status_code == 200)
+            check(f"  và được nhúng vào trang", f in b)
 
         self.stdout.write((self.style.SUCCESS if not self.fail else self.style.ERROR)(
             f"KẾT QUẢ: {self.ok} PASS / {self.fail} FAIL"))

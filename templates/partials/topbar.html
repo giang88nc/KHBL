@@ -1,0 +1,34 @@
+{% load static pos_extras %}<header class="khbl-top">
+  <a class="khbl-top__brand" href="{% url 'pos:dashboard' %}" title="Về trang tổng quan">
+    <img src="{% static 'img/logo_icon.png' %}" alt="Kim Hạnh 2" width="36" height="36">
+    <span><b>KIM HẠNH 2</b><i>Bán lẻ vàng</i></span>
+  </a>
+
+  <nav class="khbl-top__nav" aria-label="Chức năng chính">
+    <a class="khbl-top__i{% if nav_active == 'tong' %} is-on{% endif %}" href="{% url 'pos:dashboard' %}">
+      {% icon "tong" 24 %}<span>TỔNG QUAN</span></a>
+    <a class="khbl-top__i khbl-top__i--chinh{% if nav_active == 'ban' %} is-on{% endif %}" href="{% url 'pos:ban' %}">
+      {% icon "ban" 24 %}<span>BÁN HÀNG</span></a>
+    <a class="khbl-top__i{% if nav_active == 'thau' %} is-on{% endif %}" href="{% url 'pos:thau' %}">
+      {% icon "thau" 24 %}<span>THÂU VÀO</span></a>
+    <a class="khbl-top__i{% if nav_active == 'gia' %} is-on{% endif %}" href="{% url 'pos:bang_gia' %}">
+      {% icon "gia" 24 %}<span>BẢNG GIÁ</span></a>
+    <a class="khbl-top__i{% if nav_active == 'khach' %} is-on{% endif %}" href="{% url 'pos:khach_hang' %}">
+      {% icon "khach" 24 %}<span>KHÁCH HÀNG</span></a>
+    <a class="khbl-top__i{% if nav_active == 'hoadon' %} is-on{% endif %}" href="{% url 'pos:hoa_don' %}">
+      {% icon "hoadon" 24 %}<span>HÓA ĐƠN</span></a>
+    <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
+      {% icon "hethong" 24 %}<span>HỆ THỐNG</span></a>
+  </nav>
+
+  <div class="khbl-top__me">
+    <div class="khbl-top__me-info">
+      <b>{{ request.user.first_name|default:request.user.username }}</b>
+      <span><span class="mono">{{ request.user.username }}</span>{% if pmv_user.till_code %} · két <span class="mono">{{ pmv_user.till_code }}</span>{% endif %}</span>
+    </div>
+    <div class="khbl-top__me-anh" title="{{ request.user.first_name|default:request.user.username }}{% if pmv_user.emp_id %} · NV {{ pmv_user.emp_id }}{% endif %}">{{ request.user.username|slice:":2"|upper }}</div>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+      <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="submit">Đăng xuất</button>
+    </form>
+  </div>
+</header>
