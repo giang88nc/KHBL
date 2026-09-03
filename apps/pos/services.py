@@ -367,3 +367,16 @@ def tong_ngay(rows):
         "so_ban": len(ban), "tien_ban": sum((M.dec(r["SoTien"]) for r in ban), M.D0),
         "so_thau": len(thau), "tien_thau": sum((M.dec(r["SoTien"]) for r in thau), M.D0),
     }
+
+
+def thong_tin_tiem():
+    """Tên · địa chỉ · điện thoại tiệm cho chân trang (đọc T_SHOP, cache 1 giờ)."""
+    def _doc():
+        r = client("tiem").query(
+            "SELECT TOP 1 ShopID, ShopCode, ShopName, ShopAddress, ShopTel, ShopTax "
+            "FROM T_SHOP WITH (NOLOCK) WHERE Active = '1'")
+        return r[0] if r else {}
+    try:
+        return cache.get_or_set("khbl:tiem", _doc, 3600)
+    except Exception:
+        return {}

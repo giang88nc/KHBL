@@ -165,6 +165,24 @@
     });
   }
 
+
+  /* ---------- đồng hồ thời gian thực ở chân trang ---------- */
+  var THU = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+  function hai(n) { return n < 10 ? "0" + n : "" + n; }
+  function nhipDongHo() {
+    var o = document.getElementById("khbl-dongho");
+    if (!o) return;
+    var g = o.querySelector("[data-gio]"), n = o.querySelector("[data-ngay]"), d = new Date();
+    if (g) g.textContent = hai(d.getHours()) + ":" + hai(d.getMinutes()) + ":" + hai(d.getSeconds());
+    if (n) n.textContent = THU[d.getDay()] + ", " + hai(d.getDate()) + "/" +
+                           hai(d.getMonth() + 1) + "/" + d.getFullYear();
+  }
+  function batDongHo() {
+    if (window.__khblDongHo) return;          // chỉ 1 nhịp cho cả phiên
+    nhipDongHo();
+    window.__khblDongHo = setInterval(nhipDongHo, 1000);
+  }
+
   /* ---------- điểm vào ---------- */
   window.khblBind = function (root) {
     root = root || document;
@@ -177,7 +195,7 @@
     var f = root.querySelector("[data-autofocus]");
     if (f) { try { f.focus(); f.select && f.select(); } catch (_) {} }
   };
-  document.addEventListener("DOMContentLoaded", function () { window.khblBind(document); });
+  document.addEventListener("DOMContentLoaded", function () { window.khblBind(document); batDongHo(); });
   document.addEventListener("htmx:afterSwap", function (e) { window.khblBind(e.target); });
   document.addEventListener("htmx:afterSettle", function (e) { window.khblBind(e.target); });
 })();

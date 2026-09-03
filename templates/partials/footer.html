@@ -1,0 +1,21 @@
+{% load static %}<footer class="khbl-foot">
+  <div class="khbl-foot__co">
+    <img src="{% static 'img/logo_icon.png' %}" alt="" width="26" height="26">
+    <div>
+      <b>{{ tiem.ShopName|default:"CÔNG TY TNHH TRANG SỨC KIM HẠNH 2" }}</b>
+      <span>{{ tiem.ShopAddress|default:"1276 Kha Vạn Cân, P. Linh Trung, TP. Thủ Đức" }}{% if tiem.ShopTel %} · ĐT {{ tiem.ShopTel }}{% endif %}{% if tiem.ShopTax %} · MST {{ tiem.ShopTax }}{% endif %}</span>
+    </div>
+  </div>
+
+  <div class="khbl-foot__pm">
+    <b>KHBL · Webapp bán lẻ {{ khbl_ver }}</b>
+    <span>Chạy song song phần mềm PMVGoldRT · dữ liệu đọc từ máy KK
+      {% if write_lock %}<i class="khbl-foot__cham khbl-foot__cham--do"></i> kênh ghi đang khóa
+      {% else %}<i class="khbl-foot__cham"></i> kết nối máy KK{% endif %}</span>
+  </div>
+
+  <div class="khbl-foot__gio" id="khbl-dongho" aria-live="off">
+    <b class="num" data-gio>--:--:--</b>
+    <span data-ngay>&nbsp;</span>
+  </div>
+</footer>
