@@ -126,14 +126,25 @@ mà hóa đơn vẫn còn, món hàng vẫn bị giữ trong trạng thái đã 
 `/banle/ban-hang/` — bố cục GĐ chốt:
 
 ```
-THÔNG TIN (full)  Ngày [DANH SÁCH][THÊM MỚI] · Số HĐ (khóa) · [CLEAR]
-                  Nhân viên (gõ tên) · Khách hàng (tên/SĐT/CCCD) [+]
-CỘT 1  VÀNG BÁN — quét tem/gõ mã ⏎ → thêm dòng, ô tự trống để quét tiếp, SUM ở chân
-       VÀNG ĐỔI — loại dẻ · tổng TL · TL hột · TL vàng · giá đổi · thành tiền, SUM ở chân
-CỘT 2  TÍNH TỔNG — vàng mới · vàng cũ · CÒN LẠI · vàng thêm · công thêm · bớt · cọc ·
-                   ghi chú · TIỀN KHÁCH TRẢ
-CHÂN   THÊM MỚI · XÓA · THANH TOÁN · THANH TOÁN & IN · IN HÓA ĐƠN
+CỘT TRÁI (1fr) — 3 form xếp dọc:
+  #pos-info  THÔNG TIN — Ngày [DANH SÁCH][THÊM MỚI] · Số HĐ (khóa) · [CLEAR]
+                        Nhân viên (gõ tên) · Khách hàng (tên/SĐT/CCCD) [+/SỬA]
+  #pos-ban   VÀNG BÁN — quét tem/gõ mã ⏎ → thêm dòng, ô tự trống để quét tiếp, SUM ở chân
+  #pos-doi   VÀNG ĐỔI — loại dẻ · tổng TL · TL hột · TL vàng · giá đổi · thành tiền, SUM ở chân
+CỘT PHẢI (340px) — #pos-tong TÍNH TỔNG — vàng mới · vàng cũ · CÒN LẠI · vàng thêm ·
+                   công thêm · bớt · cọc · ghi chú · TIỀN KHÁCH TRẢ
+CHÂN (full)  THÊM MỚI · XÓA · THANH TOÁN · THANH TOÁN & IN · IN HÓA ĐƠN
 ```
+
+**Bố cục 2 CỘT (relayout 05/09/2026, GĐ chốt — chỉ đổi UI, hành vi/OOB giữ nguyên)**: `.pg-ban__body`
+grid 2 cột `minmax(0,1fr) 340px`; **cột trái `.pg-ban__col-l`** grid 3 hàng `auto / 1.35fr / 1fr` chứa
+`#pos-info` (cao tự nhiên) + `#pos-ban` + `#pos-doi` (mỗi khối `display:flex` để `.pg-box` bên trong lấp
+đầy track → thân bảng `.pg-box__body--cuon` MỚI cuộn đúng); **cột phải** `#pos-tong` (`.pg-ban__c2`).
+Các id `#pos-info/#pos-ban/#pos-doi/#pos-tong` GIỮ NGUYÊN nên OOB `hx-swap-oob` không đổi.
+⚠ **Bẫy đã sửa**: sau khi bỏ `#gia-strip` (block `chrome` rỗng) mà `.khbl-main--pos` vẫn để
+`grid-template-rows:auto minmax(0,1fr)` → `.pg-ban` rơi vào hàng `auto` (cao bằng nội dung) nên bảng tràn
+xuống che mất `.pg-ban__foot`; sửa `.khbl-main--pos` còn 1 hàng `minmax(0,1fr)` để `.pg-ban` lấp đầy chiều
+cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92px` (layout đời cũ, không nơi dùng).
 
 **Công thức tiền** (phần "còn lại" đo trên 18.441 hóa đơn thật; hai khoản mới GĐ chốt):
 ```

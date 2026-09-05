@@ -6,13 +6,14 @@
 
 {% block body %}
 <div class="pg-ban">
-  <div id="pos-info">{% include "pos/_ban_info.html" %}</div>
-
   <div class="pg-ban__body">
-    <div class="pg-ban__c1">
+    {# CỘT TRÁI: thông tin + vàng bán + vàng đổi (3 form xếp dọc) #}
+    <div class="pg-ban__col-l">
+      <div id="pos-info">{% include "pos/_ban_info.html" %}</div>
       <div id="pos-ban">{% include "pos/_ban_ban.html" %}</div>
       <div id="pos-doi">{% include "pos/_ban_doi.html" %}</div>
     </div>
+    {# CỘT PHẢI: tính tổng #}
     <div class="pg-ban__c2" id="pos-tong">{% include "pos/_ban_tong.html" %}</div>
   </div>
 
