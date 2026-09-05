@@ -3,7 +3,12 @@
 Không gọi mạng: chuỗi payload dựng thuần Python, mã QR do `segno` vẽ offline (xem view
 `ban_qr`). Chuẩn EMVCo QR + phụ lục VietQR: GUID A000000727, dịch vụ QRIBFTTA (tới TÀI KHOẢN).
 """
+from django.db import connection
+
 from apps.pmv import money as M
+
+# Số tài khoản nhận MẶC ĐỊNH khi chưa chọn (GĐ chốt 06/09/2026 — TK công ty Kim Hạnh 2).
+DEFAULT_BANK_NUMBER = "666141168"
 
 # (mã hiển thị, BIN napas, tên ngân hàng) — các ngân hàng phổ biến VN.
 BANKS = [
@@ -43,11 +48,47 @@ _TEN = {code: ten for code, _, ten in BANKS}
 
 
 def bank_bin(code):
-    return _BIN.get((code or "").strip().upper(), "")
+    """Napas BIN 6 số từ mã NH ('ACB'→970416). Nếu đã là BIN 6 số thì dùng thẳng."""
+    c = (code or "").strip().upper()
+    if c.isdigit() and len(c) == 6:
+        return c
+    return _BIN.get(c, "")
 
 
 def bank_ten(code):
-    return _TEN.get((code or "").strip().upper(), "")
+    return _TEN.get((code or "").strip().upper(), code or "")
+
+
+# ───────── tài khoản nhận đọc từ MySQL app: bảng gold_bank (Active=1) ─────────
+def active_banks():
+    """Các tài khoản nhận ĐANG BẬT (gold_bank.Active=1). bank_bin = mã NH ('ACB'),
+    bank_number = số tài khoản, bank_user = chủ tài khoản."""
+    with connection.cursor() as cur:
+        cur.execute("SELECT id, bank_bin, bank_number, bank_name, bank_user, type "
+                    "FROM gold_bank WHERE Active = 1 ORDER BY id")
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def get_bank(bank_id):
+    if not bank_id:
+        return None
+    with connection.cursor() as cur:
+        cur.execute("SELECT id, bank_bin, bank_number, bank_name, bank_user "
+                    "FROM gold_bank WHERE id = %s", [bank_id])
+        r = cur.fetchone()
+        if not r:
+            return None
+        return dict(zip([d[0] for d in cur.description], r))
+
+
+def default_bank_id():
+    """id của TK mặc định (số 666141168) trong các TK đang bật; không có → TK bật đầu tiên."""
+    banks = active_banks()
+    for b in banks:
+        if (b.get("bank_number") or "").strip() == DEFAULT_BANK_NUMBER:
+            return b["id"]
+    return banks[0]["id"] if banks else None
 
 
 def _tlv(idx, val):

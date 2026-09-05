@@ -10,6 +10,7 @@
     <div class="pg-qr__info">
       <div class="pg-qr__ten">{{ bank_ten }}</div>
       <div class="pg-qr__stk mono">{{ bank_num }}</div>
+      {% if bank_user %}<div class="pg-qr__kh">Chủ TK: {{ bank_user }}</div>{% endif %}
       {% if amount > 0 %}
         <div class="pg-qr__tien">{{ amount|tien }}</div>
       {% else %}

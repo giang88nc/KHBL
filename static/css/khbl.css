@@ -642,8 +642,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-pay__way.on{color:var(--gold-700);background:var(--gold-100);border-color:var(--gold-300);box-shadow:inset 0 0 0 1px var(--gold-300)}
 .pg-pay__way:hover{border-color:var(--gold-300)}
 .pg-qr-row{display:flex;gap:6px;align-items:stretch}
-.pg-qr-row .khbl-select{flex:0 0 40%;min-width:0;padding:4px 6px;font-size:12px}
-.pg-qr-row .khbl-input{flex:1;min-width:0;padding:4px 8px;font-size:12.5px}
+.pg-qr-row .khbl-select{flex:1;min-width:0;padding:4px 6px;font-size:12px}
 .pg-qr-row .khbl-btn{flex:none;white-space:nowrap}
 /* Popup QR chuyển khoản */
 .pg-qr{display:flex;gap:16px;align-items:center;flex-wrap:wrap}

@@ -80,7 +80,7 @@ def _ctx_pos(request, extra=None):
         "nav_active": "ban", "g": g, "t": cart.tong(request), "phien": ph,
         "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc(),
         "nvs": S.nhan_vien_ban(), "loai_de": S.loai_de(), "hm_ngang": _hm_ngang_list(g),
-        "banks": QR.BANKS,
+        "banks": QR.active_banks(), "bank_sel": str(g.get("bank_id") or QR.default_bank_id() or ""),
         "ngay": g.get("ngay") or datetime.date.today().isoformat(),
         "hom_nay": datetime.date.today().isoformat(),
         "ma_du_kien": g.get("trn_id") or _ma_du_kien_an_toan(),
@@ -293,38 +293,39 @@ def ban_dat(request):
     if "tien_mat" in request.POST:                 # rỗng = auto theo phương thức, có số = chốt tay
         v = (request.POST.get("tien_mat") or "").strip()
         g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
-    if "bank_code" in request.POST:
-        g["bank_code"] = (request.POST.get("bank_code") or "").strip().upper()
-    if "bank_num" in request.POST:
-        g["bank_num"] = "".join(ch for ch in (request.POST.get("bank_num") or "") if ch.isalnum())
+    if "bank_id" in request.POST:
+        g["bank_id"] = (request.POST.get("bank_id") or "").strip()
     cart.save(request, g)
     return _pos_oob(request)
 
 
 @require_GET
 def ban_qr(request):
-    """Popup mã QR chuyển khoản VietQR (dựng offline). Nhận bank_code · bank_num · amount
-    (số tiền CK) — không có amount thì QR để người chuyển tự nhập."""
+    """Popup mã QR chuyển khoản VietQR (dựng offline). Tài khoản nhận lấy từ MySQL gold_bank
+    theo bank_id (mặc định TK 666141168); số tiền = amount (ô CK), ≤0 → QR để người chuyển tự nhập."""
     import base64
     from io import BytesIO
     import segno
 
     g = cart.get(request)
-    bank_code = (request.GET.get("bank_code") or g.get("bank_code") or "").strip().upper()
-    bank_num = "".join(ch for ch in (request.GET.get("bank_num") or g.get("bank_num") or "") if ch.isalnum())
+    bank_id = (request.GET.get("bank_id") or g.get("bank_id") or "").strip() or QR.default_bank_id()
+    row = QR.get_bank(bank_id)
+    if not row:
+        return render(request, "pos/_qr_modal.html", {"loi": "Chưa có tài khoản ngân hàng nhận (gold_bank)"})
     amount = _so(request.GET.get("amount"))
     info = (g.get("bill_code") or g.get("trn_id") or "").strip()
     ten_kh = (g.get("cust") or {}).get("name") or ""
     try:
-        chuoi = QR.payload(bank_code, bank_num, amount, info)
+        chuoi = QR.payload(row["bank_bin"], row["bank_number"], amount, info)
     except ValueError as exc:
         return render(request, "pos/_qr_modal.html", {"loi": str(exc)})
     buf = BytesIO()
     segno.make(chuoi, error="m").save(buf, kind="png", scale=7, border=2)
     img = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
     return render(request, "pos/_qr_modal.html", {
-        "qr_img": img, "bank_ten": QR.bank_ten(bank_code), "bank_code": bank_code,
-        "bank_num": bank_num, "amount": M.dec(amount), "info": info, "ten_kh": ten_kh,
+        "qr_img": img, "bank_ten": row.get("bank_name") or QR.bank_ten(row["bank_bin"]),
+        "bank_num": row["bank_number"], "bank_user": row.get("bank_user") or "",
+        "amount": M.dec(amount), "info": info, "ten_kh": ten_kh,
     })
 
 
@@ -482,14 +483,8 @@ def ban_in(request):
 # ─────────────────────────── BẢNG GIÁ ───────────────────────────
 
 def bang_gia(request):
-    rows = S.bang_gia()
-    return render(request, "pos/bang_gia.html", {
-        "nav_active": "gia", "rows": rows, "moc": S.gia_moc(),
-        "lo": S.lich_su_gia(), "gia_sig": S.gia_chu_ky(rows),
-        "vang": [r for r in rows if (r["Type"] or "").upper() == "G"],
-        "de": [r for r in rows if (r["Type"] or "").upper() == "D"],
-        "khac": [r for r in rows if (r["Type"] or "").upper() not in ("G", "D")],
-    })
+    from .prices import page_data
+    return render(request, "pos/bang_gia.html", {"nav_active": "gia", **page_data()})
 
 
 def gia_nhip(request):

@@ -27,7 +27,7 @@ def _rong(emp=""):
     return {"trn_id": "", "bill_code": "", "status": "", "ngay": "", "cust": None, "emp": emp,
             "ban": [], "doi": [], "bot": "0", "cong_them": "0", "vang_them": "0",
             "coc": "0", "ghi_chu": "", "pay_method": "cash", "tien_mat": "",
-            "bank_code": "", "bank_num": ""}
+            "bank_id": ""}
 
 
 def get(request):
@@ -48,7 +48,7 @@ def clear(request, giu_nv=True):
     """Phiếu mới. Giữ nhân viên bán + tài khoản ngân hàng nhận (không phải chọn lại mỗi phiếu)."""
     cu = get(request)
     g = _rong(cu.get("emp", "") if giu_nv else "")
-    g["bank_code"], g["bank_num"] = cu.get("bank_code", ""), cu.get("bank_num", "")
+    g["bank_id"] = cu.get("bank_id", "")
     save(request, g)
 
 

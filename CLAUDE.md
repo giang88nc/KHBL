@@ -174,9 +174,14 @@ cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92p
   `ban_qr` (GET, popup `_qr_modal`) dựng chuỗi EMVCo/VietQR thuần Python (`vietqr.payload`: GUID
   A000000727, dịch vụ QRIBFTTA, CRC-16/CCITT) rồi **`segno` vẽ PNG data-URI** (không gọi mạng — chạy được
   cả khi LAN offline). Số tiền QR = ô CK/Thẻ (`amount` truyền qua hx-vals; ≤0 → QR để người chuyển tự nhập);
-  nội dung CK = mã đơn. `bank_code`/`bank_num` lưu session + **giữ qua `clear()`** (tài khoản tiệm không đổi
-  mỗi phiếu). ⚠ thêm dependency **`segno==1.6.6`** (pure-python, requirements.txt). QR chỉ để KHÁCH quét
-  chuyển — CHƯA đối soát/ghi PMV.
+  nội dung CK = mã đơn. QR chỉ để KHÁCH quét chuyển — CHƯA đối soát/ghi PMV. ⚠ thêm dependency
+  **`segno==1.6.6`** (pure-python, requirements.txt).
+- **DANH SÁCH TK LẤY TỪ MySQL** (06/09/2026, GĐ chốt): bảng **`gold_bank`** (app MySQL) — `bank_bin` = MÃ NH
+  ('ACB', map napas BIN qua `vietqr._BIN`; là BIN 6 số thì dùng thẳng), `bank_number` = số TK,
+  `bank_name`/`bank_user`, `Active`. `vietqr.active_banks()` (Active=1) đổ vào select; **mặc định chọn TK số
+  666141168** (`default_bank_id`, hằng `DEFAULT_BANK_NUMBER`). Session giữ **`bank_id`** (thay bank_code/num
+  cũ), giữ qua `clear()`; `ban_qr` tra `gold_bank` theo bank_id (fallback mặc định) → payload. Bỏ ô nhập STK
+  tay — chọn NH là có sẵn bin+số.
 - smoke_pmv_money 15/15 (+bot_le_goiy, +tron_ngan), smoke_ui 126/126, smoke_ban_hang 51/51.
   ⚠ Nếu GĐ muốn "làm tròn LÊN" kiểu ceil (thay HALF_UP nearest) thì đổi rounding trong `tron_ngan`.
 
