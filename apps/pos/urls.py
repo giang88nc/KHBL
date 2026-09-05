@@ -41,6 +41,7 @@ urlpatterns = [
     path("banle/khach-hang/", views.khach_hang, name="khach_hang"),
     path("banle/khach-hang/them/", views.khach_form, name="khach_them"),
     path("banle/khach-hang/luu/", views.khach_luu, name="khach_luu"),
+    path("banle/khach-hang/<str:cust_id>/anh/<str:kind>/", views.khach_anh, name="khach_anh"),
     path("banle/khach-hang/<str:cust_id>/", views.khach_chi_tiet, name="khach_chi_tiet"),
     path("banle/khach-hang/<str:cust_id>/sua/", views.khach_form, name="khach_sua"),
 

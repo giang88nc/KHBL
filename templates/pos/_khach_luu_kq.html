@@ -2,7 +2,8 @@
 {% if loi %}
   <div class="khbl-alert khbl-alert--do" style="margin-top:14px">
     {% icon "hethong" 16 %}
-    <div><b>Chưa lưu được — kiểm tra lại:</b>
+    <div><b>{% if da_luu_thong_tin %}Đã lưu thông tin {{ saved_cust_code }}, nhưng chưa hoàn tất:{% else %}Chưa lưu được — kiểm tra lại:{% endif %}</b>
       <ul style="margin:4px 0 0 16px;padding:0">{% for l in loi %}<li>{{ l }}</li>{% endfor %}</ul></div>
   </div>
+  {% if saved_cust_id %}<input type="hidden" id="kh-cust-id" name="CustID" value="{{ saved_cust_id }}" hx-swap-oob="outerHTML">{% endif %}
 {% endif %}

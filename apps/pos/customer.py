@@ -33,6 +33,16 @@ IMAGE_FIELDS = {
     "anh_truoc": ("p_ImageDataMatTruoc", "p_ImagePathMatTruoc", 2000, 650_000),
     "anh_sau": ("p_ImageDataMatSau", "p_ImagePathMatSau", 2000, 650_000),
 }
+SAVED_IMAGE_FIELDS = {
+    "dai-dien": ("ImagePath", "Ảnh đại diện"),
+    "mat-truoc": ("ImagePathMatTruoc", "CCCD mặt trước"),
+    "mat-sau": ("ImagePathMatSau", "CCCD mặt sau"),
+}
+IMAGE_PARAM_PATHS = {
+    "p_ImageData": ("ImagePath", "Ảnh đại diện"),
+    "p_ImageDataMatTruoc": ("ImagePathMatTruoc", "CCCD mặt trước"),
+    "p_ImageDataMatSau": ("ImagePathMatSau", "CCCD mặt sau"),
+}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PIXELS = 25_000_000
 
@@ -204,12 +214,14 @@ def upsert(data, images, shop_id="", client=None):
             or (saved.get("CMND") or "") != data["cmnd"]:
         raise CustomerSaveError("PMV trả thành công nhưng dữ liệu đọc lại chưa khớp; vui lòng kiểm tra")
 
-    warnings = []
-    if not current:
+    warnings, incomplete = [], []
+    if not _has_points(client, cust_id):
         try:
             client.call("I_DiemTichLuy_InsFromGT", write=True, day_du=True, p_CustID=cust_id)
-        except Exception:
-            warnings.append("Đã tạo khách nhưng chưa mở được sổ điểm tích lũy")
+            if not _has_points(client, cust_id):
+                incomplete.append("PMV không tạo được sổ điểm tích lũy sau khi đã lưu thông tin khách")
+        except Exception as exc:
+            incomplete.append("Chưa mở được sổ điểm tích lũy: " + error_message(exc))
 
     if images:
         image_params = dict(params)
@@ -219,11 +231,67 @@ def upsert(data, images, shop_id="", client=None):
         image_params["p_CustCode"] = _image_prefix(data["name"])
         try:
             client.call("I_CUSTOMER_Upd", write=True, day_du=True, **image_params)
-        except Exception:
-            warnings.append("Đã lưu thông tin khách nhưng chưa lưu được ảnh; hãy sửa khách để gửi ảnh lại")
+            after_image = _current(client, cust_id) or {}
+            for data_param, (path_field, label) in IMAGE_PARAM_PATHS.items():
+                if data_param not in images:
+                    continue
+                path = after_image.get(path_field)
+                if not path:
+                    raise CustomerSaveError(f"{label}: PMV chưa ghi đường dẫn tệp ảnh")
+                _validated_image(client, path)
+        except Exception as exc:
+            incomplete.append("Chưa lưu/kiểm tra được ảnh: " + error_message(exc))
 
     return {"cust_id": cust_id, "cust_code": cust_code, "name": data["name"],
-            "created": not bool(current), "warnings": warnings}
+            "created": not bool(current), "warnings": warnings,
+            "complete": not incomplete, "errors": incomplete}
+
+
+def saved_image(cust_id, kind, client=None):
+    """Đọc và kiểm tra một ảnh đã lưu, không nhận đường dẫn từ phía trình duyệt."""
+    if kind not in SAVED_IMAGE_FIELDS:
+        raise CustomerSaveError("Loại ảnh không hợp lệ")
+    client = client or PmvClient(tag="khach_anh")
+    current = _current(client, cust_id)
+    if not current:
+        raise CustomerSaveError("Không tìm thấy khách hàng")
+    field, label = SAVED_IMAGE_FIELDS[kind]
+    path = current.get(field)
+    if not path:
+        raise CustomerSaveError(f"{label}: chưa có ảnh đã lưu")
+    return _validated_image(client, path)
+
+
+def _validated_image(client, path):
+    data = client.image_file(path)
+    if not data:
+        raise CustomerSaveError("Tệp ảnh rỗng hoặc không tồn tại trên máy PMV")
+    if len(data) > MAX_UPLOAD:
+        raise CustomerSaveError("Tệp ảnh đã lưu lớn quá 15 MB")
+    try:
+        with Image.open(BytesIO(data)) as image:
+            fmt = (image.format or "").upper()
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise CustomerSaveError("Tệp trên máy PMV không phải ảnh hợp lệ") from exc
+    content_type = {"JPEG": "image/jpeg", "PNG": "image/png"}.get(fmt)
+    if not content_type:
+        raise CustomerSaveError(f"Định dạng ảnh đã lưu không được hỗ trợ ({fmt or 'không xác định'})")
+    return data, content_type
+
+
+def _has_points(client, cust_id):
+    rows = client.query(
+        "SELECT TOP 1 CustID FROM I_DIEMTICHLUY WITH (NOLOCK) WHERE CustID = ?", (cust_id,))
+    return bool(rows)
+
+
+def error_message(exc):
+    """Giữ nguyên nguyên nhân hữu ích từ PMV/ODBC nhưng giới hạn độ dài hiển thị."""
+    if isinstance(exc, PmvProcError):
+        return _proc_error(exc)
+    message = str(exc).strip() or exc.__class__.__name__
+    return re.sub(r"\s+", " ", message)[:800]
 
 
 def previous_save(token, fingerprint):

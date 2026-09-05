@@ -16,6 +16,14 @@
   </div>
   {% if k.Address %}<p class="dim" style="margin:0 0 12px">{{ k.Address }}</p>{% endif %}
 
+  {% if k.ImagePath or k.ImagePathMatTruoc or k.ImagePathMatSau %}
+  <div class="kh-anh" style="margin-bottom:14px">
+    {% if k.ImagePath %}<div class="kh-anh__item"><b>Ảnh đại diện</b><div class="kh-anh__khung"><img src="{% url 'pos:khach_anh' k.CustID 'dai-dien' %}" alt="Ảnh đại diện"></div></div>{% endif %}
+    {% if k.ImagePathMatTruoc %}<div class="kh-anh__item"><b>CCCD mặt trước</b><div class="kh-anh__khung"><img src="{% url 'pos:khach_anh' k.CustID 'mat-truoc' %}" alt="CCCD mặt trước"></div></div>{% endif %}
+    {% if k.ImagePathMatSau %}<div class="kh-anh__item"><b>CCCD mặt sau</b><div class="kh-anh__khung"><img src="{% url 'pos:khach_anh' k.CustID 'mat-sau' %}" alt="CCCD mặt sau"></div></div>{% endif %}
+  </div>
+  {% endif %}
+
   <h3 style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-700);margin-bottom:6px">Giao dịch gần nhất</h3>
   <table class="khbl-tbl">
     <thead><tr><th>Loại</th><th>Số phiếu</th><th>Ngày</th><th>Giờ</th><th class="num">Số tiền</th></tr></thead>

@@ -188,7 +188,42 @@ def pmv_read(sql, params=(), *, tag, database=None, timeout=30, audit=True, targ
     except PmvBlocked:
         raise
     except Exception as exc:
-        _audit("READ", tag, f"[{target}] {s}", ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
+        _audit("READ", tag, f"[{target}] {s}", ok=False,
+               ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise
+
+
+_CUSTOMER_IMAGE_PATH = re.compile(
+    r"(?i)^D:\\PHANMEMVANG\\HINHANHKH\\[A-Za-z0-9][A-Za-z0-9_. -]{0,180}\.(?:jpe?g|png)$"
+)
+
+
+def pmv_image_read(path, *, tag, target=None, timeout=30):
+    """Đọc một ảnh khách từ đĩa local của SQL Server qua kênh chỉ đọc riêng.
+
+    ``OPENROWSET(BULK)`` không nhận tham số cho tên tệp. Vì vậy đường dẫn phải khớp
+    tuyệt đối thư mục ảnh PMV và bộ ký tự tên tệp an toàn trước khi ghép vào SQL.
+    Hàm không nhận thư mục khác, dấu nháy, đường dẫn tương đối hoặc tên có ``..``.
+    """
+    target = target or "kk"
+    path = str(path or "").strip()
+    if ".." in path or not _CUSTOMER_IMAGE_PATH.fullmatch(path):
+        _audit("BLOCKED", tag, "Đường dẫn ảnh khách không hợp lệ", ok=False)
+        raise PmvBlocked("Đường dẫn ảnh khách nằm ngoài thư mục PMV được phép đọc")
+    sql = f"SELECT BulkColumn FROM OPENROWSET(BULK N'{path}', SINGLE_BLOB) AS img"
+    t0 = time.monotonic()
+    try:
+        with _connect_dich(target, timeout=timeout) as cn:
+            cur = cn.cursor()
+            cur.execute(sql)
+            row = cur.fetchone()
+        data = bytes(row[0]) if row and row[0] is not None else b""
+        _audit("READ", tag, f"[{target}] ảnh khách {path}",
+               ms=int((time.monotonic() - t0) * 1000))
+        return data
+    except Exception as exc:
+        _audit("READ", tag, f"[{target}] ảnh khách {path}", ok=False,
+               ms=int((time.monotonic() - t0) * 1000), error=exc)
         raise
 
 

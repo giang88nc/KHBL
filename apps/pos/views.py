@@ -13,7 +13,7 @@ import secrets
 from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.pmv import money as M
 from apps.pmv.models import PmvUser
@@ -462,6 +462,20 @@ def khach_form(request, cust_id=None):
     })
 
 
+@require_GET
+def khach_anh(request, cust_id, kind):
+    """Phục vụ ảnh PMV theo mã khách; URL không bao giờ nhận đường dẫn đĩa."""
+    try:
+        data, content_type = C.saved_image(cust_id, kind)
+    except Exception as exc:
+        logger.warning("Không đọc được ảnh khách %s/%s: %s", cust_id, kind, exc)
+        return HttpResponse(status=404)
+    response = HttpResponse(data, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=300"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @require_POST
 def khach_luu(request):
     """UPSERT thật qua proc PMV; ảnh chỉ gửi sau khi dữ liệu khách đã COMMIT."""
@@ -492,13 +506,20 @@ def khach_luu(request):
                 result = C.upsert(data, images, shop_id=_phien(request)["shop_id"])
                 result["warnings"] = list(dict.fromkeys(warnings + result["warnings"]))
                 result["images"] = image_info
-                C.remember_save(token, fingerprint, result)
+                if result.get("complete", True):
+                    C.remember_save(token, fingerprint, result)
+                else:
+                    return render(request, "pos/_khach_luu_kq.html", {
+                        "loi": result.get("errors") or ["Chưa hoàn tất lưu khách hàng"],
+                        "da_luu_thong_tin": True, "saved_cust_id": result["cust_id"],
+                        "saved_cust_code": result["cust_code"],
+                    })
     except C.CustomerSaveError as exc:
         return render(request, "pos/_khach_luu_kq.html", {"loi": str(exc).splitlines()})
     except Exception as exc:
         logger.exception("Không lưu được khách hàng qua PMV", exc_info=exc)
         return render(request, "pos/_khach_luu_kq.html", {
-            "loi": ["Chưa lưu được khách do kết nối PMV hoặc kênh ghi đang bị khóa. Hãy thử lại sau."]})
+            "loi": ["PMV/SQL: " + C.error_message(exc)]})
 
     message = (("Đã thêm" if result["created"] else "Đã cập nhật") +
                f" {result['cust_code']} — {result['name']}")

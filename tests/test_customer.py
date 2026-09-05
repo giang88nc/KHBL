@@ -8,11 +8,15 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from apps.pmv.client import PmvProcError
-from apps.pmv.gateway import _proc_sql
+from apps.pmv.gateway import PmvBlocked, _proc_sql, pmv_image_read
 from apps.pos import customer
 
 
 class CustomerValidationTests(unittest.TestCase):
+    def test_image_reader_rejects_paths_outside_pmv_folder(self):
+        with self.assertRaises(PmvBlocked):
+            pmv_image_read(r"D:\KHJ_PMV_BACKUP\secret.bak", tag="test", target="sandbox")
+
     def test_binary_proc_markers_are_explicitly_typed(self):
         sql, values = _proc_sql("I_CUSTOMER_Upd", {
             "p_CustID": "CU_TEST", "p_ImageData": None,
@@ -33,6 +37,15 @@ class CustomerValidationTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(data["name"], "Trương Ngọc Giang")
         self.assertEqual(data["phone"], "0960880906")
+
+    def test_normalizes_partially_repaired_address(self):
+        data, errors, warnings = customer.clean_form({
+            "CustName": "Trương Ngọc Giang", "Gender": "1",
+            "Address": "Khóm 4, TT. NÄm CÄn, Năm Căn, Cà Mau",
+        })
+        self.assertEqual(errors, [])
+        self.assertEqual(data["address"], "Khóm 4, TT. Năm Căn, Năm Căn, Cà Mau")
+        self.assertTrue(warnings)
 
     def test_rejects_bad_email_and_control_character(self):
         _, errors, _ = customer.clean_form({
@@ -67,15 +80,20 @@ class CustomerUpsertTests(unittest.TestCase):
     @patch("apps.pos.customer._current")
     @patch("apps.pos.customer.duplicate_errors", return_value=[])
     def test_images_are_sent_only_after_successful_upsert(self, _duplicates, current):
-        current.return_value = {"CustID": "CU_TEST", "CustCode": "KH_TEST",
-                                "CustName": "Khách Thử", "Phone": "0900000001", "CMND": ""}
+        saved = {"CustID": "CU_TEST", "CustCode": "KH_TEST",
+                 "CustName": "Khách Thử", "Phone": "0900000001", "CMND": ""}
+        current.side_effect = [saved, {**saved, "ImagePath": r"D:\PHANMEMVANG\HINHANHKH\Khach_Thu.jpg"}]
         data = {"cust_id": "", "name": "Khách Thử", "phone": "0900000001", "cmnd": "",
                 "address": "", "birth": "", "gender": "1", "issued": "", "issued_by": "",
                 "email": "", "notes": "", "cust_type": "", "active": "1"}
         client = self._client()
+        client.query.side_effect = [[], [{"CustID": "CU_TEST"}]]
+        jpeg = BytesIO(); Image.new("RGB", (20, 20), "white").save(jpeg, "JPEG")
+        client.image_file.return_value = jpeg.getvalue()
         result = customer.upsert(data, {"p_ImageData": b"jpg", "p_ImagePath": ".jpg"},
                                  client=client)
         self.assertTrue(result["created"])
+        self.assertTrue(result["complete"])
         self.assertEqual([c.args[0] for c in client.call.call_args_list],
                          ["I_CUSTOMER_Ins", "I_DiemTichLuy_InsFromGT", "I_CUSTOMER_Upd"])
         self.assertIsNone(client.call.call_args_list[0].kwargs["p_ImageData"])
@@ -114,6 +132,29 @@ class CustomerUpsertTests(unittest.TestCase):
         header = response["HX-Trigger"]
         header.encode("ascii")
         self.assertIn("Trương Ngọc Giang", json.loads(header)["khachSaved"]["message"])
+
+    def test_partial_image_failure_keeps_popup_open_for_retry(self):
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.prod")
+        import django
+        django.setup()
+        from django.test import RequestFactory
+        from apps.pos import views
+
+        post = {"CustName": "Khách Thử", "Phone": "0900000001", "Gender": "1",
+                "save_token": "b" * 24}
+        partial = {"cust_id": "CU_TEST", "cust_code": "KH_TEST", "name": "Khách Thử",
+                   "created": True, "warnings": [], "complete": False,
+                   "errors": ["CCCD mặt trước: tệp không tồn tại"]}
+        with patch("apps.pos.views._phien", return_value={"shop_id": ""}), \
+             patch("apps.pos.views.C.previous_save", return_value=None), \
+             patch("apps.pos.views.C.upsert", return_value=partial), \
+             patch("apps.pos.views.C.remember_save") as remember:
+            response = views.khach_luu(RequestFactory().post("/banle/khach-hang/luu/", post))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("HX-Trigger", response)
+        self.assertIn(b"CU_TEST", response.content)
+        self.assertIn("tệp không tồn tại", response.content.decode("utf-8"))
+        remember.assert_not_called()
 
 
 if __name__ == "__main__":

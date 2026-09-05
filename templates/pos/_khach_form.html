@@ -6,7 +6,7 @@
 <form id="kh-form" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq"
       hx-sync="this:drop" hx-disabled-elt="#kh-save-btn" enctype="multipart/form-data">
   {% csrf_token %}
-  <input type="hidden" name="CustID" value="{{ k.CustID|default:'' }}">
+  <input type="hidden" id="kh-cust-id" name="CustID" value="{{ k.CustID|default:'' }}">
   <input type="hidden" name="Active" value="{% if k %}{{ k.Active }}{% else %}1{% endif %}">
   <input type="hidden" name="save_token" value="{{ save_token }}">
 
@@ -96,7 +96,7 @@
     <div class="kh-anh">
       <div class="kh-anh__item" data-photo data-label="Ảnh đại diện" data-facing="user">
         <b>Ảnh đại diện</b>
-        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__khung" data-xem>{% if k.ImagePath %}<img src="{% url 'pos:khach_anh' k.CustID 'dai-dien' %}" alt="Ảnh đại diện đã lưu">{% else %}<span>Chưa có ảnh</span>{% endif %}</div>
         <div class="kh-anh__actions">
           <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
             <input type="file" name="anh_dai_dien" accept="image/*" data-photo-input hidden>
@@ -106,7 +106,7 @@
       </div>
       <div class="kh-anh__item" data-photo data-label="CCCD mặt trước" data-facing="environment">
         <b>CCCD mặt trước</b>
-        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__khung" data-xem>{% if k.ImagePathMatTruoc %}<img src="{% url 'pos:khach_anh' k.CustID 'mat-truoc' %}" alt="CCCD mặt trước đã lưu">{% else %}<span>Chưa có ảnh</span>{% endif %}</div>
         <div class="kh-anh__actions">
           <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
             <input type="file" name="anh_truoc" accept="image/*" data-photo-input hidden>
@@ -116,7 +116,7 @@
       </div>
       <div class="kh-anh__item" data-photo data-label="CCCD mặt sau" data-facing="environment">
         <b>CCCD mặt sau</b>
-        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__khung" data-xem>{% if k.ImagePathMatSau %}<img src="{% url 'pos:khach_anh' k.CustID 'mat-sau' %}" alt="CCCD mặt sau đã lưu">{% else %}<span>Chưa có ảnh</span>{% endif %}</div>
         <div class="kh-anh__actions">
           <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
             <input type="file" name="anh_sau" accept="image/*" data-photo-input hidden>

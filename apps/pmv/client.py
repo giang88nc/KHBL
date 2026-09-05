@@ -171,6 +171,10 @@ class PmvClient:
     def query(self, sql, params=()):
         return gateway.pmv_read(sql, params, tag=self.tag, audit=False, target=self.target)
 
+    def image_file(self, path):
+        """Đọc ảnh khách đã lưu trên đĩa của đúng máy PMV đang được chọn."""
+        return gateway.pmv_image_read(path, tag=self.tag, target=self.target)
+
     # ---------- tiện ích nghiệp vụ ----------
     def retail_log(self, trn_id, limit=10):
         return self.query(
