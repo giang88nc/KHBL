@@ -22,22 +22,23 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
     </div>
   {% endif %}
 
-  <div class="pg-box__body">
-    <table class="pg-tb">
+  <div class="pg-box__body pg-box__body--cuon">
+    <table class="pg-tb pg-tb--gon">
       <thead><tr>
-        <th class="w-stt">#</th><th>MÃ HÀNG</th><th>TÊN HÀNG</th>
+        <th class="w-stt">#</th><th>MÃ HÀNG</th><th>LOẠI</th><th>TÊN HÀNG</th>
         <th class="r">TỔNG TL</th><th class="r">TL HỘT</th><th class="r">TL VÀNG</th>
-        <th class="r">ĐƠN GIÁ</th><th class="r">TIỀN CÔNG</th><th class="r">THÀNH TIỀN</th><th class="w-x"></th>
+        <th class="r">ĐƠN GIÁ</th><th class="r">CÔNG</th><th class="r">THÀNH TIỀN</th><th class="w-x"></th>
       </tr></thead>
       <tbody>
         {% for x in g.ban %}
         <tr>
           <td class="w-stt dim">{{ forloop.counter }}</td>
           <td class="mono">{{ x.row.ProductCode }}</td>
-          <td>{{ x.row.ProductDesc }}<i class="pg-tb__phu">{{ x.row.GoldDesc }}</i></td>
-          <td class="r mono">{{ x.row.TotalWeight|tl_man:x.row.PriceUnit }}</td>
-          <td class="r mono dim">{{ x.row.DiamondWeight|tl_man:x.row.PriceUnit }}</td>
-          <td class="r mono">{{ x.row.GoldReal|tl_man:x.row.PriceUnit }}</td>
+          <td><span class="pg-tuoi">{{ x.row.GoldCode|tuoi }}</span></td>
+          <td class="pg-td-ten">{{ x.row.ProductDesc }}</td>
+          <td class="r mono">{{ x.row.TotalWeight|tl_chi:x.row.PriceUnit }}</td>
+          <td class="r mono dim">{{ x.row.DiamondWeight|tl_chi:x.row.PriceUnit }}</td>
+          <td class="r mono">{{ x.row.GoldReal|tl_chi:x.row.PriceUnit }}</td>
           <td class="r mono">{{ x.row.SellRate|don_gia }}</td>
           <td class="r mono dim">{{ x.row.TaskPrice|don_gia }}</td>
           <td class="r mono b">{{ x.tien|tien_tran }}</td>
@@ -48,7 +49,7 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
           </td>
         </tr>
         {% empty %}
-        <tr class="pg-tb__trong"><td colspan="10">
+        <tr class="pg-tb__trong"><td colspan="11">
           {% icon "tem" 34 %}<b>Chưa có món nào</b>
           <span>Quét tem hoặc gõ mã hàng vào ô trên rồi Enter</span>
         </td></tr>

@@ -124,6 +124,25 @@ def de_base(gold_code):
     return c[1:] if c[:1].upper() == "D" and len(c) > 1 else c
 
 
+# Nhãn TUỔI VÀNG hiển thị (GĐ chốt 05/09/2026): 18K→610 · 24K→980 · N9999→99.99 · BK · VT · SJC.
+# Áp cho cả mã dẻ (quy về base trước). Không có trong map → trả base.
+TUOI_LABEL = {"18K": "610", "24K": "980", "N9999": "99.99", "9999": "99.99",
+              "BK": "BK", "VT": "VT", "SJC": "SJC"}
+
+
+def tuoi(gold_code):
+    base = de_base(gold_code)
+    return TUOI_LABEL.get(base, base)
+
+
+def weight_chi(w, price_unit="L"):
+    """Trọng lượng quy về 1 ĐƠN VỊ, KHÔNG kèm chữ: 'L'/'M' → CHỈ (chính xác 0,001 chỉ = 0,1 ly),
+    'G'/'K' → GRAM. Dùng cho các ô TL trên bảng bán hàng."""
+    if (price_unit or "L").upper() in ("G", "K"):
+        return _vn(w, 3)          # gram
+    return _vn(dec(w) / Decimal("100"), 3)   # ly → chỉ
+
+
 def chia_doi_ngang(gold_weight, tl_hot, han_muc, sell_rate, buy_rate, price_unit="L", client=None):
     """Chia 1 dẻ khi 'đổi ngang' theo hạn mức (trọng lượng vàng bán ra cùng loại còn lại).
 

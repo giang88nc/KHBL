@@ -640,3 +640,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-badge--thau{background:#F1EEE6;color:#8a6d2f;border:1px solid var(--line)}
 .pg-tr-ngang{background:#F1F9F3}
 .pg-tr-ngang td:first-child{box-shadow:inset 3px 0 0 #2E7D46}
+
+/* ── Bảng bán/đổi tinh gọn + cột LOẠI VÀNG (tuổi) + tên hàng 1 dòng ── */
+.pg-tb--gon th{padding:4px 6px;font-size:10px}
+.pg-tb--gon td{padding:3px 6px;font-size:12px;line-height:1.25}
+.pg-td-ten{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg-tuoi{display:inline-block;font-weight:700;font-size:11px;color:var(--gold-700);background:var(--gold-100);
+  border:1px solid var(--gold-300);border-radius:5px;padding:0 6px;letter-spacing:.02em}
+.pg-box__body--cuon{overflow:auto}

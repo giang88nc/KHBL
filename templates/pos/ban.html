@@ -2,7 +2,7 @@
 {% block title %}Mua bán{% endblock %}
 {% block main_mod %} khbl-main--pos{% endblock %}
 
-{% block chrome %}{% include "pos/_gia_strip.html" %}{% endblock %}
+{% comment %}BỎ dải giá đỉnh (#gia-strip) trên màn bán — GĐ chốt 05/09/2026{% endcomment %}
 
 {% block body %}
 <div class="pg-ban">
@@ -51,6 +51,15 @@
 
 {% block extra_js %}
 <script>
+/* Ẩn dropdown gợi ý NV/Khách khi bấm RA NGOÀI vùng ô tìm (chọn 1 mục đã tự re-render) */
+document.addEventListener("mousedown", function (e) {
+  if (e.target.closest(".pg-f--tim")) return;   // đang bấm trong ô tìm / mục gợi ý
+  ["nv-goiy", "khach-goiy"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = "";
+  });
+});
+
 /* phím tắt */
 document.addEventListener("keydown", function (e) {
   var map = { F2: "#o-khach", F3: "#nut-tim-hang", F4: "#o-de", F6: "#nut-bot-le" };

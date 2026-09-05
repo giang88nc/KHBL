@@ -92,6 +92,18 @@ def tl_man(w, unit="L"):
 
 
 @register.filter
+def tl_chi(w, unit="L"):
+    """TL quy về CHỈ (L/M) hoặc GRAM (G), KHÔNG kèm chữ đơn vị — cho bảng bán hàng."""
+    return M.weight_chi(w, unit)
+
+
+@register.filter
+def tuoi(gold_code):
+    """Nhãn tuổi vàng: 18K→610, 24K→980, N9999→99.99, BK, VT."""
+    return M.tuoi(gold_code)
+
+
+@register.filter
 def tl_giay(w, unit="L"):
     """Trọng lượng cho giấy in: '1L0C3P7Ly'."""
     return M.weight_bill(w, unit)
