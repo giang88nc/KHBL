@@ -1,0 +1,24 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_title %}QR chuyển khoản{% endblock %}
+{% block modal_body %}
+{% if loi %}
+  <div class="khbl-alert khbl-alert--do">{% icon "hethong" 16 %}<div>{{ loi }}</div></div>
+  <p class="dim" style="margin-top:10px">Chọn ngân hàng nhận + nhập số tài khoản ở khối TÍNH TỔNG rồi bấm lại “Tạo QR”.</p>
+{% else %}
+  <div class="pg-qr">
+    <img class="pg-qr__img" src="{{ qr_img }}" alt="QR chuyển khoản VietQR" width="266" height="266">
+    <div class="pg-qr__info">
+      <div class="pg-qr__ten">{{ bank_ten }}</div>
+      <div class="pg-qr__stk mono">{{ bank_num }}</div>
+      {% if amount > 0 %}
+        <div class="pg-qr__tien">{{ amount|tien }}</div>
+      {% else %}
+        <div class="pg-qr__tien dim">Người chuyển tự nhập số tiền</div>
+      {% endif %}
+      {% if ten_kh %}<div class="pg-qr__kh">Khách: {{ ten_kh }}</div>{% endif %}
+      {% if info %}<div class="pg-qr__nd">Nội dung: <b class="mono">{{ info }}</b></div>{% endif %}
+      <p class="dim" style="margin:6px 0 0;font-size:11.5px">Quét bằng app ngân hàng để chuyển khoản. Mã tạo tại chỗ, không gửi ra ngoài.</p>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

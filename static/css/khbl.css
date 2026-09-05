@@ -641,6 +641,18 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-pay__way input{display:none}
 .pg-pay__way.on{color:var(--gold-700);background:var(--gold-100);border-color:var(--gold-300);box-shadow:inset 0 0 0 1px var(--gold-300)}
 .pg-pay__way:hover{border-color:var(--gold-300)}
+.pg-qr-row{display:flex;gap:6px;align-items:stretch}
+.pg-qr-row .khbl-select{flex:0 0 40%;min-width:0;padding:4px 6px;font-size:12px}
+.pg-qr-row .khbl-input{flex:1;min-width:0;padding:4px 8px;font-size:12.5px}
+.pg-qr-row .khbl-btn{flex:none;white-space:nowrap}
+/* Popup QR chuyển khoản */
+.pg-qr{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.pg-qr__img{width:266px;height:266px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px}
+.pg-qr__info{min-width:180px}
+.pg-qr__ten{font-weight:700;color:var(--gold-700);font-size:15px}
+.pg-qr__stk{font-size:18px;font-weight:700;letter-spacing:.03em;margin-top:2px}
+.pg-qr__tien{font-size:20px;font-weight:800;color:var(--jade-600,#1E5B33);margin-top:6px}
+.pg-qr__kh,.pg-qr__nd{font-size:12.5px;color:var(--ink-600);margin-top:4px}
 
 .pg-tong__tra{margin-top:auto;display:flex;flex-direction:column;gap:2px;padding:9px 11px;
   border-radius:8px;background:linear-gradient(135deg,#8C6A1D,#C9A02C 60%,#E4C56A);color:#fff;

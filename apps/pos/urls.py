@@ -17,6 +17,7 @@ urlpatterns = [
     path("banle/ban-hang/vang-doi/xoa/", views.ban_doi_xoa, name="ban_doi_xoa"),
     path("banle/ban-hang/vang-doi/tinh-lai/", views.ban_doi_tinh_lai, name="ban_doi_tinh_lai"),
     path("banle/ban-hang/dat/", views.ban_dat, name="ban_dat"),
+    path("banle/ban-hang/qr/", views.ban_qr, name="ban_qr"),
     path("banle/ban-hang/bot-le/", views.ban_bot_le, name="ban_bot_le"),
     path("banle/ban-hang/moi/", views.ban_moi, name="ban_moi"),
     path("banle/ban-hang/tim-khach/", views.ban_tim_khach, name="ban_tim_khach"),

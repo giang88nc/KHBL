@@ -169,6 +169,14 @@ cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92p
   giữ `pay_method` + `tien_mat` (rỗng = auto theo phương thức; đổi radio → về auto); `cart.tong` suy
   `tien_mat`/`tien_ck` (clamp trong [0, khách trả]). Nhãn ô 2 đổi theo radio.
 - **TIỀN KHÁCH TRẢ đổi màu**: >0 xanh nhạt (`--duong`) · <0 đỏ nhạt (`--am`) · =0 giữ nền vàng.
+- **QR CHUYỂN KHOẢN (VietQR, dựng OFFLINE)** — trong form thanh toán: `select name="bank_code"` (danh sách
+  ~30 NH VN + BIN napas ở **`apps/pos/vietqr.py`**) + ô **Số tài khoản** (`bank_num`) + nút **🔳 Tạo QR**.
+  `ban_qr` (GET, popup `_qr_modal`) dựng chuỗi EMVCo/VietQR thuần Python (`vietqr.payload`: GUID
+  A000000727, dịch vụ QRIBFTTA, CRC-16/CCITT) rồi **`segno` vẽ PNG data-URI** (không gọi mạng — chạy được
+  cả khi LAN offline). Số tiền QR = ô CK/Thẻ (`amount` truyền qua hx-vals; ≤0 → QR để người chuyển tự nhập);
+  nội dung CK = mã đơn. `bank_code`/`bank_num` lưu session + **giữ qua `clear()`** (tài khoản tiệm không đổi
+  mỗi phiếu). ⚠ thêm dependency **`segno==1.6.6`** (pure-python, requirements.txt). QR chỉ để KHÁCH quét
+  chuyển — CHƯA đối soát/ghi PMV.
 - smoke_pmv_money 15/15 (+bot_le_goiy, +tron_ngan), smoke_ui 126/126, smoke_ban_hang 51/51.
   ⚠ Nếu GĐ muốn "làm tròn LÊN" kiểu ceil (thay HALF_UP nearest) thì đổi rounding trong `tron_ngan`.
 

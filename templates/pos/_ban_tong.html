@@ -75,6 +75,21 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
         <span id="lb-tienck">{% if t.pay_method == 'card' %}Quẹt thẻ{% elif t.pay_method == 'bank' %}Chuyển khoản{% else %}Chuyển khoản / Thẻ{% endif %}</span>
         <input id="o-tienck" class="khbl-input khbl-money r" inputmode="numeric"
                value="{{ t.tien_ck|tien_tran }}"></label>
+
+      {# Tài khoản nhận + Tạo QR chuyển khoản (VietQR, dựng offline) #}
+      <div class="pg-qr-row">
+        <select name="bank_code" class="khbl-select" title="Ngân hàng nhận">
+          <option value="">— Ngân hàng —</option>
+          {% for code, bin, ten in banks %}
+          <option value="{{ code }}" {% if g.bank_code == code %}selected{% endif %}>{{ ten }}</option>
+          {% endfor %}
+        </select>
+        <input name="bank_num" class="khbl-input mono" inputmode="numeric" autocomplete="off"
+               placeholder="Số tài khoản" value="{{ g.bank_num }}">
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Tạo mã QR chuyển khoản"
+                hx-get="{% url 'pos:ban_qr' %}" hx-target="#modal-root" hx-include="closest form"
+                hx-vals='js:{amount: (document.getElementById("o-tienck")||{}).value || ""}'>🔳 Tạo QR</button>
+      </div>
     </form>
 
     <div class="pg-tong__tra{% if t.khach_tra < 0 %} pg-tong__tra--am{% elif t.khach_tra > 0 %} pg-tong__tra--duong{% endif %}">

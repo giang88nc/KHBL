@@ -19,7 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.pmv import money as M
 from apps.pmv.models import PmvUser
 
-from . import bill as B, cart, cccd, customer as C, services as S
+from . import bill as B, cart, cccd, customer as C, services as S, vietqr as QR
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,7 @@ def _ctx_pos(request, extra=None):
         "nav_active": "ban", "g": g, "t": cart.tong(request), "phien": ph,
         "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc(),
         "nvs": S.nhan_vien_ban(), "loai_de": S.loai_de(), "hm_ngang": _hm_ngang_list(g),
+        "banks": QR.BANKS,
         "ngay": g.get("ngay") or datetime.date.today().isoformat(),
         "hom_nay": datetime.date.today().isoformat(),
         "ma_du_kien": g.get("trn_id") or _ma_du_kien_an_toan(),
@@ -292,8 +293,39 @@ def ban_dat(request):
     if "tien_mat" in request.POST:                 # rỗng = auto theo phương thức, có số = chốt tay
         v = (request.POST.get("tien_mat") or "").strip()
         g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
+    if "bank_code" in request.POST:
+        g["bank_code"] = (request.POST.get("bank_code") or "").strip().upper()
+    if "bank_num" in request.POST:
+        g["bank_num"] = "".join(ch for ch in (request.POST.get("bank_num") or "") if ch.isalnum())
     cart.save(request, g)
     return _pos_oob(request)
+
+
+@require_GET
+def ban_qr(request):
+    """Popup mã QR chuyển khoản VietQR (dựng offline). Nhận bank_code · bank_num · amount
+    (số tiền CK) — không có amount thì QR để người chuyển tự nhập."""
+    import base64
+    from io import BytesIO
+    import segno
+
+    g = cart.get(request)
+    bank_code = (request.GET.get("bank_code") or g.get("bank_code") or "").strip().upper()
+    bank_num = "".join(ch for ch in (request.GET.get("bank_num") or g.get("bank_num") or "") if ch.isalnum())
+    amount = _so(request.GET.get("amount"))
+    info = (g.get("bill_code") or g.get("trn_id") or "").strip()
+    ten_kh = (g.get("cust") or {}).get("name") or ""
+    try:
+        chuoi = QR.payload(bank_code, bank_num, amount, info)
+    except ValueError as exc:
+        return render(request, "pos/_qr_modal.html", {"loi": str(exc)})
+    buf = BytesIO()
+    segno.make(chuoi, error="m").save(buf, kind="png", scale=7, border=2)
+    img = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    return render(request, "pos/_qr_modal.html", {
+        "qr_img": img, "bank_ten": QR.bank_ten(bank_code), "bank_code": bank_code,
+        "bank_num": bank_num, "amount": M.dec(amount), "info": info, "ten_kh": ten_kh,
+    })
 
 
 @require_POST
