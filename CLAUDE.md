@@ -190,7 +190,12 @@ nút **DANH SÁCH + THÊM MỚI** làm nổi bật (`khbl-btn--gold pg-btn-noi`,
   để KHÔNG đẩy mất chân bảng khi thêm nhiều dòng; checkbox "Đổi ngang" giữ **CHECKED** sau mỗi lần thêm.
 - ⚠ **Đổi ngang khi KHÔNG có hàng bán cùng loại** (hạn mức ≤ 0): KHÔNG chặn nữa — coi hạn mức = 0 →
   toàn bộ `(tổng − hột) × giá thâu` như thâu thường (`views.ban_doi_them`, `chia_doi_ngang` với hm=0 trả 1
-  dòng giá thâu). smoke_ban_hang 48/48.
+  dòng giá thâu).
+- **Nút ↻ TÍNH LẠI** (cuối dòng nút ＋ THÊM, `views.ban_doi_tinh_lai`): **gôm các dòng VÀNG ĐỔI cùng
+  loại vàng** rồi tính lại theo từng loại — mỗi loại **tối đa 2 dòng: 1 NGANG + 1 THÂU**. Cách tính = gộp
+  TL vàng (`GoldWeight`) + hột theo `GoldCode` → `chia_doi_ngang` với hạn mức = Σ `GoldReal` hàng bán cùng
+  base (chia dần nếu nhiều dẻ cùng base), đơn giá CHUẨN từ bảng giá (giống lúc THÊM có tick đổi ngang; đổi
+  ngang trong hạn mức giá BÁN RA, dư mới giá thâu). `cart.dat_doi` thay trọn danh sách đổi. smoke_ban_hang 51/51.
 
 **Số hóa đơn** ô khóa, chữ mờ + nhãn "dự kiến": chỉ là `MAX(TrnID)+1` cho người bán dễ
 hình dung. Số THẬT do vendor cấp lúc lưu (RULE 5) — máy KK bán song song có thể lấy

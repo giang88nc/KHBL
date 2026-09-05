@@ -33,6 +33,7 @@ class Command(BaseCommand):
             self._phan_tinh()
             self._phan_ghi()
             self._phan_web()
+            self._phan_tinh_lai()
         finally:
             self._don()
             self._tra_cong_tac(cong_tac_cu)
@@ -276,6 +277,36 @@ class Command(BaseCommand):
                     " · ".join(k[0] for k in kho))
             self.ok("C16 form sạch sau khi xóa",
                     "Chưa có món nào" in body(cl.get("/banle/ban-hang/")))
+
+    def _phan_tinh_lai(self):
+        self.stdout.write(self.style.MIGRATE_HEADING(
+            "\nD. GÔM & TÍNH LẠI vàng đổi theo từng loại"))
+        from django.contrib.auth import get_user_model
+        from django.test import Client, override_settings
+
+        u = get_user_model().objects.filter(username="kimhanh2").first()
+        if not u:
+            self.ok("D0 có tài khoản web để thử", False)
+            return
+        cl = Client(); cl.force_login(u)
+        body = lambda r: r.content.decode("utf-8", "replace")
+        with override_settings(ALLOWED_HOSTS=["testserver"]):
+            cl.post("/banle/ban-hang/moi/")
+            de = next((x for x in S.loai_de() if M.dec(x["BuyRate"]) > 0), None)
+            if not de:
+                self.ok("D0 có loại dẻ giá thâu để thử", False)
+                return
+            for tl in ("100", "150"):  # 2 dòng CÙNG loại, không có hàng bán → đều là THÂU
+                cl.post("/banle/ban-hang/vang-doi/",
+                        {"gold": de["GoldCode"], "tong_tl": tl, "tl_hot": "0", "gia": ""})
+            n_truoc = body(cl.get("/banle/ban-hang/")).count("vang-doi/xoa")
+            self.ok("D1 có 2 dòng đổi cùng loại trước khi gộp", n_truoc == 2, f"{n_truoc} dòng")
+            b = body(cl.post("/banle/ban-hang/vang-doi/tinh-lai/"))
+            n_sau = b.count("vang-doi/xoa")
+            self.ok("D2 gộp cùng loại còn 1 dòng thâu (chưa có hàng bán để đổi ngang)",
+                    n_sau == 1, f"{n_sau} dòng")
+            self.ok("D3 dòng gộp mang badge thâu", "thâu" in b)
+            cl.post("/banle/ban-hang/moi/")  # dọn phiếu thử (đổi chỉ nằm trong session)
 
     @staticmethod
     def _trich(html):

@@ -84,6 +84,13 @@ def xoa_doi(request, i):
     save(request, g)
 
 
+def dat_doi(request, rows):
+    """Thay TOÀN BỘ danh sách vàng đổi bằng rows = [(tiền, row_dict), ...]."""
+    g = get(request)
+    g["doi"] = [_dong(t, r) for t, r in rows]
+    save(request, g)
+
+
 def _danh_so(g):
     for i, x in enumerate(g["ban"], 1):
         x["row"]["STT"] = str(i)

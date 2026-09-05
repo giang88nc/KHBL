@@ -39,6 +39,9 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
     <label><span>THÀNH TIỀN</span>
       <output id="o-tiendoi" class="khbl-input r pg-ro pg-ro--tien">0</output></label>
     <button class="khbl-btn khbl-btn--gold khbl-btn--sm" type="submit">＋ THÊM</button>
+    <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+            hx-post="{% url 'pos:ban_doi_tinh_lai' %}" hx-swap="none"
+            title="Gộp các dòng cùng loại vàng & tính lại theo từng loại (đổi ngang trong hạn mức bán ra, phần dư tính thâu)">↻ TÍNH LẠI</button>
   </form>
 
   <div class="pg-box__body pg-box__body--doi pg-box__body--cuon">

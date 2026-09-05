@@ -6,6 +6,7 @@ ghi hóa đơn gọi apps/pos/bill.py (KHÔNG view nào tự gọi proc hóa đ�
 import datetime
 import hashlib
 import json
+from collections import OrderedDict
 import logging
 import re
 import secrets
@@ -220,6 +221,53 @@ def ban_doi_xoa(request):
     except (TypeError, ValueError):
         pass
     return _pos_oob(request)
+
+
+@require_POST
+def ban_doi_tinh_lai(request):
+    """GÔM & TÍNH LẠI vàng đổi theo TỪNG LOẠI VÀNG (GĐ chốt 05/09/2026): mỗi loại tối đa
+    2 dòng — 1 NGANG (phần TL vàng trong hạn mức bán ra cùng loại, giá BÁN RA) + 1 THÂU
+    (phần dư, giá thâu). Dùng ĐƠN GIÁ CHUẨN từ bảng giá, giống lúc THÊM có tick đổi ngang."""
+    g = cart.get(request)
+    if not g["doi"]:
+        return _pos_oob(request)
+    loai_map = {d["GoldCode"]: d for d in S.loai_de()}
+    # gộp TL vàng + hột theo GoldCode, giữ thứ tự xuất hiện
+    groups, orig = OrderedDict(), OrderedDict()
+    for x in g["doi"]:
+        code = (x["row"].get("GoldCode") or "").strip()
+        grp = groups.setdefault(code, {"vang": M.D0, "hot": M.D0})
+        grp["vang"] += M.dec(x["row"].get("GoldWeight"))
+        grp["hot"] += M.dec(x["row"].get("DiamondWeight"))
+        orig.setdefault(code, []).append(x)
+    # hạn mức đổi ngang theo BASE = Σ GoldReal hàng bán cùng loại; chia dần nếu nhiều dẻ cùng base
+    budget = {}
+
+    def _budget(base):
+        if base not in budget:
+            budget[base] = max(sum((M.dec(x["row"].get("GoldReal")) for x in g["ban"]
+                                    if M.de_base(x["row"].get("GoldCode")) == base), M.D0), M.D0)
+        return budget[base]
+
+    rows = []
+    for code, grp in groups.items():
+        de = loai_map.get(code)
+        if not de:  # loại không còn trong bảng giá → giữ nguyên các dòng cũ (không có đơn giá chuẩn)
+            rows.extend((M.dec(x["tien"]), x["row"]) for x in orig[code])
+            continue
+        base = de.get("base") or M.de_base(code)
+        pu = de["PriceUnit"]
+        buy = M.dec(de.get("BuyRate"))
+        sell = M.dec(de.get("SellRate"))
+        hm = _budget(base) if sell > 0 else M.D0
+        phan = M.chia_doi_ngang(grp["vang"], grp["hot"], hm, sell, buy, pu)
+        if base in budget:  # trừ phần đã đổi ngang để dẻ cùng base sau không lấn hạn mức
+            budget[base] = max(budget[base] - sum((p["w"] for p in phan if p["ngang"]), M.D0), M.D0)
+        for p in phan:
+            rows.append(B.dong_doi(code, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu,
+                                   doi_ngang=p["ngang"]))
+    cart.dat_doi(request, rows)
+    return _pos_oob(request, {"tin": "Đã gộp & tính lại vàng đổi theo từng loại."})
 
 
 @require_POST
