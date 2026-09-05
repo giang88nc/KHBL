@@ -291,6 +291,31 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
    "0" gom ở `bill._MAC_DINH` (chép từ chính lệnh app desktop gửi).
 5. **`rc=0` không có nghĩa đã ghi** — `bill.luu` luôn đọc lại đối chiếu mã hàng + tiền.
 
+## 4e. KHO LỊCH SỬ — GIANG MSSQL `PMV_KH2_HIST` (Phase 1 XONG 06/09/2026)
+
+3 kho (GĐ chốt): **KK MSSQL** (nguồn LIVE, có thể prune ~30–60 ngày/lần) · **GIANG MSSQL
+`PMV_KH2_HIST`** (bản sao ĐẦY ĐỦ, giữ mãi, đọc quá khứ + failover) · **GIANG MYSQL `khj_bl`** (bổ trợ).
+
+- **Nơi đặt**: DB `PMV_KH2_HIST` trên **chính instance `localhost\SQL2014`** (cùng chỗ `PMV_SANDBOX`),
+  SQL Server 2014 Express. **Windows auth (Trusted)** như sandbox — ⚠ tài khoản `kimhanh2` chỉ có trên KK
+  (206), KHÔNG có trên instance nội bộ (login failed), nên HIST dùng Trusted.
+- **An toàn KK**: mọi thao tác KK CHỈ ĐỌC (SELECT/metadata). Ghi CHỈ vào HIST qua **`gateway.hist_*`**
+  (kết nối riêng `settings.PMV_HIST_*`, tuyệt đối không chạm 206). `gateway.pmv_read_stream` đọc KK theo lô.
+- **Danh mục DÒ TỪ metadata KK** (`apps/pmv/hist_config.py`, không hardcode): 46 bảng = `I_CUSTOMER` ·
+  `TRN_RT_BUYSELL(+con)` · `TRN_RT_BUYGOLD(+con)` · `T_PRODUCT(+liên quan)` · mọi `*_LOG`. Chiến lược tự suy:
+  **append** (`*_LOG`, watermark=identity/PK) · **upsert** (cha có `TrnDateTime_Upd`+PK 1 cột) · **child**
+  (bảng con, làm mới theo `TrnID` cha) · **snapshot** (I_CUSTOMER/T_PRODUCT — không watermark, đối soát checksum).
+- **Phase 1 = dựng + backfill + reconcile** (`apps/pmv/hist_sync.py`, lệnh `manage.py sync_hist`):
+  `--list` xem danh mục · `--backfill [--table a,b]` DROP+CREATE schema (mirror cột KK + 2 cột kỹ thuật
+  `_sync_seen_at`,`_sync_deleted`) rồi chép trọn theo lô · `--reconcile` so `COUNT` + `CHECKSUM_AGG(BINARY_CHECKSUM)`
+  từng bảng · không cờ = trạng thái từ bảng điều khiển `_hist_sync_state`. **Chạy thật 06/09: 46/46 bảng,
+  489.071 dòng, 0 lệch, 0 lỗi** (mọi bảng KHỚP count+checksum). `smoke_hist` 16/16.
+- ⚠ **Bẫy**: `fast_executemany` nổ RAM với cột `nvarchar(max)` (I_CUSTOMER) → backfill tự TẮT fast + lô nhỏ
+  khi bảng có cột `(max)`. text/ntext/image/xml bị loại khỏi BINARY_CHECKSUM (chỉ so COUNT).
+- **CHƯA làm (Phase 2–4, chờ duyệt)**: sync incremental hằng đêm (upsert cha→refresh con, append log) +
+  reconcile đánh `_sync_deleted` trong cửa sổ **60 ngày** (`PMV_HIST_VOID_DAYS`) để phân biệt VOID (hủy đơn =
+  xóa cứng ở KK) với PRUNE (giữ nguyên) + trang báo cáo Hệ thống + định tuyến đọc quá khứ→HIST/failover.
+
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy

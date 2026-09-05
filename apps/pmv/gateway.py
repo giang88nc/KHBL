@@ -275,6 +275,7 @@ PROC_READ_ALLOW = frozenset({
 # Mỗi dòng GHI ghi rõ ngày kiểm chứng. ĐÃ chạy thật trên sandbox 03/09/2026 (tạo khách →
 # lập hóa đơn → chốt → hủy sạch, dấu vết trùng khớp 11 bảng mà app desktop tạo).
 PROC_WRITE_ALLOW = frozenset({
+    "I_XRATE_Ins",                                         # 06/09/2026 — cập nhật giá MySQL → MSSQL, smoke_price_sync
     "I_CUSTOMER_Ins", "I_CUSTOMER_Upd",                       # 03/09/2026
     "I_DiemTichLuy_InsFromGT",                                 # 05/09/2026
     "TRN_RT_BUYSELL_Ins", "TRN_RT_BUYSELL_Upd",               # 03/09/2026
@@ -452,3 +453,96 @@ def pmv_trace_batch(sql, *, tag):
 def canh_bao(tag, message):
     """Ghi 1 dòng cảnh báo vàng vào nhật ký (hiện trên trang trạng thái)."""
     _audit("CANHBAO", tag, message, ok=False)
+
+
+# ═══════════════ KHO LỊCH SỬ (GIANG MSSQL) — kênh RIÊNG, KHÔNG chạm KK ═══════════════
+# DB của CHÍNH MÌNH trên localhost\SQL2014 (settings.PMV_HIST_*). Vì là kho backup do ta
+# sở hữu nên được DDL/DML tự do — nhưng các hàm dưới CHỈ kết nối tới PMV_HIST_*, tuyệt đối
+# không bao giờ tới máy KK (206). Đọc KK vẫn qua pmv_read(target="kk") chỉ-đọc như cũ.
+
+def _hist_connect(database=None, autocommit=False, timeout=30):
+    """Kết nối instance kho lịch sử. USER trống → Trusted (Windows, như sandbox)."""
+    host = settings.PMV_HIST_MSSQL
+    if not host:
+        raise PmvBlocked("PMV_HIST_MSSQL trống trong .env — chưa cấu hình kho lịch sử")
+    auth = (f"UID={settings.PMV_HIST_USER};PWD={settings.PMV_HIST_PASSWORD};"
+            if settings.PMV_HIST_USER else "Trusted_Connection=yes;")
+    conn_str = (
+        f"DRIVER={{{settings.PMV_MSSQL_ODBC_DRIVER}}};SERVER={host};"
+        f"DATABASE={database or settings.PMV_HIST_DB};{auth}"
+        "Encrypt=no;TrustServerCertificate=yes;Connection Timeout=10;"
+    )
+    return pyodbc.connect(conn_str, timeout=timeout, autocommit=autocommit)
+
+
+def hist_query(sql, params=(), *, tag="hist", database=None, timeout=60):
+    """SELECT trên kho lịch sử → list[dict]."""
+    with _hist_connect(database=database, timeout=timeout) as cn:
+        cur = cn.cursor()
+        cur.execute(sql, params)
+        if not cur.description:
+            return []
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def hist_exec(sql, params=(), *, tag="hist", database=None, timeout=1800, audit=True):
+    """Chạy 1 lệnh DDL/DML trên kho lịch sử (autocommit). Trả số dòng ảnh hưởng."""
+    t0 = time.monotonic()
+    try:
+        with _hist_connect(database=database, autocommit=True, timeout=timeout) as cn:
+            cur = cn.cursor()
+            cur.execute(sql, params)
+            n = cur.rowcount
+            while cur.nextset():
+                pass
+        if audit:
+            _audit("HIST", tag, sql[:400], ms=int((time.monotonic() - t0) * 1000))
+        return n
+    except Exception as exc:
+        _audit("HIST", tag, sql[:400], ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise
+
+
+def hist_executemany(sql, seq_rows, *, tag="hist", database=None, timeout=1800, fast=True):
+    """INSERT hàng loạt vào kho lịch sử (1 giao dịch). Trả số dòng đã gửi."""
+    seq_rows = list(seq_rows)
+    if not seq_rows:
+        return 0
+    t0 = time.monotonic()
+    try:
+        with _hist_connect(database=database, autocommit=False, timeout=timeout) as cn:
+            cur = cn.cursor()
+            if fast:
+                try:
+                    cur.fast_executemany = True
+                except Exception:
+                    pass
+            cur.executemany(sql, seq_rows)
+            cn.commit()
+        _audit("HIST", tag, f"{sql[:120]} × {len(seq_rows)} dòng", ms=int((time.monotonic() - t0) * 1000))
+        return len(seq_rows)
+    except Exception as exc:
+        _audit("HIST", tag, f"{sql[:120]} × {len(seq_rows)}", ok=False,
+               ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise
+
+
+def pmv_read_stream(sql, params=(), *, tag, target="kk", chunk=5000, timeout=600):
+    """Đọc KK theo LÔ (generator) cho backfill kho lịch sử — tránh nạp cả bảng vào RAM.
+    Trả lần lượt list[tuple] (dạng thô để executemany). Vẫn CHỈ nhận SELECT như pmv_read."""
+    s = sql.strip()
+    if not s.lower().startswith("select") or _WRITE_WORDS.search(s):
+        _audit("BLOCKED", tag, f"VƯỢT QUYỀN (stream chỉ SELECT): {s[:200]}", ok=False)
+        raise PmvBlocked("Gateway CHẶN (stream chỉ nhận SELECT)")
+    cn = _connect_dich(target, timeout=timeout)
+    try:
+        cur = cn.cursor()
+        cur.execute(s, params)
+        while True:
+            rows = cur.fetchmany(chunk)
+            if not rows:
+                break
+            yield [tuple(r) for r in rows]
+    finally:
+        cn.close()

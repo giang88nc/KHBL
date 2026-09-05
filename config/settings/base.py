@@ -116,6 +116,16 @@ PMV_BACKUP_DIR_LOCAL = env("PMV_BACKUP_DIR_LOCAL", default=r"D:\KHBL_BACKUP\pmv"
 PMV_BACKUP_RETENTION_LOCAL = env("PMV_BACKUP_RETENTION_LOCAL")                    # giữ bao nhiêu BẢN ở máy Mr Giang
 PMV_LOCAL_MSSQL = env("PMV_LOCAL_MSSQL", default="")                              # vd "localhost\\SQL2014" — trống = chưa restore sandbox
 PMV_SANDBOX_DB = env("PMV_SANDBOX_DB", default="PMV_SANDBOX")
+
+# ─────────── KHO LỊCH SỬ (GIANG MSSQL) — bản sao đầy đủ, giữ mãi (Phase 1, 06/09/2026) ───────────
+# DB riêng CỦA MÌNH trên chính instance chứa sandbox (localhost\SQL2014). KK chỉ ĐỌC; kho này
+# tha hồ ghi (DDL/DML) nhưng gateway.hist_* CHỈ kết nối tới đây, KHÔNG bao giờ chạm KK.
+# Instance 2014 dùng Windows auth (như sandbox); để trống USER = Trusted_Connection.
+PMV_HIST_MSSQL = env("PMV_HIST_MSSQL", default=PMV_LOCAL_MSSQL)
+PMV_HIST_DB = env("PMV_HIST_DB", default="PMV_KH2_HIST")
+PMV_HIST_USER = env("PMV_HIST_USER", default="")                                  # trống = Trusted (Windows)
+PMV_HIST_PASSWORD = env("PMV_HIST_PASSWORD", default="")
+PMV_HIST_VOID_DAYS = env.int("PMV_HIST_VOID_DAYS", default=60)                    # cửa sổ phát hiện đơn bị xóa/void
 # ─────────── ĐÍCH DỮ LIỆU NGHIỆP VỤ + CHỐT AN TOÀN GHI ───────────
 # PMV_TARGET quyết định màn bán lẻ ĐỌC/GHI vào đâu:
 #   "sandbox" = bản sao trên máy Mr Giang (mặc định — tha hồ thử)
