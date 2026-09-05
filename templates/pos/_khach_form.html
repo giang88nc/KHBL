@@ -3,20 +3,26 @@
 {% block modal_title %}{% if k %}Sửa khách hàng{% else %}Thêm khách hàng{% endif %}{% endblock %}
 
 {% block modal_body %}
-<form id="kh-form" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq" enctype="multipart/form-data">
+<form id="kh-form" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq"
+      hx-sync="this:drop" hx-disabled-elt="#kh-save-btn" enctype="multipart/form-data">
   {% csrf_token %}
   <input type="hidden" name="CustID" value="{{ k.CustID|default:'' }}">
+  <input type="hidden" name="Active" value="{% if k %}{{ k.Active }}{% else %}1{% endif %}">
+  <input type="hidden" name="save_token" value="{{ save_token }}">
 
   {# ── quét thẻ CCCD: máy quét gõ thẳng vào ô này, JS tự tách 7 trường ── #}
   <div class="kh-qr">
     {% icon "khach" 20 %}
     <div class="khbl-field" style="flex:1">
-      <label>Quét mã QR trên thẻ căn cước — tự điền họ tên, ngày sinh, giới tính, địa chỉ, CCCD</label>
-      <input class="khbl-input" id="kh-qr-in" placeholder="Đặt con trỏ vào đây rồi quét thẻ…" autocomplete="off">
+      <label for="kh-qr-in"><small id="kh-qr-help"></small> Quét mã QR trên thẻ căn cước</label>
+      <input class="khbl-input" id="kh-qr-in" placeholder="Đặt con trỏ vào đây rồi quét thẻ…" autocomplete="off" maxlength="8192" aria-describedby="kh-qr-help kh-qr-msg">
+      
     </div>
     <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-btn">Điền vào biểu mẫu</button>
   </div>
-  <div id="kh-qr-msg" style="margin:-8px 0 12px;font-size:12.5px"></div>
+  <div id="kh-qr-msg" role="status" aria-live="polite" style="margin:0 0 12px;font-size:12.5px"></div>
+  <div id="kh-qr-preview" style="overflow:auto;max-height:260px"></div>
+  <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-discard" hidden>Bỏ kết quả quét</button>
 
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px">
     <div class="khbl-field" style="grid-column:span 2">
@@ -46,9 +52,10 @@
       <input class="khbl-input" name="Address" id="f-dc" value="{{ k.Address|default:'' }}">
     </div>
     <div class="khbl-field">
-      <label>Giới tính</label>
-      <select class="khbl-select" name="Gender" id="f-gt">
-        <option value="0" {% if k.gioi_tinh != "Nam" %}selected{% endif %}>Nữ</option>
+      <label for="f-gt">Giới tính</label>
+      <select class="khbl-select" name="Gender" id="f-gt" required>
+        <option value="" {% if not k %}selected{% endif %}>Chưa xác định — cần chọn trước khi lưu</option>
+        <option value="0" {% if k and k.gioi_tinh != "Nam" %}selected{% endif %}>Nữ</option>
         <option value="1" {% if k.gioi_tinh == "Nam" %}selected{% endif %}>Nam</option>
       </select>
     </div>
@@ -87,21 +94,61 @@
   <div class="khbl-field" style="margin-top:13px">
     <label>Ảnh — đại diện và hai mặt căn cước</label>
     <div class="kh-anh">
-      <label><span class="dim" style="font-size:12px">Ảnh đại diện</span>
-        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
-        <input type="file" name="anh_dai_dien" accept="image/*" hidden></label>
-      <label><span class="dim" style="font-size:12px">CCCD mặt trước</span>
-        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
-        <input type="file" name="anh_truoc" accept="image/*" hidden></label>
-      <label><span class="dim" style="font-size:12px">CCCD mặt sau</span>
-        <span class="kh-anh__khung" data-xem>Chọn ảnh…</span>
-        <input type="file" name="anh_sau" accept="image/*" hidden></label>
+      <div class="kh-anh__item" data-photo data-label="Ảnh đại diện" data-facing="user">
+        <b>Ảnh đại diện</b>
+        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__actions">
+          <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
+            <input type="file" name="anh_dai_dien" accept="image/*" data-photo-input hidden>
+          </label>
+          <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+        </div>
+      </div>
+      <div class="kh-anh__item" data-photo data-label="CCCD mặt trước" data-facing="environment">
+        <b>CCCD mặt trước</b>
+        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__actions">
+          <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
+            <input type="file" name="anh_truoc" accept="image/*" data-photo-input hidden>
+          </label>
+          <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+        </div>
+      </div>
+      <div class="kh-anh__item" data-photo data-label="CCCD mặt sau" data-facing="environment">
+        <b>CCCD mặt sau</b>
+        <div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
+        <div class="kh-anh__actions">
+          <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
+            <input type="file" name="anh_sau" accept="image/*" data-photo-input hidden>
+          </label>
+          <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+        </div>
+      </div>
     </div>
     <p class="dim" style="font-size:11.5px;margin:6px 0 0">
-      Phần mềm đang đặt lưu ảnh bằng đường dẫn về <span class="mono">{{ duong_dan_anh }}</span> trên máy KK —
-      ảnh chỉ ghi được khi mở kênh ghi ở giai đoạn sau.
+      Ảnh được xoay đúng chiều, nén JPEG rõ nét và đặt tên theo khách trước khi lưu vào
+      <span class="mono">{{ duong_dan_anh }}</span>.
     </p>
   </div>
+
+  <dialog class="kh-camera" id="kh-camera" aria-labelledby="kh-camera-title">
+    <div class="kh-camera__head">
+      <b id="kh-camera-title">Chụp ảnh</b>
+      <button type="button" class="kh-camera__x" data-camera-close aria-label="Đóng camera">×</button>
+    </div>
+    <div class="kh-camera__stage">
+      <video data-camera-video autoplay muted playsinline></video>
+      <img data-camera-preview alt="Ảnh vừa chụp" hidden>
+      <canvas data-camera-canvas hidden></canvas>
+    </div>
+    <p class="kh-camera__msg" data-camera-msg role="status" aria-live="polite">Đang mở camera…</p>
+    <div class="kh-camera__actions">
+      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-close>Đóng</button>
+      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-retake hidden>Chụp lại</button>
+      <button class="khbl-btn" type="button" data-camera-capture disabled>Chụp</button>
+      <button class="khbl-btn" type="button" data-camera-use hidden>Lưu ảnh</button>
+    </div>
+  </dialog>
 
   <div id="kh-luu-kq"></div>
 </form>
@@ -109,6 +156,7 @@
 
 {% block modal_foot %}
   <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
-  <button class="khbl-btn khbl-btn--cho" type="submit" form="kh-form"
-          title="Kênh ghi sang PMV mở ở giai đoạn sau">LƯU KHÁCH · chờ mở kênh ghi</button>
+  <button class="khbl-btn khbl-btn--gold" id="kh-save-btn" type="submit" form="kh-form">
+    <span data-save-label>LƯU KHÁCH</span>
+  </button>
 {% endblock %}

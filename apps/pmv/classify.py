@@ -12,7 +12,16 @@ NOISE = {
     "sp_datatype_info_90", "sp_datatype_info", "GET_NGAYGIO_HETHONG",
     "BangGia_Lst", "BangGiaDienTu_Lst", "BangGiaLoaiHang_Lst", "sp_reset_connection",
     "SYS_PARAMETERS_Lst", "SYS_PARAMETERS_Get", "I_XRATE_Lst",
+    "sp_unprepare", "sp_cursorclose", "sp_cursorfetch",
 }
+
+# RPC "bọc ngoài" của driver (pyodbc/ADO.NET gửi câu có tham số qua sp_prepexec/sp_execute...).
+# Tên hành vi thật nằm BÊN TRONG: 'exec sp_prepexec @p1 output, N'@P1 int', N'DECLARE @__rc INT;
+# EXEC @__rc = [T_PRODUCT_GetByCodeForSell] @p_ProductCode=@P1...' → proc thật = T_PRODUCT_GetByCodeForSell.
+# Bọc một SELECT trần → trả '' (không phải hành vi nghiệp vụ; collect bỏ với lời gọi của KHBL).
+SP_WRAPPERS = {"sp_prepexec", "sp_prepare", "sp_execute", "sp_executesql", "sp_cursoropen", "sp_cursorprepexec"}
+_SP_WRAPPERS = SP_WRAPPERS
+_INNER_EXEC = re.compile(r"(?i)\bexec(?:ute)?\s+(?:@\w+\s*=\s*)?(?:\[?dbo\]?\.)?\[?([A-Za-z_][A-Za-z0-9_]*)\]?")
 
 _CATEGORY_RULES = (
     (re.compile(r"(?i)BUYSELL|RT_SELL"), "HĐ bán"),
@@ -66,6 +75,18 @@ def proc_name_from_text(text: str) -> str:
     t = (text or "").strip()
     m = re.search(r"(?i)\bexec(?:ute)?\s+(?:\[?dbo\]?\.)?\[?([A-Za-z0-9_]+)\]?", t)
     if m:
-        return m.group(1)
+        name = m.group(1)
+        if name.lower() in _SP_WRAPPERS:
+            return _proc_trong_wrapper(t[m.end():])
+        return name
     m = re.match(r"^\[?(?:dbo\]?\.\[?)?([A-Za-z_][A-Za-z0-9_]*)\]?\s*(?:@|$|;)", t)
     return m.group(1) if m else ""
+
+
+def _proc_trong_wrapper(phan_sau):
+    """Tên proc thật bên trong sp_prepexec/sp_execute…; '' nếu bên trong chỉ là SELECT/khác."""
+    m = _INNER_EXEC.search(phan_sau)
+    if not m:
+        return ""
+    name = m.group(1)
+    return "" if name.lower() in _SP_WRAPPERS else name

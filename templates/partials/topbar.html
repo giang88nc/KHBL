@@ -6,19 +6,19 @@
 
   <nav class="khbl-top__nav" aria-label="Chức năng chính">
     <a class="khbl-top__i{% if nav_active == 'tong' %} is-on{% endif %}" href="{% url 'pos:dashboard' %}">
-      {% icon "tong" 24 %}<span>TỔNG QUAN</span></a>
+      {% icon_anh "tong" 26 %}<span>TỔNG QUAN</span></a>
     <a class="khbl-top__i khbl-top__i--chinh{% if nav_active == 'ban' %} is-on{% endif %}" href="{% url 'pos:ban' %}">
-      {% icon "ban" 24 %}<span>BÁN HÀNG</span></a>
+      {% icon_anh "ban" 26 %}<span>BÁN HÀNG</span></a>
     <a class="khbl-top__i{% if nav_active == 'thau' %} is-on{% endif %}" href="{% url 'pos:thau' %}">
-      {% icon "thau" 24 %}<span>THÂU VÀO</span></a>
+      {% icon_anh "thau" 26 %}<span>THÂU VÀO</span></a>
     <a class="khbl-top__i{% if nav_active == 'gia' %} is-on{% endif %}" href="{% url 'pos:bang_gia' %}">
-      {% icon "gia" 24 %}<span>BẢNG GIÁ</span></a>
+      {% icon_anh "gia" 26 %}<span>BẢNG GIÁ</span></a>
     <a class="khbl-top__i{% if nav_active == 'khach' %} is-on{% endif %}" href="{% url 'pos:khach_hang' %}">
-      {% icon "khach" 24 %}<span>KHÁCH HÀNG</span></a>
+      {% icon_anh "khach" 26 %}<span>KHÁCH HÀNG</span></a>
     <a class="khbl-top__i{% if nav_active == 'hoadon' %} is-on{% endif %}" href="{% url 'pos:hoa_don' %}">
-      {% icon "hoadon" 24 %}<span>HÓA ĐƠN</span></a>
+      {% icon_anh "hoadon" 26 %}<span>HÓA ĐƠN</span></a>
     <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
-      {% icon "hethong" 24 %}<span>HỆ THỐNG</span></a>
+      {% icon_anh "hethong" 26 %}<span>HỆ THỐNG</span></a>
   </nav>
 
   <div class="khbl-top__me">

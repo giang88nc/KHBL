@@ -36,7 +36,9 @@ if %errorlevel%==0 (
 )
 
 REM --- 2) SCHEDULER: chua co tien trinh run_scheduler cua KHBL thi moi bat ---
-powershell -NoProfile -Command "exit (@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.ExecutablePath -match 'KHBL' -and $_.CommandLine -match 'run_scheduler' }).Count)"
+REM     (venv = cap cha-con: cha ...\KHBL\venv\...python.exe, con D:\PYTHON\python.exe
+REM      khong mang ten du an - nhan dien con qua ParentProcessId tro ve cha KHBL)
+powershell -NoProfile -Command "$s=@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'run_scheduler' }); $l=@($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' }); exit @($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' -or $l.ProcessId -contains $_.ParentProcessId }).Count"
 if %errorlevel% gtr 0 (
     echo [KHBL] Scheduler DA CHAY san. Bo qua.
 ) else (

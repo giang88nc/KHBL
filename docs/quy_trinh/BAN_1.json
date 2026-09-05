@@ -1,0 +1,336 @@
+{
+  "code": "BAN_1",
+  "name": "HĐ + tạo mới khách",
+  "description": "",
+  "status": "approved",
+  "version": 6,
+  "source": "HỌC từ khung 05/09/2026 06:50→23:59 (admin)",
+  "updated_at": "2026-09-05T06:57:48.948866+07:00",
+  "phases": [
+    {
+      "title": "Đã học 05/09 06:53 — chưa phân nhóm",
+      "note": "Bảng đổi trong khung: I_CUSTOMER, I_DIEMTICHLUY, I_GOLD_BAL, I_LICHSUTICHLUYDIEM, RetailLog, SYS_BILL_COUNTER, SYS_CODEMASTERS, TRN_DAILY_LOG, TRN_RT_BUYSELL, TRN_RT_BUYSELL_SELL, T_CUSTOMER_DEBT, T_PRODUCT, T_PRODUCT_TRACKING, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL, TonKho, tbc_TinNhan",
+      "steps": [
+        {
+          "title": "Sản phẩm/kho: T_PRODUCT_GetByCodeForSell",
+          "proc_name": "T_PRODUCT_GetByCodeForSell",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_PRODUCT_GetByCodeForSell @p_ProductCode=N'1D60001400',@p_TaskPrice=0,@p_ShopID='',@p_CheckRealSL=1,@p_TillID='TIL260500000001',@p_CustID='',@p_ShopID_XRate='',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Ins",
+          "proc_name": "TRN_RT_BUYSELL_Ins",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p25 xml set @p25=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><ProductID>PD2609000000811</ProductID><ProductCode>1D60001400</ProductCode><ProductDesc>Dây mì</ProductDesc><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><TotalWeight>123.4000000000000000000</TotalWeight><GoldWeight>123.400000000000000000</GoldWeight><D",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000606',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sản phẩm/kho: T_PRODUCT_GetByCodeForSell",
+          "proc_name": "T_PRODUCT_GetByCodeForSell",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_PRODUCT_GetByCodeForSell @p_ProductCode=N'1D60001399',@p_TaskPrice=0,@p_ShopID='',@p_CheckRealSL=1,@p_TillID='TIL260500000001',@p_CustID='',@p_ShopID_XRate='',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Upd",
+          "proc_name": "TRN_RT_BUYSELL_Upd",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p29 xml set @p29=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><STT>1</STT><ProductID>PD2609000000811</ProductID><ProductCode>1D60001400</ProductCode><ProductDesc>Dây mì</ProductDesc><GroupID>PG1411000000016</GroupID><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><PCcyRate>1000.000</PCcyRate><TotalWeight>123.4000000",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000606',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO ×2",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'I_CUSTOMER_GROUP',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khác: I_GIAODICH_Lst",
+          "proc_name": "I_GIAODICH_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "I_GIAODICH_Lst",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_CUSTOMER_Ins",
+          "proc_name": "I_CUSTOMER_Ins",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p18 xml set @p18=convert(xml,N'') exec [I_CUSTOMER_Ins] @p_CustID='',@p_CustCode=N'',@p_CustName=N'Anh Abc',@p_Address=N'',@p_Phone='0236598741',@p_Notes=N'',@p_Active='1',@p_CMND='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='05/09/2026',@p_Gender='0',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@TuDongNangHang='1',@p_Image=NULL,@MaGD=@p18,@p_Company=N'',@p_Company_Address=",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_DiemTichLuy_InsFromGT",
+          "proc_name": "I_DiemTichLuy_InsFromGT",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [I_DiemTichLuy_InsFromGT] @p_CustID='CU2609000000192'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'I_GOLD',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_CUSTOMER_Lst",
+          "proc_name": "I_CUSTOMER_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec I_CUSTOMER_Lst @p_CustID='',@p_CustCode=N'',@p_CustName=N'',@p_Address=N'',@p_Phone='',@p_Notes=N'',@p_Active='1',@p_Sort='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='',@p_Gender='',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@p_LoaiGD='SRT',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO ×2",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'T_EMPLOYEE',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Upd",
+          "proc_name": "TRN_RT_BUYSELL_Upd",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p29 xml set @p29=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><STT>1</STT><ProductID>PD2609000000811</ProductID><ProductCode>1D60001400</ProductCode><ProductDesc>Dây mì</ProductDesc><GroupID>PG1411000000016</GroupID><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><PCcyRate>1000.000</PCcyRate><TotalWeight>123.4000000",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get ×2",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000606',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Upd",
+          "proc_name": "TRN_RT_BUYSELL_Upd",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p29 xml set @p29=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><STT>1</STT><ProductID>PD2609000000811</ProductID><ProductCode>1D60001400</ProductCode><ProductDesc>Dây mì</ProductDesc><GroupID>PG1411000000016</GroupID><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><PCcyRate>1000.000</PCcyRate><TotalWeight>123.4000000",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000606',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Complete",
+          "proc_name": "TRN_RT_BUYSELL_Complete",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec [TRN_RT_BUYSELL_Complete] @p_TrnID='TRB260900000606',@p_UserID='US1806000000001',@p_ThuHo='0'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_DETAIL_GetByTrnID",
+          "proc_name": "T_TILL_TXN_DETAIL_GetByTrnID",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_DETAIL_GetByTrnID @p_TrnID='TRB260900000606'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Proc",
+          "proc_name": "T_TILL_TXN_Proc",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Proc @p_TrnIDs='TRB260900000606',@p_TillID='TIL260500000001',@p_UserID='US1806000000001'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Tin nhắn: SMS_Check",
+          "proc_name": "SMS_Check",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SMS_Check] @p_TrnCode='SRT'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khác: PHONE_LIST_Get",
+          "proc_name": "PHONE_LIST_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [PHONE_LIST_Get] @p_TrnCode='SRT'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Tin nhắn: SYS_SMS_SYSTEM_GetByTrnCode",
+          "proc_name": "SYS_SMS_SYSTEM_GetByTrnCode",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_SMS_SYSTEM_GetByTrnCode] @p_TrnCode='SRT'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Tin nhắn: SYS_SMS_SRT_GetInfo",
+          "proc_name": "SYS_SMS_SRT_GetInfo",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_SMS_SRT_GetInfo] @p_TrnID='TRB260900000606'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_Notification_Templates_Check",
+          "proc_name": "SYS_Notification_Templates_Check",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_Notification_Templates_Check] @p_TrnCode='SRT'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ điện tử: HoaDonDienTu_UpdateMa",
+          "proc_name": "HoaDonDienTu_UpdateMa",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p6 xml set @p6=convert(xml,N'<NewDataSet><Table1><STT>1</STT><ProductID>PD2609000000811</ProductID><ProductCode>1D60001400</ProductCode><ProductDesc>Dây mì</ProductDesc><GroupID>PG1411000000016</GroupID><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><PCcyRate>1000.000</PCcyRate><TotalWeight>123.40000000</TotalWeight>",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000606',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khác: TRN_PROMOTION_LOG_Lst",
+          "proc_name": "TRN_PROMOTION_LOG_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_PROMOTION_LOG_Lst @p_TrnID=N'TRB260900000606'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Báo cáo: rptSRT_PrintBill",
+          "proc_name": "rptSRT_PrintBill",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec rptSRT_PrintBill @p_TrnID='TRB260900000606',@xemtruoc='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

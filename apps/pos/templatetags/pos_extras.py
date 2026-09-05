@@ -1,6 +1,7 @@
 """Bộ lọc/thẻ template của KHBL. Glyph vẽ bằng SVG 1 nét — KHÔNG dùng emoji hệ điều hành
 (emoji render khác nhau mỗi máy, màu sặc, phá bảng màu đã đo tương phản)."""
 from django import template
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
 from apps.pmv import money as M
@@ -38,6 +39,22 @@ def rail_icon(key, size=20):
 @register.simple_tag
 def icon(key, size=18):
     return rail_icon(key, size)
+
+
+# Icon ẢNH cho topbar (bộ tranh vàng GĐ đưa 03/09/2026). Bản 96px trong static/img/ico/
+# sinh từ ảnh gốc 1254px bằng System.Drawing — gốc GIỮ NGUYÊN trong static/img/, đừng xóa.
+# Muốn sinh lại sau khi đổi ảnh: xem CLAUDE.md mục "Icon topbar".
+# {% icon %} (SVG nét, ăn theo currentColor) vẫn dùng cho mọi chỗ khác trong app.
+_ICON_ANH = {"tong", "ban", "thau", "gia", "khach", "hoadon", "hethong"}
+
+
+@register.simple_tag
+def icon_anh(key, size=26):
+    if key not in _ICON_ANH:
+        return rail_icon(key, size)
+    return mark_safe(
+        f'<img class="khbl-ico-anh" src="{static(f"img/ico/{key}.png")}" '
+        f'width="{size}" height="{size}" alt="" aria-hidden="true" loading="lazy" decoding="async">')
 
 
 @register.filter
@@ -78,6 +95,13 @@ def tl_man(w, unit="L"):
 def tl_giay(w, unit="L"):
     """Trọng lượng cho giấy in: '1L0C3P7Ly'."""
     return M.weight_bill(w, unit)
+
+
+@register.filter
+def don_gia(x):
+    """Giá vàng / tiền công trong PMV lưu dạng NGHÌN (8750 = 8.750.000 ₫/chỉ).
+    Nhân RATE_SCALE rồi format — đừng hiện số thô ra màn hình."""
+    return M.money_vn(M.dec(x) * M.RATE_SCALE, "")
 
 
 @register.filter

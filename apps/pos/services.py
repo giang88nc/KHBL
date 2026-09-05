@@ -26,7 +26,7 @@ AGE_CLASS = {"N9999": "9999", "D9999": "9999", "SJC": "9999", "DSJC": "9999",
 
 
 def client(tag="pos"):
-    return PmvClient("pmv", tag=tag)
+    return PmvClient(tag=tag)
 
 
 def age_class(gold_code):
@@ -92,11 +92,12 @@ def lich_su_gia(limit=12):
 SCAN_ERR_STYLE = {"P-002": "do", "P-017": "nau", "P-012": "hoi"}
 
 
-def quet_ma(ma, till_id="", cust_id=WALK_IN):
-    """Gọi đúng proc vendor → dict(ok, item|err). Câu lỗi lấy NGUYÊN VĂN của vendor."""
+def _quet(ma, till_id="", cust_id=WALK_IN):
+    """Gọi proc quét mã, trả (row_thô, lỗi). row_thô giữ NGUYÊN mọi cột — dòng hàng gửi
+    lên proc hóa đơn dựng từ đây (apps/pos/bill.dong_ban_tu_quet)."""
     ma = (ma or "").strip()
     if not ma:
-        return {"ok": False, "err": {"code": "", "desc": "Chưa nhập mã hàng", "style": "cam"}}
+        return None, {"code": "", "desc": "Chưa nhập mã hàng", "style": "cam"}
     c = client("quet_ma")
     rc, sets = c.call(
         "T_PRODUCT_GetByCodeForSell", raise_on_rc=False,
@@ -110,9 +111,19 @@ def quet_ma(ma, till_id="", cust_id=WALK_IN):
         desc = str((row or {}).get("ErrorDesc") or "Không đọc được mã hàng").strip()
         if code == "P-002" and ma not in desc:
             desc = f"{desc}: {ma}"
-        return {"ok": False, "err": {"code": code, "desc": desc,
-                                     "style": SCAN_ERR_STYLE.get(code, "do")}}
-    return {"ok": True, "item": _item_tu_row(row)}
+        return None, {"code": code, "desc": desc, "style": SCAN_ERR_STYLE.get(code, "do")}
+    return row, None
+
+
+def quet_ma(ma, till_id="", cust_id=WALK_IN):
+    """Quét mã → dict(ok, item|err). Câu lỗi lấy NGUYÊN VĂN của vendor."""
+    row, err = _quet(ma, till_id, cust_id)
+    return {"ok": False, "err": err} if err else {"ok": True, "item": _item_tu_row(row)}
+
+
+def quet_ma_row(ma, till_id="", cust_id=WALK_IN):
+    """Bản thô của quet_ma — dùng khi cần dựng dòng hàng gửi lên proc hóa đơn."""
+    return _quet(ma, till_id, cust_id)[0]
 
 
 def _item_tu_row(r):
@@ -163,8 +174,8 @@ def ton_theo_quay():
 # ─────────────────────────── KHÁCH HÀNG ───────────────────────────
 
 def tim_khach(q="", limit=25):
-    """Tra khách theo SĐT (gõ 3-4 số cuối) hoặc tên. Không dùng proc I_CUSTOMER_Lst
-    (tên khách có dấu nháy đơn làm vỡ câu SQL động bên trong proc)."""
+    """Tra khách theo SĐT (gõ 3-4 số cuối) · tên · CCCD · mã KH. Không dùng proc
+    I_CUSTOMER_Lst (tên khách có dấu nháy đơn làm vỡ câu SQL động bên trong proc)."""
     q = (q or "").strip()
     if not q:
         return []
@@ -173,23 +184,25 @@ def tim_khach(q="", limit=25):
         "c.LastTradingDate, ISNULL(d.DiemDoiQua,0) AS Diem "
         "FROM I_CUSTOMER c WITH (NOLOCK) "
         "LEFT JOIN I_DIEMTICHLUY d WITH (NOLOCK) ON d.CustID = c.CustID "
-        "WHERE c.Active = '1' AND c.CustID <> ? AND (c.Phone LIKE ? OR c.CustName LIKE ? OR c.CustCode LIKE ?) "
+        "WHERE c.Active = '1' AND c.CustID <> ? AND (c.Phone LIKE ? OR c.CustName LIKE ? "
+        "  OR c.CustCode LIKE ? OR c.CMND LIKE ?) "
         "ORDER BY c.LastTradingDate DESC, c.CustName",
-        (WALK_IN, f"%{q}%", f"%{q}%", f"{q}%"))
+        (WALK_IN, f"%{q}%", f"%{q}%", f"{q}%", f"%{q}%"))
 
 
 def khach_theo_id(cust_id):
     r = client("khach").query(
         "SELECT TOP 1 c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, c.CMND, c.BirthDate, "
-        "c.Gender, c.CustType, c.Email, c.Notes, c.NgayCap, c.NoiCap, c.Company, c.Masothue, "
+        "c.Gender, COALESCE(NULLIF(c.CustTypeID,''), c.CustType) AS CustType, "
+        "c.Email, c.Notes, c.NgayCap, c.NoiCap, c.Company, c.Masothue, "
         "c.ImagePath, c.ImagePathMatTruoc, c.ImagePathMatSau, c.Active, "
         "c.LastTradingDate, ISNULL(d.DiemDoiQua,0) AS Diem FROM I_CUSTOMER c WITH (NOLOCK) "
         "LEFT JOIN I_DIEMTICHLUY d WITH (NOLOCK) ON d.CustID = c.CustID WHERE c.CustID = ?", (cust_id,))
     return _dep_khach(r[0]) if r else None
 
 
-# Loại khách — cột I_CUSTOMER.CustType varchar(10). Bảng I_CUSTOMER_TYPE của vendor RỖNG
-# nên không dùng CustTypeID. TRỐNG/NULL = Thường (mặc định, 56.312/56.312 khách hiện nay).
+# Loại khách — proc vendor ghi vào I_CUSTOMER.CustTypeID; dữ liệu cũ từng dùng CustType
+# nên câu SELECT đọc CustTypeID trước và rơi về CustType. TRỐNG/NULL = Thường.
 CUST_TYPES = [
     {"ma": "", "ten": "Thường", "badge": ""},
     {"ma": "VIP", "ten": "VIP", "badge": "khbl-badge--cam"},
@@ -210,6 +223,7 @@ def _dep_khach(r):
     'Anh …' vẫn đang mang giới tính Nữ — đánh dấu `gt_lech` để UI báo, KHÔNG tự sửa."""
     loai = (r.get("CustType") or "").strip().upper()
     r["loai"] = CUST_TYPE_MAP.get(loai, CUST_TYPE_MAP[""])
+    r["Active"] = "1" if r.get("Active") is True or str(r.get("Active")) == "1" else "0"
     g = r.get("Gender")
     la_nam = g is True or str(g) in ("1", "True")
     r["gioi_tinh"] = "Nam" if la_nam else "Nữ"
@@ -237,7 +251,8 @@ def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50):
     den = tu + moi_trang - 1
     rows = c.query(
         "SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY c.LastTradingDate DESC, c.CustName) AS rn, "
-        "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.BirthDate, c.CustType, "
+        "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.BirthDate, "
+        "COALESCE(NULLIF(c.CustTypeID,''), c.CustType) AS CustType, "
         "c.Gender, c.LastTradingDate, c.Active "
         f"FROM I_CUSTOMER c WITH (NOLOCK) {dk}) t WHERE t.rn BETWEEN ? AND ? ORDER BY t.rn",
         ps + (tu, den))
@@ -274,6 +289,48 @@ def nhan_vien_ban():
     return cache.get_or_set("khbl:nvban", lambda: client("nv").query(
         "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) WHERE ISNULL(Active,'1') = '1' "
         "ORDER BY EmpName"), 300)
+
+
+def tim_nhan_vien(q="", limit=15):
+    """Tra nhân viên bán. GĐ chốt gõ theo TÊN GỌI (chữ cuối của họ tên) nên kết quả xếp
+    tên-gọi-khớp lên trước, rồi mới tới khớp ở giữa: gõ 'nguyện' ra 'Trần Ngọc Nguyện'."""
+    q = (q or "").strip().lower()
+    ds = nhan_vien_ban()
+    if not q:
+        return ds[:limit]
+    dau, giua = [], []
+    for e in ds:
+        ten = (e.get("EmpName") or "").strip()
+        goi = ten.split()[-1].lower() if ten else ""
+        if goi.startswith(q):
+            dau.append(e)
+        elif q in ten.lower():
+            giua.append(e)
+    return (dau + giua)[:limit]
+
+
+def loai_de():
+    """Danh mục LOẠI DẺ (vàng cũ khách đưa) kèm giá đổi hiện hành.
+    'Dẻ' là từ của chính phần mềm vendor: I_GOLD.GoldType='D' (D18K, D9999, DBk...).
+    Bảng giá có sẵn đúng các mã đó nên giá đổi lấy thẳng, không phải quy đổi."""
+    def _lay():
+        ds = client("loai_de").query(
+            "SELECT GoldCode, GoldDesc, PriceUnit FROM I_GOLD WITH (NOLOCK) "
+            "WHERE GoldType = 'D' AND ISNULL(Active,'1') = '1' ORDER BY OrderBy, GoldCode")
+        gia = {g["GoldCcy"]: g for g in bang_gia()}
+        for x in ds:
+            g = gia.get(x["GoldCode"], {})
+            x["BuyRate"] = g.get("BuyRate") or 0
+            # Giá BÁN RA để ĐỔI NGANG: SellRate của chính dòng dẻ; nếu 0 thì lấy của loại vàng bán tương ứng
+            base = M.de_base(x["GoldCode"])
+            x["base"] = base
+            sell = M.dec(g.get("SellRate"))
+            if sell <= 0:
+                sell = M.dec((gia.get(base) or {}).get("SellRate"))
+            x["SellRate"] = str(sell)
+            x["don_vi"] = "₫/chỉ" if (x.get("PriceUnit") or "L").upper() in ("L", "M") else "₫/g"
+        return ds
+    return cache.get_or_set("khbl:loaide", _lay, 30)
 
 
 def loai_vang_thau():

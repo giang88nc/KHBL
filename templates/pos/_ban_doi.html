@@ -1,0 +1,89 @@
+{% load pos_extras %}{% comment %}
+Form VÀNG ĐỔI — dẻ khách đưa, nằm CHUNG hóa đơn bán (bảng TRN_RT_BUYSELL_BUYGOLD).
+Checkbox "Đổi ngang vàng" (GĐ chốt 05/09/2026): TICK → phần dẻ trong hạn mức (= TL vàng bán ra
+cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách 1–2 dòng, đánh dấu DoiNgang.
+{% endcomment %}
+<section class="pg-box pg-box--doi">
+  <header class="pg-box__head">
+    <h3>VÀNG ĐỔI <i>dẻ khách đưa</i></h3>
+    <label class="pg-ngang" title="Đổi dẻ cùng tuổi vàng lấy hàng mới: phần trong hạn mức tính GIÁ BÁN RA (ngang giá), phần dư tính giá thâu">
+      <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1">
+      <span>⇄ Đổi ngang vàng</span>
+    </label>
+  </header>
+
+  {% if hm_ngang %}
+  <div class="pg-ngang-hm" id="pg-ngang-hm">
+    Hạn mức đổi ngang còn:
+    {% for h in hm_ngang %}<b data-base="{{ h.base }}" data-con="{{ h.con|sokhong }}">{{ h.base }} {{ h.con|tl_man }}</b>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
+        hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=false;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
+    {% csrf_token %}
+    <input type="hidden" name="doi_ngang" id="o-doingang-hidden" value="">
+    <label><span>LOẠI DẺ</span>
+      <select name="gold" id="o-de" class="khbl-select" required>
+        <option value="">— chọn —</option>
+        {% for d in loai_de %}
+        <option value="{{ d.GoldCode }}" data-gia="{{ d.BuyRate|sokhong }}" data-sell="{{ d.SellRate|sokhong }}"
+                data-base="{{ d.base }}" data-dv="{{ d.don_vi }}">{{ d.GoldDesc }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><span>TỔNG TL</span>
+      <input name="tong_tl" id="o-tongtl" class="khbl-input r" inputmode="decimal" placeholder="0" required>
+      <i class="pg-doi-nhap__dv" data-dvtl>ly</i></label>
+    <label><span>TL HỘT</span>
+      <input name="tl_hot" id="o-tlhot" class="khbl-input r" inputmode="decimal" placeholder="0">
+      <i class="pg-doi-nhap__dv" data-dvtl>ly</i></label>
+    <label><span>TL VÀNG</span>
+      <output id="o-tlvang" class="khbl-input r pg-ro">0</output></label>
+    <label id="lb-giadoi"><span id="lb-giadoi-t">GIÁ ĐỔI</span>
+      <input name="gia" id="o-giadoi" class="khbl-input r khbl-money" inputmode="numeric" placeholder="0">
+      <i id="o-dv" class="pg-doi-nhap__dv"></i></label>
+    <label><span>THÀNH TIỀN</span>
+      <output id="o-tiendoi" class="khbl-input r pg-ro pg-ro--tien">0</output></label>
+    <button class="khbl-btn khbl-btn--gold khbl-btn--sm" type="submit">＋ THÊM</button>
+  </form>
+
+  <div class="pg-box__body pg-box__body--doi">
+    <table class="pg-tb">
+      <thead><tr>
+        <th class="w-stt">#</th><th>LOẠI DẺ</th><th>KIỂU</th>
+        <th class="r">TỔNG TL</th><th class="r">TL HỘT</th><th class="r">TL VÀNG</th>
+        <th class="r">GIÁ</th><th class="r">THÀNH TIỀN</th><th class="w-x"></th>
+      </tr></thead>
+      <tbody>
+        {% for x in g.doi %}
+        <tr class="{% if x.row.DoiNgang == '1' %}pg-tr-ngang{% endif %}">
+          <td class="w-stt dim">{{ forloop.counter }}</td>
+          <td>{{ x.row.GoldDesc }}<i class="pg-tb__phu mono">{{ x.row.GoldCode }}</i></td>
+          <td>{% if x.row.DoiNgang == '1' %}<span class="pg-badge pg-badge--ngang">⇄ đổi ngang</span>{% else %}<span class="pg-badge pg-badge--thau">giá thâu</span>{% endif %}</td>
+          <td class="r mono">{{ x.row.TotalGoldWeight|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono dim">{{ x.row.DiamondWeight|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono">{{ x.row.GoldWeight|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono">{{ x.row.BuyRate|don_gia }}</td>
+          <td class="r mono b">{{ x.tien|tien_tran }}</td>
+          <td class="w-x">
+            <button class="pg-x" type="button" title="Bỏ dòng này"
+                    hx-post="{% url 'pos:ban_doi_xoa' %}" hx-vals='{"i": "{{ forloop.counter0 }}"}'
+                    hx-swap="none">×</button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="pg-tb__trong pg-tb__trong--nho"><td colspan="9">
+          <span>Khách không đổi vàng cũ thì bỏ trống phần này</span>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="pg-box__foot">
+    <span>{{ t.so_doi }} dòng</span>
+    <span class="dim">TL đổi <b class="mono">{{ t.tl_doi|tl_man }}</b></span>
+    <span class="pg-box__sum">TIỀN VÀNG CŨ <b>{{ t.vang_cu|tien }}</b></span>
+  </footer>
+</section>

@@ -64,7 +64,16 @@ class Command(BaseCommand):
         check("topbar: đủ 7 mục menu", b.count('class="khbl-top__i') == 7)
         for nhan in ("TỔNG QUAN", "BÁN HÀNG", "THÂU VÀO", "BẢNG GIÁ", "KHÁCH HÀNG", "HÓA ĐƠN", "HỆ THỐNG"):
             check(f"  mục '{nhan}'", f"<span>{nhan}</span>" in b)
-        check("topbar: icon 24px", b.count('width="24" height="24"') >= 7)
+        # Icon topbar = ẢNH (bộ tranh vàng GĐ đưa 03/09/2026), bản 96px trong img/ico/.
+        # Ảnh gốc 1254px ~2MB/cái GIỮ trong img/ — không bao giờ nhúng thẳng vào trang.
+        check("topbar: 7 icon ảnh 26px", b.count('class="khbl-ico-anh"') == 7)
+        for k in ("tong", "ban", "thau", "gia", "khach", "hoadon", "hethong"):
+            check(f"  icon '{k}' được nhúng", f'img/ico/{k}.png' in b)
+            r = c.get(f"/static/img/ico/{k}.png")
+            check(f"  icon '{k}' tải được + nhẹ (<60KB)",
+                  r.status_code == 200 and len(r.getvalue() if hasattr(r, "getvalue")
+                                               else b"".join(r.streaming_content)
+                                               if r.streaming else r.content) < 60_000)
         check("topbar: tên người đăng nhập + két", "khbl-top__me" in b and TK in b)
         check("topbar: nút Đăng xuất", "Đăng xuất" in b)
         check("topbar: đánh dấu trang đang mở (Tổng quan)", 'khbl-top__i is-on' in b)
@@ -85,14 +94,39 @@ class Command(BaseCommand):
             "SELECT TOP 1 ProductCode FROM T_PRODUCT WITH (NOLOCK) "
             "WHERE Status='I' AND TaskPrice>0 AND ISNULL(DiamondWeight,0)>0 ORDER BY InDate DESC")[0]["ProductCode"]
         b = body(c.post("/banle/ban-hang/quet/", {"ma": ma}))
-        check(f"quét mã thật {ma} → thẻ món + phép tính", ma in b and "khbl-calc" in b)
+        check(f"quét mã thật {ma} → thêm dòng VÀNG BÁN", ma in b and "pos-ban" in b)
         check("quét lại cùng mã → báo đã có trong phiếu",
               "đã có trong phiếu" in body(c.post("/banle/ban-hang/quet/", {"ma": ma})))
         check("mã không tồn tại → câu lỗi vendor P-002",
               "P-002" in body(c.post("/banle/ban-hang/quet/", {"ma": "ZZZKHONGCO"})))
-        b = body(c.post("/banle/ban-hang/vang-cu/", {"gold": "D9999", "gw": "1000", "pct": "100"}))
-        check("thêm vàng cũ → khối THÂU hiện", "Vàng cũ khách đưa" in b and "has-mua" in b)
-        check("popup phiếu tạm mở được", "Phiếu tạm" in body(c.get("/banle/ban-hang/phieu/")))
+        b = body(c.post("/banle/ban-hang/vang-doi/",
+                        {"gold": "D9999", "tong_tl": "100", "tl_hot": "0", "gia": ""}))
+        check("thêm dòng VÀNG ĐỔI (giá tự lấy từ bảng giá)",
+              "D9999" in b and "TIỀN VÀNG CŨ" in b)
+        check("vàng đổi thiếu trọng lượng → báo lỗi rõ",
+              "Chưa nhập tổng trọng lượng" in body(
+                  c.post("/banle/ban-hang/vang-doi/", {"gold": "D9999", "tong_tl": "0"})))
+        check("TL hột > tổng TL → chặn",
+              "không được lớn hơn" in body(c.post("/banle/ban-hang/vang-doi/",
+                                                  {"gold": "D9999", "tong_tl": "10", "tl_hot": "20"})))
+        # ── 4b. khối THÔNG TIN + TÍNH TỔNG ──
+        b = body(c.get("/banle/ban-hang/"))
+        for nhan in ("VÀNG BÁN", "VÀNG ĐỔI", "TÍNH TỔNG", "TIỀN KHÁCH TRẢ",
+                     "DANH SÁCH", "THÊM MỚI", "CLEAR", "THANH TOÁN", "IN HÓA ĐƠN"):
+            check(f"  màn bán hàng có '{nhan}'", nhan in b)
+        check("số hóa đơn KHÓA + ghi rõ dự kiến", "readonly" in b and "dự kiến" in b)
+        check("ô tìm nhân viên theo tên", 'id="o-nv"' in b)
+        check("ô tìm khách theo tên/SĐT/CCCD", "CCCD" in b and 'id="o-khach"' in b)
+        check("nút + mở popup thêm khách", "khach_them" in b or "khach-hang/them" in b)
+        check("gợi ý nhân viên trả về được",
+              "pg-goiy__i" in body(c.get("/banle/ban-hang/tim-nv/?q=ng")))
+        check("popup DANH SÁCH hóa đơn mở được",
+              "Hóa đơn ngày" in body(c.get("/banle/ban-hang/danh-sach/")))
+        check("6 khoản tiền đủ trong cột TÍNH TỔNG",
+              all(x in b for x in ("Tiền vàng mới", "Tiền vàng cũ", "CÒN LẠI", "Tiền vàng thêm",
+                                   "Tiền công thêm", "Tiền bớt", "Tiền cọc", "Ghi chú")))
+        check("giấy đảm bảo in được", "GIẤY ĐẢM BẢO" in body(c.get("/banle/ban-hang/in/")))
+        c.post("/banle/ban-hang/moi/")
         c.post("/banle/ban-hang/moi/")
 
         # ── 5. bảng giá + nhịp 204 ──
@@ -115,11 +149,8 @@ class Command(BaseCommand):
             check(f"  popup có ô '{f}'", f'name="{f}"' in b)
         check("  popup có ô quét QR", 'id="kh-qr-in"' in b)
         check("  popup có 3 ô ảnh", b.count("kh-anh__khung") == 3)
-        check("  nút lưu ở trạng thái chờ", "khbl-btn--cho" in b)
-        b = body(c.post("/banle/khach-hang/luu/", {"CustName": "Nguyễn Thị Thử", "Phone": "0906 737 668",
-                                                   "CMND": "096088009068", "BirthDate": "1988-04-07",
-                                                   "Address": "Thủ Đức", "Gender": "1", "CustType": "VIP"}))
-        check("lưu khách: hiện tham số sẽ gửi", "I_CUSTOMER_Ins" in b and "0906737668" in b)
+        check("  nút lưu thật + khóa double click", "LƯU KHÁCH" in b and
+              'hx-sync="this:drop"' in b and 'name="save_token"' in b)
         check("thiếu họ tên → báo lỗi", "Chưa nhập họ tên" in body(c.post("/banle/khach-hang/luu/", {"CustName": ""})))
 
         # ── 7. thâu: đối chiếu với money.py ──

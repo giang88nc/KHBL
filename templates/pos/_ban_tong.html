@@ -1,0 +1,50 @@
+{% load pos_extras %}{% comment %}
+Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026:
+  còn lại   = tiền vàng mới − tiền vàng cũ
+  khách trả = còn lại − bớt + công thêm + vàng thêm − cọc
+Ô nhập gửi ngay khi rời ô (change) để mọi máy cùng thấy một con số.
+{% endcomment %}
+<section class="pg-box pg-box--tong">
+  <header class="pg-box__head"><h3>TÍNH TỔNG</h3></header>
+
+  <div class="pg-tong">
+    <div class="pg-tong__r">
+      <span>Tiền vàng mới</span><b class="mono">{{ t.vang_moi|tien_tran }}</b></div>
+    <div class="pg-tong__r pg-tong__r--tru">
+      <span>Tiền vàng cũ</span><b class="mono">− {{ t.vang_cu|tien_tran }}</b></div>
+    <div class="pg-tong__r pg-tong__r--conlai">
+      <span>CÒN LẠI</span><b class="mono">{{ t.con_lai|tien_tran }}</b></div>
+
+    <form class="pg-tong__form" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
+      {% csrf_token %}
+      <label class="pg-tong__r pg-tong__r--nhap">
+        <span>Tiền vàng thêm <i>+</i></span>
+        <input name="vang_them" class="khbl-input khbl-money r" inputmode="numeric"
+               value="{{ g.vang_them|tien_tran }}"></label>
+      <label class="pg-tong__r pg-tong__r--nhap">
+        <span>Tiền công thêm <i>+</i></span>
+        <input name="cong_them" class="khbl-input khbl-money r" inputmode="numeric"
+               value="{{ g.cong_them|tien_tran }}"></label>
+      <label class="pg-tong__r pg-tong__r--nhap">
+        <span>Tiền bớt <i class="tru">−</i></span>
+        <input name="bot" id="o-bot" class="khbl-input khbl-money r" inputmode="numeric"
+               value="{{ g.bot|tien_tran }}"></label>
+      <label class="pg-tong__r pg-tong__r--nhap">
+        <span>Tiền cọc <i class="tru">−</i></span>
+        <input name="coc" class="khbl-input khbl-money r" inputmode="numeric"
+               value="{{ g.coc|tien_tran }}"></label>
+      <label class="pg-tong__r pg-tong__r--ghi">
+        <span>Ghi chú</span>
+        <input name="ghi_chu" class="khbl-input" maxlength="200" placeholder="ghi thêm nếu cần"
+               value="{{ g.ghi_chu }}"></label>
+    </form>
+
+    <button id="nut-bot-le" class="pg-tong__botle" type="button" title="Bớt cho tròn nghìn"
+            hx-post="{% url 'pos:ban_bot_le' %}" hx-swap="none">⌁ Bớt lẻ cho tròn · F6</button>
+
+    <div class="pg-tong__tra">
+      <span>TIỀN KHÁCH TRẢ</span>
+      <b class="mono">{{ t.khach_tra|tien }}</b>
+    </div>
+  </div>
+</section>

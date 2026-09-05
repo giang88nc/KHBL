@@ -93,6 +93,20 @@ class Command(BaseCommand):
         )
         PmvState.set("pmv_last_sandbox", f"{done:%d/%m/%Y %H:%M} | SYNC từ PMV thật | "
                      f"NV={r['nv']} HĐ={r['hd']} SP={r['sp']}")
+
+        # 6) BASELINE cho Bước 2 (GĐ duyệt 05/09/2026): ngay lúc 2 SQL bằng nhau, chụp FULL KK
+        #    làm mốc so sánh — chu kỳ dò thay đổi kế tiếp so với đúng mốc này.
+        try:
+            from apps.pmv import behavior_log as BL, diff as diffmod
+            from apps.pmv.models import PmvSnapshot
+
+            snap = BL.chup_kk()
+            PmvSnapshot.objects.create(label=f"baseline sau SYNC {done:%d/%m %H:%M}", source="pmv",
+                                       mode="full", table_count=len(snap), payload=snap)
+            BL.dat_moc(snap)
+            self.stdout.write(f"[+] Baseline FULL KK: {len(snap)} bảng — mốc dò thay đổi đã đặt lại")
+        except Exception as exc:
+            self.stderr.write(f"[+] Không chụp được baseline: {exc}")
         self.stdout.write(self.style.SUCCESS(
             f"SYNC HOÀN TẤT trong {tong:.0f}s — sandbox = PMV thật tại {done:%H:%M:%S}. "
             f"T_EMPLOYEE={r['nv']}, TRN_RT_BUYSELL={r['hd']}, T_PRODUCT={r['sp']}"

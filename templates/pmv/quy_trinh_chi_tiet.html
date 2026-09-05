@@ -1,0 +1,219 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — Quy trình {{ p.code }}</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; --tim:#7C3AED; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  .wrap { max-width:1320px; margin:0 auto; padding:20px 16px; }
+  h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0; font-size:24px; }
+  .nav { margin-bottom:12px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
+  .nav a.active { font-weight:700; border-bottom:2px solid var(--gold-500); }
+  .msg { padding:8px 12px; border-radius:6px; margin-bottom:10px; }
+  .msg.success { background:#EAF4EC; color:#2E7D46; border:1px solid #B7DCC0; }
+  .msg.error { background:#FDF2F0; color:#B3402A; border:1px solid #E4B5AC; }
+  .msg.warning { background:#FFF7EC; color:#C07A1A; border:1px solid #F0D9B5; }
+  .head { background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold-500); border-radius:8px; padding:12px 16px; margin-bottom:12px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+  .head .desc { font-size:12px; color:#78716c; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .chip { border:1px solid var(--line); border-radius:12px; padding:1px 9px; font-size:11.5px; background:var(--surface); }
+  .badge { border-radius:10px; padding:1px 8px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .b-approved { background:#E3EFE6; color:#2E7D46; } .b-draft { background:#F7E6C8; color:#8a5a12; }
+  .b-lam { background:#E3EFE6; color:#2E7D46; } .b-kiem { background:#F7E6C8; color:#8a5a12; } .b-rieng { background:#E0E7FF; color:#3730A3; } .b-bo { background:#F1F5F9; color:#64748B; }
+  .b-khop { background:#E3EFE6; color:#2E7D46; } .b-lech { background:#F6D9D2; color:#B3402A; } .b-chua { background:#F1F5F9; color:#64748B; }
+  .act-ghi { color:#B3402A; font-weight:700; } .act-đọc { color:#57534e; }
+  button { padding:6px 12px; border:0; border-radius:6px; background:var(--gold-500); color:#fff; font-weight:600; cursor:pointer; font-size:12.5px; }
+  button.ghost { background:#fff; color:var(--gold-700); border:1px solid var(--gold-500); }
+  button.danger { background:#fff; color:#B3402A; border:1px solid #E4B5AC; }
+  button.tiny { padding:2px 7px; font-size:11px; }
+  button.tim { background:var(--tim); }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .tools form { display:inline; }
+  /* sơ đồ pha 0 → hoàn thành */
+  .flow { display:flex; align-items:stretch; gap:0; overflow-x:auto; padding:6px 0 10px; }
+  .flow .ph { min-width:150px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px; position:relative; }
+  .flow .ph b { display:block; font-size:12.5px; color:var(--gold-700); }
+  .flow .ph span { font-size:11px; color:#78716c; }
+  .flow .arr { align-self:center; padding:0 6px; color:var(--gold-500); font-size:20px; }
+  .flow .ph.done { border-top:3px solid #2E7D46; } .flow .ph.kiem { border-top:3px solid #C07A1A; } .flow .ph.new { border-top:3px solid var(--tim); }
+  /* cây */
+  .pha { background:#fff; border:1px solid var(--line); border-radius:8px; margin-bottom:12px; }
+  .pha > header { display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--gold-100); border-radius:8px 8px 0 0; }
+  .pha > header h3 { margin:0; font-family:"Cormorant Garamond",serif; color:var(--gold-700); font-size:18px; flex:1; }
+  .pha .note { padding:6px 12px 0; font-size:12px; color:#78716c; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; padding:6px 8px; font-size:11px; color:var(--gold-700); border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; font-size:12px; }
+  td.mono, .mono { font-family:Consolas,monospace; font-size:11.5px; word-break:break-word; }
+  td.stt { color:#a8a29e; white-space:nowrap; }
+  td.acts { white-space:nowrap; }
+  details summary { cursor:pointer; color:var(--gold-700); font-size:11px; }
+  .muted { color:#a8a29e; }
+  dialog { border:1px solid var(--line); border-radius:10px; padding:0; width:min(760px,96vw); }
+  dialog::backdrop { background:rgba(28,25,23,.5); }
+  dialog form { padding:0; }
+  .dlg-h { background:var(--gold-100); color:var(--gold-700); font-family:"Cormorant Garamond",serif; font-size:18px; padding:10px 16px; display:flex; justify-content:space-between; }
+  .dlg-b { padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dlg-b .w { grid-column:1 / -1; }
+  .fld { display:flex; flex-direction:column; gap:2px; } .fld label { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  input, select, textarea { padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; background:#fff; font-family:inherit; width:100%; }
+  textarea { min-height:56px; }
+  .dlg-f { padding:10px 16px 14px; display:flex; justify-content:flex-end; gap:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}" class="active">Quy trình</a>
+  </div>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <div class="head">
+    <div style="flex:1;min-width:320px">
+      <h1><span class="mono" style="font-size:16px">{{ p.code }}</span> · {{ p.name }}</h1>
+      <div class="desc">v{{ p.version }} · <span class="badge b-{{ p.status }}">{{ p.get_status_display }}</span> · cập nhật {{ p.updated_at|date:"d/m/Y H:i" }} · file <span class="mono">{{ file_md }}</span></div>
+      {% if p.description %}<div class="desc" style="margin-top:6px;color:var(--ink)">{{ p.description }}</div>{% endif %}
+      {% if p.source %}<div class="desc" style="margin-top:4px">Nguồn học: {{ p.source|linebreaksbr }}</div>{% endif %}
+      <div class="chips">
+        <span class="chip">{{ tk.pha }} pha</span><span class="chip">{{ tk.buoc }} bước · <b class="act-ghi">{{ tk.ghi }} ghi</b></span>
+        <span class="chip"><span class="badge b-lam">KHBL làm</span> {{ tk.lam }}</span>
+        <span class="chip"><span class="badge b-kiem">cần kiểm</span> {{ tk.kiem }}</span>
+        <span class="chip"><span class="badge b-bo">bỏ</span> {{ tk.bo }}</span>
+        <span class="chip"><span class="badge b-khop">khớp app</span> {{ tk.khop }}{% if tk.lech %} · <span class="badge b-lech">lệch</span> {{ tk.lech }}{% endif %}</span>
+      </div>
+    </div>
+    <div class="tools">
+      <button type="button" class="ghost" onclick="moQT()">✎ Sửa quy trình</button>
+      <form method="post" action="{% url 'pmv:qt_luu' p.code %}">{% csrf_token %}<button type="submit">💾 LƯU ra file</button></form>
+      <button type="button" class="tim" onclick="moBuoc(null, '')">＋ Thêm pha</button>
+      <form method="post" action="{% url 'pmv:qt_xoa' p.code %}" onsubmit="return confirm('Xóa quy trình {{ p.code }} khỏi DB? File .md/.json vẫn giữ.')">{% csrf_token %}<button type="submit" class="danger">Xóa</button></form>
+    </div>
+  </div>
+
+  {# ── SƠ ĐỒ: pha 0 → hoàn thành ── #}
+  <div class="flow">
+    {% for pha, buoc in cay %}
+      <div class="ph {% if 'chưa phân nhóm' in pha.title %}new{% endif %}">
+        <b>{{ pha.title }}</b>
+        <span>{{ buoc|length }} bước{% with g=buoc|length %}{% endwith %}</span>
+      </div>
+      {% if not forloop.last %}<div class="arr">→</div>{% endif %}
+    {% empty %}<div class="muted">Chưa có pha nào — bấm “＋ Thêm pha”.</div>
+    {% endfor %}
+    {% if cay %}<div class="arr">→</div><div class="ph done"><b>✔ Hoàn thành</b><span>đối chiếu 6 điểm</span></div>{% endif %}
+  </div>
+
+  {# ── CÂY: pha → bước ── #}
+  {% for pha, buoc in cay %}
+  <section class="pha">
+    <header>
+      <h3>{{ forloop.counter0 }}. {{ pha.title }}</h3>
+      <form method="post" action="{% url 'pmv:buoc_doi_cho' pha.pk 'len' %}">{% csrf_token %}<button class="tiny ghost" title="Lên">↑</button></form>
+      <form method="post" action="{% url 'pmv:buoc_doi_cho' pha.pk 'xuong' %}">{% csrf_token %}<button class="tiny ghost" title="Xuống">↓</button></form>
+      <button type="button" class="tiny ghost" onclick='moBuoc({{ pha.pk }}, "")'>＋ Thêm bước</button>
+      <button type="button" class="tiny ghost" onclick="suaBuoc(this)" data-pk="{{ pha.pk }}" data-title="{{ pha.title }}" data-note="{{ pha.note }}" data-pha="1">✎</button>
+      <form method="post" action="{% url 'pmv:buoc_xoa' pha.pk %}" onsubmit="return confirm('Xóa pha “{{ pha.title }}” và {{ buoc|length }} bước bên trong?')">{% csrf_token %}<button class="tiny danger">✕</button></form>
+    </header>
+    {% if pha.note %}<div class="note">{{ pha.note }}</div>{% endif %}
+    <table>
+      <thead><tr><th>#</th><th>Bước</th><th>Proc</th><th>Ghi/đọc</th><th>Tham số quan trọng</th><th>Bảng đổi</th><th>KHBL</th><th>Đối chiếu</th><th>Ghi chú</th><th></th></tr></thead>
+      <tbody>
+      {% for s in buoc %}
+        <tr>
+          <td class="stt">{{ forloop.parentloop.counter0 }}.{{ forloop.counter }}</td>
+          <td><b>{{ s.title }}</b></td>
+          <td class="mono">{% if s.proc_name %}{{ s.proc_name }}{% if s.repeat %} <span class="badge b-kiem">×N</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="act-{{ s.action }}">{{ s.action|default:"—" }}</td>
+          <td>{% if s.params %}<details><summary>{{ s.params|truncatechars:60 }}</summary><div class="mono">{{ s.params }}</div></details>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if s.tables %}<details><summary>{{ s.tables|truncatechars:50 }}</summary><div class="mono">{{ s.tables }}</div></details>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td><span class="badge b-{{ s.khbl }}">{{ s.get_khbl_display }}</span></td>
+          <td><span class="badge b-{{ s.doi_chieu }}">{{ s.get_doi_chieu_display }}</span></td>
+          <td style="max-width:260px">{{ s.note|default:"—" }}</td>
+          <td class="acts">
+            <form method="post" action="{% url 'pmv:buoc_doi_cho' s.pk 'len' %}" style="display:inline">{% csrf_token %}<button class="tiny ghost" title="Lên">↑</button></form>
+            <form method="post" action="{% url 'pmv:buoc_doi_cho' s.pk 'xuong' %}" style="display:inline">{% csrf_token %}<button class="tiny ghost" title="Xuống">↓</button></form>
+            <button type="button" class="tiny ghost" onclick="suaBuoc(this)"
+              data-pk="{{ s.pk }}" data-parent="{{ s.parent_id }}" data-title="{{ s.title }}" data-proc="{{ s.proc_name }}"
+              data-action="{{ s.action }}" data-repeat="{{ s.repeat|yesno:'1,0' }}" data-params="{{ s.params }}" data-tables="{{ s.tables }}"
+              data-khbl="{{ s.khbl }}" data-dc="{{ s.doi_chieu }}" data-note="{{ s.note }}">✎ Sửa</button>
+            <form method="post" action="{% url 'pmv:buoc_xoa' s.pk %}" style="display:inline" onsubmit="return confirm('Xóa bước “{{ s.title }}”?')">{% csrf_token %}<button class="tiny danger">✕</button></form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="10" class="muted">Pha này chưa có bước — bấm “＋ Thêm bước”.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+</div>
+
+{# ── DIALOG pha/bước (thêm + sửa dùng chung) ── #}
+<dialog id="dlg-buoc">
+  <form method="post" id="f-buoc">{% csrf_token %}
+    <div class="dlg-h"><span id="dlg-buoc-title">Bước</span><button type="button" class="tiny ghost" onclick="document.getElementById('dlg-buoc').close()">✕</button></div>
+    <div class="dlg-b">
+      <div class="fld w" id="fld-parent"><label>Thuộc pha</label>
+        <select name="parent" id="i-parent"><option value="">— (đây là PHA) —</option>{% for ph in phas %}<option value="{{ ph.pk }}">{{ ph.title }}</option>{% endfor %}</select></div>
+      <div class="fld w"><label>Tên pha / bước *</label><input name="title" id="i-title" required maxlength="150"></div>
+      <div class="fld" data-buoc><label>Proc</label><input name="proc_name" id="i-proc" class="mono" maxlength="128" placeholder="TRN_RT_BUYSELL_Ins"></div>
+      <div class="fld" data-buoc><label>Ghi / đọc</label><select name="action" id="i-action"><option value="">—</option><option value="ghi">ghi</option><option value="đọc">đọc</option></select></div>
+      <div class="fld" data-buoc><label>KHBL</label><select name="khbl" id="i-khbl">{% for v, t in khbl_choices %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select></div>
+      <div class="fld" data-buoc><label>Đối chiếu với app</label><select name="doi_chieu" id="i-dc">{% for v, t in dc_choices %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select></div>
+      <div class="fld w" data-buoc><label><input type="checkbox" name="repeat" id="i-repeat" value="1" style="width:auto;margin-right:6px">Lặp nhiều lần trong 1 giao dịch (×N)</label></div>
+      <div class="fld w" data-buoc><label>Tham số quan trọng</label><textarea name="params" id="i-params"></textarea></div>
+      <div class="fld w" data-buoc><label>Bảng đổi</label><textarea name="tables" id="i-tables"></textarea></div>
+      <div class="fld w"><label>Ghi chú</label><textarea name="note" id="i-note"></textarea></div>
+    </div>
+    <div class="dlg-f"><button type="button" class="ghost" onclick="document.getElementById('dlg-buoc').close()">Hủy</button><button type="submit">Lưu (version +1, ghi file)</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-qt">
+  <form method="post" action="{% url 'pmv:qt_sua' p.code %}">{% csrf_token %}
+    <div class="dlg-h"><span>Sửa quy trình {{ p.code }}</span><button type="button" class="tiny ghost" onclick="document.getElementById('dlg-qt').close()">✕</button></div>
+    <div class="dlg-b">
+      <div class="fld w"><label>Tên</label><input name="name" value="{{ p.name }}" required></div>
+      <div class="fld w"><label>Mô tả</label><textarea name="description">{{ p.description }}</textarea></div>
+      <div class="fld"><label>Trạng thái</label><select name="status">{% for v, t in status_choices %}<option value="{{ v }}" {% if v == p.status %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="dlg-f"><button type="button" class="ghost" onclick="document.getElementById('dlg-qt').close()">Hủy</button><button type="submit">Lưu (version +1, ghi file)</button></div>
+  </form>
+</dialog>
+
+<script>
+  var URL_THEM = "{% url 'pmv:buoc_them' p.code %}";
+  var URL_SUA = "{% url 'pmv:buoc_sua' 0 %}";
+  function set(id, v) { var el = document.getElementById(id); if (!el) return; if (el.type === "checkbox") el.checked = v === "1" || v === true; else el.value = v || ""; }
+  function hienBuoc(la_buoc) { document.querySelectorAll("#dlg-buoc [data-buoc]").forEach(function (e) { e.style.display = la_buoc ? "" : "none"; }); }
+  function moBuoc(parentPk, title) {
+    var f = document.getElementById("f-buoc"); f.action = URL_THEM;
+    ["i-title", "i-proc", "i-action", "i-params", "i-tables", "i-note"].forEach(function (i) { set(i, ""); });
+    set("i-repeat", "0"); set("i-khbl", "lam"); set("i-dc", "chua");
+    set("i-parent", parentPk ? String(parentPk) : "");
+    document.getElementById("fld-parent").style.display = parentPk ? "" : "none";
+    hienBuoc(!!parentPk);
+    document.getElementById("dlg-buoc-title").textContent = parentPk ? "＋ Thêm bước" : "＋ Thêm pha";
+    document.getElementById("dlg-buoc").showModal();
+  }
+  function suaBuoc(btn) {
+    var d = btn.dataset, laPha = d.pha === "1";
+    var f = document.getElementById("f-buoc"); f.action = URL_SUA.replace("/0/", "/" + d.pk + "/");
+    set("i-title", d.title); set("i-note", d.note);
+    if (laPha) { set("i-parent", ""); }
+    else { set("i-parent", d.parent); set("i-proc", d.proc); set("i-action", d.action); set("i-repeat", d.repeat); set("i-params", d.params); set("i-tables", d.tables); set("i-khbl", d.khbl); set("i-dc", d.dc); }
+    document.getElementById("fld-parent").style.display = laPha ? "none" : "";
+    hienBuoc(!laPha);
+    document.getElementById("dlg-buoc-title").textContent = laPha ? "✎ Sửa pha" : "✎ Sửa bước";
+    document.getElementById("dlg-buoc").showModal();
+  }
+  function moQT() { document.getElementById("dlg-qt").showModal(); }
+</script>
+</body>
+</html>

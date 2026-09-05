@@ -2,45 +2,126 @@
 {% block title %}Mua bán{% endblock %}
 {% block main_mod %} khbl-main--pos{% endblock %}
 
-{% block chrome %}
-  {% include "pos/_gia_strip.html" %}
-  <div class="khbl-bar">
-    {% include "pos/_khach_o.html" %}
-    <div class="dim" style="font-size:12.5px">Số phiếu <b class="mono">— cấp khi lưu</b></div>
-    <form class="khbl-bar__nv" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
-      <select class="khbl-select" name="emp" style="padding:4px 8px" title="Nhân viên bán">
-        <option value="">— Nhân viên bán —</option>
-        {% for e in nvs %}<option value="{{ e.EmpID }}" {% if gio.emp == e.EmpID %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
-      </select>
-    </form>
-    <button class="khbl-btn khbl-btn--ghost khbl-btn--sm" type="button"
-            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
-            hx-confirm="Bỏ phiếu đang lập và bắt đầu phiếu mới?">Phiếu mới</button>
-  </div>
-{% endblock %}
+{% block chrome %}{% include "pos/_gia_strip.html" %}{% endblock %}
 
 {% block body %}
-  <div id="pos-work">{% include "pos/_work.html" %}</div>
-  <div id="dai-quyet-toan">{% include "pos/_dai.html" %}</div>
+<div class="pg-ban">
+  <div id="pos-info">{% include "pos/_ban_info.html" %}</div>
+
+  <div class="pg-ban__body">
+    <div class="pg-ban__c1">
+      <div id="pos-ban">{% include "pos/_ban_ban.html" %}</div>
+      <div id="pos-doi">{% include "pos/_ban_doi.html" %}</div>
+    </div>
+    <div class="pg-ban__c2" id="pos-tong">{% include "pos/_ban_tong.html" %}</div>
+  </div>
+
+  <footer class="pg-ban__foot">
+    <button class="khbl-btn khbl-btn--ghost" type="button"
+            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
+            hx-confirm="Bỏ phiếu đang lập và mở phiếu mới?">＋ THÊM MỚI</button>
+
+    <button class="khbl-btn khbl-btn--nguy" type="button"
+            hx-post="{% url 'pos:ban_huy' %}" hx-swap="none"
+            hx-confirm="{% if dang_sua %}HỦY HẲN hóa đơn {{ g.bill_code|default:g.trn_id }}?&#10;&#10;Hóa đơn bị xóa khỏi phần mềm và toàn bộ món hàng trả về kho.{% else %}Xóa trắng phiếu đang nhập?{% endif %}">
+      🗑 XÓA</button>
+
+    <span class="pg-ban__foot-tra">
+      KHÁCH TRẢ <b class="mono">{{ t.khach_tra|tien }}</b>
+    </span>
+
+    <button class="khbl-btn khbl-btn--gold" type="button"
+            hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none">💰 THANH TOÁN</button>
+    <button class="khbl-btn khbl-btn--gold" type="button"
+            hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none">
+      💰 THANH TOÁN &amp; IN</button>
+    <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:ban_in' %}" target="_blank">🖨 IN HÓA ĐƠN</a>
+  </footer>
+
   <div class="khbl-keys">
     <span><kbd>Enter</kbd>Thêm món</span>
     <span><kbd>F2</kbd>Khách hàng</span>
     <span><kbd>F3</kbd>Tìm hàng</span>
-    <span><kbd>F4</kbd>Vàng cũ</span>
+    <span><kbd>F4</kbd>Vàng đổi</span>
     <span><kbd>F6</kbd>Bớt lẻ</span>
-    <span style="margin-left:auto" class="dim">Kênh ghi PMV chưa mở — phiếu chỉ để tra cứu và tính toán</span>
+    <span class="dim" style="margin-left:auto">{{ pmv_dich_mo_ta }}</span>
   </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+/* phím tắt */
 document.addEventListener("keydown", function (e) {
-  if (e.target.matches("input,select,textarea") && e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "F6") return;
-  var map = { F2: "#o-khach", F3: "#nut-tim-hang", F4: "#nut-vang-cu", F6: "#nut-bot-le" };
+  var map = { F2: "#o-khach", F3: "#nut-tim-hang", F4: "#o-de", F6: "#nut-bot-le" };
   var sel = map[e.key];
   if (!sel) return;
   var el = document.querySelector(sel);
   if (el) { e.preventDefault(); el.focus(); if (el.tagName === "BUTTON") el.click(); }
 });
+
+/* form VÀNG ĐỔI: chọn loại dẻ thì điền giá; gõ TL thì tính ngay TL vàng + thành tiền */
+(function () {
+  function so(v) { return parseFloat(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
+  function tienVN(n) { return Math.round(n).toLocaleString("vi-VN"); }
+  function tinh() {
+    var de = document.getElementById("o-de");
+    if (!de) return;
+    var op = de.options[de.selectedIndex] || {};
+    var dv = document.getElementById("o-dv");
+    if (dv) dv.textContent = op.dataset ? (op.dataset.dv || "") : "";
+    var giaO = document.getElementById("o-giadoi");
+    var tong = so(document.getElementById("o-tongtl").value);
+    var hot  = so(document.getElementById("o-tlhot").value);
+    var vang = Math.max(0, tong - hot);
+    document.getElementById("o-tlvang").textContent = vang ? vang.toLocaleString("vi-VN") : "0";
+    /* ô giá nhập theo ĐỒNG (8.750.000 ₫/chỉ) — khớp cách người bán đọc số */
+    var gia = so(giaO.value);
+    if (!gia && op.dataset && op.dataset.gia) gia = (parseFloat(op.dataset.gia) || 0) * 1000;
+    var theoGam = op.dataset && op.dataset.dv === "₫/g";
+    var hs = theoGam ? 1 : 100;                 /* L/M tính trên CHỈ = 100 ly */
+    document.querySelectorAll("[data-dvtl]").forEach(function (e) { e.textContent = theoGam ? "g" : "ly"; });
+    document.getElementById("o-tiendoi").textContent = tienVN(vang / hs * gia);
+  }
+  /* Điền giá theo LOẠI DẺ: đổi ngang → giá BÁN RA (data-sell), thường → giá THÂU (data-gia) */
+  function dienGia() {
+    var de = document.getElementById("o-de");
+    var g = document.getElementById("o-giadoi");
+    if (!de || !g) return;
+    var op = de.options[de.selectedIndex];
+    if (!op || !op.value) return;
+    var ngang = document.getElementById("o-doingang");
+    var key = (ngang && ngang.checked) ? "sell" : "gia";
+    var v = parseFloat(op.dataset[key] || op.dataset.gia || 0) || 0;
+    g.value = v ? (v * 1000).toLocaleString("vi-VN") : "";
+  }
+  /* Đồng bộ checkbox 'Đổi ngang': set hidden, đổi nhãn giá, tô màu khối, điền lại giá */
+  window.khblDoiNgangSync = function () {
+    var ngang = document.getElementById("o-doingang");
+    var hidden = document.getElementById("o-doingang-hidden");
+    var box = document.querySelector(".pg-box--doi");
+    var lbl = document.getElementById("lb-giadoi-t");
+    if (!ngang || !hidden) return;
+    hidden.value = ngang.checked ? "1" : "";
+    if (box) box.classList.toggle("pg-doi--ngang-on", ngang.checked);
+    if (lbl) lbl.textContent = ngang.checked ? "GIÁ BÁN RA" : "GIÁ ĐỔI";
+    dienGia(); tinh();
+  };
+  function gan() {
+    var de = document.getElementById("o-de");
+    if (!de || de.dataset.gan) return;
+    de.dataset.gan = "1";
+    de.addEventListener("change", function () { dienGia(); tinh(); });
+    var ng = document.getElementById("o-doingang");
+    if (ng) ng.addEventListener("change", window.khblDoiNgangSync);
+    ["o-tongtl", "o-tlhot", "o-giadoi"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener("input", tinh);
+    });
+    window.khblDoiNgangSync();
+  }
+  document.addEventListener("DOMContentLoaded", gan);
+  document.addEventListener("htmx:afterSwap", gan);
+})();
 </script>
 {% endblock %}

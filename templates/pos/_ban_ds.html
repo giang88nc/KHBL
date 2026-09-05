@@ -1,0 +1,37 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_title %}Hóa đơn ngày {{ ngay }}{% endblock %}
+{% block modal_style %}max-width:1040px{% endblock %}
+{% block modal_body %}
+  {% if loi %}
+    <div class="khbl-alert khbl-alert--do">Không đọc được danh sách: {{ loi }}</div>
+  {% endif %}
+  <table class="pg-tb pg-tb--ds">
+    <thead><tr>
+      <th>GIỜ</th><th>SỐ HÓA ĐƠN</th><th>KHÁCH</th><th>NHÂN VIÊN</th>
+      <th class="r">VÀNG MỚI</th><th class="r">VÀNG CŨ</th><th class="r">KHÁCH TRẢ</th>
+      <th>TRẠNG THÁI</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for b in ds %}
+      <tr>
+        <td class="mono">{{ b.TrnTime }}</td>
+        <td class="mono b">{{ b.BillCode|default:b.TrnID }}</td>
+        <td>{{ b.CustName|default:"—" }}</td>
+        <td>{{ b.EmpName|default:"—" }}</td>
+        <td class="r mono">{{ b.SellTotalAmount|tien_tran }}</td>
+        <td class="r mono dim">{{ b.BuyTotalAmount|tien_tran }}</td>
+        <td class="r mono b">{{ b.PayAmount|tien_tran }}</td>
+        <td>{% if b.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>
+            {% else %}<span class="khbl-badge">Còn nháp</span>{% endif %}</td>
+        <td class="r">
+          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+                  hx-post="{% url 'pos:ban_mo' %}" hx-vals='{"trn_id": "{{ b.TrnID }}"}'
+                  hx-swap="none" hx-on::after-request="closeKhblModal()">MỞ</button>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="pg-tb__trong"><span>Ngày này chưa có hóa đơn nào</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

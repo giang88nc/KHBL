@@ -89,6 +89,100 @@ class PmvBehavior(models.Model):
         return f"[{self.source}] {self.event_time:%d/%m %H:%M:%S} {self.proc_name or self.text[:40]}"
 
 
+class PmvChange(models.Model):
+    """1 dòng = 1 BẢNG của SQL KK đổi trong 1 khung thời gian (Bước 2 — dò thay đổi, 05/09/2026).
+    mark rỗng = dò liên tục 2 phút; 'danhdau:<id>' = chế độ ĐÁNH DẤU TRƯỚC/SAU thủ công."""
+
+    window_start = models.DateTimeField(db_index=True, verbose_name="Từ")
+    window_end = models.DateTimeField(verbose_name="Đến")
+    table = models.CharField(max_length=128, db_index=True, verbose_name="Bảng")
+    rows_before = models.IntegerField(null=True, blank=True)
+    rows_after = models.IntegerField(null=True, blank=True)
+    delta = models.IntegerField(null=True, blank=True)
+    cs_changed = models.BooleanField(default=False, verbose_name="Checksum đổi")
+    procs = models.TextField(blank=True, default="", verbose_name="Proc ghi trong khung")
+    mark = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "pmv_change_logs"
+        ordering = ["-id"]
+        verbose_name = "Thay đổi SQL KK"
+        verbose_name_plural = "Thay đổi SQL KK"
+
+    def __str__(self):
+        return f"[{self.window_end:%d/%m %H:%M}] {self.table} {self.delta:+d}" if self.delta else f"[{self.window_end:%d/%m %H:%M}] {self.table}"
+
+
+class PmvProcess(models.Model):
+    """QUY TRÌNH nghiệp vụ của PMVGoldRT đã HỌC được từ thao tác thật (GĐ chốt 05/09/2026):
+    cây PHA → BƯỚC theo thứ tự từ 0 đến hoàn thành. Mỗi lần đổi tự LƯU ra
+    docs/quy_trinh/<code>.md + .json (apps/pmv/quy_trinh.py)."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Bản nháp (mới học)"
+        APPROVED = "approved", "GĐ đã duyệt"
+
+    code = models.CharField(max_length=40, unique=True, verbose_name="Mã")          # BAN_HANG
+    name = models.CharField(max_length=150, verbose_name="Tên quy trình")
+    description = models.TextField(blank=True, default="", verbose_name="Mô tả")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    version = models.IntegerField(default=1)
+    source = models.TextField(blank=True, default="", verbose_name="Nguồn học (hóa đơn/khung giờ đo)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "pmv_process"
+        ordering = ["code"]
+        verbose_name = "Quy trình PMV"
+        verbose_name_plural = "Quy trình PMV"
+
+    def __str__(self):
+        return f"{self.code} v{self.version}"
+
+
+class PmvProcessStep(models.Model):
+    """1 nút trong cây quy trình: PHA (parent=None, không proc) hoặc BƯỚC (parent=pha)."""
+
+    class Khbl(models.TextChoices):
+        LAM = "lam", "KHBL thực hiện"
+        KIEM = "kiem", "Cần kiểm trên sandbox"
+        RIENG = "rieng", "KHBL làm cách riêng"
+        BO = "bo", "Ngoài phạm vi — bỏ"
+
+    class DoiChieu(models.TextChoices):
+        CHUA = "chua", "Chưa đối chiếu"
+        KHOP = "khop", "Khớp app"
+        LECH = "lech", "Lệch app"
+
+    process = models.ForeignKey(PmvProcess, on_delete=models.CASCADE, related_name="steps")
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
+    order = models.IntegerField(default=0)
+    title = models.CharField(max_length=150, verbose_name="Tên pha / bước")
+    proc_name = models.CharField(max_length=128, blank=True, default="", verbose_name="Proc")
+    action = models.CharField(max_length=10, blank=True, default="", verbose_name="ghi/đọc")
+    repeat = models.BooleanField(default=False, verbose_name="Lặp nhiều lần (×N)")
+    params = models.TextField(blank=True, default="", verbose_name="Tham số quan trọng")
+    tables = models.TextField(blank=True, default="", verbose_name="Bảng đổi")
+    khbl = models.CharField(max_length=10, choices=Khbl.choices, default=Khbl.LAM)
+    doi_chieu = models.CharField(max_length=10, choices=DoiChieu.choices, default=DoiChieu.CHUA)
+    note = models.TextField(blank=True, default="", verbose_name="Ghi chú")
+
+    class Meta:
+        db_table = "pmv_process_step"
+        ordering = ["process", "parent_id", "order", "id"]
+        verbose_name = "Bước quy trình"
+        verbose_name_plural = "Bước quy trình"
+
+    def __str__(self):
+        return f"{self.process.code} · {self.title}"
+
+    @property
+    def la_pha(self):
+        return self.parent_id is None
+
+
 class PmvUser(models.Model):
     """Bản sao SYS_USERS của app KK cho 2 tài khoản web dùng (GĐ chốt 03/09/2026: admin,
     kimhanh2). Web stamp UserID/TillID/EmpID này khi gọi proc → app KK hiện đúng tên/két.

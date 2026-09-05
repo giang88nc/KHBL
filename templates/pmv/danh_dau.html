@@ -1,0 +1,105 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — Báo cáo đánh dấu TRƯỚC/SAU</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; --tim:#7C3AED; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  .wrap { max-width:1280px; margin:0 auto; padding:20px 16px; }
+  h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--tim); margin:0 0 2px; font-size:26px; }
+  .nav { margin-bottom:14px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px; }
+  .chip { background:#fff; border:1px solid var(--line); border-radius:20px; padding:4px 12px; }
+  .chip b { font-size:15px; color:var(--tim); }
+  h3 { font-family:"Cormorant Garamond",serif; color:var(--gold-700); margin:18px 0 6px; font-size:18px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th { background:var(--gold-100); color:var(--gold-700); text-align:left; padding:7px 8px; font-size:11.5px; white-space:nowrap; }
+  td { padding:5px 8px; border-top:1px solid var(--line); vertical-align:top; font-size:12px; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .mono { font-family:Consolas,monospace; font-size:11.5px; word-break:break-all; }
+  .ghi { color:#B3402A; font-weight:700; } .doc { color:#57534e; }
+  .khbl { background:#EEF2FF; color:#3730A3; border-radius:10px; padding:0 7px; font-size:11px; font-weight:600; }
+  .muted { color:#a8a29e; }
+  details summary { cursor:pointer; color:var(--gold-700); font-size:11px; }
+  .file { background:#fff; border:1px dashed var(--line); border-radius:8px; padding:8px 12px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Báo cáo đánh dấu TRƯỚC → SAU</h1>
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}">← So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
+  </div>
+
+  <div class="chips">
+    <div class="chip">Khung: <b>{{ ws|date:"H:i:s" }} → {{ we|date:"H:i:s" }}</b> ({{ ws|date:"d/m/Y" }})</div>
+    <div class="chip">Lời gọi bắt được: <b>{{ hanh_vi|length }}</b></div>
+    <div class="chip">Bảng đổi: <b>{{ khac|length }}</b></div>
+    <div class="chip">Snapshot: <b>#{{ truoc.pk }} → #{{ sau.pk }}</b></div>
+  </div>
+  <div class="file">📄 Đã ghi file: <span class="mono">{{ file }}</span></div>
+
+  <form method="post" action="{% url 'pmv:qt_hoc' %}" class="file" style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border-style:solid;border-color:var(--tim)">{% csrf_token %}
+    <input type="hidden" name="seq_tu" value="{{ seq_tu }}"><input type="hidden" name="seq_den" value="{{ seq_den }}">
+    <div><b style="color:var(--tim)">📚 HỌC thành quy trình</b><br><span class="muted">gom {{ hanh_vi|length }} lời gọi trên thành bước nháp (pha "Đã học — chưa phân nhóm")</span></div>
+    <label style="font-size:11px;color:var(--gold-700)">Mã MỚI<br><input name="code" placeholder="HUY_HOA_DON" style="text-transform:uppercase;padding:5px 8px;border:1px solid var(--line);border-radius:6px"></label>
+    <label style="font-size:11px;color:var(--gold-700)">Tên<br><input name="name" placeholder="Hủy hóa đơn đã chốt" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;width:240px"></label>
+    <label style="font-size:11px;color:var(--gold-700)">hoặc THÊM vào<br><select name="them_vao" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px"><option value="">— tạo mới —</option>{% for q in quy_trinh_ds %}<option value="{{ q.code }}">{{ q.code }}</option>{% endfor %}</select></label>
+    <button type="submit" style="padding:7px 14px;border:0;border-radius:6px;background:var(--tim);color:#fff;font-weight:600;cursor:pointer">📚 HỌC</button>
+  </form>
+
+  <h3>1. Lời gọi proc giữa 2 mốc (trace SQL KK — mọi máy, kể cả KHBL)</h3>
+  {% if hanh_vi %}
+  <table>
+    <thead><tr><th>Giờ KK</th><th>Máy</th><th>Login</th><th>Nhóm</th><th>Hành động</th><th>Proc</th><th class="num">ms</th><th class="num">r/w/n</th><th>Tham số</th></tr></thead>
+    <tbody>
+    {% for b in hanh_vi %}
+      <tr>
+        <td class="mono">{{ b.event_time|date:"H:i:s" }}</td>
+        <td>{% if b.host == "KHBL" %}<span class="khbl">KHBL</span>{% else %}{{ b.host|default:"—" }}{% endif %}</td>
+        <td class="mono">{{ b.login|default:"—" }}</td>
+        <td>{{ b.category }}</td>
+        <td class="{% if b.action == 'ghi' %}ghi{% else %}doc{% endif %}">{{ b.action }}</td>
+        <td class="mono">{{ b.proc_name|default:"—" }}</td>
+        <td class="num">{{ b.duration_ms|default_if_none:"—"|unlocalize }}</td>
+        <td class="num">{{ b.reads|default_if_none:"—"|unlocalize }}/{{ b.writes|default_if_none:"—"|unlocalize }}/{{ b.row_count|default_if_none:"—"|unlocalize }}</td>
+        <td>{% if b.text %}<details><summary>{{ b.text|truncatechars:90 }}</summary><div class="mono">{{ b.text }}</div></details>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Không bắt được lời gọi nào — trace đang tắt, hoặc thao tác chưa chạm SQL.</p>{% endif %}
+
+  <h3>2. Bảng đổi trên SQL KK &nbsp;<span class="muted" style="font-size:12px;font-family:inherit">proc GHI trong khung: {{ procs|default:"(không)" }}</span></h3>
+  {% if khac %}
+  <table>
+    <thead><tr><th>Bảng</th><th class="num">Dòng trước</th><th class="num">Dòng sau</th><th class="num">Δ</th><th>Checksum</th></tr></thead>
+    <tbody>
+    {% for r in khac %}
+      <tr>
+        <td class="mono"><b>{{ r.tbl }}</b></td>
+        <td class="num">{{ r.rows_a|default_if_none:"—"|unlocalize }}</td>
+        <td class="num">{{ r.rows_b|default_if_none:"—"|unlocalize }}</td>
+        <td class="num">{% if r.delta %}{% if r.delta > 0 %}+{% endif %}{{ r.delta|unlocalize }}{% else %}0{% endif %}</td>
+        <td>{% if r.cs_changed %}<span class="ghi">đổi giá trị</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Không bảng nào đổi giữa 2 mốc.</p>{% endif %}
+
+  <h3>3. Dòng vừa đổi (bảng có cột mốc thời gian)</h3>
+  {% for m in mau %}
+    <details {% if forloop.first %}open{% endif %} style="margin-bottom:8px">
+      <summary style="font-size:13px"><b class="mono">{{ m.bang }}</b> — theo {{ m.cot|join:", " }} — {{ m.dong|length }} dòng</summary>
+      {% for d in m.dong %}<div class="mono" style="padding:4px 0;border-bottom:1px dashed var(--line)">{% for k, v in d.items %}<span style="color:#78716c">{{ k }}=</span>{{ v }} &nbsp;{% endfor %}</div>{% empty %}<div class="muted">Không có dòng nào trong khung (bảng đổi kiểu UPDATE cột không mốc, hoặc xóa).</div>{% endfor %}
+    </details>
+  {% empty %}<p class="muted">Không bảng đổi nào có cột mốc thời gian để kéo dòng.</p>{% endfor %}
+</div>
+</body>
+</html>

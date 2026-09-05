@@ -53,6 +53,7 @@
 
   /* ---------- popup ---------- */
   window.closeKhblModal = function () {
+    if (window.__khblStopCamera) window.__khblStopCamera();
     var r = document.getElementById("modal-root");
     if (r) r.innerHTML = "";
   };
@@ -68,6 +69,46 @@
       v.addEventListener("click", window.closeKhblModal);
     });
   }
+
+  /* ---------- lưu khách: trạng thái gửi, đóng popup, tải lại danh sách, toast ---------- */
+  function customerFormFromEvent(e) {
+    var el = e.detail && e.detail.elt;
+    if (!el) return null;
+    if (el.id === "kh-form") return el;
+    return el.closest ? el.closest("#kh-form") : null;
+  }
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var form = customerFormFromEvent(e);
+    if (!form) return;
+    form.setAttribute("aria-busy", "true");
+    var label = document.querySelector("#kh-save-btn [data-save-label]");
+    if (label) label.textContent = "ĐANG LƯU…";
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    var form = customerFormFromEvent(e);
+    if (!form) return;
+    form.removeAttribute("aria-busy");
+    var label = document.querySelector("#kh-save-btn [data-save-label]");
+    if (label) label.textContent = "LƯU KHÁCH";
+  });
+  function showToast(text, tone) {
+    var root = document.getElementById("toast-root");
+    if (!root || !text) return;
+    var item = document.createElement("div");
+    item.className = tone || "success";
+    item.setAttribute("role", "status");
+    item.textContent = text;
+    root.appendChild(item);
+    setTimeout(function () { if (item.parentNode) item.remove(); }, tone === "warning" ? 8000 : 5000);
+  }
+  document.addEventListener("khachSaved", function (e) {
+    var detail = e.detail || {};
+    window.closeKhblModal();
+    var filter = document.querySelector("form.kh-loc");
+    if (filter && window.htmx) window.htmx.trigger(filter, "submit");
+    showToast(detail.message || "Đã lưu khách hàng", "success");
+    (detail.warnings || []).forEach(function (warning) { showToast(warning, "warning"); });
+  });
 
   /* ---------- bảng giá: không cướp DOM khi đang gõ ---------- */
   var pendingGia = null;
@@ -90,78 +131,229 @@
     pendingGia = null;
   });
 
-  /* ---------- quét QR thẻ CCCD ----------
-     Khuôn 7 trường: CCCD|CMND cũ|họ tên|ddmmyyyy sinh|giới tính|địa chỉ|ddmmyyyy cấp
-     Máy quét gõ như bàn phím nên vừa quét xong là điền luôn, không cần bấm nút. */
-  function docCCCD(raw) {
-    // CHUẨN HÓA trước: máy quét đi qua clipboard/Excel hay trả chữ hỏng mã
-    // ('Tr0198017601980161ng' → 'Trương'). Thuật toán: static/js/vn_text.js
-    var ch = window.VNText ? window.VNText.chuanHoa(raw) : { text: String(raw || ""), canhBao: [] };
-    var p = ch.text.split("|").map(function (x) { return x.trim(); });
-    if (p.length < 6 || !/^\d{9,12}$/.test(p[0])) return null;
-    return { cccd: p[0], ten: hoaDauTu(p[2]), sinh: ngayISO(p[3]),
-             nam: /^nam/i.test(p[4] || ""), diaChi: p[5], cap: ngayISO(p[6] || ""),
-             canhBao: ch.canhBao };
-  }
-  function ngayISO(s) {
-    s = String(s || "").replace(/\D/g, "");
-    if (s.length !== 8) return "";
-    var d = s.slice(0, 2), m = s.slice(2, 4), y = s.slice(4);
-    return y + "-" + m + "-" + d;
-  }
-  function hoaDauTu(t) {
-    return window.VNText ? window.VNText.hoaDauTu(t) : String(t || "").trim();
-  }
-  function dienCCCD(raw) {
-    var msg = document.getElementById("kh-qr-msg");
-    var d = docCCCD(raw);
-    if (!d) {
-      if (msg) msg.innerHTML = '<span style="color:var(--flame-500)">Chuỗi không đúng khuôn thẻ căn cước (cần 7 trường ngăn bằng dấu |).</span>';
-      return false;
-    }
-    var set = function (id, v) { var el = document.getElementById(id); if (el && v) el.value = v; };
-    set("f-ten", d.ten); set("f-cccd", d.cccd); set("f-sinh", d.sinh);
-    set("f-dc", d.diaChi); set("f-cap", d.cap);
-    var gt = document.getElementById("f-gt"); if (gt) gt.value = d.nam ? "1" : "0";
-    if (msg) {
-      var h = '<span style="color:var(--jade-500)">Đã điền từ thẻ căn cước: <b>' + d.ten +
-        '</b> · ' + d.cccd + (d.sinh ? ' · sinh ' + d.sinh.split("-").reverse().join("/") : "") + '</span>';
-      (d.canhBao || []).forEach(function (c) {
-        h += '<br><span style="color:var(--warn-500)">⚠ ' + c + '</span>';
-      });
-      msg.innerHTML = h;
-    }
-    return true;
-  }
+  /* ---------- quét QR CCCD: Enter kết thúc lượt quét; hết giờ chỉ xem trước ---------- */
   function bindQR(root) {
     var el = root.querySelector ? root.querySelector("#kh-qr-in") : null;
     if (!el || el.dataset.qr) return;
     el.dataset.qr = "1";
-    var t = null;
-    el.addEventListener("input", function () {
-      if (t) clearTimeout(t);
-      if (el.value.indexOf("|") < 0) return;
-      t = setTimeout(function () { if (dienCCCD(el.value)) el.select(); }, 150);
+    var form = el.closest("form"), modal = el.closest(".khbl-modal");
+    var msg = form.querySelector("#kh-qr-msg"), preview = form.querySelector("#kh-qr-preview");
+    var btn = form.querySelector("#kh-qr-btn"), discard = form.querySelector("#kh-qr-discard");
+    var save = modal.querySelector('button[type="submit"][form="kh-form"]');
+    var fields = [["f-ten", "ho_ten", "Họ tên"], ["f-cccd", "cmnd", "CCCD"],
+      ["f-sinh", "ngay_sinh", "Ngày sinh"], ["f-gt", "gioi_tinh", "Giới tính"],
+      ["f-dc", "dia_chi", "Địa chỉ"], ["f-cap", "ngay_cap", "Ngày cấp"]];
+    var t = null, pending = null, unresolved = false, lastRaw = "", lastValues = "";
+    function values() { return JSON.stringify(fields.map(function (f) { return form.querySelector("#" + f[0]).value; })); }
+    function stopTimer() { if (t !== null) clearTimeout(t); t = null; }
+    function block(value) { unresolved = value; if (save) save.disabled = value; discard.hidden = !value; }
+    function message(text, tone) { msg.textContent = text; msg.style.color = "var(--" + tone + "-500)"; }
+    function clearPreview() { pending = null; preview.replaceChildren(); btn.textContent = "Điền vào biểu mẫu"; }
+    function display(key, value) {
+      if (key === "gioi_tinh") return value === "1" ? "Nam" : (value === "0" ? "Nữ" : "Chưa xác định");
+      if (key === "ngay_sinh" || key === "ngay_cap") return value ? value.split("-").reverse().join("/") : "Để trống";
+      return value || "Để trống";
+    }
+    function apply(d, raw) {
+      clearPreview();
+      // Ghi cả giá trị trống, tránh giữ thông tin của thẻ quét trước.
+      fields.forEach(function (f) { form.querySelector("#" + f[0]).value = d[f[1]]; });
+      lastRaw = raw; lastValues = values(); block(false);
+      message("Đã điền thông tin từ thẻ. " + (d.canh_bao.length ? "Cần kiểm tra: " + d.canh_bao.join(" · ") : "Kiểm tra lại trước khi lưu khách."),
+        d.canh_bao.length ? "warn" : "jade");
+    }
+    function showPreview(r, raw) {
+      clearPreview();
+      var table = document.createElement("table"); table.className = "kh-qr-review";
+      function row(items, header) {
+        var tr = document.createElement("tr");
+        items.forEach(function (value) { var cell = document.createElement(header ? "th" : "td"); cell.textContent = value; tr.appendChild(cell); });
+        table.appendChild(tr);
+      }
+      row(["Thông tin", "Đang có", "Từ thẻ mới"], true);
+      fields.forEach(function (f) { row([f[2], display(f[1], form.querySelector("#" + f[0]).value), display(f[1], r.data[f[1]])]); });
+      preview.appendChild(table);
+      pending = { data: r.data, raw: raw, values: values() };
+      btn.textContent = "Áp dụng thông tin đã kiểm tra";
+      message((r.thieu.length ? "Đọc được một phần. " : "Đã đọc thẻ, chưa thay đổi biểu mẫu. ") +
+        "Đối chiếu thông tin bên dưới; ô trống sẽ xóa giá trị đang có. " + r.canh_bao.join(" · "), "warn");
+    }
+    function process(final) {
+      stopTimer();
+      if (!el.isConnected) return;
+      var raw = el.value.trim();
+      if (raw === lastRaw && values() === lastValues) { block(false); return; }
+      block(true);
+      if (!window.CCCD || !window.VNText) { message("Chưa tải được bộ đọc thẻ. Tải lại trang rồi thử lại.", "flame"); return; }
+      var r = window.CCCD.parse(raw);
+      if (!r.data) { clearPreview(); message(r.loi.join(" "), "flame"); return; }
+      var conflict = fields.some(function (f) { var old = form.querySelector("#" + f[0]).value; return old && old !== r.data[f[1]]; });
+      if (final && !conflict && !r.canh_bao.length) apply(r.data, raw);
+      else showPreview(r, raw);
+    }
+    el.addEventListener("input", function (e) {
+      stopTimer(); clearPreview(); block(!!el.value.trim());
+      message(el.value.trim() ? "Đang nhận dữ liệu. Quét xong hãy nhấn Enter hoặc bấm Điền vào biểu mẫu." : "", "warn");
+      if (e.isComposing) return;
+      // Chỉ xem trước khi đủ cấu trúc và ngày cấp; không chọn toàn bộ / ghi form khi đầu đọc đang gửi.
+      var parts = el.value.trim().split("|");
+      if (parts.length === 7 && /^[0-9]{8}$/.test(parts[6].trim()))
+        t = setTimeout(function () { process(false); }, 400);
     });
     el.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); dienCCCD(el.value); }
+      if (e.key === "Enter" && !e.isComposing) {
+        e.preventDefault(); e.stopPropagation(); process(true);
+        if (!unresolved) el.select();
+      }
     });
-    var btn = root.querySelector("#kh-qr-btn");
-    if (btn) btn.addEventListener("click", function () { dienCCCD(el.value); });
+    btn.addEventListener("click", function () {
+      stopTimer();
+      if (pending && pending.raw === el.value.trim() && pending.values === values()) apply(pending.data, pending.raw);
+      else process(true);
+    });
+    discard.addEventListener("click", function () {
+      stopTimer(); clearPreview(); el.value = ""; block(false);
+      message("Đã bỏ kết quả quét; biểu mẫu giữ nguyên.", "warn"); el.focus();
+    });
+    form.addEventListener("submit", function (e) {
+      if (unresolved) { e.preventDefault(); e.stopImmediatePropagation(); message("Hãy áp dụng hoặc bỏ kết quả quét trước khi lưu.", "flame"); }
+    }, true);
+    form.addEventListener("input", function (e) {
+      if (e.target !== el && pending) {
+        clearPreview(); message("Biểu mẫu vừa thay đổi. Bấm Điền vào biểu mẫu để đối chiếu lại thẻ.", "warn");
+      }
+    });
+    el.focus();
   }
 
-  /* ---------- xem trước ảnh chọn ---------- */
+  /* ---------- chọn tệp / chụp ảnh cho ba ảnh khách hàng ---------- */
   function bindAnh(root) {
-    root.querySelectorAll('.kh-anh input[type=file]:not([data-anh])').forEach(function (inp) {
+    var area = root.querySelector ? root.querySelector(".kh-anh") : null;
+    if (!area || area.dataset.anh) return;
+    area.dataset.anh = "1";
+    var form = area.closest("form"), dialog = form && form.querySelector("#kh-camera");
+    if (!dialog) return;
+    var video = dialog.querySelector("[data-camera-video]");
+    var canvas = dialog.querySelector("[data-camera-canvas]");
+    var shot = dialog.querySelector("[data-camera-preview]");
+    var title = dialog.querySelector("#kh-camera-title");
+    var msg = dialog.querySelector("[data-camera-msg]");
+    var capture = dialog.querySelector("[data-camera-capture]");
+    var retake = dialog.querySelector("[data-camera-retake]");
+    var use = dialog.querySelector("[data-camera-use]");
+    var stream = null, target = null, blob = null, shotUrl = "";
+
+    function stopStream() {
+      if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+      stream = null;
+      if (video) video.srcObject = null;
+    }
+    function revokeShot() {
+      if (shotUrl) URL.revokeObjectURL(shotUrl);
+      shotUrl = "";
+    }
+    function closeCamera() {
+      stopStream(); revokeShot(); blob = null; target = null;
+      if (dialog.open) dialog.close();
+    }
+    window.__khblStopCamera = closeCamera;
+
+    function showFile(inp, file) {
+      var card = inp.closest("[data-photo]"), box = card && card.querySelector("[data-xem]");
+      if (!box || !file) return;
+      if (box.dataset.url) URL.revokeObjectURL(box.dataset.url);
+      var url = URL.createObjectURL(file), img = document.createElement("img");
+      box.dataset.url = url;
+      img.alt = "Xem trước " + (card.dataset.label || "ảnh").toLowerCase();
+      img.src = url; box.replaceChildren(img);
+    }
+    area.querySelectorAll("[data-photo-input]").forEach(function (inp) {
       inp.dataset.anh = "1";
       inp.addEventListener("change", function () {
-        var khung = inp.parentElement.querySelector("[data-xem]");
         var f = inp.files && inp.files[0];
-        if (!khung || !f) return;
-        var url = URL.createObjectURL(f);
-        khung.innerHTML = '<img alt="">';
-        khung.firstChild.src = url;
+        if (!f) return;
+        inp._capturedFile = null;
+        showFile(inp, f);
       });
+    });
+
+    // Dự phòng cho trình duyệt không cho gán FileList: vẫn đưa ảnh chụp vào FormData.
+    form.addEventListener("formdata", function (e) {
+      area.querySelectorAll("[data-photo-input]").forEach(function (inp) {
+        if (inp._capturedFile) e.formData.set(inp.name, inp._capturedFile, inp._capturedFile.name);
+      });
+    });
+
+    function cameraError(err) {
+      var text = "Không mở được camera. Bạn vẫn có thể dùng Chọn tệp.";
+      if (err && err.name === "NotAllowedError") text = "Camera chưa được cấp quyền. Hãy cho phép camera rồi thử lại.";
+      else if (err && err.name === "NotFoundError") text = "Không tìm thấy camera trên thiết bị.";
+      else if (err && err.name === "NotReadableError") text = "Camera đang được ứng dụng khác sử dụng.";
+      video.hidden = true;
+      msg.textContent = text; msg.style.color = "var(--flame-500)";
+      capture.disabled = true;
+    }
+    async function openStream() {
+      stopStream(); revokeShot(); blob = null;
+      video.hidden = false; shot.hidden = true;
+      capture.hidden = false; capture.disabled = true; retake.hidden = true; use.hidden = true;
+      msg.textContent = "Đang mở camera…"; msg.style.color = "var(--ink-600)";
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        cameraError({ name: "NotSupportedError" }); return;
+      }
+      var wanted = target;
+      try {
+        var opened = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: wanted.closest("[data-photo]").dataset.facing || "environment" } }
+        });
+        if (!dialog.open || target !== wanted) {
+          opened.getTracks().forEach(function (track) { track.stop(); }); return;
+        }
+        stream = opened; video.srcObject = stream;
+        await video.play();
+        capture.disabled = false; msg.textContent = "Đặt ảnh ngay ngắn trong khung rồi bấm Chụp.";
+      } catch (err) { cameraError(err); }
+    }
+
+    area.querySelectorAll("[data-chup]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var card = button.closest("[data-photo]");
+        target = card.querySelector("[data-photo-input]");
+        title.textContent = "Chụp " + (card.dataset.label || "ảnh").toLowerCase();
+        if (typeof dialog.showModal !== "function") { target.click(); return; }
+        dialog.showModal(); openStream();
+      });
+    });
+    dialog.querySelectorAll("[data-camera-close]").forEach(function (button) {
+      button.addEventListener("click", closeCamera);
+    });
+    dialog.addEventListener("cancel", function (e) { e.preventDefault(); closeCamera(); });
+    dialog.addEventListener("click", function (e) { if (e.target === dialog) closeCamera(); });
+    capture.addEventListener("click", function () {
+      if (!stream || !video.videoWidth || !video.videoHeight) return;
+      var max = 1600, scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      stopStream(); capture.disabled = true; msg.textContent = "Đang tạo ảnh…";
+      canvas.toBlob(function (result) {
+        if (!result || !dialog.open) { cameraError(); return; }
+        blob = result; shotUrl = URL.createObjectURL(blob); shot.src = shotUrl;
+        video.hidden = true; shot.hidden = false; capture.hidden = true;
+        retake.hidden = false; use.hidden = false;
+        msg.textContent = "Kiểm tra ảnh, sau đó lưu ảnh hoặc chụp lại.";
+      }, "image/jpeg", 0.9);
+    });
+    retake.addEventListener("click", openStream);
+    use.addEventListener("click", function () {
+      if (!blob || !target) return;
+      var name = target.name + "-" + Date.now() + ".jpg";
+      var file = new File([blob], name, { type: "image/jpeg", lastModified: Date.now() });
+      target._capturedFile = file;
+      try {
+        var transfer = new DataTransfer(); transfer.items.add(file); target.files = transfer.files;
+      } catch (_) { /* sự kiện formdata phía trên sẽ bổ sung tệp */ }
+      showFile(target, file); closeCamera();
     });
   }
 

@@ -13,14 +13,20 @@ urlpatterns = [
     path("banle/ban-hang/", views.ban, name="ban"),
     path("banle/ban-hang/quet/", views.ban_quet, name="ban_quet"),
     path("banle/ban-hang/xoa/", views.ban_xoa, name="ban_xoa"),
-    path("banle/ban-hang/vang-cu/", views.ban_mua_them, name="ban_mua_them"),
-    path("banle/ban-hang/vang-cu/xoa/", views.ban_mua_xoa, name="ban_mua_xoa"),
+    path("banle/ban-hang/vang-doi/", views.ban_doi_them, name="ban_doi_them"),
+    path("banle/ban-hang/vang-doi/xoa/", views.ban_doi_xoa, name="ban_doi_xoa"),
     path("banle/ban-hang/dat/", views.ban_dat, name="ban_dat"),
     path("banle/ban-hang/bot-le/", views.ban_bot_le, name="ban_bot_le"),
     path("banle/ban-hang/moi/", views.ban_moi, name="ban_moi"),
     path("banle/ban-hang/tim-khach/", views.ban_tim_khach, name="ban_tim_khach"),
+    path("banle/ban-hang/tim-nv/", views.ban_tim_nv, name="ban_tim_nv"),
     path("banle/ban-hang/tim-hang/", views.ban_tim_hang, name="ban_tim_hang"),
-    path("banle/ban-hang/phieu/", views.ban_phieu, name="ban_phieu"),
+    # hóa đơn đã lưu
+    path("banle/ban-hang/danh-sach/", views.ban_ds, name="ban_ds"),
+    path("banle/ban-hang/mo/", views.ban_mo, name="ban_mo"),
+    path("banle/ban-hang/mo-lai/", views.ban_mo_lai, name="ban_mo_lai"),
+    path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
+    path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
     path("banle/ban-hang/in/", views.ban_in, name="ban_in"),
 
     # Thâu vào

@@ -116,6 +116,19 @@ PMV_BACKUP_DIR_LOCAL = env("PMV_BACKUP_DIR_LOCAL", default=r"D:\KHBL_BACKUP\pmv"
 PMV_BACKUP_RETENTION_LOCAL = env("PMV_BACKUP_RETENTION_LOCAL")                    # giữ bao nhiêu BẢN ở máy Mr Giang
 PMV_LOCAL_MSSQL = env("PMV_LOCAL_MSSQL", default="")                              # vd "localhost\\SQL2014" — trống = chưa restore sandbox
 PMV_SANDBOX_DB = env("PMV_SANDBOX_DB", default="PMV_SANDBOX")
+# ─────────── ĐÍCH DỮ LIỆU NGHIỆP VỤ + CHỐT AN TOÀN GHI ───────────
+# PMV_TARGET quyết định màn bán lẻ ĐỌC/GHI vào đâu:
+#   "sandbox" = bản sao trên máy Mr Giang (mặc định — tha hồ thử)
+#   "kk"      = máy KK, DỮ LIỆU THẬT của tiệm
+# Đổi 1 dòng trong .env rồi RESET_KHBL.bat là chuyển, KHÔNG phải sửa code.
+# ⚠ Việc backup / kiểm tra / trace / đồng bộ LUÔN nói chuyện với máy KK, không theo cờ này.
+PMV_TARGET = env("PMV_TARGET", default="sandbox")
+
+# CHỐT AN TOÀN — cho phép GHI vào máy KK. MẶC ĐỊNH TẮT.
+# Khi tắt, gateway TỪ CHỐI mọi lệnh ghi có đích là KK dù proc nằm trong allowlist.
+# Chỉ bật khi GĐ duyệt go-live từng nghiệp vụ, và bật xong phải RESET.
+PMV_GHI_KK = env.bool("PMV_GHI_KK", default=False)
+
 # Nút SYNC (KK -> Mr Giang), cơ chế mặc định KHÔNG CẦN SHARE (chốt 02/09/2026):
 #   SQL KK backup ra PMV_BACKUP_DIR_KK\KHBL_PMV_SYNC.bak (đĩa local KK — luôn ghi được)
 #   -> Mr Giang HÚT file về qua kết nối SQL (OPENROWSET BULK SINGLE_BLOB, ~11MB/s LAN)

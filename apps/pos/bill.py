@@ -1,0 +1,284 @@
+"""
+HÓA ĐƠN BÁN LẺ — dựng · lưu · sửa · chốt · hủy, qua ĐÚNG proc vendor.
+
+Đây là nơi DUY NHẤT biết cách nói chuyện với TRN_RT_BUYSELL_*. View chỉ đưa dữ liệu
+người dùng nhập vào và nhận kết quả; không view nào được tự gọi proc hóa đơn.
+
+Kiểm chứng thật trên bản thử 03/09/2026 (xem manage.py smoke_ban_hang):
+  TẠO   TRN_RT_BUYSELL_Ins       → TrnID + BillCode do vendor cấp, Status 'W'
+  SỬA   TRN_RT_BUYSELL_Upd       → thêm/bớt/đổi dòng hàng, đổi vàng đổi, đổi các khoản tiền
+  CHỐT  TRN_RT_BUYSELL_Complete + T_TILL_TXN_Proc → Status 'C', hàng sang 'S'
+  MỞ LẠI T_TILL_TXN_Del @p_Type='1' → 'C' về 'W' (điều kiện để sửa)
+  HỦY   TRN_RT_BUYSELL_Del       → xóa hẳn, hàng về kho 'I'
+
+BA LUẬT PHẢI NHỚ (đều đã trả giá để biết):
+1. Hóa đơn ĐÃ CHỐT (C) thì proc _Upd TỪ CHỐI (rc=-1). Muốn sửa phải mở khóa về 'W' trước.
+2. Mọi lệnh _Upd/_Del so mốc khóa lạc quan; sai mốc thì proc trả rc=0 mà KHÔNG làm gì.
+   Vì vậy hàm nào ở đây cũng ĐỌC LẠI để xác nhận, không tin mỗi mã trả về.
+3. Món hàng đang nằm trên hóa đơn KHÔNG quét lại được (nó đã mang trạng thái đã bán).
+   Mở hóa đơn ra sửa thì dòng hàng phải dựng từ TRN_RT_BUYSELL_Get — xem dong_ban_tu_phieu.
+"""
+from decimal import Decimal
+
+from apps.pmv import money as M
+from apps.pmv.client import PmvClient, PmvProcError
+
+from . import services as S
+
+# Trạng thái hóa đơn của vendor
+NHAP, CHOT_ROI = "W", "C"
+TEN_TRANG_THAI = {NHAP: "Còn nháp", CHOT_ROI: "Đã chốt"}
+
+# Các tham số vendor luôn đòi nhưng nghiệp vụ bán lẻ của tiệm không dùng.
+# ⚠ Nhiều cái khai kiểu varchar nhưng proc CONVERT sang numeric — để rỗng là chết,
+# phải là "0". Danh sách chép từ chính lệnh app desktop gửi (nhật ký hành vi).
+_MAC_DINH = dict(
+    p_DebitAmount=0, p_IsCatGia="0", p_IsCatGIa="0", p_Add="0", p_TaskPriceAdd="0",
+    DiscountPercent="0", OldDebitAmount="0", p_TotalPromotionAmount=0,
+    p_TienKhachTraThuc="0", p_TienTraLai="0", p_SoLuongDoi="0", p_DiemDoi="0",
+    p_TienDoiQua="0", p_KhongTLD="0", p_TienCoc=0, p_IsGiaoDichNhanh="0",
+    p_MaQuaTang="", p_Discount="0", p_GoldCode="", p_Description="", p_SoHDTuNhap="",
+    Desc1="", Desc2="", Desc3="", Desc4="", Desc5="", p_IsSync="0", p_TrnID_GDN="",
+)
+
+# Cột 1 dòng VÀNG BÁN cần gửi lại khi sửa (đọc ra từ TRN_RT_BUYSELL_Get)
+COT_DONG_BAN = (
+    "STT", "ProductID", "ProductCode", "ProductDesc", "PriceCcy", "PriceUnit", "CcyRate",
+    "CcyRateTaskPrice", "TotalWeight", "GoldWeight", "DiamondWeight", "SectionID", "SectionName",
+    "TaskPrice", "RingSize", "InPrice", "GoldCode", "GoldDesc", "SellRate", "SellAmount",
+    "CatNi", "GoldReal", "SL", "SL_Ban", "A", "DiamondPrice", "GiaBanMon", "DiamondTaskPrice",
+    "DiamondInPrice", "GiaVon", "ProductTypeCode", "TienCongThemMonHang", "LoaiTienChiTra",
+    "TienQuyDoi", "Discounts", "CongBanTrenTL", "OrderBy", "TienBotTrenChi",
+    "GroupID", "GroupName", "StampWeight", "WeightUnit",
+)
+COT_DONG_DOI = (
+    "GoldCode", "GoldDesc", "PriceUnit", "GoldWeight", "DiamondWeight", "Dirty",
+    "TruDoTrenChi", "TotalGoldWeight", "BuyRate", "BuyAmount", "PercentValue",
+    "GCatNi", "DiamondPrice",
+)
+
+
+# ─────────────────────────── dựng dòng ───────────────────────────
+def dong_ban_tu_quet(r, stt=1):
+    """1 dòng VÀNG BÁN từ kết quả quét mã (T_PRODUCT_GetByCodeForSell)."""
+    tw, dw = M.dec(r.get("TotalWeight")), M.dec(r.get("DiamondWeight"))
+    rate, task = M.dec(r.get("SellRate")), M.dec(r.get("TaskPrice"))
+    pu = (r.get("PriceUnit") or "L").upper()
+    tien = M.sell_amount(tw, dw, rate, task, pu)
+    return tien, {
+        "STT": stt,
+        "ProductID": r.get("ProductID"), "ProductCode": r.get("ProductCode"),
+        "ProductDesc": r.get("ProductDesc") or "", "PriceCcy": "VND", "PriceUnit": pu,
+        "CcyRate": "1000.000", "CcyRateTaskPrice": "1000.000",
+        "TotalWeight": tw, "GoldWeight": tw - dw, "DiamondWeight": dw,
+        "SectionID": r.get("SectionID") or "", "SectionName": r.get("SectionName") or "",
+        "GroupID": r.get("GroupID") or "", "GroupName": r.get("GroupName") or "",
+        "StampWeight": M.dec(r.get("StampWeight")), "WeightUnit": r.get("WeightUnit") or pu,
+        "TaskPrice": task, "RingSize": M.dec(r.get("RingSize")), "InPrice": "0.000",
+        "GoldCode": r.get("GoldCode") or "", "GoldDesc": r.get("GoldDesc") or "",
+        "SellRate": rate, "SellAmount": tien, "CatNi": "0", "GoldReal": tw - dw,
+        "SL": "1", "SL_Ban": "1", "A": "1", "DiamondPrice": "0.000", "GiaBanMon": "0.000",
+        "DiamondTaskPrice": "0.000", "DiamondInPrice": "0.000", "GiaVon": "0.000",
+        "ProductTypeCode": r.get("ProductTypeCode") or "TTM", "TienCongThemMonHang": "0",
+        "LoaiTienChiTra": "VND", "TienQuyDoi": tien, "Discounts": "0",
+        "CongBanTrenTL": "0.000", "OrderBy": "0", "TienBotTrenChi": "0.000",
+    }
+
+
+def dong_ban_tu_phieu(r):
+    """1 dòng VÀNG BÁN dựng lại TỪ HÓA ĐƠN — dùng khi mở hóa đơn ra sửa.
+    KHÔNG quét lại mã được: món đang trên hóa đơn đã mang trạng thái đã bán (luật 3)."""
+    return M.dec(r.get("SellAmount")), {k: r[k] for k in COT_DONG_BAN if r.get(k) is not None}
+
+
+def dong_doi(gold_code, gold_desc, tong_tl, tl_hot, gia, price_unit="L", doi_ngang=False):
+    """1 dòng VÀNG ĐỔI (dẻ khách đưa). tl_vàng = tổng TL − TL hột.
+    doi_ngang=True: dòng này định GIÁ BÁN RA (đổi ngang cùng tuổi vàng) — chỉ để đánh dấu/hiệu ứng,
+    PMV vẫn nhận là 1 dòng TRN_RT_BUYSELL_BUYGOLD với BuyRate = giá bán ra."""
+    tong_tl, tl_hot = M.dec(tong_tl), M.dec(tl_hot)
+    tl_vang = tong_tl - tl_hot
+    tien = M.buy_amount_in_bill(tl_vang, gia, 100, price_unit)
+    return tien, {
+        "GoldCode": gold_code, "GoldDesc": gold_desc, "PriceUnit": price_unit,
+        "TotalGoldWeight": tong_tl, "DiamondWeight": tl_hot, "GoldWeight": tl_vang,
+        "Dirty": "0.00", "TruDoTrenChi": "0.00", "BuyRate": M.dec(gia), "BuyAmount": tien,
+        "PercentValue": "100.00", "GCatNi": gold_code, "DiamondPrice": "0.000",
+        "DoiNgang": "1" if doi_ngang else "0",
+    }
+
+
+def dong_doi_tu_phieu(r):
+    return M.dec(r.get("BuyAmount")), {k: r[k] for k in COT_DONG_DOI if r.get(k) is not None}
+
+
+# ─────────────────────────── tính tiền ───────────────────────────
+def tinh_tong(tien_ban, tien_doi, bot=0, cong_them=0, vang_them=0, coc=0):
+    """Công thức GĐ chốt 03/09/2026 (phần \"còn lại\" đo trên 18.441 hóa đơn thật):
+         còn lại   = tiền vàng mới − tiền vàng cũ
+         khách trả = còn lại − bớt + công thêm + vàng thêm − cọc"""
+    ban, doi = M.dec(tien_ban), M.dec(tien_doi)
+    bot, cong_them = M.dec(bot), M.dec(cong_them)
+    vang_them, coc = M.dec(vang_them), M.dec(coc)
+    con_lai = ban - doi
+    return {
+        "vang_moi": ban, "vang_cu": doi, "con_lai": con_lai,
+        "vang_them": vang_them, "cong_them": cong_them, "bot": bot, "coc": coc,
+        "khach_tra": con_lai - bot + cong_them + vang_them - coc,
+    }
+
+
+# ─────────────────────────── đọc ───────────────────────────
+def ma_du_kien(c=None):
+    """Mã hóa đơn DỰ KIẾN cho phiếu kế tiếp — chỉ để người bán dễ hình dung.
+    ⚠ Mã THẬT do vendor cấp lúc lưu (RULE 5); máy KK bán song song có thể lấy trước
+    số này. Không bao giờ dùng giá trị đây để ghi vào CSDL."""
+    c = c or S.client("ma_du_kien")
+    r = c.query("SELECT MAX(TrnID) AS m FROM TRN_RT_BUYSELL WITH (NOLOCK)")
+    cuoi = (r[0]["m"] if r else None) or ""
+    if len(cuoi) < 4 or not cuoi[3:].isdigit():
+        return ""
+    return cuoi[:3] + str(int(cuoi[3:]) + 1).zfill(len(cuoi) - 3)
+
+
+def doc(trn_id, c=None):
+    """Đọc trọn hóa đơn về dạng form dùng được: đầu phiếu + dòng bán + dòng đổi + tổng."""
+    c = c or S.client("doc_hoa_don")
+    b = c.bill(trn_id)
+    h = b["header"]
+    if not h:
+        return None
+    ban = [dong_ban_tu_phieu(x) for x in b["lines"]]
+    doi = [dong_doi_tu_phieu(x) for x in b["old_gold"]]
+    return {
+        "trn_id": h["TrnID"], "bill_code": h.get("BillCode") or "",
+        "status": h.get("Status"), "ten_trang_thai": TEN_TRANG_THAI.get(h.get("Status"), h.get("Status")),
+        "sua_duoc": h.get("Status") == NHAP,      # luật 1
+        "ngay": h.get("TrnDate"), "gio": h.get("TrnTime"),
+        "cust_id": h.get("CustID") or "", "khach": h.get("CustName") or "",
+        "emp_id": h.get("EmpID") or "", "nhan_vien": h.get("EmpName") or "",
+        "ghi_chu": h.get("Description") or "",
+        "ban": ban, "doi": doi,
+        "tong": tinh_tong(sum((x[0] for x in ban), Decimal(0)),
+                          sum((x[0] for x in doi), Decimal(0)),
+                          h.get("Discount"), h.get("TaskPriceAdd"),
+                          h.get("AddMoney"), h.get("TienCoc")),
+    }
+
+
+def trong_ngay(ngay, c=None, limit=100):
+    """Danh sách hóa đơn của 1 ngày — cho nút DANH SÁCH."""
+    c = c or S.client("ds_hoa_don")
+    return c.query(
+        f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnTime, b.Status, b.PayAmount, "
+        "b.SellTotalAmount, b.BuyTotalAmount, k.CustName, e.EmpName "
+        "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
+        "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = b.CustID "
+        "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
+        "WHERE b.IsDel = '0' AND b.TrnDate = ? ORDER BY b.TrnTime DESC", (ngay,))
+
+
+# ─────────────────────────── ghi ───────────────────────────
+def _tham_so(c, proc, **rieng):
+    co = {n for n, _ in c.params_of(proc)}
+    d = {k: v for k, v in _MAC_DINH.items() if k in co}
+    d.update({k: v for k, v in rieng.items() if k in co or not k.startswith("p_")})
+    return d
+
+
+def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_id,
+        ghi_chu="", bot=0, cong_them=0, vang_them=0, coc=0, c=None):
+    """trn_id rỗng = TẠO MỚI, có trn_id = SỬA. Trả dict(trn_id, bill_code, tong).
+
+    Sau khi ghi LUÔN đọc lại đối chiếu — proc có thể trả rc=0 mà không đổi gì (luật 2)."""
+    c = c or S.client("luu_hoa_don")
+    t_ban = sum((x[0] for x in ban), Decimal(0))
+    t_doi = sum((x[0] for x in doi), Decimal(0))
+    tong = tinh_tong(t_ban, t_doi, bot, cong_them, vang_them, coc)
+    xml = c.xml_nhieu_bang([("TRN_RT_BUYSELL_SELL", [x[1] for x in ban]),
+                            ("TRN_RT_BUYSELL_BUYGOLD", [x[1] for x in doi])])
+    chung = dict(
+        p_TrnDate=ngay, p_TrnTime=gio, p_CustID=cust_id or S.WALK_IN,
+        p_SellTotalAmount=c.money(t_ban), p_BuyTotalAmount=c.money(t_doi),
+        p_TotalAmount=c.money(tong["con_lai"]), p_PayAmount=c.money(tong["khach_tra"]),
+        p_Discount=c.money(bot), p_TaskPriceAdd=c.money(cong_them),
+        p_Add=c.money(vang_them), p_TienCoc=c.money(coc),
+        p_Status=NHAP, p_CreatedBy=user_id, p_EmpID=emp_id or "", p_ShopID=shop_id,
+        p_TillID=till_id, p_Description=ghi_chu, p_BanLeBanSi="BL",
+        p_Trn_RT_BUYSELL=xml, p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG,
+    )
+    ma_hang = sorted(x[1].get("ProductCode") for x in ban)
+
+    if not trn_id:
+        rc, sets = c.call("TRN_RT_BUYSELL_Ins", write=True, day_du=True, raise_on_rc=False,
+                          **_tham_so(c, "TRN_RT_BUYSELL_Ins", p_TrnID="", **chung))
+        moi = next((r["TrnID"] for s in sets for r in s if r.get("TrnID")), None)
+        if rc != 0 or not moi:
+            raise PmvProcError("TRN_RT_BUYSELL_Ins", rc, sets)
+        trn_id = moi
+    else:
+        cu = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
+        if not cu:
+            raise PmvProcError("TRN_RT_BUYSELL_Upd", -1, [{"loi": f"Không thấy hóa đơn {trn_id}"}])
+        if cu[0]["Status"] != NHAP:                                    # luật 1
+            raise PmvProcError("TRN_RT_BUYSELL_Upd", -1, [{
+                "loi": "Hóa đơn đã chốt — phải MỞ LẠI (hủy phần két) rồi mới sửa được."}])
+        moc = c.moc_khoa("TRN_RT_BUYSELL", "TrnID", trn_id)
+        rc, sets = c.call("TRN_RT_BUYSELL_Upd", write=True, day_du=True, raise_on_rc=False,
+                          **_tham_so(c, "TRN_RT_BUYSELL_Upd", p_TrnID=trn_id, p_UserUpd=user_id,
+                                     p_TrnDateTime_Upd=PmvClient.fmt_moc(moc), **chung))
+        if rc != 0:
+            raise PmvProcError("TRN_RT_BUYSELL_Upd", rc, sets)
+
+    # ── đối chiếu lại: rc=0 KHÔNG bảo đảm dữ liệu đã đổi (luật 2) ──
+    h = c.query("SELECT BillCode, Status, PayAmount FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
+                (trn_id,))
+    thuc = sorted(x["ProductCode"] for x in c.query(
+        "SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)))
+    if not h or thuc != ma_hang or M.dec(h[0]["PayAmount"]) != tong["khach_tra"]:
+        raise PmvProcError("TRN_RT_BUYSELL", -2, [{
+            "loi": f"Lưu xong nhưng đọc lại KHÔNG khớp — hàng {thuc} ≠ {ma_hang} "
+                   f"hoặc tiền {h and h[0]['PayAmount']} ≠ {tong['khach_tra']}. "
+                   "Nhiều khả năng mốc khóa đã cũ (phiếu vừa bị sửa ở máy khác)."}])
+    return {"trn_id": trn_id, "bill_code": h[0]["BillCode"] or "", "tong": tong}
+
+
+def chot(trn_id, *, till_id, user_id, c=None):
+    """Chốt hóa đơn: Complete + đẩy sổ quỹ. Xong là Status 'C', hàng sang 'S'."""
+    c = c or S.client("chot_hoa_don")
+    c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")
+    c.call("T_TILL_TXN_Proc", write=True, p_TrnIDs=trn_id, p_TillID=till_id, p_UserID=user_id)
+    st = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
+    if not st or st[0]["Status"] != CHOT_ROI:
+        raise PmvProcError("TRN_RT_BUYSELL_Complete", -2, [{
+            "loi": f"Chốt xong mà trạng thái vẫn {st and st[0]['Status']} — chưa vào sổ quỹ."}])
+    return True
+
+
+def mo_lai(trn_id, *, user_id, c=None):
+    """Mở hóa đơn ĐÃ CHỐT về lại nháp để sửa (hủy phần sổ quỹ).
+    ⚠ @p_Type='1' cho phiếu đã chốt — dùng '0' là không ăn gì mà cũng không báo lỗi."""
+    c = c or S.client("mo_lai_hoa_don")
+    c.goi_co_khoa(
+        "T_TILL_TXN_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=trn_id,
+        kiem_tra=lambda cl: (cl.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
+                                      (trn_id,)) or [{}])[0].get("Status") == NHAP,
+        p_TrnRefID=trn_id, pType="SRT", pCongNoBanLe=0, p_UserUpd=user_id,
+        p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_Type="1")
+    return True
+
+
+def huy(trn_id, *, user_id, c=None):
+    """Hủy hẳn hóa đơn, trả hàng về kho. Phiếu đã chốt thì mở lại trước."""
+    c = c or S.client("huy_hoa_don")
+    st = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,))
+    if not st:
+        return False
+    if st[0]["Status"] == CHOT_ROI:
+        mo_lai(trn_id, user_id=user_id, c=c)
+    c.goi_co_khoa(
+        "TRN_RT_BUYSELL_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=trn_id,
+        kiem_tra=lambda cl: not cl.query(
+            "SELECT TrnID FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,)),
+        p_TrnID=trn_id, p_UserUpd=user_id,
+        p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_LogDel="0")
+    return True

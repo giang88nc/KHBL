@@ -42,6 +42,51 @@ phức tạp nhất — tự DELETE+INSERT 5 bảng con (_SELL/_BUYGOLD/_DTL_NEW
 phải trace thêm khi code GĐ3 (SQL Profiler trên sandbox, hoặc đọc source proc bằng
 `sys.sql_modules`).
 
+## 2b. VÒNG ĐỜI ĐÃ CHẠY THẬT ĐẦU-CUỐI (kiểm chứng trên sandbox 03/09/2026)
+
+Chuỗi dưới đây đã chạy trọn vẹn qua gateway, tạo đúng dấu vết 11 bảng như app desktop,
+rồi hủy sạch trả hàng về kho. Đây là khuôn để code GĐ3 — bộ hồi quy `manage.py smoke_dich`
+chạy lại y hệt mỗi lần sửa.
+
+```
+1. TRN_RT_BUYSELL_Ins      → TrnID + BillCode do vendor sinh, Status='W'
+2. TRN_RT_BUYSELL_Complete @p_TrnID, @p_UserID, @p_ThuHo='0'  → trả TillTxnID
+3. T_TILL_TXN_Proc         @p_TrnIDs, @p_TillID, @p_UserID    → Status='C', hàng sang 'S'
+HỦY (ngược lại, ĐÚNG THỨ TỰ):
+4. T_TILL_TXN_Del      @p_TrnRefID, @pType='SRT', @pCongNoBanLe=0, @p_Type='1'  → về 'W'
+5. TRN_RT_BUYSELL_Del  @p_TrnID, @p_LogDel='0'                → xóa hẳn, hàng về 'I'
+```
+
+- `@p_Type` của `T_TILL_TXN_Del`: **`'1'` cho hóa đơn ĐÃ CHỐT (C)**, `'0'` cho hóa đơn còn
+  chờ (W). Dùng nhầm `'0'` trên hóa đơn C = không hủy được (im lặng).
+- Bước 4 và 5 **mỗi bước một mốc khóa lạc quan khác nhau** — xem mục 2c.
+- Không cần `CARDPAY_Ins` cho hóa đơn tiền mặt.
+- Hủy KHÔNG dọn `T_CUSTOMER_DEBT` (còn dòng số dư 0) và các bảng `*_Log` — cố ý.
+- `I_CUSTOMER_Del` **từ chối** xóa khách đã phát sinh giao dịch (`Result=-1`).
+
+## 2c. ⚠ KHÓA LẠC QUAN — HỎNG IM LẶNG (bài học đắt, 03/09/2026)
+
+Proc `_Upd`/`_Del` so `@p_TrnDateTime_Upd` truyền vào với `TrnDateTime_Upd` trong bảng.
+**Không khớp → proc trả `rc=0`, không báo lỗi, và KHÔNG LÀM GÌ CẢ.** Đã dính thật: tưởng
+đã hủy hóa đơn, thực tế hóa đơn còn nguyên và món hàng vẫn kẹt ở trạng thái đã bán.
+
+Vì thế **không bao giờ gọi `_Upd`/`_Del` trần**. Dùng:
+
+```python
+c.goi_co_khoa("TRN_RT_BUYSELL_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=hd,
+              kiem_tra=lambda cl: not cl.query("SELECT TrnID FROM TRN_RT_BUYSELL "
+                                               "WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (hd,)),
+              p_TrnID=hd, p_UserUpd=NGUOI, p_LogDel="0")
+```
+
+Hàm tự đọc mốc HIỆN TẠI, gọi proc, rồi **kiểm chứng dữ liệu đã đổi thật**; không đổi thì ném
+lỗi. `kiem_tra` là bắt buộc về mặt tinh thần — bỏ nó là quay lại bẫy cũ.
+
+Thêm 2 điều:
+- Mốc **đổi sau mỗi bước** → đọc lại giữa bước 4 và 5, đừng dùng lại mốc cũ.
+- Proc vendor **không có tham số mặc định**; thiếu 1 cái là `expects parameter '@X'`.
+  Dùng `c.call(proc, day_du=True, ...)` để tự điền phần còn lại theo chữ ký proc.
+
 ## 3. DẤU VẾT 1 HÓA ĐƠN BÁN THẬT (TRB260900000194, đo 02/09/2026)
 
 | Bảng | Dòng | Qua cột |
@@ -113,3 +158,13 @@ Lệnh: `manage.py pmv_trace start|stop|status`, `collect_pmv_behavior` (2 phút
 2. Chạy trên PMV_SANDBOX, diff từng bảng với thao tác thật trên app PMVGoldRT.
 3. GĐ duyệt nghiệp vụ đó → thêm vào allowlist `pmv_exec` kèm comment ngày duyệt.
 4. Smoke test + backup PMV ngay trước go-live. `pmv_write_lock` đang bật thì KHÔNG ghi.
+
+## LUỒNG THẬT ĐÃ ĐO TRÊN KK (05/09/2026)
+
+Bán 1 món trên PMVGoldRT → 40 lời gọi, 18 bảng đổi, đối chiếu từng cột KK ↔ sandbox và so với
+`apps/pos/bill.py`: xem **`docs/LUONG_BAN_HANG_PMV_20260905.md`**. Cách đo lại cho nghiệp vụ khác
+(thâu, khách, bảng giá…): nút ĐÁNH DẤU TRƯỚC/SAU trên `/he-thong/so-sanh/` + file `logs\pmv\<ngày>\`.
+
+Quy trình chuẩn FULL (v3, GĐ chốt 05/09/2026): `docs/quy_trinh/BAN_HANG.md` — 9 pha, có hủy thanh toán
+(`T_TILL_TXN_Del @p_Type=0` → về W), xóa đơn (`TRN_RT_BUYSELL_Del` → *_Log), tạo khách trong đơn (`I_CUSTOMER_Ins`),
+chống trùng P-008. ⚠ Đính chính: `@p_Type` không rẽ nhánh với SRT (xem CLAUDE.md 4c).

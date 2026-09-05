@@ -51,6 +51,7 @@
     <a href="{% url 'pmv:status' %}">Trạng thái</a>
     <a href="{% url 'pmv:diff' %}" class="active">So sánh SQL</a>
     <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}">Quy trình</a>
     <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
   </div>
 
@@ -65,6 +66,21 @@
     </div>
     <button type="submit" style="font-size:14px;padding:9px 18px">⟳ SYNC ngay</button>
   </form>
+
+  <div class="bar" style="border-top:3px solid #7C3AED;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px">
+      <div style="font-weight:700;color:#7C3AED">🎯 ĐÁNH DẤU TRƯỚC / SAU — học đúng 1 thao tác của PMVGoldRT</div>
+      <div class="desc">Bấm <b>TRƯỚC</b> → làm đúng 1 thao tác trên máy KK/QQ → bấm <b>SAU</b>: báo cáo proc đã gọi (tham số thật), bảng đổi, dòng vừa đổi. Chụp FULL KK ~1,5s mỗi mốc, chỉ đọc.</div>
+      {% if danh_dau %}<div class="desc" style="color:#7C3AED;font-weight:600">● Đang chờ mốc SAU — đã đánh dấu TRƯỚC lúc {{ danh_dau.luc|slice:"11:19" }} (snapshot #{{ danh_dau.snap_id }})</div>{% endif %}
+      <div class="desc">Dò liên tục 2 phút: {{ thay_doi_last|default:"chưa có chu kỳ nào" }} · nhật ký file: <span class="mono" style="font-family:Consolas,monospace">{{ log_dir }}\&lt;ngày&gt;\</span></div>
+    </div>
+    <form method="post" action="{% url 'pmv:danh_dau_truoc' %}">{% csrf_token %}
+      <button type="submit" class="ghost" style="border-color:#7C3AED;color:#7C3AED" {% if danh_dau %}onclick="return confirm('Đang có mốc TRƯỚC chưa đóng. Đánh dấu lại từ đầu?')"{% endif %}>① ĐÁNH DẤU TRƯỚC</button>
+    </form>
+    <form method="post" action="{% url 'pmv:danh_dau_sau' %}">{% csrf_token %}
+      <button type="submit" style="background:{% if danh_dau %}#7C3AED{% else %}#c9c2d9{% endif %}" {% if not danh_dau %}disabled{% endif %}>② ĐÁNH DẤU SAU → báo cáo</button>
+    </form>
+  </div>
 
   <form class="bar" method="get">
     <div class="fld">

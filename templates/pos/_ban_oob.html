@@ -1,3 +1,11 @@
-{% load pos_extras %}<div id="pos-work" hx-swap-oob="true">{% include "pos/_work.html" %}</div>
-<div id="dai-quyet-toan" hx-swap-oob="true">{% include "pos/_dai.html" %}</div>
-<div id="toast-root" class="khbl-toast" hx-swap-oob="true">{% include "partials/messages.html" %}</div>
+{% load pos_extras %}{% comment %}Các mảnh làm mới sau mỗi thao tác (HTMX out-of-band){% endcomment %}
+<div id="pos-info" hx-swap-oob="true">{% include "pos/_ban_info.html" %}</div>
+<div id="pos-ban" hx-swap-oob="true">{% include "pos/_ban_ban.html" %}</div>
+<div id="pos-doi" hx-swap-oob="true">{% include "pos/_ban_doi.html" %}</div>
+<div id="pos-tong" hx-swap-oob="true" class="pg-ban__c2">{% include "pos/_ban_tong.html" %}</div>
+<div id="toast-root" class="khbl-toast" hx-swap-oob="true">
+  {% if loi_phieu %}<div class="error">{{ loi_phieu }}</div>{% endif %}
+  {% if tin %}<div class="success">{{ tin }}</div>{% endif %}
+  {% include "partials/messages.html" %}
+</div>
+{% if in_luon %}<script>window.open("{% url 'pos:ban_in' %}", "_blank");</script>{% endif %}

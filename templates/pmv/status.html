@@ -25,6 +25,37 @@
   .kind-READ { color:#57534e; }
   .mono { font-family:Consolas,monospace; font-size:12px; word-break:break-all; }
   .banner { border:1px solid #B3402A; background:#FDF2F0; color:#B3402A; border-radius:8px; padding:10px 14px; margin-bottom:16px; font-weight:600; }
+  .msg { border-radius:8px; padding:9px 14px; margin-bottom:10px; font-size:13px; border:1px solid; }
+  .msg-success { border-color:#2E7D46; background:#EDF6F0; color:#1E5B32; }
+  .msg-warning { border-color:#C07A1A; background:#FDF6E9; color:#8A560F; }
+  .msg-error   { border-color:#B3402A; background:#FDF2F0; color:#B3402A; }
+  /* ---- CÔNG TẮC ĐÍCH DỮ LIỆU ---- */
+  .dich { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:center;
+          border:1px solid var(--line); border-left:5px solid var(--gold-500);
+          background:#fff; border-radius:10px; padding:14px 16px; margin-bottom:16px;
+          box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .dich--kk { border-left-color:#B3402A; background:#FEF8F7; }
+  .dich--sandbox { border-left-color:#2E7D46; background:#F6FBF7; }
+  .dich__ten { font-size:17px; font-weight:700; display:flex; align-items:center; gap:9px; }
+  .dich--kk .dich__ten { color:#B3402A; }
+  .dich--sandbox .dich__ten { color:#1E5B32; }
+  .dich__cham { width:10px; height:10px; border-radius:50%; background:currentColor;
+                box-shadow:0 0 0 4px color-mix(in srgb,currentColor 20%,transparent); }
+  .dich--kk .dich__cham { animation:nhay 1.4s ease-in-out infinite; }
+  @keyframes nhay { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .dich__mo { font-size:12.5px; color:#57534e; margin-top:5px; line-height:1.55; }
+  .dich__nut { display:flex; gap:8px; align-items:center; }
+  .dich__nut button { padding:9px 15px; border-radius:8px; border:1px solid var(--line);
+                      background:#fff; color:var(--ink); font-weight:600; font-size:12.5px;
+                      cursor:pointer; font-family:inherit; }
+  .dich__nut button:hover { border-color:var(--gold-500); background:var(--gold-100); }
+  .dich__nut .dang { background:var(--gold-100); border-color:var(--gold-500);
+                     color:var(--gold-700); cursor:default; }
+  .dich__nut .toi-kk:hover { border-color:#B3402A; background:#FDF2F0; color:#B3402A; }
+  .chip { display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px;
+          font-weight:700; border:1px solid; }
+  .chip-do { border-color:#B3402A; color:#B3402A; background:#FDF2F0; }
+  .chip-xanh { border-color:#2E7D46; color:#1E5B32; background:#EDF6F0; }
 </style>
 </head>
 <body>
@@ -35,7 +66,64 @@
     <a href="{% url 'pmv:status' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px;font-weight:700;border-bottom:2px solid var(--gold-500)">Trạng thái</a>
     <a href="{% url 'pmv:diff' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">So sánh SQL</a>
     <a href="{% url 'pmv:behavior' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Quy trình</a>
+    <a href="{% url 'pos:dashboard' %}" style="color:var(--gold-700);text-decoration:none;font-weight:600" title="Về màn hình bán lẻ">← Về Tổng quan</a>
     <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
+  </div>
+
+  {% if messages %}{% for m in messages %}
+  <div class="msg msg-{{ m.tags|default:'success' }}">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {% comment %}
+  CÔNG TẮC ĐÍCH DỮ LIỆU (GĐ chốt 03/09/2026) — đổi được NGAY, không phải sửa .env + RESET.
+  Chuyển sang máy KK chỉ mở đường ĐỌC; chốt GHI (PMV_GHI_KK) cố ý chỉ nằm trong .env.
+  {% endcomment %}
+  <div class="dich dich--{{ dich }}">
+    <div>
+      <div class="dich__ten"><span class="dich__cham"></span>
+        {% if dich == "kk" %}ĐANG DÙNG DỮ LIỆU THẬT — máy KK{% else %}ĐANG DÙNG BẢN THỬ — máy Mr Giang{% endif %}
+      </div>
+      <div class="dich__mo">
+        {% if dich == "kk" %}
+          Mọi màn bán lẻ đang đọc thẳng sổ sách thật của tiệm.
+          Kênh ghi: {% if ghi_kk %}<span class="chip chip-do">ĐANG MỞ — ghi vào dữ liệu thật</span>
+          {% else %}<span class="chip chip-xanh">CỔNG ĐANG CẤM GHI</span>{% endif %}
+        {% else %}
+          Mọi màn bán lẻ đang đọc/ghi bản sao trên máy này. Ghi sai thì bấm ⟳ SYNC lấy lại bản sạch.
+        {% endif %}
+        <br>Mặc định trong <span class="mono">.env</span>: <b>{{ dich_env }}</b>{% if dich_do_cong_tac %} · đang bị công tắc này ghi đè{% endif %}.
+        Chốt ghi máy KK chỉ đổi được trong <span class="mono">.env</span> (<span class="mono">PMV_GHI_KK</span>), không đổi được từ web.
+      </div>
+    </div>
+    <div class="dich__nut">
+      {% if dich == "sandbox" %}
+        <button class="dang" type="button" disabled>● Bản thử</button>
+        <form method="post" action="{% url 'pmv:doi_dich' %}"
+              onsubmit="return confirm('Chuyển sang DỮ LIỆU THẬT của tiệm (máy KK)?
+
+Màn bán lẻ sẽ đọc thẳng sổ sách thật.{% if ghi_kk %}
+
+⚠ KÊNH GHI ĐANG MỞ — thao tác ghi sẽ vào dữ liệu thật!{% else %}
+Ghi vẫn bị cổng chặn.{% endif %}');">
+          {% csrf_token %}<input type="hidden" name="dich" value="kk">
+          <button class="toi-kk" type="submit">Chuyển sang dữ liệu THẬT →</button>
+        </form>
+      {% else %}
+        <form method="post" action="{% url 'pmv:doi_dich' %}">
+          {% csrf_token %}<input type="hidden" name="dich" value="sandbox">
+          <button type="submit">← Về bản thử</button>
+        </form>
+        <button class="dang" type="button" disabled>● Dữ liệu thật</button>
+      {% endif %}
+      {% if dich_do_cong_tac %}
+        <form method="post" action="{% url 'pmv:doi_dich' %}"
+              onsubmit="return confirm('Bỏ công tắc, quay về mặc định trong .env ({{ dich_env }})?');">
+          {% csrf_token %}<input type="hidden" name="dich" value="env">
+          <button type="submit" title="Bỏ ghi đè, dùng lại giá trị PMV_TARGET trong .env">↺ Theo .env</button>
+        </form>
+      {% endif %}
+    </div>
   </div>
 
   {% if write_lock %}

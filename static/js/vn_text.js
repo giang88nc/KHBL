@@ -31,11 +31,22 @@
 
   /* ① byte in ra thành số: '0225''0187''0141' → E1 BB 8D → 'ọ' */
   function suaByteSo(s, cb) {
-    var re = /(?:0(?:1[2-9]\d|2[0-5]\d))+/g;
-    var kq = s.replace(re, function (cum) {
+    var re = /(?:0(?:12[89]|1[3-9]\d|2[0-4]\d|25[0-5]))+/g;
+    var kq = s.replace(re, function (cum, offset) {
+      // Không diễn giải một phần mã số / số nhà thành chữ.
+      var before = s[offset - 1] || "", after = s[offset + cum.length] || "";
+      if (/\d/.test(before + after)) return cum;
       var bs = [], i;
       for (i = 0; i < cum.length; i += 4) bs.push(parseInt(cum.substr(i + 1, 3), 10));
-      return deUTF8(bs, true) || cum;
+      var decoded = deUTF8(bs, false);
+      var letter = function (c) { return !!c && /\p{L}/u.test(c); };
+      if (decoded && Array.from(decoded).every(function (c) {
+        return CHU_VIET.indexOf(c.toLowerCase()) >= 0;
+      }) && (letter(before) || letter(after) || cum === s)) return decoded;
+      // Chỉ phục hồi byte mồ côi ở giữa một từ, ví dụ N0196m.
+      if (bs.length === 1 && bs[0] >= 0xC2 && bs[0] <= 0xF4 &&
+          letter(before) && letter(after)) return HONG;
+      return cum;
     });
     if (kq !== s) cb.push("Đã dựng lại chữ từ mã số byte UTF-8");
     return kq;
@@ -61,7 +72,8 @@
     if (s.indexOf("&#") < 0) return s;
     var kq = s.replace(/&#(x[0-9a-fA-F]+|\d+);/g, function (m, v) {
       var n = v[0] === "x" || v[0] === "X" ? parseInt(v.slice(1), 16) : parseInt(v, 10);
-      return isNaN(n) ? m : String.fromCodePoint(n);
+      return !Number.isInteger(n) || n < 0 || n > 0x10FFFF ||
+        (n >= 0xD800 && n <= 0xDFFF) ? m : String.fromCodePoint(n);
     });
     if (kq !== s) cb.push("Đã đổi thực thể HTML về chữ");
     return kq;
@@ -72,6 +84,56 @@
       try { return decodeURIComponent(m); } catch (e) { return m; }
     });
     if (kq !== s) cb.push("Đã giải mã đoạn %XX");
+    return kq;
+  }
+
+  /* Mã Unicode thập phân bị máy quét gõ thành chữ số. Một dãy có thể chứa
+     nhiều code point nối liền: Tr432417ng = Tr + 432(ư) + 417(ơ) + ng. */
+  function suaMaUnicode(s, cb) {
+    var allowed = CHU_VIET + "ăâêôơư";
+    function tach(digits) {
+      if (digits.length > 32) return null;
+      var ways = [];
+      function tim(pos, out) {
+        if (ways.length > 1) return;
+        if (pos === digits.length) { ways.push(out); return; }
+        [3, 4].forEach(function (size) {
+          if (pos + size > digits.length) return;
+          var n = Number(digits.slice(pos, pos + size));
+          if (!Number.isInteger(n) || n > 0x10FFFF) return;
+          var c = String.fromCodePoint(n);
+          if (allowed.indexOf(c.toLowerCase()) >= 0) tim(pos + size, out + c);
+        });
+      }
+      tim(0, "");
+      return ways.length === 1 ? ways[0] : null;
+    }
+    var kq = s.replace(/\d{3,}/g, function (digits, offset) {
+      var before = s[offset - 1] || "", after = s[offset + digits.length] || "";
+      if (!(/\p{L}/u.test(before) || /\p{L}/u.test(after))) return digits;
+      var fixed = tach(digits);
+      return fixed === null ? digits : fixed;
+    });
+    if (kq !== s) cb.push("Đã đổi mã Unicode thập phân trong chữ tiếng Việt");
+    return kq;
+  }
+
+  /* Unicode bị cắt còn byte thấp rồi hiện bằng font DOS/OEM. ≤ và α chỉ được
+     sửa trong ngữ cảnh từ đã thấy chắc chắn từ máy quét; không thay toàn cục. */
+  function suaOEM(s, cb) {
+    var changed = false;
+    var kq = s.replace(/\S+/g, function (word) {
+      var fixed = word;
+      if (/[░═♥]/.test(word)) fixed = word.replace(/░/g, "ư").replace(/═/g, "ọ").replace(/♥/g, "ă");
+      if (word.indexOf("░") >= 0) fixed = fixed.replace(/í/g, "ơ");
+      // Một số nơi đã đổi byte đầu trước, để lại trạng thái nửa chừng Trưíng.
+      fixed = fixed.replace(/Trưíng/g, "Trương").replace(/TRƯÍNG/g, "TRƯƠNG");
+      fixed = fixed.replace(/^([Kk]h)≤m(?=\W|$)/u, "$1óm");
+      fixed = fixed.replace(/^Cα(?=\W|$)/u, "Cà");
+      if (fixed !== word) changed = true;
+      return fixed;
+    });
+    if (changed) cb.push("Đã phục hồi ký tự DOS/OEM từ byte thấp — vui lòng đối chiếu với thẻ");
     return kq;
   }
 
@@ -114,6 +176,8 @@
     kq = suaThucThe(kq, cb);
     kq = suaPercent(kq, cb);
     kq = suaByteSo(kq, cb);
+    kq = suaMaUnicode(kq, cb);
+    kq = suaOEM(kq, cb);
     kq = suaMojibake(kq, cb);
     kq = suaByteMat(kq, cb);
     if (String.prototype.normalize) kq = kq.normalize("NFC");

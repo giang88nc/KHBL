@@ -56,6 +56,7 @@
     <a href="{% url 'pmv:status' %}">Trạng thái</a>
     <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
     <a href="{% url 'pmv:behavior' %}" class="active">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}">Quy trình</a>
     <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
   </div>
   {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
@@ -79,6 +80,8 @@
         <a href="?{{ qstring }}{% if not auto %}&auto=1{% endif %}" style="align-self:center;font-size:12px;color:var(--gold-700)">{% if auto %}⏸ Tắt tự làm mới{% else %}▶ Tự làm mới 30s{% endif %}</a>
       </div>
       <div class="sub" style="margin-top:6px">Thu thập gần nhất: {{ state.pmv_behavior_last|default:"—" }} (scheduler 2 phút/lần)</div>
+      <div class="sub">Dò thay đổi SQL KK: {{ state.pmv_thay_doi_last|default:"chưa có chu kỳ nào" }}</div>
+      <div class="sub">Nhật ký file (ALL + 16 nhóm + thay_doi, giữ 90 ngày): <span class="mono">{{ state.log_dir }}\&lt;ngày&gt;\</span> · <a href="{% url 'pmv:diff' %}" style="color:var(--gold-700)">Đánh dấu TRƯỚC/SAU →</a></div>
     </div>
     <div class="panel">
       <h3>Nhóm nghiệp vụ ({{ d1 }}{% if d2 != d1 %} → {{ d2 }}{% endif %})</h3>

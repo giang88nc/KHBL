@@ -63,7 +63,7 @@ def _quy_cach_lam_tron(client=None):
             if client is None:
                 from .client import PmvClient
 
-                client = PmvClient("pmv", tag="money")
+                client = PmvClient(tag="money")
             v = client.sys_param("QuyCachLamTronVND") or v
         except Exception:
             pass  # mất kết nối KK → giữ mặc định đang dùng thực tế
@@ -104,6 +104,47 @@ def buy_amount_standalone(gold_weight, buy_rate, percent_value=100, add_money=0,
     """Tiền PHIẾU THÂU độc lập (TRN_RT_BUYGOLD). % nhân TRƯỚC, tiền bù/bớt cộng SAU (có thể âm)."""
     tien = dec(gold_weight) / hs(weight_unit) * dec(buy_rate) * RATE_SCALE * dec(percent_value) / Decimal("100")
     return round_vnd(tien + dec(add_money), client)
+
+
+# ----------------------------- ĐỔI NGANG VÀNG (GĐ chốt 05/09/2026) -----------------------------
+# Khách đổi dẻ CÙNG TUỔI VÀNG lấy hàng mới: phần dẻ trong HẠN MỨC = trọng lượng vàng MỚI bán ra
+# cùng loại được định GIÁ BÁN RA (ngang giá, tiệm không ăn chênh mua–bán); phần dẻ DƯ hạn mức
+# định GIÁ THÂU (mua vào). Khớp THEO TỪNG LOẠI: dẻ D18K ↔ hàng 18K, D9999 ↔ N9999...
+# Map dẻ → mã vàng bán (để gộp trọng lượng hàng bán cùng loại làm hạn mức). Giá bán ra thì
+# lấy THẲNG SellRate của chính dòng dẻ trong bảng giá (đã kiểm: D18K.Sell = 18K.Sell = 8850).
+DE_TO_BASE = {"D18K": "18K", "D24K": "24K", "D9999": "N9999", "DBK": "BK", "DBk": "BK",
+              "DSJC": "SJC", "DT": "VT"}
+
+
+def de_base(gold_code):
+    """Mã vàng BÁN tương ứng của 1 mã dẻ (D18K→18K). Fallback: bỏ 'D' đầu."""
+    c = (gold_code or "").strip()
+    if c in DE_TO_BASE:
+        return DE_TO_BASE[c]
+    return c[1:] if c[:1].upper() == "D" and len(c) > 1 else c
+
+
+def chia_doi_ngang(gold_weight, tl_hot, han_muc, sell_rate, buy_rate, price_unit="L", client=None):
+    """Chia 1 dẻ khi 'đổi ngang' theo hạn mức (trọng lượng vàng bán ra cùng loại còn lại).
+
+    Trả list bản ghi phần: [{'w': TL vàng, 'hot': TL hột, 'rate': giá, 'tien': thành tiền, 'ngang': bool}]
+    - Phần w_sell = min(TL vàng, hạn mức) → giá BÁN RA (đổi ngang).
+    - Phần w_buy  = còn lại            → giá THÂU.
+    Hột dồn vào phần CUỐI (không ảnh hưởng tiền — tiền chỉ tính trên TL vàng)."""
+    w = dec(gold_weight)
+    hot = dec(tl_hot)
+    hm = max(dec(han_muc), D0)
+    w_sell = min(w, hm)
+    w_buy = w - w_sell
+    phan = []
+    if w_sell > 0:
+        phan.append({"w": w_sell, "hot": D0, "rate": dec(sell_rate), "ngang": True,
+                     "tien": buy_amount_in_bill(w_sell, sell_rate, 100, price_unit, client)})
+    if w_buy > 0 or not phan:
+        phan.append({"w": w_buy, "hot": D0, "rate": dec(buy_rate), "ngang": False,
+                     "tien": buy_amount_in_bill(w_buy, buy_rate, 100, price_unit, client)})
+    phan[-1]["hot"] = hot  # hột dồn vào dòng cuối, không đổi tiền
+    return phan
 
 
 # ----------------------------- tổng hóa đơn -----------------------------

@@ -1,0 +1,11 @@
+{% comment %}Gợi ý nhân viên bán — bấm là chọn (gõ TÊN GỌI, xem services.tim_nhan_vien){% endcomment %}
+{% if ds %}
+<div class="pg-goiy__hop">
+  {% for e in ds %}
+  <button type="button" class="pg-goiy__i"
+          hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": "{{ e.EmpID }}"}' hx-swap="none">
+    <b>{{ e.EmpName }}</b><i class="mono">{{ e.EmpID }}</i>
+  </button>
+  {% endfor %}
+</div>
+{% endif %}

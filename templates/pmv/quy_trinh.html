@@ -1,0 +1,94 @@
+{% load l10n %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — Quy trình PMV</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; --tim:#7C3AED; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:20px 16px; }
+  h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0 0 2px; font-size:26px; }
+  .nav { margin-bottom:14px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
+  .nav a.active { font-weight:700; border-bottom:2px solid var(--gold-500); }
+  .msg { padding:8px 12px; border-radius:6px; margin-bottom:10px; }
+  .msg.success { background:#EAF4EC; color:#2E7D46; border:1px solid #B7DCC0; }
+  .msg.error { background:#FDF2F0; color:#B3402A; border:1px solid #E4B5AC; }
+  .msg.warning { background:#FFF7EC; color:#C07A1A; border:1px solid #F0D9B5; }
+  .card { background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold-500); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  .card h3 { margin:0 0 6px; font-family:"Cormorant Garamond",serif; color:var(--gold-700); font-size:18px; }
+  .desc { font-size:12px; color:#78716c; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; }
+  .qt { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; text-decoration:none; color:inherit; display:block; }
+  .qt:hover { border-color:var(--gold-500); }
+  .qt b.code { font-family:Consolas,monospace; color:var(--gold-700); }
+  .qt .ten { font-size:15px; font-weight:600; margin:2px 0 4px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--line); border-radius:12px; padding:1px 9px; font-size:11.5px; background:var(--surface); }
+  .badge { border-radius:10px; padding:1px 8px; font-size:11px; font-weight:600; }
+  .b-approved { background:#E3EFE6; color:#2E7D46; } .b-draft { background:#F7E6C8; color:#8a5a12; }
+  form.bar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+  .fld { display:flex; flex-direction:column; gap:2px; } .fld label { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  input, select, textarea { padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; background:#fff; font-family:inherit; }
+  button { padding:7px 14px; border:0; border-radius:6px; background:var(--gold-500); color:#fff; font-weight:600; cursor:pointer; font-size:12.5px; }
+  button.tim { background:var(--tim); }
+  .mono { font-family:Consolas,monospace; font-size:11.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Quy trình PMVGoldRT — LƯU và HỌC</h1>
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}" class="active">Quy trình</a>
+  </div>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <div class="grid" style="margin-bottom:16px">
+    {% for x in ds %}
+    <a class="qt" href="{% url 'pmv:quy_trinh_detail' x.p.code %}">
+      <div><b class="code">{{ x.p.code }}</b> · v{{ x.p.version }} ·
+        <span class="badge b-{{ x.p.status }}">{{ x.p.get_status_display }}</span></div>
+      <div class="ten">{{ x.p.name }}</div>
+      <div class="chips">
+        <span class="chip">{{ x.tk.pha }} pha</span><span class="chip">{{ x.tk.buoc }} bước · {{ x.tk.ghi }} ghi</span>
+        <span class="chip">KHBL làm {{ x.tk.lam }}</span><span class="chip">cần kiểm {{ x.tk.kiem }}</span>
+        <span class="chip">bỏ {{ x.tk.bo }}</span><span class="chip">khớp {{ x.tk.khop }}{% if x.tk.lech %} · lệch {{ x.tk.lech }}{% endif %}</span>
+      </div>
+      <div class="desc" style="margin-top:6px">cập nhật {{ x.p.updated_at|date:"d/m/Y H:i" }} · file <span class="mono">{{ x.file.name }}</span></div>
+    </a>
+    {% empty %}
+    <div class="desc">Chưa có quy trình nào. Chạy <span class="mono">manage.py seed_quy_trinh</span> để dựng BAN_HANG chuẩn, hoặc HỌC từ khung giờ bên dưới.</div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h3>📚 HỌC quy trình mới từ hành vi đã đo</h3>
+    <div class="desc">Chọn khung giờ (giờ máy web) chứa đúng thao tác anh vừa làm trên PMVGoldRT → hệ gom các lời gọi (bỏ lớp bọc/nhiễu/KHBL) thành bước nháp trong 1 pha "Đã học — chưa phân nhóm" + liệt kê bảng đổi. Cách chính xác hơn: dùng ĐÁNH DẤU TRƯỚC/SAU ở trang So sánh rồi bấm HỌC ngay trên báo cáo.</div>
+    <form class="bar" method="post" action="{% url 'pmv:qt_hoc' %}" style="margin-top:8px">{% csrf_token %}
+      <div class="fld"><label>Mã quy trình MỚI</label><input name="code" placeholder="HUY_HOA_DON" style="text-transform:uppercase" size="18"></div>
+      <div class="fld"><label>Tên</label><input name="name" placeholder="Hủy hóa đơn đã chốt" size="30"></div>
+      <div class="fld"><label>hoặc THÊM vào quy trình có sẵn</label>
+        <select name="them_vao"><option value="">— tạo mới —</option>{% for x in ds %}<option value="{{ x.p.code }}">{{ x.p.code }}</option>{% endfor %}</select></div>
+      <div class="fld"><label>Từ</label><input type="datetime-local" name="tu" value="{{ hom_nay }}T00:00" step="1"></div>
+      <div class="fld"><label>Đến</label><input type="datetime-local" name="den" value="{{ hom_nay }}T23:59" step="1"></div>
+      <button type="submit" class="tim">📚 HỌC</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>＋ Tạo quy trình trống</h3>
+    <form class="bar" method="post" action="{% url 'pmv:qt_tao' %}">{% csrf_token %}
+      <div class="fld"><label>Mã</label><input name="code" placeholder="SUA_HOA_DON" style="text-transform:uppercase" size="18" required></div>
+      <div class="fld"><label>Tên</label><input name="name" placeholder="Sửa hóa đơn đã chốt" size="34" required></div>
+      <div class="fld"><label>Mô tả</label><input name="description" size="40"></div>
+      <button type="submit">Tạo</button>
+    </form>
+    <div class="desc" style="margin-top:6px">File quy trình: <span class="mono">{{ log_dir }}\&lt;MÃ&gt;.md + .json</span> — tự ghi lại sau MỌI thay đổi (version +1), repo git giữ lịch sử.</div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "code": "HUY_HOA_DON",
+  "name": "Hủy đơn đã chốt",
+  "description": "Xóa hóa đơn đã chốt",
+  "status": "approved",
+  "version": 3,
+  "source": "HỌC từ khung 05/09/2026 06:46→23:59 (admin)",
+  "updated_at": "2026-09-05T06:51:16.508617+07:00",
+  "phases": [
+    {
+      "title": "Đã học 05/09 06:49 — chưa phân nhóm",
+      "note": "Bảng đổi trong khung: ErrorLog, I_CUSTOMER, I_GOLD_BAL, I_LICHSUTICHLUYDIEM, TRN_DAILY_LOG, TRN_RT_BUYSELL, TRN_RT_BUYSELL_Log, TRN_RT_BUYSELL_SELL, TRN_RT_BUYSELL_SELL_Log, T_PRODUCT, T_PRODUCT_TRACKING, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL, T_TILL_TXN_DETAIL_Log, T_TILL_TXN_Log, TonKho",
+      "steps": [
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Lst",
+          "proc_name": "T_TILL_TXN_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Lst @p_TillTxnID='',@p_TillID='',@p_TrnRefID='',@p_TrnFromDate='05/09/2026',@p_TrnToDate='05/09/2026',@p_FromTime='06:48:31',@p_ToTime='06:48:31',@p_TrnType='',@p_TrnCode='',@p_CustID='',@p_GoldCcy='',@p_TrnAmount='',@p_Status='P',@p_TillUserID='',@p_Sort='',@p_ProcUserID='',@p_ShopID='',@p_BillCode=N'',@p_Description=N'',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Del",
+          "proc_name": "T_TILL_TXN_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec [T_TILL_TXN_Del] @p_TrnRefID='TRB260900000604',@pType=N'SRT',@pCongNoBanLe=0,@p_UserUpd='US1806000000001',@p_TrnDateTime_Upd='Sep 5 2026 5:58:09:967AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_Type='1'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Del",
+          "proc_name": "TRN_RT_BUYSELL_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Del @p_TrnID='TRB260900000604',@p_UserUpd='US1806000000001',@p_TrnDateTime_Upd='Sep 5 2026 6:48:49:990AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_LogDel='0'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Lst",
+          "proc_name": "T_TILL_TXN_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Lst @p_TillTxnID='',@p_TillID='',@p_TrnRefID='',@p_TrnFromDate='05/09/2026',@p_TrnToDate='05/09/2026',@p_FromTime='06:48:31',@p_ToTime='06:48:31',@p_TrnType='',@p_TrnCode='',@p_CustID='',@p_GoldCcy='',@p_TrnAmount='',@p_Status='P',@p_TillUserID='',@p_Sort='',@p_ProcUserID='',@p_ShopID='',@p_BillCode=N'',@p_Description=N'',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

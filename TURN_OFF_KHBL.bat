@@ -14,6 +14,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr "LISTENING" ^| findstr ":8100
     taskkill /F /T /PID %%p >nul 2>&1
 )
 if %FOUND%==0 echo [KHBL] Web khong chay san.
-powershell -NoProfile -Command "$p = @(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.ExecutablePath -match 'KHBL' -and $_.CommandLine -match 'run_scheduler' }); if ($p.Count -eq 0) { Write-Host '[KHBL] Scheduler khong chay san.' } else { $p | ForEach-Object { Write-Host ('[KHBL] Tat scheduler PID ' + $_.ProcessId + ' ...'); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } }"
+REM Tat scheduler CUA KHBL: cha ...\KHBL\venv\... + con qua ParentProcessId - khong dung cham KHJ
+powershell -NoProfile -Command "$s=@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'run_scheduler' }); $l=@($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' }); $p=@($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' -or $l.ProcessId -contains $_.ParentProcessId }); if ($p.Count -eq 0) { Write-Host '[KHBL] Scheduler khong chay san.' } else { $p | ForEach-Object { Write-Host ('[KHBL] Tat scheduler PID ' + $_.ProcessId + ' ...'); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } }"
 echo [KHBL] Da tat he thong KHBL.
 exit /b 0

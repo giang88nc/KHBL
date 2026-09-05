@@ -1,0 +1,61 @@
+{
+  "code": "HUY_THANH_TOAN",
+  "name": "Hủy thanh toán, trả về DS chờ",
+  "description": "",
+  "status": "approved",
+  "version": 4,
+  "source": "HỌC từ khung 05/09/2026 06:55→23:59 (admin)",
+  "updated_at": "2026-09-05T07:01:27.373323+07:00",
+  "phases": [
+    {
+      "title": "Đã học 05/09 07:00 — chưa phân nhóm",
+      "note": "Bảng đổi trong khung: ErrorLog, I_CUSTOMER, I_GOLD_BAL, I_LICHSUTICHLUYDIEM, TRN_DAILY_LOG, TRN_RT_BUYSELL, TRN_RT_BUYSELL_Log, TRN_RT_BUYSELL_SELL, TRN_RT_BUYSELL_SELL_Log, T_PRODUCT, T_PRODUCT_TRACKING, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL, T_TILL_TXN_DETAIL_Log, T_TILL_TXN_Log, TonKho",
+      "steps": [
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Lst",
+          "proc_name": "T_TILL_TXN_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Lst @p_TillTxnID='',@p_TillID='',@p_TrnRefID='',@p_TrnFromDate='05/09/2026',@p_TrnToDate='05/09/2026',@p_FromTime='06:58:22',@p_ToTime='06:58:22',@p_TrnType='',@p_TrnCode='',@p_CustID='',@p_GoldCcy='',@p_TrnAmount='',@p_Status='P',@p_TillUserID='',@p_Sort='',@p_ProcUserID='',@p_ShopID='',@p_BillCode=N'',@p_Description=N'',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Del",
+          "proc_name": "T_TILL_TXN_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec [T_TILL_TXN_Del] @p_TrnRefID='TRB260900000606',@pType=N'SRT',@pCongNoBanLe=0,@p_UserUpd='US1806000000001',@p_TrnDateTime_Upd='Sep 5 2026 6:52:20:887AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_Type='0'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Lst",
+          "proc_name": "T_TILL_TXN_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Lst @p_TillTxnID='',@p_TillID='',@p_TrnRefID='',@p_TrnFromDate='05/09/2026',@p_TrnToDate='05/09/2026',@p_FromTime='06:58:22',@p_ToTime='06:58:22',@p_TrnType='',@p_TrnCode='',@p_CustID='',@p_GoldCcy='',@p_TrnAmount='',@p_Status='P',@p_TillUserID='',@p_Sort='',@p_ProcUserID='',@p_ShopID='',@p_BillCode=N'',@p_Description=N'',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Lst",
+          "proc_name": "TRN_RT_BUYSELL_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Lst @p_TrnID='',@p_BillCode=N'',@p_FromDate='05/09/2026',@p_ToDate='05/09/2026',@p_CustID='',@p_CustName=N'',@p_GoldCode='',@p_Status='',@p_CreatedBy='',@p_ShopID='',@p_TillID='',@p_SDT='',@p_RutGon='0',@p_SoHDTuNhap=N''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

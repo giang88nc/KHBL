@@ -23,8 +23,8 @@ import re
 import unicodedata
 import urllib.parse
 
-# nhóm ≥2 mã '0NNN' liền nhau (NNN = 128..255) — 1 mã lẻ vẫn nhận vì có thể là byte mồ côi
-_BYTE_SO = re.compile(r"(?:0(?:1[2-9]\d|2[0-5]\d))+")
+# Chỉ byte 128..255; không đổi một phần chuỗi số thành chữ.
+_BYTE_SO = re.compile(r"(?:0(?:12[89]|1[3-9]\d|2[0-4]\d|25[0-5]))+")
 _THUC_THE = re.compile(r"&#(x[0-9a-fA-F]+|\d+);")
 _PERCENT = re.compile(r"(?:%[0-9a-fA-F]{2})+")
 KY_TU_HONG = "�"
@@ -41,6 +41,8 @@ def chuan_hoa(s, ve_nfc=True, sua_mat=True):
     kq = _sua_thuc_the(kq, canh_bao)
     kq = _sua_percent(kq, canh_bao)
     kq = _sua_byte_so(kq, canh_bao)
+    kq = _sua_ma_unicode(kq, canh_bao)
+    kq = _sua_oem(kq, canh_bao)
     kq = _sua_mojibake(kq, canh_bao)
 
     if sua_mat:
@@ -61,7 +63,8 @@ def _sua_thuc_the(s, canh_bao):
     def _1(m):
         v = m.group(1)
         try:
-            return chr(int(v[1:], 16) if v[0] in "xX" else int(v))
+            n = int(v[1:], 16) if v[0] in "xX" else int(v)
+            return m.group(0) if not 0 <= n <= 0x10FFFF or 0xD800 <= n <= 0xDFFF else chr(n)
         except ValueError:
             return m.group(0)
     kq = _THUC_THE.sub(_1, s)
@@ -84,14 +87,99 @@ def _sua_percent(s, canh_bao):
     return kq
 
 
+def _sua_ma_unicode(s, canh_bao):
+    """Mã Unicode thập phân trong từ: 'Tr432417ng' → 'Trương'.
+
+    Một lần bấm phím có thể nối nhiều code point (432 + 417). Chỉ nhận khi dãy số
+    có chữ đứng sát bên và chỉ có đúng một cách tách thành chữ tiếng Việt.
+    """
+    allowed = _CHU_VIET | set("ăâêôơư")
+
+    def _tach(cum):
+        if len(cum) > 32:
+            return None
+        cach = []
+
+        def tim(pos, out):
+            if len(cach) > 1:
+                return
+            if pos == len(cum):
+                cach.append(out)
+                return
+            for size in (3, 4):
+                if pos + size > len(cum):
+                    continue
+                n = int(cum[pos:pos + size])
+                c = chr(n) if n <= 0x10FFFF else ""
+                if c and c.lower() in allowed:
+                    tim(pos + size, out + c)
+
+        tim(0, "")
+        return cach[0] if len(cach) == 1 else None
+
+    def _1(m):
+        before = s[m.start() - 1] if m.start() else ""
+        after = s[m.end()] if m.end() < len(s) else ""
+        if not (before.isalpha() or after.isalpha()):
+            return m.group(0)
+        fixed = _tach(m.group(0))
+        return fixed if fixed is not None else m.group(0)
+
+    kq = re.sub(r"\d{3,}", _1, s)
+    if kq != s:
+        canh_bao.append("Đã đổi mã Unicode thập phân trong chữ tiếng Việt")
+    return kq
+
+
+def _sua_oem(s, canh_bao):
+    """Phục hồi các dạng byte thấp đã quan sát từ đúng máy quét CCCD.
+
+    ≤ và α có nhiều nghĩa nếu đứng riêng, nên chỉ sửa trong ngữ cảnh từ đã biết chắc.
+    """
+    changed = False
+
+    def _1(m):
+        nonlocal changed
+        word = m.group(0)
+        fixed = word
+        if any(c in word for c in "░═♥"):
+            fixed = word.translate(str.maketrans({"░": "ư", "═": "ọ", "♥": "ă"}))
+        if "░" in word:
+            fixed = fixed.replace("í", "ơ")
+        # Có lượt quét/trình duyệt đã đổi byte đầu trước, để lại trạng thái nửa chừng.
+        fixed = fixed.replace("Trưíng", "Trương").replace("TRƯÍNG", "TRƯƠNG")
+        fixed = re.sub(r"^([Kk]h)≤m(?=\W|$)", r"\1óm", fixed)
+        fixed = re.sub(r"^Cα(?=\W|$)", "Cà", fixed)
+        changed |= fixed != word
+        return fixed
+
+    kq = re.sub(r"\S+", _1, s)
+    if changed:
+        canh_bao.append("Đã phục hồi ký tự DOS/OEM từ byte thấp — vui lòng đối chiếu với thẻ")
+    return kq
+
+
 def _sua_byte_so(s, canh_bao):
     """'0225' '0187' '0141' → byte 225,187,141 → giải mã UTF-8."""
     if not _BYTE_SO.search(s):
         return s
     def _1(m):
         cum = m.group(0)
+        before = s[m.start() - 1] if m.start() else ""
+        after = s[m.end()] if m.end() < len(s) else ""
+        if any(c in "0123456789" for c in before + after):
+            return cum
         bs = bytes(int(cum[i + 1:i + 4]) for i in range(0, len(cum), 4))
-        return bs.decode("utf-8", errors="replace")
+        try:
+            decoded = bs.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            decoded = ""
+        if (decoded and all(c.lower() in _CHU_VIET for c in decoded)
+                and (before.isalpha() or after.isalpha() or cum == s)):
+            return decoded
+        if len(bs) == 1 and 0xC2 <= bs[0] <= 0xF4 and before.isalpha() and after.isalpha():
+            return KY_TU_HONG
+        return cum
     kq = _BYTE_SO.sub(_1, s)
     if kq != s:
         canh_bao.append("Đã dựng lại chữ từ mã số byte UTF-8")

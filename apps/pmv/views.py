@@ -1,13 +1,21 @@
+import datetime
+import json
 import time
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from . import behavior_log as BL
 from . import diff as diffmod
-from .models import PmvAudit, PmvSnapshot, PmvState
+from . import gateway
+from . import quy_trinh as QT
+from .models import PmvAudit, PmvBehavior, PmvChange, PmvProcess, PmvProcessStep, PmvSnapshot, PmvState
+
+DANH_DAU_KEY = "pmv_danh_dau"   # JSON {snap_id, luc, seq} khi đang ở giữa TRƯỚC và SAU
 
 
 def status(request):
@@ -16,13 +24,46 @@ def status(request):
     audits = PmvAudit.objects.all()[:30]
     so_blocked = PmvAudit.objects.filter(kind=PmvAudit.Kind.BLOCKED).count()
     so_canhbao = PmvAudit.objects.filter(kind=PmvAudit.Kind.CANHBAO).count()
+    dich = gateway.dich_hien_tai()
     return render(request, "pmv/status.html", {
         "state": state,
         "audits": audits,
         "so_blocked": so_blocked,
         "so_canhbao": so_canhbao,
         "write_lock": state.get("pmv_write_lock") == "1",
+        # Công tắc đích dữ liệu (xem CLAUDE.md mục 4b)
+        "dich": dich,
+        "dich_mo_ta": gateway.mo_ta_dich(dich),
+        "dich_env": gateway._chuan_dich(settings.PMV_TARGET),
+        "dich_do_cong_tac": bool(state.get(gateway.DICH_KEY)),
+        "ghi_kk": gateway.duoc_ghi_kk(),
     })
+
+
+@require_POST
+def doi_dich(request):
+    """Công tắc ĐÍCH DỮ LIỆU trên trang Hệ thống — đổi được ngay, không cần RESET.
+
+    Đổi sang máy KK CHỈ mở đường ĐỌC dữ liệu thật; ghi vẫn bị gateway từ chối chừng nào
+    PMV_GHI_KK trong .env còn tắt. Chốt ghi cố ý KHÔNG đưa lên web — thứ nguy hiểm phải
+    nằm trong file, có chủ đích mới sửa được."""
+    chon = request.POST.get("dich", "")
+    cu = gateway.dich_hien_tai()
+    if chon == "env":
+        moi = gateway.xoa_cong_tac()
+        messages.success(request, f"Đã bỏ công tắc — quay về mặc định trong .env: {gateway.mo_ta_dich(moi)}.")
+    else:
+        moi = gateway.dat_dich(chon)
+        if moi == "kk":
+            them = ("Kênh GHI đang MỞ — mọi thao tác ghi vào sổ sách thật!"
+                    if gateway.duoc_ghi_kk() else "Chỉ tra cứu — cổng vẫn cấm ghi vào máy KK.")
+            messages.warning(request, f"⚠ Đã chuyển sang DỮ LIỆU THẬT máy KK. {them}")
+        else:
+            messages.success(request, "Đã chuyển về BẢN THỬ máy Mr Giang — ghi thoải mái, không đụng dữ liệu tiệm.")
+    if moi != cu:
+        gateway.canh_bao("doi_dich", f"ĐỔI ĐÍCH DỮ LIỆU: {cu} → {moi} "
+                                     f"(người đổi: {request.user.username}, ghi KK={gateway.duoc_ghi_kk()})")
+    return redirect("pmv:status")
 
 
 def _resolve_snapshot(token):
@@ -70,7 +111,326 @@ def diff_view(request):
         "a_tok": a_tok, "b_tok": b_tok, "only_diff": only_diff,
         "desc_a": desc_a, "desc_b": desc_b,
         "rows": rows, "summary": summary, "ran": "so" in request.GET,
+        "danh_dau": _danh_dau_hien_tai(),
+        "thay_doi_last": PmvState.get(BL.THAY_DOI_LAST_KEY),
+        "log_dir": str(BL.LOG_DIR),
     })
+
+
+# ─────────────────────── ĐÁNH DẤU TRƯỚC / SAU (Bước 2 thủ công, GĐ duyệt 05/09/2026) ───────────────────────
+
+def _danh_dau_hien_tai():
+    try:
+        return json.loads(PmvState.get(DANH_DAU_KEY) or "null")
+    except Exception:
+        return None
+
+
+def _thu_trace():
+    from .management.commands.collect_pmv_behavior import thu_thap_trace
+
+    rows = thu_thap_trace()
+    BL.ghi(rows)
+    return rows
+
+
+@require_POST
+def danh_dau_truoc(request):
+    """Chụp FULL KK + ghim mốc trace. Sau đó GĐ làm ĐÚNG 1 thao tác trên PMVGoldRT rồi bấm SAU."""
+    try:
+        _thu_trace()
+        seq = int(PmvState.get("pmv_trace_last_seq") or 0)
+        snap = BL.chup_kk()
+    except Exception as exc:
+        messages.error(request, f"Không đánh dấu được: {exc}")
+        return redirect("pmv:diff")
+    now = timezone.now()
+    s = PmvSnapshot.objects.create(label=f"ĐÁNH DẤU TRƯỚC {timezone.localtime(now):%d/%m %H:%M:%S}",
+                                   source="pmv", mode="full", table_count=len(snap), payload=snap)
+    PmvState.set(DANH_DAU_KEY, json.dumps({"snap_id": s.pk, "luc": now.isoformat(), "seq": seq}))
+    messages.success(request, f"Đã đánh dấu TRƯỚC lúc {timezone.localtime(now):%H:%M:%S} ({len(snap)} bảng). "
+                              "Giờ làm ĐÚNG 1 thao tác trên PMVGoldRT rồi quay lại bấm ĐÁNH DẤU SAU.")
+    return redirect("pmv:diff")
+
+
+@require_POST
+def danh_dau_sau(request):
+    """Chụp lại, so với mốc TRƯỚC, ghép proc trace giữa 2 mốc + kéo dòng vừa đổi → báo cáo 1 thao tác."""
+    mark = _danh_dau_hien_tai()
+    if not mark:
+        messages.error(request, "Chưa có mốc TRƯỚC — bấm ĐÁNH DẤU TRƯỚC rồi làm thao tác đã.")
+        return redirect("pmv:diff")
+    truoc = PmvSnapshot.objects.filter(pk=mark["snap_id"]).first()
+    if not truoc:
+        PmvState.objects.filter(key=DANH_DAU_KEY).delete()
+        messages.error(request, "Snapshot TRƯỚC đã bị xóa — đánh dấu lại.")
+        return redirect("pmv:diff")
+    try:
+        _thu_trace()
+        snap = BL.chup_kk()
+    except Exception as exc:
+        messages.error(request, f"Không chụp được trạng thái SAU: {exc}")
+        return redirect("pmv:diff")
+    now = timezone.now()
+    ws = datetime.datetime.fromisoformat(mark["luc"])
+    sau = PmvSnapshot.objects.create(label=f"ĐÁNH DẤU SAU {timezone.localtime(now):%d/%m %H:%M:%S}",
+                                     source="pmv", mode="full", table_count=len(snap), payload=snap)
+    khac = BL.bang_doi(truoc.payload, snap)
+    hanh_vi = list(PmvBehavior.objects.filter(source=PmvBehavior.Source.TRACE, event_seq__gt=mark["seq"])
+                   .order_by("event_seq", "id"))
+    procs = BL.chuoi_proc(BL.proc_ghi_trong(hanh_vi))
+    objs = BL.tao_pmv_change(ws, now, khac, procs, mark=f"danhdau:{truoc.pk}")
+
+    # mức dòng: bảng đổi có cột mốc thời gian → kéo dòng có mốc trong khung (trừ biên 2 phút
+    # vì đồng hồ KK chậm ~35s so máy web)
+    mau = []
+    try:
+        cot = BL.cot_moc_kk()
+        tu = ws - datetime.timedelta(minutes=2)
+        for r in khac:
+            cols = cot.get(r["tbl"])
+            if cols:
+                mau.append({"bang": r["tbl"], "cot": cols, "dong": BL.mau_dong_doi(r["tbl"], cols, tu)})
+    except Exception as exc:
+        messages.warning(request, f"Không kéo được dòng chi tiết: {exc}")
+
+    ngay = timezone.localtime(now).date()
+    ten = f"danh_dau_{timezone.localtime(ws):%H%M%S}"
+    lines = [f"=== ĐÁNH DẤU {timezone.localtime(ws):%d/%m/%Y %H:%M:%S} → {timezone.localtime(now):%H:%M:%S} "
+             f"| {len(hanh_vi)} lời gọi | {len(khac)} bảng đổi | người đánh dấu: {request.user.username} ==="]
+    lines += ["--- lời gọi (trace, mọi máy kể cả KHBL) ---"] + [BL.dong(b) for b in hanh_vi]
+    lines += ["--- bảng đổi ---"] + BL.dong_thay_doi(ws, now, objs, procs)
+    for m in mau:
+        lines.append(f"--- dòng đổi trong {m['bang']} (theo {', '.join(m['cot'])}) ---")
+        for d in m["dong"]:
+            lines.append("    " + " | ".join(f"{k}={v}" for k, v in d.items()))
+    BL.ghi_thay_doi(ngay, lines, ten=ten)
+    PmvState.objects.filter(key=DANH_DAU_KEY).delete()
+    return render(request, "pmv/danh_dau.html", {
+        "ws": ws, "we": now, "hanh_vi": hanh_vi, "khac": khac, "procs": procs, "mau": mau,
+        "truoc": truoc, "sau": sau, "file": str(BL.thu_muc_ngay(ngay) / f"{ten}.log"),
+        # để nút "HỌC thành quy trình" trên báo cáo
+        "seq_tu": mark["seq"], "seq_den": int(PmvState.get("pmv_trace_last_seq") or 0),
+        "quy_trinh_ds": PmvProcess.objects.all(),
+    })
+
+
+# ─────────────────────── QUY TRÌNH — LƯU và HỌC (GĐ chốt 05/09/2026) ───────────────────────
+
+def _qt(code):
+    return PmvProcess.objects.filter(code=code).first()
+
+
+def _ma_hop_le(code):
+    import re as _re
+    return bool(_re.fullmatch(r"[A-Z][A-Z0-9_]{1,39}", code or ""))
+
+
+def quy_trinh_list(request):
+    ds = []
+    for p in PmvProcess.objects.all():
+        ds.append({"p": p, "tk": QT.thong_ke(p), "file": QT.QUY_TRINH_DIR / f"{p.code}.md"})
+    return render(request, "pmv/quy_trinh.html", {
+        "ds": ds, "log_dir": str(QT.QUY_TRINH_DIR), "hom_nay": timezone.localdate().isoformat(),
+    })
+
+
+def quy_trinh_detail(request, code):
+    p = _qt(code)
+    if not p:
+        messages.error(request, f"Không có quy trình {code}.")
+        return redirect("pmv:quy_trinh")
+    cay = QT.cay(p)
+    return render(request, "pmv/quy_trinh_chi_tiet.html", {
+        "p": p, "cay": cay, "tk": QT.thong_ke(p), "phas": [x[0] for x in cay],
+        "khbl_choices": PmvProcessStep.Khbl.choices, "dc_choices": PmvProcessStep.DoiChieu.choices,
+        "status_choices": PmvProcess.Status.choices,
+        "file_md": QT.QUY_TRINH_DIR / f"{p.code}.md",
+    })
+
+
+@require_POST
+def qt_tao(request):
+    code = (request.POST.get("code") or "").strip().upper()
+    name = (request.POST.get("name") or "").strip()
+    if not _ma_hop_le(code) or not name:
+        messages.error(request, "Mã quy trình phải là CHỮ IN/số/gạch dưới (vd BAN_HANG, HUY_HOA_DON) và phải có tên.")
+        return redirect("pmv:quy_trinh")
+    if _qt(code):
+        messages.error(request, f"Quy trình {code} đã có.")
+        return redirect("pmv:quy_trinh_detail", code=code)
+    p = PmvProcess.objects.create(code=code, name=name, description=(request.POST.get("description") or "").strip())
+    PmvProcessStep.objects.create(process=p, parent=None, order=10, title="Điều kiện trước")
+    QT.luu_file(p)
+    messages.success(request, f"Đã tạo quy trình {code} — thêm pha/bước rồi bấm LƯU.")
+    return redirect("pmv:quy_trinh_detail", code=code)
+
+
+@require_POST
+def qt_sua(request, code):
+    p = _qt(code)
+    if not p:
+        return redirect("pmv:quy_trinh")
+    p.name = (request.POST.get("name") or p.name).strip()
+    p.description = (request.POST.get("description") or "").strip()
+    st = request.POST.get("status")
+    if st in dict(PmvProcess.Status.choices):
+        p.status = st
+    p.save()
+    QT.tang_ban(p)
+    gateway.canh_bao("quy_trinh", f"SỬA quy trình {code} → v{p.version} ({request.user.username})")
+    messages.success(request, f"Đã lưu quy trình {code} v{p.version} ra file.")
+    return redirect("pmv:quy_trinh_detail", code=code)
+
+
+@require_POST
+def qt_xoa(request, code):
+    p = _qt(code)
+    if p:
+        p.delete()
+        gateway.canh_bao("quy_trinh", f"XÓA quy trình {code} khỏi DB (file docs/quy_trinh/{code}.md GIỮ LẠI) — {request.user.username}")
+        messages.success(request, f"Đã xóa quy trình {code} khỏi DB — file docs/quy_trinh/{code}.md vẫn giữ làm lịch sử.")
+    return redirect("pmv:quy_trinh")
+
+
+@require_POST
+def qt_luu(request, code):
+    p = _qt(code)
+    if not p:
+        return redirect("pmv:quy_trinh")
+    md, js = QT.luu_file(p)
+    messages.success(request, f"Đã LƯU: {md.name} + {js.name} trong {QT.QUY_TRINH_DIR}")
+    return redirect("pmv:quy_trinh_detail", code=code)
+
+
+@require_POST
+def qt_hoc(request):
+    """HỌC quy trình từ hành vi đã đo: theo khung giờ (trang Quy trình) hoặc theo seq (báo cáo đánh dấu)."""
+    code = (request.POST.get("code") or "").strip().upper()
+    name = (request.POST.get("name") or "").strip()
+    them_vao = (request.POST.get("them_vao") or "").strip().upper()   # thêm vào quy trình sẵn có
+    if them_vao:
+        p = _qt(them_vao)
+        if not p:
+            messages.error(request, f"Không có quy trình {them_vao}.")
+            return redirect("pmv:quy_trinh")
+        code = p.code
+    elif not _ma_hop_le(code):
+        messages.error(request, "Mã quy trình phải là CHỮ IN/số/gạch dưới (vd HUY_HOA_DON).")
+        return redirect("pmv:quy_trinh")
+    else:
+        p = None
+    try:
+        if request.POST.get("seq_tu"):
+            seq_tu, seq_den = int(request.POST["seq_tu"]), int(request.POST.get("seq_den") or 0) or None
+            hv = QT.hanh_vi_theo_seq(seq_tu, seq_den)
+            if hv:
+                tu, den = hv[0].event_time - datetime.timedelta(minutes=3), hv[-1].event_time + datetime.timedelta(minutes=3)
+                ch = QT.thay_doi_theo_gio(tu, den)
+            else:
+                ch = []
+            nguon = f"HỌC từ đánh dấu seq {seq_tu}→{seq_den or '…'} ({timezone.localtime():%d/%m/%Y %H:%M}, {request.user.username})"
+        else:
+            tz = timezone.get_current_timezone()
+            tu = timezone.make_aware(datetime.datetime.fromisoformat(request.POST["tu"]), tz)
+            den = timezone.make_aware(datetime.datetime.fromisoformat(request.POST["den"]), tz)
+            hv = QT.hanh_vi_theo_gio(tu, den)
+            ch = QT.thay_doi_theo_gio(tu, den)
+            nguon = f"HỌC từ khung {timezone.localtime(tu):%d/%m/%Y %H:%M}→{timezone.localtime(den):%H:%M} ({request.user.username})"
+    except (KeyError, ValueError) as exc:
+        messages.error(request, f"Khung giờ không hợp lệ: {exc}")
+        return redirect("pmv:quy_trinh")
+    if not hv:
+        messages.warning(request, "Không có lời gọi nào trong khung này (trace tắt? khung sai?). Không tạo gì.")
+        return redirect("pmv:quy_trinh")
+    p = QT.hoc(code, name, hv, ch, source=nguon, process=p)
+    messages.success(request, f"Đã HỌC {len(QT.gom_buoc(hv))} bước từ {len(hv)} lời gọi vào quy trình {p.code} "
+                              f"(pha 'Đã học — chưa phân nhóm') — kéo từng bước vào pha đúng rồi duyệt.")
+    return redirect("pmv:quy_trinh_detail", code=p.code)
+
+
+def _doc_form_buoc(request, p):
+    parent = None
+    pid = request.POST.get("parent")
+    if pid:
+        parent = p.steps.filter(pk=pid, parent=None).first()
+    return {
+        "parent": parent,
+        "title": (request.POST.get("title") or "").strip()[:150],
+        "proc_name": (request.POST.get("proc_name") or "").strip()[:128],
+        "action": request.POST.get("action") if request.POST.get("action") in ("ghi", "đọc", "") else "",
+        "repeat": request.POST.get("repeat") == "1",
+        "params": (request.POST.get("params") or "").strip(),
+        "tables": (request.POST.get("tables") or "").strip(),
+        "khbl": request.POST.get("khbl") if request.POST.get("khbl") in dict(PmvProcessStep.Khbl.choices) else PmvProcessStep.Khbl.LAM,
+        "doi_chieu": request.POST.get("doi_chieu") if request.POST.get("doi_chieu") in dict(PmvProcessStep.DoiChieu.choices) else PmvProcessStep.DoiChieu.CHUA,
+        "note": (request.POST.get("note") or "").strip(),
+    }
+
+
+@require_POST
+def buoc_them(request, code):
+    p = _qt(code)
+    if not p:
+        return redirect("pmv:quy_trinh")
+    d = _doc_form_buoc(request, p)
+    if not d["title"]:
+        messages.error(request, "Chưa nhập tên pha/bước.")
+        return redirect("pmv:quy_trinh_detail", code=code)
+    n = p.steps.filter(parent=d["parent"]).count()
+    PmvProcessStep.objects.create(process=p, order=(n + 1) * 10, **d)
+    QT.tang_ban(p)
+    messages.success(request, f"Đã thêm {'bước' if d['parent'] else 'pha'} “{d['title']}” — v{p.version} đã lưu file.")
+    return redirect("pmv:quy_trinh_detail", code=code)
+
+
+@require_POST
+def buoc_sua(request, pk):
+    s = PmvProcessStep.objects.filter(pk=pk).select_related("process").first()
+    if not s:
+        return redirect("pmv:quy_trinh")
+    p = s.process
+    d = _doc_form_buoc(request, p)
+    if not d["title"]:
+        messages.error(request, "Chưa nhập tên pha/bước.")
+        return redirect("pmv:quy_trinh_detail", code=p.code)
+    if s.parent_id is None:
+        d["parent"] = None            # pha không thể thành bước
+    elif d["parent"] is None:
+        d["parent"] = s.parent        # bước phải thuộc 1 pha
+    doi_pha = d["parent"] != s.parent
+    for k, v in d.items():
+        setattr(s, k, v)
+    if doi_pha:
+        s.order = (p.steps.filter(parent=d["parent"]).count() + 1) * 10
+    s.save()
+    QT.sap_lai(p, s.parent)
+    QT.tang_ban(p)
+    messages.success(request, f"Đã sửa “{s.title}” — v{p.version} đã lưu file.")
+    return redirect("pmv:quy_trinh_detail", code=p.code)
+
+
+@require_POST
+def buoc_xoa(request, pk):
+    s = PmvProcessStep.objects.filter(pk=pk).select_related("process").first()
+    if not s:
+        return redirect("pmv:quy_trinh")
+    p, ten, parent = s.process, s.title, s.parent
+    s.delete()
+    QT.sap_lai(p, parent)
+    QT.tang_ban(p)
+    messages.success(request, f"Đã xóa “{ten}” — v{p.version} đã lưu file.")
+    return redirect("pmv:quy_trinh_detail", code=p.code)
+
+
+@require_POST
+def buoc_doi_cho(request, pk, huong):
+    s = PmvProcessStep.objects.filter(pk=pk).select_related("process").first()
+    if not s:
+        return redirect("pmv:quy_trinh")
+    if QT.doi_cho(s, -1 if huong == "len" else 1):
+        QT.tang_ban(s.process)
+    return redirect("pmv:quy_trinh_detail", code=s.process.code)
 
 
 @require_POST
@@ -184,7 +544,9 @@ def behavior_view(request):
         tstat = trace_status()
     except Exception as exc:
         tstat = {"error": str(exc)}
-    state = {s.key: s.value for s in PmvState.objects.filter(key__in=["pmv_behavior_last", "pmv_trace_started", "pmv_trace_stopped"])}
+    state = {s.key: s.value for s in PmvState.objects.filter(
+        key__in=["pmv_behavior_last", "pmv_trace_started", "pmv_trace_stopped", BL.THAY_DOI_LAST_KEY])}
+    state["log_dir"] = str(BL.LOG_DIR)
 
     return render(request, "pmv/behavior.html", {
         "d1": d1, "d2": d2, "cat": cat, "src": src, "act": act, "q": q, "auto": auto,

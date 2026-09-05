@@ -30,10 +30,13 @@ def _runner(source):
     raise ValueError(f"Nguồn không hợp lệ: {source}")
 
 
-def snapshot(source, mode="fast"):
-    """Trả {tbl: {'rows': int, 'cs': int|None}} cho toàn bộ bảng của 1 nguồn."""
-    if mode == "full" and source == "pmv":
-        # An toàn: không quét toàn bộ PMV thật. Hạ về fast.
+def snapshot(source, mode="fast", force=False):
+    """Trả {tbl: {'rows': int, 'cs': int|None}} cho toàn bộ bảng của 1 nguồn.
+
+    force=True: cho phép FULL trên PMV thật — GĐ duyệt 05/09/2026 sau khi đo: 251 bảng
+    checksum WITH (NOLOCK) ≈ 1,5s (18 bảng nghiệp vụ trên KK 0,48s), dùng cho dò thay đổi
+    2 phút/lần (behavior_log.py). Mặc định vẫn hạ về fast để trang So sánh không lỡ tay."""
+    if mode == "full" and source == "pmv" and not force:
         mode = "fast"
     run = _runner(source)
     rows = run(_COUNTS_SQL)

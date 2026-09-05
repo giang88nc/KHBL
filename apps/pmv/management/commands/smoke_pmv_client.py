@@ -45,18 +45,33 @@ class Command(BaseCommand):
         check("header có TrnDateTime_Upd (khóa lạc quan)", "TrnDateTime_Upd" in b["header"] or "TRN_GDN" in b["header"])
         check("sys_param TaoSoHDKhiThanhToan = '0'", c.sys_param("TaoSoHDKhiThanhToan") == "0")
 
-        # 4. allowlist: proc GHI chưa duyệt → BLOCKED; proc lạ → BLOCKED
-        for proc, write in (("TRN_RT_BUYSELL_Ins", True), ("Del_AllData", True), ("rptSRT_PrintBill", False)):
+        # 4. allowlist: proc lạ → BLOCKED (bất kể đích)
+        for proc, write in (("Del_AllData", True), ("rptSRT_PrintBill", False)):
             try:
                 pmv_call(proc, {}, tag="smoke", write=write)
                 check(f"pmv_call chặn {proc}", False)
             except PmvBlocked:
                 check(f"pmv_call chặn {proc}", True)
+        # 4b. proc GHI ĐÃ duyệt vẫn bị CHỐT AN TOÀN chặn khi đích là máy KK (03/09/2026)
+        from django.test import override_settings
+        from apps.pmv import gateway as gw2
+        cong_tac_cu = PmvState.get(gw2.DICH_KEY, "")
+        try:
+            gw2.dat_dich("kk")
+            with override_settings(PMV_GHI_KK=False):
+                try:
+                    pmv_call("TRN_RT_BUYSELL_Ins", {}, tag="smoke", write=True)
+                    check("chốt an toàn chặn ghi vào máy KK", False)
+                except PmvBlocked as e:
+                    check("chốt an toàn chặn ghi vào máy KK", "cấm GHI vào máy KK" in str(e))
+        finally:
+            gw2.dat_dich(cong_tac_cu) if cong_tac_cu else gw2.xoa_cong_tac()
         # write lock
         old = PmvState.get("pmv_write_lock")
         PmvState.set("pmv_write_lock", "1")
         try:
             from apps.pmv import gateway as gw
+            allow_that = gw.PROC_WRITE_ALLOW          # nhớ để trả lại y nguyên
             gw.PROC_WRITE_ALLOW = frozenset({"I_XRATE_Ins"})
             try:
                 pmv_call("I_XRATE_Ins", {}, tag="smoke", write=True)
@@ -64,7 +79,7 @@ class Command(BaseCommand):
             except PmvBlocked:
                 check("write_lock chặn proc ghi đã duyệt", True)
         finally:
-            gw.PROC_WRITE_ALLOW = frozenset()
+            gw.PROC_WRITE_ALLOW = allow_that          # KHÔNG để rỗng — bộ test không được đổi allowlist thật
             PmvState.set("pmv_write_lock", old or "")
 
         # 5. sandbox: gọi cùng proc trên bản sao

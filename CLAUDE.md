@@ -62,14 +62,179 @@ KHBL web (Mr Giang) ─────────┘         │ backup COPY_ONLY 
 - Web không bao giờ query PMV nặng trong request cycle người dùng — đọc báo cáo lấy từ
   MySQL/cache, PMV chỉ cho tra cứu nhanh + lệnh nghiệp vụ.
 
+## 4b. CÔNG TẮC ĐÍCH DỮ LIỆU (chốt 03/09/2026)
+
+Toàn bộ nghiệp vụ bán lẻ ĐỌC và GHI vào **một đích duy nhất**. Hai lớp điều khiển:
+
+| | Đổi ở đâu | Đổi được lúc đang chạy? |
+|---|---|---|
+| **Đích dữ liệu** (bản thử ↔ máy KK) | **nút trên trang `/he-thong/`** (chính) · `.env PMV_TARGET` (mặc định lúc khởi động) | **CÓ** — bấm là đổi ngay, không RESET |
+| **Chốt ghi máy KK** | **CHỈ** `.env PMV_GHI_KK` | không — phải sửa file + RESET |
+
+```
+PMV_TARGET=sandbox     # mặc định khi chưa bật công tắc: bản thử | kk = dữ liệu THẬT
+PMV_GHI_KK=False       # chốt an toàn: cho phép GHI vào máy KK. MẶC ĐỊNH TẮT
+```
+
+Cố ý tách hai lớp: **đổi đích là việc thường ngày** (tập dượt rồi soi số thật) nên để trên
+web cho nhanh; **mở đường ghi vào sổ tiệm là việc hệ trọng** nên bắt phải mở file, không
+bấm nhầm được. Nút trên web ghi vào `PmvState['pmv_target']` (sống qua RESET), thắng `.env`;
+nút "↺ Theo .env" bỏ ghi đè. Gateway đệm 2 giây để khỏi hỏi MySQL mỗi lệnh.
+
+Kiểm chứng 03/09: đích `kk` đọc ra 56.320 khách (số sống), `sandbox` 56.318 (số lúc đồng bộ).
+
+| | Đi theo `PMV_TARGET` | Luôn nói chuyện với máy KK |
+|---|---|---|
+| Ai | `PmvClient()` → mọi màn bán lẻ | backup đêm · `check_pmv` · trace hành vi · nút ĐỒNG BỘ |
+| Vì sao | đổi đích là đổi cả app | hạ tầng phải soi máy thật, và chỉ ĐỌC |
+
+**Chốt an toàn nằm TRONG `gateway.pmv_call`**, trước cả bước mở kết nối — không phải ở
+người gọi, để không ai quên được. `PMV_TARGET=kk` + `PMV_GHI_KK=False` = đọc thật, ghi chặn.
+
+**Băng đích trên mọi trang** (`templates/partials/dich.html`, hàng 2 của `.khbl-shell`):
+xanh "BẢN THỬ" / đỏ "DỮ LIỆU THẬT" + chấm nhấp nháy. Đừng bỏ — nhầm đích là hỏng sổ tiệm.
+
+**Tập dượt đi ĐÚNG đường chạy thật**: sandbox cũng qua gateway (allowlist + nhật ký +
+khóa ghi). `sandbox_call` đi tắt đã XÓA; `sandbox_query` chỉ còn cho hạ tầng.
+
+Bộ hồi quy: **`manage.py smoke_dich`** (45 kịch bản — công tắc, chốt chặn ghi KK, CRUD thật
+trên bản thử: tạo khách → lập hóa đơn → chốt → hủy sạch → trả hàng về kho, tự dọn rác;
+và giao diện công tắc: bấm đổi → băng đổi màu cả trang Hệ thống lẫn màn bán lẻ, ở đích KK
+ghi vẫn bị chặn, web KHÔNG có chỗ bật chốt ghi). Bộ này KHÔNG bao giờ bật `PMV_GHI_KK`.
+
+## 4c. KHÓA LẠC QUAN — BẪY IM LẶNG (kiểm chứng 03/09/2026)
+
+Proc `_Upd`/`_Del` của vendor so `TrnDateTime_Upd` truyền vào với giá trị trong bảng.
+**Sai mốc → proc trả `rc=0` nhưng KHÔNG LÀM GÌ CẢ.** Đã dính thật: hủy hóa đơn "thành công"
+mà hóa đơn vẫn còn, món hàng vẫn bị giữ trong trạng thái đã bán.
+
+- Mốc **đổi sau MỖI bước** → phải đọc lại giữa `T_TILL_TXN_Del` và `TRN_RT_BUYSELL_Del`.
+- `T_TILL_TXN_Del @p_Type` — **ĐÍNH CHÍNH 05/09/2026 (đo thật + đọc proc)**: với hóa đơn bán (SRT) proc
+  KHÔNG rẽ nhánh theo `@p_Type`, giá trị chỉ được ghi vào bảng `*_Log`; `'0'` hay `'1'` đều hoàn kho/két/nhật
+  ký. App dùng **`'0'` = hủy thanh toán → đơn về W** (đo 06:58:30 TRB…606) và **`'1'` chỉ trong chuỗi xóa đơn đã
+  thanh toán** (06:48:49 TRB…604, Del ngay 1s sau). Câu cũ "`'0'` không ăn gì" đúng CHỈ với đơn còn W (không có
+  gì để hoàn). `bill.mo_lai` đang dùng `'1'` → **đổi sang `'0'`** khi làm GĐ3 (đã ghi trong quy trình BAN_HANG pha 6).
+- Dùng **`PmvClient.goi_co_khoa(...)`**: tự đọc mốc hiện tại, gọi, rồi **kiểm chứng dữ liệu
+  đã đổi thật**; không đổi thì ném lỗi. Đừng gọi `_Upd`/`_Del` trần.
+- Proc vendor không có tham số mặc định → thiếu 1 cái là SQL Server chửi. Dùng
+  `call(..., day_du=True)` để tự điền nốt theo chữ ký proc.
+- Hủy hóa đơn **không dọn** `T_CUSTOMER_DEBT` (còn 1 dòng số dư 0) và các bảng `*_Log`
+  (cố ý giữ). `I_CUSTOMER_Del` **từ chối** xóa khách đã phát sinh giao dịch (trả `Result=-1`).
+
+## 4d. MÀN BÁN HÀNG (thiết kế lại 03/09/2026 — GĐ duyệt)
+
+`/banle/ban-hang/` — bố cục GĐ chốt:
+
+```
+THÔNG TIN (full)  Ngày [DANH SÁCH][THÊM MỚI] · Số HĐ (khóa) · [CLEAR]
+                  Nhân viên (gõ tên) · Khách hàng (tên/SĐT/CCCD) [+]
+CỘT 1  VÀNG BÁN — quét tem/gõ mã ⏎ → thêm dòng, ô tự trống để quét tiếp, SUM ở chân
+       VÀNG ĐỔI — loại dẻ · tổng TL · TL hột · TL vàng · giá đổi · thành tiền, SUM ở chân
+CỘT 2  TÍNH TỔNG — vàng mới · vàng cũ · CÒN LẠI · vàng thêm · công thêm · bớt · cọc ·
+                   ghi chú · TIỀN KHÁCH TRẢ
+CHÂN   THÊM MỚI · XÓA · THANH TOÁN · THANH TOÁN & IN · IN HÓA ĐƠN
+```
+
+**Công thức tiền** (phần "còn lại" đo trên 18.441 hóa đơn thật; hai khoản mới GĐ chốt):
+```
+còn lại   = tiền vàng mới − tiền vàng cũ
+khách trả = còn lại − bớt + công thêm + vàng thêm − cọc
+```
+Cột PMV: `SellTotalAmount` `BuyTotalAmount` `TotalAmount` `Discount` `TaskPriceAdd`
+`AddMoney` `TienCoc` `PayAmount` `Description`. ⚠ **`AddMoney` và `TienCoc` chưa từng
+phát sinh trong 18.441 hóa đơn của tiệm** — dấu (+ / −) là do GĐ chốt 03/09/2026, không
+phải đo được; đổi ý thì sửa `bill.tinh_tong` chứ đừng sửa rải rác.
+
+**"Dẻ"** là từ của chính vendor cho vàng cũ: `I_GOLD.GoldType='D'` → `D18K · D24K ·
+D9999 · DBk · DSJC · DT`. Bảng giá có sẵn đúng các mã đó nên **giá đổi lấy thẳng**,
+không phải quy đổi. Đơn vị: `PriceUnit='L'` → ₫/chỉ (trọng lượng nhập theo **ly**);
+`'G'` → ₫/g. Ô "giá đổi" trên màn hình nhập theo **ĐỒNG** (8.750.000), view chia
+`RATE_SCALE` trước khi đưa xuống PMV (PMV lưu 8750).
+
+**ĐỔI NGANG VÀNG (checkbox "⇄ Đổi ngang vàng", GĐ chốt 05/09/2026)** — cạnh tiêu đề khối VÀNG ĐỔI:
+- **Bỏ tick** = như cũ, 1 dòng dẻ giá THÂU.
+- **Tick** = khách đổi dẻ CÙNG TUỔI VÀNG lấy hàng mới: phần dẻ trong **HẠN MỨC** (= Σ `GoldReal` hàng
+  BÁN cùng loại còn lại) tính **GIÁ BÁN RA** (ngang giá, tiệm không ăn chênh mua–bán); phần DƯ tính giá thâu.
+  `views.ban_doi_them` tự tách 1–2 dòng dẻ (`money.chia_doi_ngang`), đánh dấu `DoiNgang='1'` cho dòng ngang.
+- Khớp **theo từng loại** (GĐ chốt): dẻ D18K↔hàng 18K, D9999↔N9999… (`money.DE_TO_BASE`/`de_base`). Giá bán ra
+  lấy **SellRate của chính dòng dẻ** trong bảng giá (đã kiểm: D18K.Sell=18K.Sell=8850; nếu 0 → SellRate loại base).
+- Hạn mức = Σ GoldReal hàng bán loại đó − Σ TL vàng các dòng dẻ đã đổi ngang loại đó (`_han_muc_doi_ngang`);
+  hiện gợi ý "Hạn mức đổi ngang còn: 18K …" trên khối khi giỏ có hàng. Kiểm chứng đúng ví dụ GĐ: mua 2,5 chỉ 18K,
+  dẻ 3,1 chỉ → dòng 1 = 2,5 chỉ × giá bán, dòng 2 = 0,6 chỉ × giá thâu; hột dồn dòng cuối (không đổi tiền).
+- Hiệu ứng phân biệt: dòng đổi ngang nền xanh + badge "⇄ đổi ngang" (xanh), dòng thâu badge "giá thâu";
+  khối viền vàng khi đang tick; JS đổi nhãn "GIÁ ĐỔI"→"GIÁ BÁN RA" và tự điền SellRate.
+- ⚠ Trọng lượng vàng đổi có thể LẺ (GoldReal 258,2 ly) → dùng `_so_tl` (phẩy=thập phân, chấm=nghìn), KHÔNG
+  dùng `_so` (parser tiền, bỏ hết dấu → hỏng số lẻ). Đổi ngang chỉ ảnh hưởng BuyRate từng dòng dẻ; vẫn là
+  các dòng `TRN_RT_BUYSELL_BUYGOLD` bình thường khi GHI (GĐ3).
+
+**Bố cục THÔNG TIN (chỉnh 05/09/2026)**: "Số hóa đơn" chuyển xuống ĐẦU dòng NHÂN VIÊN BÁN (`pg-info__d2`);
+nút **DANH SÁCH + THÊM MỚI** làm nổi bật (`khbl-btn--gold pg-btn-noi`, bóng vàng).
+
+**Số hóa đơn** ô khóa, chữ mờ + nhãn "dự kiến": chỉ là `MAX(TrnID)+1` cho người bán dễ
+hình dung. Số THẬT do vendor cấp lúc lưu (RULE 5) — máy KK bán song song có thể lấy
+trước số đó. Lưu xong ô hiện `BillCode` thật.
+
+**Ngày**: hóa đơn mới LUÔN mang ngày hôm nay (GĐ chốt). Ô ngày chỉ dùng để lọc DANH SÁCH.
+
+### Vòng đời trên màn hình
+
+| Nút | Việc |
+|---|---|
+| DANH SÁCH | popup hóa đơn trong ngày → MỞ nạp lên form |
+| THANH TOÁN | `bill.luu` (Ins hoặc Upd) rồi `bill.chot` |
+| MỞ LẠI ĐỂ SỬA | chỉ hiện khi phiếu ĐÃ CHỐT — `bill.mo_lai` đưa về nháp |
+| XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho) |
+
+⚠ **Hóa đơn đã chốt thì proc `_Upd` TỪ CHỐI (rc=-1)** — muốn sửa phải MỞ LẠI trước.
+`bill.luu` tự kiểm và ném lỗi kèm hướng dẫn, không im lặng bỏ qua.
+
+### Tệp
+
+- **`apps/pos/bill.py`** — NƠI DUY NHẤT nói chuyện với `TRN_RT_BUYSELL_*`. View không
+  được tự gọi proc hóa đơn. Đọc 3 luật ghi trong docstring trước khi sửa.
+- `apps/pos/cart.py` — phiếu đang làm dở trong session; mỗi dòng giữ NGUYÊN bộ cột proc
+  cần (khóa `row`) nên quét mã mới và mở hóa đơn cũ đi chung một đường.
+- `templates/pos/ban.html` + `_ban_info/_ban_ban/_ban_doi/_ban_tong/_ban_ds/_nv_goiy` ·
+  OOB gom trong `_ban_oob.html` · CSS tiền tố `.pg-`.
+- Bộ hồi quy **`manage.py smoke_ban_hang`** (48 kịch bản: công thức · tạo/sửa/chốt/mở
+  lại/hủy trên bản thử · đầu-cuối qua web), tự dọn hóa đơn của mình.
+
+### Bẫy đã trả giá (03/09/2026)
+
+1. **`str(Decimal('0E-8'))` ra `'0E-8'`** → proc CONVERT sang numeric là CHẾT
+   ("Error converting data type varchar to numeric"). Dính khi đọc dòng hàng bằng
+   `TRN_RT_BUYSELL_Get` rồi đẩy ngược vào `_Upd`. Đã bịt trong `PmvClient._xml_val`
+   (mọi Decimal viết dạng `format(v,"f")`); `cart._chuoi` cũng vậy.
+2. **Món đang nằm trên hóa đơn KHÔNG quét lại được** (đã mang trạng thái đã bán) — mở
+   hóa đơn ra sửa thì dòng hàng phải dựng từ `TRN_RT_BUYSELL_Get`, xem `dong_ban_tu_phieu`.
+3. **Vàng bán và vàng đổi đi CHUNG một tham số XML** `@p_Trn_RT_BUYSELL`:
+   `<NewDataSet><TRN_RT_BUYSELL_SELL/>…<TRN_RT_BUYSELL_BUYGOLD/>…</NewDataSet>`.
+   Dùng `PmvClient.xml_nhieu_bang`.
+4. **Tham số varchar chứa SỐ để rỗng là chết** — proc CONVERT sang numeric. Bộ mặc định
+   "0" gom ở `bill._MAC_DINH` (chép từ chính lệnh app desktop gửi).
+5. **`rc=0` không có nghĩa đã ghi** — `bill.luu` luôn đọc lại đối chiếu mã hàng + tiền.
+
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy
    nhất: `_restore_sandbox` trong backup_pmv — server LOCAL). Muốn lệnh mới → thêm vào
    allowlist gateway kèm lý do, không "đi tắt".
-2. **CHƯA MỞ KÊNH GHI**: `pmv_exec` chưa tồn tại. GĐ3 mới code, và chỉ gọi STORED PROC
-   vendor trong allowlist (xem skill pmv-proc-map) — **không bao giờ INSERT/UPDATE thẳng
-   vào bảng PMV** (né sạch logic tồn kho/sổ quỹ/audit của app).
+2. **KÊNH GHI ĐÃ MỞ NHƯNG KHÓA VÀO MÁY KK** (03/09/2026): `gateway.pmv_call(..., write=True)`
+   chỉ gọi STORED PROC vendor trong `PROC_WRITE_ALLOW` — **không bao giờ INSERT/UPDATE thẳng
+   vào bảng PMV** (né sạch logic tồn kho/sổ quỹ/audit của app). Thêm proc vào allowlist phải
+   ghi NGÀY kiểm chứng trên sandbox.
+   **Ngoại lệ RULE 2 duy nhất (GĐ duyệt 05/09/2026)**: khuôn `UPDATE TOP (n) I_CUSTOMER SET BirthDate = '1900-01-01'
+   WHERE BirthDate > CAST('2010-01-01' AS datetime)` trong `_ADMIN_ALLOW` — dọn ngày sinh khách mà app PMVGoldRT ghi
+   mặc định = ngày tạo hồ sơ (bảng không trigger; proc `I_CUSTOMER_Upd` ghi cả 35 cột + DELETE/INSERT lại
+   `I_GIAODICH_KHACHHANG`/`SHOP_CUSTOMER` nên KHÔNG dùng). Lệnh tay `manage.py sua_ngay_sinh_khach [--kiem |
+   --dich sandbox | --dich kk --xac-nhan KK]`, lô 5.000/~0,3s. **Đã chạy thật 05/09/2026 09:01**: sync backup mới
+   09:00 → sandbox 56.392 dòng OK, diff chỉ `I_CUSTOMER` → KK 56.392 dòng/12 lô/4,0s, tổng 56.401 giữ nguyên, sau
+   khi chạy KK = sandbox 251/251 (còn 7 ngày sinh thật ≤ 2010, mới nhất 04/05/2000). GĐ chốt: KHÔNG job đêm dọn
+   lại (KHBL tạo khách sẽ gửi 01/01/1900); app vẫn ghi sai cho khách mới → chạy tay lại khi cần. Audit CANHBAO tag
+   `sua_ngay_sinh` + dòng trong `thay_doi.log`.
+2b. **CÔNG TẮC ĐÍCH + CHỐT AN TOÀN** — xem mục 4b. Đích mặc định là BẢN THỬ; ghi vào máy KK
+   bị gateway TỪ CHỐI khi `PMV_GHI_KK=False`. **Không bao giờ bật cờ này để "cho tiện"** —
+   chỉ bật khi GĐ duyệt go-live từng nghiệp vụ.
 3. **SQL tương thích 2005 (compat 90)**: không MERGE, không kiểu DATE/TIME — tham số ngày
    truyền **chuỗi ISO** `'YYYY-MM-DD'`. Đọc bảng dữ liệu PHẢI `WITH (NOLOCK)` (2 máy trạm
    đang bán hàng, tuyệt đối không giữ lock).
@@ -115,7 +280,10 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 - Mặc định **PROD** (`config.settings.prod` trong manage.py + wsgi.py, DEBUG=False).
   Dev tạm: `set DJANGO_SETTINGS_MODULE=config.settings.dev`.
 - Job nền: **02:00 backup_pmv** (KHJ HR backup 01:30 cùng máy — né giờ nhau) ·
-  **30 phút check_pmv**.
+  **30 phút check_pmv** · **2 phút collect_pmv_behavior** (trace → MySQL + file `logs\pmv\<ngày>\`
+  + chụp FULL KK dò bảng đổi → `thay_doi.log`; dọn 1 lần/ngày: file 90 ngày, DB 30 ngày).
+- **Trace SQL trên KK chạy LIÊN TỤC có chủ đích** (GĐ duyệt 05/09/2026 — là nguồn của nhật ký
+  hành vi), gồm cả lời gọi của KHBL. Tắt/bật: `manage.py pmv_trace stop|start|status`.
 - Bài học KHJ áp nguyên: `.bat` CRLF + ASCII, không `timeout` (dùng `ping -n`);
   KHÔNG gọi bat từ Git Bash (gọi `cmd /c ...` qua PowerShell); `PYTHONUTF8=1`
   + `stream.reconfigure(errors="replace")` chống crash cp1252; template sửa bằng
@@ -129,10 +297,12 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 | **GĐ1** | Bộ so sánh diff 2 SQL: `apps/pmv/diff.py` (vân tay rows từ sys.partitions + checksum; FAST cho PMV thật/FULL cho sandbox) + model `PmvSnapshot` + trang **`/so-sanh/`** (chọn 2 nguồn PMV/sandbox/snapshot, tô màu bảng khác, lọc "chỉ bảng khác", chụp/xóa snapshot). Kiểm chứng: test_diff 4/4 PASS (UPDATE 1 dòng → checksum bắt đúng 1 bảng dù rows không đổi). **Cách dùng cho GĐ3**: chụp snapshot sandbox FULL TRƯỚC → chạy proc → chụp SAU → so 2 snapshot ra đúng bảng proc đụng | ✅ 02/09/2026 — chờ nghiệm thu |
 | **GĐ1+** | **Nút ⟳ SYNC 1 chiều KK → Mr Giang** (`manage.py sync_sandbox`, nút trên `/so-sanh/` + trang trạng thái): SQL KK backup COPY_ONLY ra đĩa local của nó → Mr Giang **hút .bak về qua kết nối SQL** (`OPENROWSET(BULK …, SINGLE_BLOB)` — gateway mở đúng 1 dạng lệnh, giới hạn thư mục `D:\KHJ_PMV_BACKUP`) → restore đè `PMV_SANDBOX`. **KHÔNG cần share, không đổi gì trên KK/AA**. Đo thật 02/09: 50s cho 428MB (hút ~11MB/s LAN); sau sync so PMV thật ↔ sandbox = **251/251 giống, 0 khác**. `.env` `PMV_SYNC_BAK_READ` (tùy chọn) = UNC đọc được file đó thì copy thay vì hút | ✅ 02/09/2026 — chờ nghiệm thu |
 | **GĐ0+ LOG HÀNH VI PMVGoldRT** (02/09/2026 — GĐ yêu cầu): bảng `pmv_behavior_logs` (model `PmvBehavior`) + trang **`/hanh-vi/`**. 2 lớp thu thập (`collect_pmv_behavior`, scheduler **2 phút/lần**): **THỐNG KÊ** = đọc `dm_exec_query_stats` → proc tăng lượt gọi (`exec_delta`), luôn chạy, chỉ đọc · **TRACE** = server-side trace SQL 2005 (`manage.py pmv_trace start|stop|status`, nút Bật/Tắt trên trang): event RPC:Completed(10) + SQL:BatchCompleted(12) kèm **tham số thật**, lọc tại SQL DB=PMV + bỏ login kimhanh2, file `D:\KHJ_PMV_BACKUP\trace\pmv_behavior*.trc` xoay vòng **5×20MB** (SQL tự xóa cũ nhất), đọc về bằng `fn_trace_gettable` theo `EventSequence` (state `pmv_trace_last_seq`). Bộ phân loại `apps/pmv/classify.py`: NHÓM (HĐ bán/thâu/đổi, Khách hàng, Bảng giá, Sản phẩm/kho, Sổ quỹ, Nhật ký ngày, Đồng bộ, HĐ điện tử, Hệ thống…) + HÀNH ĐỘNG (ghi/đọc/hệ thống); `NOISE` = proc app poll liên tục (GetAll, đăng nhập, khuyến mãi…) bỏ ở CẢ 2 lớp. Gateway kênh mới `pmv_trace_batch` chỉ nhận đúng khuôn `sp_trace_*` (file khóa trong thư mục trace). UI: thẻ tổng quan, thanh nhóm bấm lọc, top proc, bộ lọc ngày/nhóm/hành động/nguồn/tìm, dòng thời gian (tham số mở rộng), nút Bật/Tắt trace + Thu thập ngay + tự làm mới 30s | ✅ 02/09/2026 — trace đang BẬT, chờ nghiệm thu |
+| **NHẬT KÝ HÀNH VI RA FILE + DÒ THAY ĐỔI SQL KK** (05/09/2026 — GĐ duyệt 7 điểm thiết kế, code `apps/pmv/behavior_log.py`): **Bước 1** — mỗi lời gọi bắt được từ trace ghi thêm 1 dòng text vào **`logs\pmv\<YYYY-MM-DD>\ALL.log`** + file NHÓM (`ban_hang · thau_vang · hd_doi · dat_coc · khach_hang · bang_gia · san_pham_kho · so_quy · nhat_ky_ngay · dong_bo · hd_dien_tu · tin_nhan · he_thong · nhan_vien · bao_cao · khac` — map `NHOM_FILE` từ classify.py, có assert phủ đủ nhóm); dòng = `giờ KK TRACE\|STATS \| máy \| login \| nhóm \| ghi/đọc \| proc \| ms \| r/w/n \| tham số ĐẦY ĐỦ ép 1 dòng`. **Trace bỏ lọc login** (GĐ chốt): lời gọi của chính KHBL đi chung dòng thời gian, collect gắn máy **`KHBL`**, bỏ SELECT trần của web (poll giá/hóa đơn, sys.parameters) để không ngập; tên file trace gắn mốc giờ `pmv_behavior_YYYYMMDDTHHMM*.trc (SQL cấm đuôi "_số" khi xoay vòng — lỗi 19069)`, 10×20MB; lớp đọc lấy **file ĐẦU chuỗi** sống từ `sys.traces` + `xp_dirtree` (`trace_first_file`/`_chon_file_dau`) rồi `fn_trace_gettable(…, DEFAULT)` — hết ghim path cũ; EventSequence là bộ đếm toàn instance nên GIỮ mốc khi bật trace mới. **Bước 2** — cùng chu kỳ 2 phút `collect_pmv_behavior` chụp **FULL KK** (`diff.snapshot("pmv","full",force=True)` — đo 05/09: 251 bảng checksum NOLOCK ≈ 1,5s, 18 bảng nghiệp vụ 0,48s → GĐ duyệt chạy liên tục, tải ≈1%) so với lần trước (`PmvState pmv_kk_snapshot`) → bảng đổi ghi **`thay_doi.log`** + bảng **`pmv_change_logs`** (model `PmvChange`, migration pmv-0005) **kèm các proc GHI bắt được trong khung** = bản đồ proc→bảng cho GĐ3; `sync_sandbox` xong tự chụp **baseline** + đặt lại mốc. **Chế độ thủ công** trên `/he-thong/so-sanh/`: nút **① ĐÁNH DẤU TRƯỚC** (chụp FULL + ghim seq trace) → GĐ làm 1 thao tác trên PMVGoldRT → **② ĐÁNH DẤU SAU** → trang `pmv/danh_dau.html`: lời gọi giữa 2 mốc (mọi máy kể cả KHBL, so theo `event_seq` nên không lệ thuộc đồng hồ KK chậm 35s) + bảng đổi + **dòng vừa đổi** (30/251 bảng có cột `TrnDateTime_Upd/CreatedDate/…`, tham số ISO có `T` để không lệ thuộc ngôn ngữ phiên; ẩn cột password) + file `danh_dau_HHMMSS.log`; PmvChange gắn `mark=danhdau:<snap>`. Dọn tự động 1 lần/ngày: file 90 ngày · DB 30 ngày. Lệnh `manage.py pmv_log xuat-lai [ngày] \| don \| thu-muc`. Hạn chế đã nói với GĐ: BINARY_CHECKSUM bỏ cột text/ntext/image/xml; số dòng sys.partitions có thể trễ; khung 2 phút gom nhiều thao tác → dùng đánh dấu để tách. Lời gọi của KHBL qua pyodbc đi trong lớp bọc RPC `sp_prepexec`/`sp_execute` — `classify.proc_name_from_text` bóc proc thật bên trong (bọc SELECT trần → "" → collect bỏ), `sp_unprepare` vào NOISE. Smoke **`manage.py smoke_pmv_log` 41/41** (thư mục tạm + rollback, không đụng KK) + `smoke_ui` 123/123. ⚠ BẪY: đặt tên method `check` trong Command đè `BaseCommand.check()` → nổ ngay khi chạy; `event_time__date` trên MySQL trả rỗng (chưa nạp timezone) — lọc khoảng `[đầu ngày, ngày sau)` | ✅ 05/09/2026 — chờ nghiệm thu |
 | **TRACK C — MÀN HÌNH BÁN HÀNG** (03/09/2026): hệ thiết kế **"MẶT KÍNH"** — vùng làm việc SÁNG kẹp giữa 2 dải TỐI (bảng giá đỉnh · dải quyết toán đáy), chọn qua hội đồng 3 phương án × 3 giám khảo. `static/css/khbl.css` (token → base → layout → component → trang → in; **cấm hardcode hex trong template**, chữ trên dải tối dùng bản `*-glow` ≥5:1) · font **tự host** `static/fonts/` (mất mạng không đổi font giữa ca) · htmx + `static/js/khbl.js` (1 hàm `khblBind`) · `templates/base.html` rail 64px + `#modal-root`/`#toast-root`. App **`apps/pos`**: `services.py` (đọc PMV: quét mã qua proc vendor lấy nguyên câu lỗi P-002/P-017, tìm hàng, khách, bảng giá cache 5s, hóa đơn ngày) · `cart.py` (giỏ trong session — F5 không mất) · 5 màn: **`/` Mua bán** (quét → thẻ lớn 1 món / bảng ≥2 món, ngăn THÂU VÀO cùng hóa đơn, dải quyết toán 8 khối, nhãn tự đổi **"Tiệm trả lại khách"** khi PayAmount<0) · **`/thau/`** · **`/bang-gia/`** · **`/khach-hang/`** · **`/hoa-don/`**. Realtime = **poll nhẹ + HTTP 204** (KHÔNG long-poll: waitress ít thread + nguồn là MSSQL qua LAN): bảng giá 15s theo chữ ký sha1, hóa đơn 3s. Smoke: `smoke_pmv_money` **11/11** + smoke UI **19/19** PASS. ⚠ v1 CHƯA GHI: nút Lưu dùng `.khbl-btn--cho` (vân sọc, không toast xanh) → popup phiếu tạm để nhập tay sang PMVGoldRT | ✅ 03/09/2026 — chờ nghiệm thu |
 | **TRACK C-2 — CẤU TRÚC URL `/banle/` + TỔNG QUAN + KHÁCH HÀNG** (03/09/2026, GĐ chốt): mọi màn dời vào **`/banle/…`** (`ban-hang` · `thau-vao` · `khach-hang` · `bang-gia` · `hoa-don`); **`/` và `/banle/` = TỔNG QUAN**: 4 thẻ KPI (bán/thâu/khách mới/hàng tồn hôm nay) · biểu đồ cột 7 ngày vẽ **thuần CSS** (không thư viện chart, không npm — cột dùng `%` nên PHẢI có `.dash-bar__track` cao cố định làm mốc, thiếu là cột dẹp lép) · tồn theo nhóm vàng · lối tắt; hiện lên so le `.dash-in`. **KHÁCH HÀNG viết lại**: lọc 3 ô (key = SĐT/CCCD/họ tên/mã · địa chỉ · ngày sinh, HTMX gõ-là-lọc), 9 cột theo GĐ, **phân trang 50/trang bằng `ROW_NUMBER()`** (SQL 2005 không có OFFSET/FETCH); nút **+ THÊM KHÁCH** → popup CRUD đầy đủ (`_khach_form.html`) có **ô quét QR thẻ CCCD tự điền 6 trường** (`apps/pos/cccd.py` + bản JS trong khbl.js: `CCCD\|CMND cũ\|họ tên\|ddmmyyyy\|giới tính\|địa chỉ\|ddmmyyyy cấp`, tên IN HOA tự về Hoa-đầu-từ), 3 ô ảnh (đại diện + 2 mặt CCCD, xem trước tại chỗ), **loại khách radio Thường/VIP/VVIP/Cảnh báo** ghi cột `I_CUSTOMER.CustType` (bảng `I_CUSTOMER_TYPE` của vendor RỖNG nên KHÔNG dùng CustTypeID; trống = Thường), CMND = số CCCD. Lưu vẫn ở trạng thái chờ: kiểm tra dữ liệu rồi hiện **bộ tham số sẽ gửi cho `I_CUSTOMER_Ins/_Upd`**. Smoke 57/57 PASS | ✅ 03/09/2026 — chờ nghiệm thu |
 | **TRACK C-3 — TRANG CHỦ + NHẬN DIỆN + CHÂN TRANG** (03/09/2026, GĐ chốt): logo thật `static/img/logo_icon.png|logo_full.png|favicon.png` (chép từ KHJ). **`/` và `/banle/` = TRANG CHỦ riêng khung**: `{% block rail %}` rỗng + `.khbl-shell--home` (bỏ rail) → đầu trang logo 56px + tên tiệm + **khối tài khoản** (họ tên · username · EmpID · két · nút Đăng xuất), dưới là **MENU NGANG 6 nút icon 34px** (Bán hàng nổi bật nền vàng · Thâu vào · Bảng giá · Khách hàng · Hóa đơn · Hệ thống), rồi bảng giá + số liệu. Các màn làm việc GIỮ rail (tiết kiệm chiều dọc), logo đặt đầu rail bấm về trang chủ. **CHÂN TRANG** `partials/footer.html` (nền tối, có ở mọi trang TRỪ màn bán hàng vì đã có thanh phím): trái = công ty/địa chỉ/ĐT/MST đọc từ `T_SHOP` (cache 1 giờ), giữa = phiên bản phần mềm + chấm trạng thái kết nối KK, phải = **đồng hồ thời gian thực** (JS 1 nhịp/giây, `window.__khblDongHo` chống chạy nhiều nhịp). Bộ kiểm gộp thành lệnh chính thức **`manage.py smoke_ui` (66/66 PASS)** — dùng `force_login`, KHÔNG đặt lại mật khẩu (set_password đổi session hash và ĐÁ MỌI NGƯỜI ĐANG ĐĂNG NHẬP ra ngoài) | ✅ 03/09/2026 — chờ nghiệm thu |
 | **TRACK C-4 — KHUNG CHUNG TOÀN HỆ: TOPBAR + CHÂN TRANG, BỎ RAIL DỌC** (03/09/2026, GĐ chốt): `partials/topbar.html` cao **58px** dùng cho MỌI trang — logo 36px bấm về trang chủ · **menu ngang 7 mục icon 24px** (Tổng quan · Bán hàng · Thâu vào · Bảng giá · Khách hàng · Hóa đơn · Hệ thống, mục đang mở có nền vàng + gạch chân gradient qua `nav_active`) · khối tài khoản (họ tên, username, két, avatar, Đăng xuất). `partials/footer.html` cũng có ở MỌI trang (kể cả màn bán hàng). `.khbl-shell` đổi từ 2 CỘT (rail 64px) sang 3 HÀNG `auto 1fr auto`; `.khbl-rail*` và `partials/rail_item.html` đã XÓA HẲN. ⚠ Topbar+chân trang ăn 107px chiều dọc của màn bán hàng → đã siết các dải cố định (bảng giá 56→50 · dải quyết toán 88→78 · thanh phím 32→26 · chân trang 40) **và sửa lỗi có sẵn: `#pos-work` không kéo giãn** nên lưới giỏ hàng chỉ cao bằng nội dung — thêm `#pos-work{display:flex;flex-direction:column}` + `.pg-ban__body{flex:1;grid-template-rows:minmax(0,1fr)}` → vùng danh sách món **286px**, hơn cả trước khi có topbar (282px). Smoke `manage.py smoke_ui` **91/91 PASS** | ✅ 03/09/2026 — chờ nghiệm thu |
+| **TRACK C-1B — LƯU KHÁCH THẬT** (05/09/2026, GĐ yêu cầu): popup Thêm/Sửa gọi `I_CUSTOMER_Ins/_Upd` qua gateway; kiểm trùng `Phone` + `CMND` trước proc và proc kiểm lại; `hx-sync:drop` + khóa server + token chống gửi lặp; khách mới gọi `I_DiemTichLuy_InsFromGT`; ảnh xoay EXIF, thu về tối đa 1600/2000px, nén JPEG theo ngưỡng và đặt tiền tố tên khách không dấu. Dữ liệu khách UPSERT trước, chỉ gọi proc ảnh sau khi đọc lại đúng nên UPSERT fail không để lại ảnh. Thành công: đóng popup → giữ bộ lọc và tải lại danh sách → toast. Sandbox `smoke_customer` PASS tạo/sửa/điểm/ảnh rồi dọn sạch; `smoke_ui` 122/122; backup KK 05/09 02:00 VERIFY OK; `.env PMV_GHI_KK=True`, runtime `target=kk`, `pmv_write_lock=''`. Dòng C/C-2 cũ ghi “chưa ghi/chờ” đã được thay thế bởi trạng thái này. | ✅ 05/09/2026 — đang mở ghi thật |
 | GĐ1.5 | (nếu cần) so sánh SÂU 1 bảng: diff theo từng dòng PK, xem giá trị cột đổi | ⏳ |
 | GĐ2 | Khung web nghiệp vụ: auth + layout KHJ + màn tra cứu ĐỌC (bảng giá, khách, hàng, hóa đơn trong ngày) | ⏳ |
 | GĐ3 | Mở kênh GHI `pmv_exec` từng nghiệp vụ trên SANDBOX: bảng giá → customer → product sửa → HĐ thâu → bán → đổi (chuỗi `*_Ins` → `CARDPAY_Ins` → `*_Complete`) — mỗi cái 1 bộ smoke + diff | ⏳ |
@@ -162,6 +332,55 @@ kênh **`pmv_call(proc, params, write=)`** trong gateway (`PROC_READ_ALLOW` proc
 
 **Việc treo**: hỏi vendor về bộ proc `*_Mobile_Ins`/`*_API` (có phải cổng tích hợp
 chính thức?) — GĐ hỏi khi tiện, không chặn tiến độ.
+
+**QUY TRÌNH — LƯU và HỌC (05/09/2026, GĐ chốt)**: trang **`/he-thong/quy-trinh/`** = cây PHA → BƯỚC
+từ 0 đến hoàn thành (model `PmvProcess`/`PmvProcessStep`, migration pmv-0006, module
+`apps/pmv/quy_trinh.py`). Mỗi bước: proc · ghi/đọc · ×N · tham số quan trọng · bảng đổi · **KHBL**
+(làm / cần kiểm / làm cách riêng / bỏ) · **đối chiếu** (khớp / lệch / chưa) · ghi chú. CRUD bằng
+`<dialog>` native (trang pmv standalone, không htmx), ↑↓ đổi chỗ, dời bước sang pha khác. **LƯU**: MỌI
+thay đổi → version +1 + ghi lại **`docs/quy_trinh/<CODE>.md`** (sơ đồ mermaid + bảng) và `.json` — git
+giữ lịch sử; xóa quy trình khỏi DB vẫn giữ file. **HỌC**: form khung giờ trên trang Quy trình HOẶC nút
+📚 trên báo cáo ĐÁNH DẤU SAU (theo `event_seq`) → gom lời gọi trace (bỏ DeriveParameters/NOISE/KHBL,
+liên tiếp cùng proc = ×N) thành bước nháp trong pha "Đã học — chưa phân nhóm" (ghi = cần kiểm) + bảng đổi
+→ GĐ dời vào pha đúng rồi duyệt; có thể HỌC THÊM vào quy trình sẵn có. Quy trình chuẩn
+**`BAN_HANG`** seed từ thao tác thật (`manage.py seed_quy_trinh [--ghi-de]`, dữ liệu `quy_trinh.BAN_HANG`):
+**v3 = FULL (GĐ chốt 05/09/2026, dữ liệu `apps/pmv/quy_trinh_ban_hang.py`)**: 9 pha (0 điều kiện · 1 khách
+có sẵn/tạo mới/vãng lai · 2 gom hàng vào ĐƠN CHỜ (Ins ngay món đầu, dẻ vụn cùng XML) · 3 tính tiền · 4 DUYỆT ·
+5 sau duyệt · 6 HỦY THANH TOÁN C→W · 7 XÓA ĐƠN → *_Log · 8 kiểm soát trùng P-008 & đơn treo) · 30 bước (15 ghi · KHBL làm 18 · cần kiểm 6 · bỏ 1; dẻ vụn đo thật đơn 612 → khớp; thêm I_DiemTichLuy_InsFromGT sau tạo khách; gộp 6 bản GĐ tự học BAN_1·HD_FULL·DON_MOI·HUY_HOA_DON·HUY_THANH_TOAN·KHACH_HANG_MOI), đo từ 4
+thao tác thật 05/09 (604 bán · 605 tạo-xóa · 606 2 món + tạo khách + hủy TT + xóa · 604 xóa đơn đã TT). **6 điểm
+GĐ chốt** ghi trong ghi chú bước (nhãn "cần kiểm" = KHBL PHẢI SỬA khi làm GĐ3): (1) `Ins` NGAY món đầu như app →
+SP khóa P-008 mọi máy; kèm nút XÓA đơn bỏ dở + nhắc đơn W treo quá **30 phút** (GĐ chốt 05/09) · (2) xóa đơn
+ĐÃ THANH TOÁN = 2 bước rõ ràng, 2 xác nhận · (3) BirthDate rỗng → gửi **01/01/1900** (app gửi ngày hôm nay = sai)
+· (4) dẻ vụn đi theo MÃ ĐƠN (Upd/Del kéo theo) · (5) HĐĐT giữ "cần kiểm" · (6) giữ mã BAN_HANG; sửa đơn đã TT =
+nhánh pha 6→2/3→4. Vendor tự chặn SP đang trong đơn: **P-008 "Mã hàng … đang chờ duyệt mua bán"** (proc dòng 219,
+mọi W/C, mọi máy) — KHBL chỉ cần bổ sung thông điệp "đơn nào đang giữ" + nút MỞ. `ErrorLog` +1 mỗi lần
+`T_TILL_TXN_Del` là vết kết nối vendor tự ghi, không phải lỗi. Sau này thêm quy trình khác: ĐÁNH DẤU → làm trên
+app → HỌC. Smoke **`smoke_quy_trinh` 31/31**.
+
+**LUỒNG BÁN HÀNG THẬT ĐÃ ĐO (05/09/2026)**: `docs/LUONG_BAN_HANG_PMV_20260905.md` — 40 lời gọi
++ bản đồ proc→18 bảng (cột nào đổi) + đối chiếu với `bill.py` + 3 điểm phải kiểm trên sandbox
+trước GĐ3 (`p_TrnDateTime_Upd_GDN`, 60 cột dòng hàng khi Upd, XML `HoaDonDienTu_UpdateMa` ghi
+`DonGiaHDDT/AmountHDDT`). ĐỌC TRƯỚC KHI SỬA bill.py.
+
+## 8b. ICON TOPBAR (bộ tranh vàng GĐ đưa 03/09/2026)
+
+Ảnh gốc ~1254px, **1,5–2,4 MB mỗi cái** — 7 cái là ~13,5 MB mỗi lần tải trang, không được
+nhúng thẳng. Bản dùng thật nằm ở **`static/img/ico/<key>.png` 96px (~19 KB)**, sinh từ ảnh
+gốc bằng System.Drawing của Windows (dự án KHÔNG có Pillow, cũng không cần thêm).
+
+Key ↔ ảnh gốc: `tong`←tong-quan · `ban`←ban-hang · `thau`←thau-vao · `gia`←gia-vang ·
+`khach`←khach-hang · `hoadon`←hoa-don · `hethong`←he-thong. **Giữ ảnh gốc trong `static/img/`**
+(nguồn để sinh lại). Sinh lại bằng PowerShell:
+
+```powershell
+Add-Type -AssemblyName System.Drawing
+# đọc ảnh gốc → Bitmap 96x96, InterpolationMode HighQualityBicubic → lưu vào static/img/ico/
+```
+
+Thẻ template **`{% icon_anh "key" 26 %}`** (pos_extras) chỉ dùng cho topbar. Mọi chỗ khác
+trong app vẫn dùng **`{% icon %}`** — SVG 1 nét, ăn theo `currentColor`, đổi màu theo ngữ
+cảnh; đừng thay bằng ảnh. Ảnh nhiều màu nên CSS `.khbl-ico-anh` giảm bão hòa khi mục đang
+tắt, chỉ lên đủ màu khi rê chuột / đang mở. Topbar cao **64px** (trước 58px) để chứa icon 26px.
 
 ## 9. UI & THƯƠNG HIỆU
 

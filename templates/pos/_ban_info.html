@@ -1,0 +1,88 @@
+{% load pos_extras %}{% comment %}
+Khối THÔNG TIN — chạy hết bề ngang, 2 dòng.
+Ngày + DANH SÁCH + THÊM MỚI · số hóa đơn (khóa) · nhân viên · khách hàng + nút thêm khách.
+{% endcomment %}
+<div class="pg-info{% if dang_sua %} pg-info--sua{% endif %}">
+
+  <div class="pg-info__d1">
+    <label class="pg-f pg-f--ngay">
+      <span>Ngày</span>
+      <input type="date" class="khbl-input" id="o-ngay" value="{{ ngay }}" max="{{ hom_nay }}">
+    </label>
+    <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
+            hx-get="{% url 'pos:ban_ds' %}" hx-target="#modal-root"
+            hx-include="#o-ngay" hx-vals='js:{ngay: document.getElementById("o-ngay").value}'>
+      ☰ DANH SÁCH</button>
+    <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
+            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
+            hx-confirm="Bỏ phiếu đang lập và mở phiếu mới?">＋ THÊM MỚI</button>
+
+    {% if dang_sua %}
+      <span class="pg-info__tt{% if phieu_chot %} pg-info__tt--chot{% endif %}">
+        {% if phieu_chot %}🔒 ĐÃ CHỐT{% else %}✎ ĐANG SỬA{% endif %}
+        <b class="mono">{{ g.bill_code|default:g.trn_id }}</b>
+      </span>
+      {% if phieu_chot %}
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+                hx-post="{% url 'pos:ban_mo_lai' %}" hx-swap="none"
+                hx-confirm="Mở lại hóa đơn đã chốt để sửa?&#10;&#10;Phần sổ quỹ của phiếu này sẽ bị hủy, hóa đơn quay về trạng thái nháp.">
+          🔓 MỞ LẠI ĐỂ SỬA</button>
+      {% endif %}
+    {% endif %}
+
+    <button class="khbl-btn khbl-btn--ghost khbl-btn--sm pg-info__clear" type="button"
+            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
+            hx-confirm="Xóa trắng toàn bộ nội dung đang nhập?">CLEAR</button>
+  </div>
+
+  <div class="pg-info__d2">
+    {# ── Số hóa đơn: chuyển xuống ĐẦU dòng này (GĐ chốt 05/09/2026) ── #}
+    <label class="pg-f pg-f--sohd">
+      <span>Số hóa đơn</span>
+      <input class="khbl-input mono" readonly tabindex="-1"
+             value="{% if g.bill_code %}{{ g.bill_code }}{% elif g.trn_id %}{{ g.trn_id }}{% else %}{{ ma_du_kien }}{% endif %}"
+             placeholder="gợi ý mã HĐ tiếp theo"
+             title="{% if g.trn_id %}Số thật do phần mềm cấp{% else %}DỰ KIẾN — số thật do phần mềm cấp lúc lưu; máy KK bán song song có thể lấy số này trước{% endif %}">
+      {% if not g.trn_id %}<i class="pg-f__ghi">dự kiến</i>{% endif %}
+    </label>
+
+    {# ── nhân viên bán: gõ TÊN GỌI ── #}
+    <div class="pg-f pg-f--tim">
+      <span>Nhân viên bán</span>
+      {% if g.emp %}
+        <div class="pg-chon">
+          <b>{{ ten_nv|default:g.emp }}</b>
+          <button class="pg-chon__x" type="button" title="Bỏ chọn"
+                  hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": ""}' hx-swap="none">×</button>
+        </div>
+      {% else %}
+        <input id="o-nv" class="khbl-input" autocomplete="off" placeholder="gõ tên nhân viên"
+               hx-get="{% url 'pos:ban_tim_nv' %}" hx-trigger="focus, keyup changed delay:200ms"
+               hx-target="#nv-goiy" name="q">
+        <div id="nv-goiy" class="pg-goiy"></div>
+      {% endif %}
+    </div>
+
+    {# ── khách hàng: tên / SĐT / CCCD ── #}
+    <div class="pg-f pg-f--tim pg-f--khach">
+      <span>Khách hàng</span>
+      {% if g.cust %}
+        <div class="pg-chon">
+          <b>{{ g.cust.name }}</b>
+          <i class="mono">{{ g.cust.phone }}{% if g.cust.code %} · {{ g.cust.code }}{% endif %}</i>
+          <button class="pg-chon__x" type="button" title="Bỏ chọn khách"
+                  hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": ""}' hx-swap="none">×</button>
+        </div>
+      {% else %}
+        <input id="o-khach" class="khbl-input" autocomplete="off"
+               placeholder="F2 — tên · số điện thoại · CCCD"
+               hx-get="{% url 'pos:ban_tim_khach' %}" hx-trigger="keyup changed delay:220ms"
+               hx-target="#khach-goiy" name="q">
+        <div id="khach-goiy" class="pg-goiy"></div>
+      {% endif %}
+      <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-f__them" type="button"
+              title="Thêm khách hàng mới"
+              hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋</button>
+    </div>
+  </div>
+</div>

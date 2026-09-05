@@ -1,7 +1,7 @@
 {% load static pos_extras %}<!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8"><title>Giấy đảm bảo (bản thử)</title>
+<meta charset="utf-8"><title>Giấy đảm bảo</title>
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
 <link rel="stylesheet" href="{% static 'css/khbl.css' %}">
 <style>
@@ -27,7 +27,7 @@
 </div>
 
 <div class="gt">
-  <div class="gt__wm">PHIẾU THỬ — CHƯA LƯU</div>
+  {% if not g.trn_id %}<div class="gt__wm">CHƯA LƯU</div>{% endif %}
   <div class="gt__head">
     <div>
       <div class="gt__shop">KIM HẠNH 2</div>
@@ -36,41 +36,51 @@
     <div style="text-align:right;font-size:12px">
       <div style="font-family:var(--f-head);font-size:19px;color:var(--gold-700)">GIẤY ĐẢM BẢO</div>
       <div>Ngày {{ hom_nay|date:"d/m/Y" }}</div>
-      <div class="dim">Số phiếu: — cấp khi lưu</div>
+      <div class="dim">Số phiếu:
+        {% if g.bill_code %}<b class="mono">{{ g.bill_code }}</b>{% else %}— cấp khi lưu —{% endif %}</div>
+      {% if ten_nv %}<div class="dim">Nhân viên: {{ ten_nv }}</div>{% endif %}
     </div>
   </div>
 
   <div style="font-size:12.5px;margin-top:8px">
-    Khách hàng: <b>{{ gio.cust.name|default:"Khách lẻ" }}</b>
-    {% if gio.cust.phone %} · ĐT {{ gio.cust.phone }}{% endif %}
+    Khách hàng: <b>{{ g.cust.name|default:"Khách lẻ" }}</b>
+    {% if g.cust.phone %} · ĐT {{ g.cust.phone }}{% endif %}
   </div>
 
   <table>
     <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th>Tuổi</th><th class="num">Trọng lượng</th><th class="num">Đơn giá</th><th class="num">Công</th><th class="num">Thành tiền</th></tr></thead>
     <tbody>
-    {% for m in gio.ban %}
-      <tr><td>{{ m.code }}</td><td>{{ m.name }}</td><td>{{ m.gold_desc }}</td>
-          <td class="num">{{ m.gr|tl_giay:m.unit }}<br><span style="font-size:10.5px;color:var(--ink-600)">≈ {{ m.gr|tl_man:m.unit }}</span></td>
-          <td class="num">{{ m.rate|nhan:1000|tien_tran }}</td><td class="num">{{ m.task|nhan:1000|tien_tran }}</td>
-          <td class="num"><b>{{ m.amount|tien_tran }}</b></td></tr>
+    {% for m in g.ban %}
+      <tr><td class="mono">{{ m.row.ProductCode }}</td><td>{{ m.row.ProductDesc }}</td><td>{{ m.row.GoldDesc }}</td>
+          <td class="num">{{ m.row.GoldReal|tl_giay:m.row.PriceUnit }}<br>
+            <span style="font-size:10.5px;color:var(--ink-600)">≈ {{ m.row.GoldReal|tl_man:m.row.PriceUnit }}</span></td>
+          <td class="num">{{ m.row.SellRate|don_gia }}</td><td class="num">{{ m.row.TaskPrice|don_gia }}</td>
+          <td class="num"><b>{{ m.tien|tien_tran }}</b></td></tr>
     {% endfor %}
-    {% for m in gio.mua %}
-      <tr><td>—</td><td>Vàng cũ khách đưa</td><td>{{ m.gold_desc }}</td>
-          <td class="num">{{ m.gw|tl_giay:m.unit }}</td><td class="num">{{ m.rate|nhan:1000|tien_tran }}</td>
-          <td class="num">{{ m.pct }}%</td><td class="num"><b>− {{ m.amount|tien_tran }}</b></td></tr>
+    {% for m in g.doi %}
+      <tr><td>—</td><td>Vàng đổi (dẻ khách đưa)</td><td>{{ m.row.GoldDesc }}</td>
+          <td class="num">{{ m.row.GoldWeight|tl_giay:m.row.PriceUnit }}</td>
+          <td class="num">{{ m.row.BuyRate|don_gia }}</td><td class="num">—</td>
+          <td class="num"><b>− {{ m.tien|tien_tran }}</b></td></tr>
     {% endfor %}
     </tbody>
   </table>
 
   <div style="display:flex;justify-content:flex-end;gap:26px;margin-top:10px;font-size:13px">
     <div style="text-align:right">
-      <div>Tổng hàng bán: <b>{{ t.sell_total|tien }}</b></div>
-      {% if t.buy_total %}<div>Trừ vàng cũ: <b>{{ t.buy_total|tien }}</b></div>{% endif %}
+      <div>Tiền vàng mới: <b>{{ t.vang_moi|tien }}</b></div>
+      {% if t.vang_cu %}<div>Trừ vàng đổi: <b>− {{ t.vang_cu|tien }}</b></div>{% endif %}
+      {% if t.vang_them %}<div>Tiền vàng thêm: <b>+ {{ t.vang_them|tien }}</b></div>{% endif %}
+      {% if t.cong_them %}<div>Tiền công thêm: <b>+ {{ t.cong_them|tien }}</b></div>{% endif %}
+      {% if t.bot %}<div>Tiền bớt: <b>− {{ t.bot|tien }}</b></div>{% endif %}
+      {% if t.coc %}<div>Tiền cọc: <b>− {{ t.coc|tien }}</b></div>{% endif %}
       <div style="font-size:17px;margin-top:5px;border-top:2px double var(--line-2);padding-top:5px">
-        {% if t.pay < 0 %}Tiệm trả lại: <b>{{ t.tra_lai|tien }}</b>{% else %}Khách trả: <b>{{ t.pay|tien }}</b>{% endif %}
+        {% if t.khach_tra < 0 %}Tiệm trả lại: <b>{{ t.khach_tra|tien }}</b>
+        {% else %}Khách trả: <b>{{ t.khach_tra|tien }}</b>{% endif %}
       </div>
     </div>
   </div>
+  {% if g.ghi_chu %}<div style="font-size:12px;margin-top:6px">Ghi chú: {{ g.ghi_chu }}</div>{% endif %}
 
   <div class="gt__ky">
     <div>Người mua<br><span class="dim">(ký, ghi rõ họ tên)</span></div>

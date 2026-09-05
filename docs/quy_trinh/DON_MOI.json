@@ -1,0 +1,182 @@
+{
+  "code": "DON_MOI",
+  "name": "DON_MOI",
+  "description": "",
+  "status": "draft",
+  "version": 2,
+  "source": "HỌC từ khung 05/09/2026 07:23→23:59 (admin)",
+  "updated_at": "2026-09-05T07:27:33.795671+07:00",
+  "phases": [
+    {
+      "title": "Đã học 05/09 07:26 — chưa phân nhóm",
+      "note": "Bảng đổi trong khung: I_CUSTOMER, I_DIEMTICHLUY, I_GOLD_BAL, I_LICHSUTICHLUYDIEM, RetailLog, SYS_BILL_COUNTER, SYS_CODEMASTERS, TRN_DAILY_LOG, TRN_RT_BUYSELL, TRN_RT_BUYSELL_SELL, T_CUSTOMER_DEBT, T_PRODUCT, T_PRODUCT_TRACKING, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL, TonKho, tbc_TinNhan",
+      "steps": [
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'I_GOLD',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_CUSTOMER_Lst",
+          "proc_name": "I_CUSTOMER_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec I_CUSTOMER_Lst @p_CustID='',@p_CustCode=N'',@p_CustName=N'',@p_Address=N'',@p_Phone='',@p_Notes=N'',@p_Active='1',@p_Sort='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='',@p_Gender='',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@p_LoaiGD='SRT',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO ×2",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'T_EMPLOYEE',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sản phẩm/kho: T_PRODUCT_GetByCodeForSell",
+          "proc_name": "T_PRODUCT_GetByCodeForSell",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_PRODUCT_GetByCodeForSell @p_ProductCode=N'9T60000234',@p_TaskPrice=0,@p_ShopID='',@p_CheckRealSL=1,@p_TillID='TIL110500000001',@p_CustID='',@p_ShopID_XRate='',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Ins",
+          "proc_name": "TRN_RT_BUYSELL_Ins",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p25 xml set @p25=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><ProductID>PD2608000004564</ProductID><ProductCode>9T60000234</ProductCode><ProductDesc>Bánh kem kitty</ProductDesc><GoldCode>N9999</GoldCode><GoldDesc>99.99</GoldDesc><SectionName>Tượng 9999</SectionName><TaskPrice>490.000</TaskPrice><DiamondWeight>0.0000000000000000000</DiamondWeight><TotalWeight>2.0000000000000000000</Tota",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000607',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO ×2",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'I_CUSTOMER_GROUP',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khác: I_GIAODICH_Lst",
+          "proc_name": "I_GIAODICH_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "I_GIAODICH_Lst",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_CUSTOMER_Ins",
+          "proc_name": "I_CUSTOMER_Ins",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p18 xml set @p18=convert(xml,N'') exec [I_CUSTOMER_Ins] @p_CustID='',@p_CustCode=N'',@p_CustName=N'Chị Tâm',@p_Address=N'',@p_Phone='0386031411',@p_Notes=N'',@p_Active='1',@p_CMND='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='05/09/2026',@p_Gender='0',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@TuDongNangHang='1',@p_Image=NULL,@MaGD=@p18,@p_Company=N'',@p_Company_Address=",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_DiemTichLuy_InsFromGT",
+          "proc_name": "I_DiemTichLuy_InsFromGT",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [I_DiemTichLuy_InsFromGT] @p_CustID='CU2609000000194'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'I_GOLD',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Khách hàng: I_CUSTOMER_Lst",
+          "proc_name": "I_CUSTOMER_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec I_CUSTOMER_Lst @p_CustID='',@p_CustCode=N'',@p_CustName=N'',@p_Address=N'',@p_Phone='',@p_Notes=N'',@p_Active='1',@p_Sort='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='',@p_Gender='',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@p_LoaiGD='SRT',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Hệ thống: SYS_LOADCOMBO ×2",
+          "proc_name": "SYS_LOADCOMBO",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec [SYS_LOADCOMBO] @pType=N'T_EMPLOYEE',@pParam=N'',@ShopID=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Upd",
+          "proc_name": "TRN_RT_BUYSELL_Upd",
+          "action": "ghi",
+          "repeat": false,
+          "params": "declare @p29 xml set @p29=convert(xml,N'<NewDataSet><TRN_RT_BUYSELL_SELL><STT>1</STT><ProductID>PD2608000004564</ProductID><ProductCode>9T60000234</ProductCode><ProductDesc>Bánh kem kitty</ProductDesc><GroupID>PG2504000000001</GroupID><PriceCcy>VND</PriceCcy><PriceUnit>L</PriceUnit><CcyRate>1000.000</CcyRate><CcyRateTaskPrice>1000.000</CcyRateTaskPrice><PCcyRate>1000.000</PCcyRate><TotalWeight>2.0",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ bán: TRN_RT_BUYSELL_Get ×2",
+          "proc_name": "TRN_RT_BUYSELL_Get",
+          "action": "đọc",
+          "repeat": true,
+          "params": "exec TRN_RT_BUYSELL_Get @p_TrnID='TRB260900000607',@p_ShopID_XRate=''",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

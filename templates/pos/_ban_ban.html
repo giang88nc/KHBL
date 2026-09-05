@@ -1,0 +1,65 @@
+{% load pos_extras %}{% comment %}
+Form VÀNG BÁN — quét tem hoặc gõ mã, Enter là thêm dòng và ô tự trống để quét tiếp.
+Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộng tổng.
+{% endcomment %}
+<section class="pg-box pg-box--ban">
+  <header class="pg-box__head">
+    <h3>VÀNG BÁN</h3>
+    <form class="pg-scan" hx-post="{% url 'pos:ban_quet' %}" hx-swap="none"
+          hx-trigger="submit, khbl:scan" hx-on::after-request="this.reset(); this.ma.focus()">
+      {% csrf_token %}
+      <input name="ma" class="khbl-input khbl-scan__in" autocomplete="off" data-autofocus
+             placeholder="Quét tem hoặc gõ mã hàng rồi Enter" value="{{ scan_val|default:'' }}">
+      <span class="pg-scan__dots khbl-scan__dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </form>
+    <button id="nut-tim-hang" class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+            hx-get="{% url 'pos:ban_tim_hang' %}" hx-target="#modal-root">Tìm hàng · F3</button>
+  </header>
+
+  {% if scan_err %}
+    <div class="pg-scan__err pg-scan__err--{{ scan_err.style }}">
+      {% icon "tem" 15 %}<b>{{ scan_err.desc }}</b>{% if scan_err.code %}<code>{{ scan_err.code }}</code>{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="pg-box__body">
+    <table class="pg-tb">
+      <thead><tr>
+        <th class="w-stt">#</th><th>MÃ HÀNG</th><th>TÊN HÀNG</th>
+        <th class="r">TỔNG TL</th><th class="r">TL HỘT</th><th class="r">TL VÀNG</th>
+        <th class="r">ĐƠN GIÁ</th><th class="r">TIỀN CÔNG</th><th class="r">THÀNH TIỀN</th><th class="w-x"></th>
+      </tr></thead>
+      <tbody>
+        {% for x in g.ban %}
+        <tr>
+          <td class="w-stt dim">{{ forloop.counter }}</td>
+          <td class="mono">{{ x.row.ProductCode }}</td>
+          <td>{{ x.row.ProductDesc }}<i class="pg-tb__phu">{{ x.row.GoldDesc }}</i></td>
+          <td class="r mono">{{ x.row.TotalWeight|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono dim">{{ x.row.DiamondWeight|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono">{{ x.row.GoldReal|tl_man:x.row.PriceUnit }}</td>
+          <td class="r mono">{{ x.row.SellRate|don_gia }}</td>
+          <td class="r mono dim">{{ x.row.TaskPrice|don_gia }}</td>
+          <td class="r mono b">{{ x.tien|tien_tran }}</td>
+          <td class="w-x">
+            <button class="pg-x" type="button" title="Bỏ món này"
+                    hx-post="{% url 'pos:ban_xoa' %}" hx-vals='{"code": "{{ x.row.ProductCode }}"}'
+                    hx-swap="none">×</button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="pg-tb__trong"><td colspan="10">
+          {% icon "tem" 34 %}<b>Chưa có món nào</b>
+          <span>Quét tem hoặc gõ mã hàng vào ô trên rồi Enter</span>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="pg-box__foot">
+    <span>{{ t.so_mon }} món</span>
+    <span class="dim">TL vàng <b class="mono">{{ t.tl_ban|tl_man }}</b></span>
+    <span class="pg-box__sum">TIỀN VÀNG MỚI <b>{{ t.vang_moi|tien }}</b></span>
+  </footer>
+</section>

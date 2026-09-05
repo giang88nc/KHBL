@@ -1,9 +1,14 @@
 """
-Màn hình bán lẻ. v1 = TRA CỨU + TÍNH TOÁN + dựng PHIẾU TẠM (kênh ghi PMV chưa mở — RULE 2).
-Mọi phép tính tiền gọi apps/pmv/money.py; mọi truy vấn gọi apps/pos/services.py.
+Màn hình bán lẻ.
+Mọi phép tính tiền gọi apps/pmv/money.py · truy vấn gọi apps/pos/services.py ·
+ghi hóa đơn gọi apps/pos/bill.py (KHÔNG view nào tự gọi proc hóa đơn).
 """
 import datetime
+import hashlib
+import json
+import logging
 import re
+import secrets
 
 from django.contrib import messages
 from django.http import HttpResponse
@@ -11,8 +16,12 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.pmv import money as M
+from apps.pmv.models import PmvUser
 
-from . import cart, cccd, services as S
+from . import bill as B, cart, cccd, customer as C, services as S
+
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────── TỔNG QUAN ───────────────────────────
@@ -36,20 +45,69 @@ def _so(x):
     return M.dec(s or 0)
 
 
+def _so_tl(x):
+    """Bóc TRỌNG LƯỢNG có thể LẺ (kiểu VN: phẩy = thập phân, chấm = nghìn).
+    '258,2'→258.2 · '1.234,5'→1234.5 · '258.2'→258.2 · '250'→250. Khác _so (parser tiền, bỏ hết dấu)."""
+    s = str(x or "").strip().replace(" ", "")
+    if not s:
+        return M.D0
+    if "," in s:                       # có phẩy → phẩy là thập phân, chấm là nghìn
+        s = s.replace(".", "").replace(",", ".")
+    s = re.sub(r"[^0-9.\-]", "", s)
+    try:
+        return M.dec(s or 0)
+    except Exception:
+        return M.D0
+
+
+def _phien(request):
+    """Bối cảnh PMV của người đang đăng nhập: tài khoản · két · tiệm."""
+    pu = PmvUser.objects.filter(django_user=request.user).first()
+    tiem = S.thong_tin_tiem() or {}
+    return {
+        "user_id": (pu.user_id if pu else ""),
+        "till_id": (pu.till_id if pu else "") or "",
+        "emp_id": (pu.emp_id if pu else "") or "",
+        "shop_id": tiem.get("ShopID") or "",
+    }
+
+
 def _ctx_pos(request, extra=None):
     g = cart.get(request)
+    ph = _phien(request)
     ctx = {
-        "nav_active": "ban", "gio": g, "t": cart.tong(request),
+        "nav_active": "ban", "g": g, "t": cart.tong(request), "phien": ph,
         "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc(),
-        "nvs": S.nhan_vien_ban(), "loai_thau": S.loai_vang_thau(),
+        "nvs": S.nhan_vien_ban(), "loai_de": S.loai_de(), "hm_ngang": _hm_ngang_list(g),
+        "ngay": g.get("ngay") or datetime.date.today().isoformat(),
+        "hom_nay": datetime.date.today().isoformat(),
+        "ma_du_kien": g.get("trn_id") or _ma_du_kien_an_toan(),
+        "dang_sua": bool(g.get("trn_id")),
+        # hóa đơn đã chốt thì proc vendor TỪ CHỐI sửa — phải MỞ LẠI trước (bill.py luật 1)
+        "phieu_chot": g.get("status") == B.CHOT_ROI,
     }
+    ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
     ctx.update(extra or {})
     return ctx
 
 
+def _ma_du_kien_an_toan():
+    """Mã dự kiến chỉ để người bán dễ hình dung — hỏng thì thôi, không chặn bán hàng."""
+    try:
+        return B.ma_du_kien()
+    except Exception:
+        return ""
+
+
 def _pos_oob(request, extra=None):
-    """Trả 3 mảnh OOB: giỏ + ngăn thâu + dải quyết toán (+ toast)."""
+    """Trả các mảnh OOB: thông tin phiếu + vàng bán + vàng đổi + tính tổng (+ toast)."""
     return render(request, "pos/_ban_oob.html", _ctx_pos(request, extra))
+
+
+def _loi(request, thong_diep, extra=None):
+    e = {"loi_phieu": thong_diep}
+    e.update(extra or {})
+    return _pos_oob(request, e)
 
 
 # ─────────────────────────── MUA BÁN ───────────────────────────
@@ -60,17 +118,22 @@ def ban(request):
 
 @require_POST
 def ban_quet(request):
+    """Quét tem hoặc gõ mã hàng → thêm 1 dòng VÀNG BÁN, ô nhập tự trống để quét tiếp."""
     ma = (request.POST.get("ma") or "").strip()
-    till = getattr(request, "khbl_till", "") or ""
-    pu = request.POST.get("_till") or ""
-    kq = S.quet_ma(ma, till_id=pu or till)
+    ph = _phien(request)
+    kq = S.quet_ma(ma, till_id=ph["till_id"])
     if not kq["ok"]:
         return _pos_oob(request, {"scan_err": kq["err"], "scan_val": ma})
-    ok, ly_do = cart.them_ban(request, kq["item"])
+    row = S.quet_ma_row(ma, till_id=ph["till_id"])
+    if not row:
+        return _pos_oob(request, {"scan_err": {"code": "", "style": "do",
+                                               "desc": f"Không đọc lại được mã {ma}"}, "scan_val": ma})
+    tien, dong = B.dong_ban_tu_quet(row, len(cart.get(request)["ban"]) + 1)
+    ok, vi_sao = cart.them_ban(request, tien, dong)
     if not ok:
-        return _pos_oob(request, {"scan_err": {"code": "", "style": "cam",
-                                               "desc": f"Mã {ma} đã có trong phiếu"}, "scan_val": ""})
-    return _pos_oob(request, {"scan_ok": kq["item"]["code"]})
+        return _pos_oob(request, {"scan_err": {"code": "", "style": "cam", "desc": vi_sao},
+                                  "scan_val": ""})
+    return _pos_oob(request, {"scan_ok": ma})
 
 
 @require_POST
@@ -79,29 +142,80 @@ def ban_xoa(request):
     return _pos_oob(request)
 
 
+def _hm_ngang_list(g):
+    """[{base, con}] — hạn mức đổi ngang CÒN LẠI theo từng loại vàng đang bán (>0 mới hiện).
+    Dùng cho gợi ý trên khối VÀNG ĐỔI + JS tính trước khi tick 'Đổi ngang'."""
+    bases = {(x["row"].get("GoldCode") or "").strip() for x in g["ban"]}
+    out = []
+    for b in sorted(x for x in bases if x):
+        con = _han_muc_doi_ngang(g, b)
+        if con > 0:
+            out.append({"base": b, "con": str(con)})
+    return out
+
+
+def _han_muc_doi_ngang(g, base):
+    """TL vàng bán ra CÙNG LOẠI (base) còn lại cho đổi ngang = Σ GoldReal hàng bán loại đó
+    − Σ TL vàng các dòng dẻ đã đổi ngang loại đó."""
+    ban = sum((M.dec(x["row"].get("GoldReal")) for x in g["ban"]
+               if (x["row"].get("GoldCode") or "").strip() == base), M.D0)
+    da_dung = sum((M.dec(x["row"].get("GoldWeight")) for x in g["doi"]
+                   if str(x["row"].get("DoiNgang")) == "1" and M.de_base(x["row"].get("GoldCode")) == base), M.D0)
+    return ban - da_dung
+
+
 @require_POST
-def ban_mua_them(request):
-    """Thêm 1 dòng VÀNG CŨ khách đưa vào (cùng hóa đơn bán — đúng cách PMV làm)."""
-    gold = (request.POST.get("gold") or "").strip()
-    gw = _so(request.POST.get("gw"))
-    pct = M.dec(request.POST.get("pct") or 100)
-    gm = S.gia_map().get(gold)
-    if not gm or gw <= 0:
-        return _pos_oob(request, {"mua_err": "Chọn loại vàng và nhập trọng lượng"})
-    unit = (gm["PriceUnit"] or "L").upper()
-    rate = M.dec(gm["BuyRate"])
-    cart.them_mua(request, {
-        "gold": gold, "gold_desc": gm["GoldDesc"], "unit": unit, "age": S.age_class(gold),
-        "gw": str(gw), "rate": str(rate), "pct": str(pct),
-        "amount": str(M.buy_amount_in_bill(gw, rate, pct, unit)),
-    })
+def ban_doi_them(request):
+    """Thêm dòng VÀNG ĐỔI (dẻ khách đưa). Không đổi ngang → 1 dòng giá thâu (như cũ).
+    Đổi ngang → chia theo HẠN MỨC vàng bán cùng loại: phần trong hạn mức giá BÁN RA, phần dư giá thâu."""
+    ma = (request.POST.get("gold") or "").strip()
+    tong_tl = _so_tl(request.POST.get("tong_tl"))
+    tl_hot = _so_tl(request.POST.get("tl_hot"))
+    doi_ngang = request.POST.get("doi_ngang") == "1"
+    # ⚠ Người bán gõ giá theo ĐỒNG ("8.750.000 ₫/chỉ"), PMV lưu theo NGHÌN (8750).
+    gia_dong = _so(request.POST.get("gia"))
+    gia = gia_dong / M.RATE_SCALE if gia_dong else M.D0
+    de = next((x for x in S.loai_de() if x["GoldCode"] == ma), None)
+    if not de:
+        return _loi(request, "Chưa chọn loại dẻ")
+    if tong_tl <= 0:
+        return _loi(request, "Chưa nhập tổng trọng lượng vàng đổi")
+    if tl_hot > tong_tl:
+        return _loi(request, "Trọng lượng hột không được lớn hơn tổng trọng lượng")
+    gia_thau = gia if gia > 0 else M.dec(de["BuyRate"])
+    pu = de["PriceUnit"]
+
+    if not doi_ngang:
+        if gia_thau <= 0:
+            return _loi(request, f"Bảng giá chưa có giá đổi cho {de['GoldDesc']} — nhập tay giá đổi")
+        tien, dong = B.dong_doi(ma, de["GoldDesc"], tong_tl, tl_hot, gia_thau, pu)
+        cart.them_doi(request, tien, dong)
+        return _pos_oob(request)
+
+    # ── ĐỔI NGANG ──
+    g = cart.get(request)
+    base = de.get("base") or M.de_base(ma)
+    han_muc = _han_muc_doi_ngang(g, base)
+    if han_muc <= 0:
+        return _loi(request, f"Chưa có (hoặc hết) hàng bán loại {base} để đổi ngang với {de['GoldDesc']} — "
+                             f"bỏ tick 'Đổi ngang' để tính giá thâu, hoặc quét hàng {base} trước")
+    sell = M.dec(de.get("SellRate"))
+    if sell <= 0:
+        return _loi(request, f"Bảng giá chưa có giá BÁN RA cho {de['GoldDesc']} — không đổi ngang được")
+    tl_vang = tong_tl - tl_hot
+    phan = M.chia_doi_ngang(tl_vang, tl_hot, han_muc, sell, gia_thau, pu)
+    if len(phan) > 1 and gia_thau <= 0:
+        return _loi(request, f"Phần dư quá hạn mức cần GIÁ THÂU cho {de['GoldDesc']} — nhập tay giá đổi")
+    for p in phan:
+        tien, dong = B.dong_doi(ma, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu, doi_ngang=p["ngang"])
+        cart.them_doi(request, tien, dong)
     return _pos_oob(request)
 
 
 @require_POST
-def ban_mua_xoa(request):
+def ban_doi_xoa(request):
     try:
-        cart.xoa_mua(request, int(request.POST.get("i", -1)))
+        cart.xoa_doi(request, int(request.POST.get("i", -1)))
     except (TypeError, ValueError):
         pass
     return _pos_oob(request)
@@ -109,24 +223,20 @@ def ban_mua_xoa(request):
 
 @require_POST
 def ban_dat(request):
-    """Đặt khách / NV bán / giảm giá / công thêm / tiền khách đưa."""
+    """Đặt khách · nhân viên · ngày · các khoản tiền · ghi chú."""
     g = cart.get(request)
     if "cust_id" in request.POST:
         cid = (request.POST.get("cust_id") or "").strip()
-        if not cid or cid == S.WALK_IN:
-            g["cust"] = None
-        else:
-            k = S.khach_theo_id(cid)
-            g["cust"] = {"id": k["CustID"], "code": k["CustCode"], "name": k["CustName"],
-                         "phone": k["Phone"] or "", "diem": str(M.dec(k["Diem"]))} if k else None
+        k = S.khach_theo_id(cid) if cid and cid != S.WALK_IN else None
+        g["cust"] = {"id": k["CustID"], "code": k["CustCode"], "name": k["CustName"],
+                     "phone": k["Phone"] or "", "diem": str(M.dec(k["Diem"]))} if k else None
     if "emp" in request.POST:
         g["emp"] = (request.POST.get("emp") or "").strip()
-    if "discount" in request.POST:
-        g["discount"] = str(_so(request.POST.get("discount")))
-    if "task_add" in request.POST:
-        g["task_add"] = str(_so(request.POST.get("task_add")))
-    if "khach_dua" in request.POST:
-        g["khach_dua"] = str(_so(request.POST.get("khach_dua")))
+    if "ghi_chu" in request.POST:
+        g["ghi_chu"] = (request.POST.get("ghi_chu") or "").strip()[:200]
+    for o in ("bot", "cong_them", "vang_them", "coc"):
+        if o in request.POST:
+            g[o] = str(_so(request.POST.get(o)))
     cart.save(request, g)
     return _pos_oob(request)
 
@@ -135,7 +245,7 @@ def ban_dat(request):
 def ban_bot_le(request):
     g = cart.get(request)
     t = cart.tong(request)
-    g["discount"] = str(M.dec(g.get("discount") or 0) + M.bot_le(t["pay"]))
+    g["bot"] = str(M.dec(g.get("bot") or 0) + M.bot_le(t["khach_tra"]))
     cart.save(request, g)
     return _pos_oob(request)
 
@@ -143,30 +253,142 @@ def ban_bot_le(request):
 @require_POST
 def ban_moi(request):
     cart.clear(request)
-    messages.success(request, "Đã bắt đầu phiếu mới.")
-    return _pos_oob(request)
+    return _pos_oob(request, {"tin": "Đã mở phiếu mới."})
 
 
 def ban_tim_khach(request):
-    return render(request, "pos/_khach_goiy.html",
-                  {"ds": S.tim_khach(request.GET.get("q", ""))})
+    return render(request, "pos/_khach_goiy.html", {"ds": S.tim_khach(request.GET.get("q", ""))})
+
+
+def ban_tim_nv(request):
+    return render(request, "pos/_nv_goiy.html", {"ds": S.tim_nhan_vien(request.GET.get("q", ""))})
 
 
 def ban_tim_hang(request):
     return render(request, "pos/_tim_hang.html", {
-        "ds": S.tim_hang(request.GET.get("q", ""), request.GET.get("sec", ""), request.GET.get("gold", "")),
+        "ds": S.tim_hang(request.GET.get("q", ""), request.GET.get("sec", ""),
+                         request.GET.get("gold", "")),
         "q": request.GET.get("q", "")})
 
 
-def ban_phieu(request):
-    """Popup PHIẾU TẠM — nội dung sẽ gửi sang PMV khi kênh ghi mở (GĐ3)."""
-    return render(request, "pos/_phieu_tam.html", _ctx_pos(request))
+# ─────── hóa đơn đã lưu: danh sách · mở · mở lại · thanh toán · xóa ───────
+
+def ban_ds(request):
+    """Popup DANH SÁCH hóa đơn theo ngày."""
+    ngay = request.GET.get("ngay") or datetime.date.today().isoformat()
+    try:
+        ds, loi = B.trong_ngay(ngay), ""
+    except Exception as exc:
+        ds, loi = [], str(exc)
+    return render(request, "pos/_ban_ds.html", {"ds": ds, "ngay": ngay, "loi": loi})
+
+
+@require_POST
+def ban_mo(request):
+    """Nạp 1 hóa đơn đã lưu lên form để xem / sửa."""
+    trn = (request.POST.get("trn_id") or "").strip()
+    try:
+        phieu = B.doc(trn)
+    except Exception as exc:
+        return _loi(request, f"Không mở được hóa đơn: {exc}")
+    if not phieu:
+        return _loi(request, f"Không thấy hóa đơn {trn}")
+    cart.nap(request, phieu)
+    tin = f"Đã mở {phieu['bill_code'] or trn} · {phieu['ten_trang_thai']}"
+    if not phieu["sua_duoc"]:
+        tin += " — muốn sửa phải bấm MỞ LẠI."
+    return _pos_oob(request, {"tin": tin})
+
+
+@require_POST
+def ban_mo_lai(request):
+    """Đưa hóa đơn ĐÃ CHỐT về nháp để sửa (hủy phần sổ quỹ)."""
+    g = cart.get(request)
+    ph = _phien(request)
+    if not g.get("trn_id"):
+        return _loi(request, "Chưa mở hóa đơn nào")
+    try:
+        B.mo_lai(g["trn_id"], user_id=ph["user_id"])
+        cart.nap(request, B.doc(g["trn_id"]))
+    except Exception as exc:
+        return _loi(request, f"Mở lại không được: {exc}")
+    return _pos_oob(request, {"tin": "Đã mở lại — hóa đơn về trạng thái nháp, sửa được rồi."})
+
+
+def _kiem_truoc_khi_luu(request, g, ph):
+    if not g["ban"] and not g["doi"]:
+        return "Phiếu chưa có món nào"
+    if not ph["user_id"]:
+        return "Tài khoản web chưa gắn với tài khoản PMV — vào trang Hệ thống đồng bộ lại"
+    if not ph["till_id"]:
+        return "Tài khoản chưa gắn KÉT — không ghi sổ quỹ được"
+    if not g.get("emp"):
+        return "Chưa chọn nhân viên bán"
+    return ""
+
+
+@require_POST
+def ban_thanh_toan(request):
+    """Lưu phiếu rồi CHỐT. GĐ chốt 03/09/2026: hóa đơn mới luôn mang ngày HÔM NAY."""
+    g = cart.get(request)
+    ph = _phien(request)
+    loi = _kiem_truoc_khi_luu(request, g, ph)
+    if loi:
+        return _loi(request, loi)
+    c = S.client("thanh_toan")
+    now = datetime.datetime.now()
+    try:
+        kq = B.luu(trn_id=g.get("trn_id") or "", ban=cart.dong_ban(g), doi=cart.dong_doi(g),
+                   ngay=c.fmt_date(now.date()), gio=c.fmt_time(now),
+                   cust_id=(g.get("cust") or {}).get("id") or S.WALK_IN,
+                   emp_id=g.get("emp"), till_id=ph["till_id"], shop_id=ph["shop_id"],
+                   user_id=ph["user_id"], ghi_chu=g.get("ghi_chu") or "",
+                   bot=g.get("bot"), cong_them=g.get("cong_them"),
+                   vang_them=g.get("vang_them"), coc=g.get("coc"), c=c)
+        B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
+    except Exception as exc:
+        return _loi(request, _loi_goi(exc))
+    cart.nap(request, B.doc(kq["trn_id"], c))
+    tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
+    return _pos_oob(request, {"tin": tin, "vua_chot": kq["trn_id"],
+                              "in_luon": request.POST.get("in") == "1"})
+
+
+@require_POST
+def ban_huy(request):
+    """Nút XÓA: phiếu chưa lưu thì dọn form; hóa đơn đã lưu thì HỦY THẬT (hàng về kho)."""
+    g = cart.get(request)
+    ph = _phien(request)
+    trn = g.get("trn_id")
+    if not trn:
+        cart.clear(request)
+        return _pos_oob(request, {"tin": "Đã xóa phiếu đang nhập."})
+    try:
+        B.huy(trn, user_id=ph["user_id"])
+    except Exception as exc:
+        return _loi(request, f"Hủy không được: {_loi_goi(exc)}")
+    cart.clear(request)
+    return _pos_oob(request, {"tin": f"Đã hủy hóa đơn {g.get('bill_code') or trn} — hàng trả về kho."})
+
+
+def _loi_goi(exc):
+    """Lấy câu lỗi NGUYÊN VĂN của vendor nếu có, đỡ phải đoán."""
+    sets = getattr(exc, "sets", None)
+    if sets:
+        for s in sets:
+            if isinstance(s, dict) and s.get("loi"):
+                return s["loi"]
+            for r in (s if isinstance(s, list) else []):
+                if isinstance(r, dict) and r.get("ErrorDesc"):
+                    return r["ErrorDesc"]
+    return str(exc)
 
 
 def ban_in(request):
-    """Bản in thử giấy đảm bảo (chờ GĐ gửi mẫu giấy thật)."""
+    """GIẤY ĐẢM BẢO — mẫu tạm, chờ GĐ đưa mẫu giấy thật."""
     ctx = _ctx_pos(request)
     ctx["hom_nay"] = datetime.date.today()
+    ctx["tiem"] = S.thong_tin_tiem()
     return render(request, "pos/in_phieu.html", ctx)
 
 
@@ -236,52 +458,58 @@ def khach_form(request, cust_id=None):
     return render(request, "pos/_khach_form.html", {
         "k": S.khach_theo_id(cust_id) if cust_id else None,
         "loai_ds": S.CUST_TYPES, "duong_dan_anh": S.DUONG_DAN_ANH,
+        "save_token": secrets.token_urlsafe(24),
     })
 
 
 @require_POST
 def khach_luu(request):
-    """v1 CHƯA GHI sang PMV (RULE 2). Kiểm tra dữ liệu, dựng đúng bộ tham số sẽ gửi cho
-    I_CUSTOMER_Ins/_Upd rồi hiện lại để đối chiếu — mở kênh ghi ở giai đoạn sau."""
-    d = request.POST
-    ten = (d.get("CustName") or "").strip()
-    loi = []
-    if not ten:
-        loi.append("Chưa nhập họ tên khách")
-    phone = re.sub(r"[^\d]", "", d.get("Phone") or "")
-    if phone and not (9 <= len(phone) <= 11):
-        loi.append(f"Số điện thoại {phone} không hợp lệ (9–11 số)")
-    cmnd = re.sub(r"[^\d]", "", d.get("CMND") or "")
-    if cmnd and len(cmnd) not in (9, 12):
-        loi.append(f"Số CCCD/CMND {cmnd} phải 9 hoặc 12 số")
-    loai = (d.get("CustType") or "").strip().upper()
-    if loai not in S.CUST_TYPE_MAP:
-        loai = ""
-
-    tham_so = {
-        "p_CustID": (d.get("CustID") or "").strip(),
-        "p_CustName": ten, "p_Phone": phone, "p_Address": (d.get("Address") or "").strip(),
-        "p_CMND": cmnd, "p_BirthDate": _ngay_vn(d.get("BirthDate")),
-        "p_Gender": "1" if d.get("Gender") == "1" else "0",
-        "p_Email": (d.get("Email") or "").strip(),
-        "p_NgayCap": _ngay_vn(d.get("NgayCap")), "p_NoiCap": (d.get("NoiCap") or "").strip(),
-        "p_Notes": (d.get("Notes") or "").strip(),
-        "CustType": loai or "(trống = Thường)",
-        "p_Active": "1" if d.get("Active", "1") == "1" else "0",
-    }
-    return render(request, "pos/_khach_luu_kq.html", {
-        "loi": loi, "tham_so": tham_so, "sua": bool(tham_so["p_CustID"]),
-        "anh": [k for k in ("anh_dai_dien", "anh_truoc", "anh_sau") if request.FILES.get(k)],
-    })
-
-
-def _ngay_vn(s):
-    """yyyy-mm-dd (ô date của trình duyệt) → dd/MM/yyyy như app gửi cho proc."""
-    s = (s or "").strip()
+    """UPSERT thật qua proc PMV; ảnh chỉ gửi sau khi dữ liệu khách đã COMMIT."""
+    data, errors, warnings = C.clean_form(request.POST)
+    token = (request.POST.get("save_token") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,80}", token):
+        errors.append("Phiên lưu không hợp lệ; hãy đóng và mở lại biểu mẫu")
     try:
-        return datetime.date.fromisoformat(s).strftime("%d/%m/%Y")
-    except ValueError:
-        return ""
+        images, image_info = C.prepare_images(request.FILES)
+    except C.CustomerSaveError as exc:
+        images, image_info = {}, []
+        errors.append(str(exc))
+    if errors:
+        return render(request, "pos/_khach_luu_kq.html", {"loi": errors})
+
+    fp = hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8"))
+    for key in sorted(images):
+        value = images[key]
+        if isinstance(value, bytes):
+            fp.update(key.encode("ascii")); fp.update(value)
+    fingerprint = fp.hexdigest()
+
+    try:
+        with C.SAVE_LOCK:
+            result = C.previous_save(token, fingerprint)
+            replay = result is not None
+            if result is None:
+                result = C.upsert(data, images, shop_id=_phien(request)["shop_id"])
+                result["warnings"] = list(dict.fromkeys(warnings + result["warnings"]))
+                result["images"] = image_info
+                C.remember_save(token, fingerprint, result)
+    except C.CustomerSaveError as exc:
+        return render(request, "pos/_khach_luu_kq.html", {"loi": str(exc).splitlines()})
+    except Exception as exc:
+        logger.exception("Không lưu được khách hàng qua PMV", exc_info=exc)
+        return render(request, "pos/_khach_luu_kq.html", {
+            "loi": ["Chưa lưu được khách do kết nối PMV hoặc kênh ghi đang bị khóa. Hãy thử lại sau."]})
+
+    message = (("Đã thêm" if result["created"] else "Đã cập nhật") +
+               f" {result['cust_code']} — {result['name']}")
+    if replay:
+        message = f"Yêu cầu này đã hoàn tất trước đó: {result['cust_code']} — {result['name']}"
+    payload = {"khachSaved": {"message": message, "warnings": result["warnings"],
+                               "custId": result["cust_id"]}}
+    response = HttpResponse(status=204)
+    # Header HTTP phải ASCII; \uXXXX vẫn được JSON.parse phía HTMX trả lại đúng tiếng Việt.
+    response["HX-Trigger"] = json.dumps(payload, ensure_ascii=True)
+    return response
 
 
 # ─────────────────────────── THÂU VÀO ───────────────────────────
