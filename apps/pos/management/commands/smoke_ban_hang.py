@@ -307,6 +307,23 @@ class Command(BaseCommand):
                     n_sau == 1, f"{n_sau} dòng")
             self.ok("D3 dòng gộp mang badge thâu", "thâu" in b)
             cl.post("/banle/ban-hang/moi/")  # dọn phiếu thử (đổi chỉ nằm trong session)
+        self._phan_botle()
+
+    def _phan_botle(self):
+        """Gợi ý BỚT LẺ phải là dict {tien, val} — val = số nguyên cho hx-vals (đừng để rỗng → bot=0)."""
+        self.stdout.write(self.style.MIGRATE_HEADING("\nE. GỢI Ý BỚT LẺ (cart.tong)"))
+        from django.test import RequestFactory
+        from django.contrib.sessions.backends.db import SessionStore
+        from apps.pos import cart
+        req = RequestFactory().get("/"); req.session = SessionStore()
+        g = cart.get(req)
+        g["ban"] = [{"tien": "7346000", "row": {"GoldReal": "0", "GoldCode": "18K"}}]
+        cart.save(req, g)
+        goiy = cart.tong(req)["botle_goiy"]
+        self.ok("E1 đúng 3 mức [6.000·16.000·26.000]",
+                [x["val"] for x in goiy] == ["6000", "16000", "26000"], str(goiy))
+        self.ok("E2 val = số nguyên khác rỗng (hx-vals không ra bot=0)",
+                all(x["val"] and x["val"] == str(int(x["tien"])) for x in goiy))
 
     @staticmethod
     def _trich(html):

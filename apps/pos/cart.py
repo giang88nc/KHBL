@@ -148,7 +148,8 @@ def tong(request):
 
     # ── Gợi ý TIỀN BỚT để tròn chục nghìn (tối đa 3 mức, dựa trên khách trả TRƯỚC bớt) ──
     tra = t["khach_tra"]
-    t["botle_goiy"] = M.bot_le_goiy(tra + t["bot"])
+    # dict {tien: Decimal để hiển thị, val: chuỗi số nguyên cho hx-vals — KHÔNG bị localize}
+    t["botle_goiy"] = [{"tien": v, "val": str(int(v))} for v in M.bot_le_goiy(tra + t["bot"])]
 
     # ── Tách PHƯƠNG THỨC THANH TOÁN: tiền mặt + chuyển khoản/thẻ = khách trả ──
     t["pay_method"] = g.get("pay_method") or "cash"
