@@ -44,6 +44,7 @@ def chuan_hoa(s, ve_nfc=True, sua_mat=True):
     kq = _sua_ma_unicode(kq, canh_bao)
     kq = _sua_oem(kq, canh_bao)
     kq = _sua_mojibake(kq, canh_bao)
+    kq = _sua_byte_dau_mo_coi(kq, canh_bao)
 
     if sua_mat:
         kq = sua_byte_mat(kq, canh_bao)
@@ -245,6 +246,40 @@ def _ung_vien(dau_byte):
         if c.lower() in _CHU_VIET or c.lower() in "ăâêôơư":
             ra.append(c)
     return ra
+
+
+def _sua_byte_dau_mo_coi(s, canh_bao):
+    """Sửa byte đầu UTF-8 còn lộ ra trong một chuỗi đã đúng một phần.
+
+    Ví dụ ``NÄm CÄn`` giữ byte đầu C4 của ``ă`` nhưng mất byte sau 83. Không thể
+    giải mã lại cả câu vì các đoạn ``Khóm``/``Năm`` khác vốn đã là Unicode đúng.
+    Chỉ thay khi byte đầu + ngữ cảnh hoa/thường, nguyên âm/phụ âm còn đúng một
+    ứng viên tiếng Việt; trường hợp mơ hồ được giữ nguyên để người dùng đối chiếu.
+    """
+    kq, doan = list(s), []
+    for i, c in enumerate(kq):
+        dau = ord(c)
+        if dau not in (0xC3, 0xC4, 0xC5, 0xC6):
+            continue
+        truoc = kq[i - 1] if i else ""
+        sau = kq[i + 1] if i + 1 < len(kq) else ""
+        if not (truoc.isalpha() and sau.isalpha()):
+            continue
+        uv = _ung_vien(dau)
+        if sau.islower() or truoc.islower():
+            uv = [x for x in uv if x.islower()]
+        elif truoc.isupper() and sau.isupper():
+            uv = [x for x in uv if x.isupper()]
+        if truoc.lower() in _PHU_AM and sau.lower() in _PHU_AM:
+            uv = [x for x in uv if x.lower() in _NGUYEN_AM]
+        uv = sorted(set(uv))
+        if len(uv) == 1:
+            kq[i] = uv[0]
+            doan.append(truoc + uv[0] + sau)
+    if doan:
+        canh_bao.append("Đã phục hồi byte đầu UTF-8 bị sót: "
+                        + ", ".join(dict.fromkeys(doan)) + " — vui lòng đối chiếu với thẻ")
+    return "".join(kq)
 
 
 def sua_byte_mat(s, canh_bao=None):

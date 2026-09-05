@@ -10,6 +10,7 @@ from django.core.cache import cache
 
 from apps.pmv import money as M
 from apps.pmv.client import PmvClient
+from .vn_text import chuan_hoa
 
 # Bảng giá dùng ShopID = CHUỖI RỖNG (khác ShopID hóa đơn 'TSP141100000001')
 XRATE_SHOP = ""
@@ -221,6 +222,11 @@ def _dep_khach(r):
     """Bổ sung trường hiển thị: loại khách, giới tính (bit: 1 = Nam, 0 = Nữ — đã đối chiếu
     106 khách Gender=1 đều là 'Anh/Chú'). ⚠ Phần mềm để MẶC ĐỊNH 0 nên 13.805 khách tên
     'Anh …' vẫn đang mang giới tính Nữ — đánh dấu `gt_lech` để UI báo, KHÔNG tự sửa."""
+    # Dữ liệu cũ có thể đã lưu ở trạng thái mojibake nửa chừng. Chuẩn hóa lúc đọc
+    # để danh sách/popup hiển thị đúng ngay; lần Sửa + Lưu kế tiếp sẽ ghi bản sạch.
+    for field in ("CustName", "Address", "NoiCap"):
+        if r.get(field):
+            r[field] = chuan_hoa(r[field])[0]
     loai = (r.get("CustType") or "").strip().upper()
     r["loai"] = CUST_TYPE_MAP.get(loai, CUST_TYPE_MAP[""])
     r["Active"] = "1" if r.get("Active") is True or str(r.get("Active")) == "1" else "0"

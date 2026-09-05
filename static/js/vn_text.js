@@ -170,6 +170,32 @@
     return a.join("");
   }
 
+  function suaByteDauMoCoi(s, cb) {
+    var a = s.split(""), doan = [], i, lead, truoc, sau, uv;
+    for (i = 0; i < a.length; i++) {
+      lead = a[i].charCodeAt(0);
+      if ([0xC3, 0xC4, 0xC5, 0xC6].indexOf(lead) < 0) continue;
+      truoc = i ? a[i - 1] : ""; sau = i + 1 < a.length ? a[i + 1] : "";
+      if (!(letter(truoc) && letter(sau))) continue;
+      uv = BI_NUOT.map(function (b) { return deUTF8([lead, b], false); })
+        .filter(function (x) { return x && (CHU_VIET.indexOf(x.toLowerCase()) >= 0 ||
+          "ăâêôơư".indexOf(x.toLowerCase()) >= 0); });
+      if ((sau && sau === sau.toLowerCase() && sau !== sau.toUpperCase()) ||
+          (truoc && truoc === truoc.toLowerCase() && truoc !== truoc.toUpperCase()))
+        uv = uv.filter(function (x) { return x === x.toLowerCase(); });
+      else if (truoc === truoc.toUpperCase() && sau === sau.toUpperCase())
+        uv = uv.filter(function (x) { return x === x.toUpperCase(); });
+      if (PHU_AM.indexOf(truoc.toLowerCase()) >= 0 && PHU_AM.indexOf(sau.toLowerCase()) >= 0)
+        uv = uv.filter(function (x) { return NGUYEN_AM.indexOf(x.toLowerCase()) >= 0; });
+      uv = uv.filter(function (v, k, arr) { return arr.indexOf(v) === k; });
+      if (uv.length === 1) { a[i] = uv[0]; doan.push(truoc + uv[0] + sau); }
+    }
+    if (doan.length) cb.push("Đã phục hồi byte đầu UTF-8 bị sót: " +
+      doan.filter(function (v, k, arr) { return arr.indexOf(v) === k; }).join(", ") +
+      " — vui lòng đối chiếu với thẻ");
+    return a.join("");
+  }
+
   function chuanHoa(s) {
     if (!s) return { text: "", canhBao: [] };
     var cb = [], kq = String(s);
@@ -179,6 +205,7 @@
     kq = suaMaUnicode(kq, cb);
     kq = suaOEM(kq, cb);
     kq = suaMojibake(kq, cb);
+    kq = suaByteDauMoCoi(kq, cb);
     kq = suaByteMat(kq, cb);
     if (String.prototype.normalize) kq = kq.normalize("NFC");
     kq = kq.replace(/[ \t]+/g, " ").trim();
