@@ -157,6 +157,21 @@ cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92p
   đưa"**; checkbox ⇄ Đổi ngang **float phải** (`.pg-ngang--right`, `margin-left:auto`).
 - smoke_ui 122/122 (cập nhật assertion: bỏ CLEAR/Số HĐ, thêm badge + Ngày chỉ xem), smoke_ban_hang 51/51.
 
+**TÍNH TỔNG nâng cấp (05/09/2026, GĐ chốt)**:
+- **Làm tròn HÀNG NGHÌN toàn màn**: `money.tron_ngan` (quantize 1.000, HALF_UP); `bill.tinh_tong` làm tròn
+  `con_lai` + `khach_tra` (giá vàng/công vốn theo nghìn → thực tế no-op, PayAmount lưu cũng tròn); `ban_dat`
+  làm tròn mọi khoản nhập (bớt/cọc/thêm/tiền mặt).
+- **BỚT LẺ = tối đa 3 nút gợi ý** (`money.bot_le_goiy`): lẻ hiện tại, +10k, +20k (lẻ=0 → 10k/20k/30k), không
+  vượt tổng; VD khách trả 7.346.000 → [6.000·16.000·26.000]; bấm = **set** thẳng `bot` qua `ban_dat`
+  (không cộng dồn) + nút **✕ bỏ** (bot=0). Nút cũ "Bớt lẻ cho tròn" đã thay; F6 trỏ nút gợi ý đầu.
+- **PHƯƠNG THỨC THANH TOÁN** (session, CHƯA ghi PMV — để GĐ3): radio Tiền mặt (mặc định) / Chuyển khoản /
+  Quẹt thẻ + 2 ô **Tiền mặt** + **CK/Thẻ** tự bù cho đủ khách trả (JS `sync`, gõ ô này ô kia auto). Session
+  giữ `pay_method` + `tien_mat` (rỗng = auto theo phương thức; đổi radio → về auto); `cart.tong` suy
+  `tien_mat`/`tien_ck` (clamp trong [0, khách trả]). Nhãn ô 2 đổi theo radio.
+- **TIỀN KHÁCH TRẢ đổi màu**: >0 xanh nhạt (`--duong`) · <0 đỏ nhạt (`--am`) · =0 giữ nền vàng.
+- smoke_pmv_money 15/15 (+bot_le_goiy, +tron_ngan), smoke_ui 126/126, smoke_ban_hang 51/51.
+  ⚠ Nếu GĐ muốn "làm tròn LÊN" kiểu ceil (thay HALF_UP nearest) thì đổi rounding trong `tron_ngan`.
+
 **Công thức tiền** (phần "còn lại" đo trên 18.441 hóa đơn thật; hai khoản mới GĐ chốt):
 ```
 còn lại   = tiền vàng mới − tiền vàng cũ

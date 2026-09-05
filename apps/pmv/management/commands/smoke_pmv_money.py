@@ -124,6 +124,12 @@ class Command(BaseCommand):
         # --- 7. bớt lẻ ---
         check("bot_le(3.133.000) = 3.000", M.bot_le(3133000) == Decimal("3000"))
         check("bot_le(198.302.000) = 2.000", M.bot_le(198302000) == Decimal("2000"))
+        check("bot_le_goiy(7.346.000) = [6k,16k,26k]",
+              [int(v) for v in M.bot_le_goiy(7346000)] == [6000, 16000, 26000])
+        check("bot_le_goiy tròn sẵn (7.340.000) = [10k,20k,30k]",
+              [int(v) for v in M.bot_le_goiy(7340000)] == [10000, 20000, 30000])
+        check("tron_ngan(7.346.499) = 7.346.000", M.tron_ngan(7346499) == Decimal("7346000"))
+        check("tron_ngan(7.346.500) = 7.347.000", M.tron_ngan(7346500) == Decimal("7347000"))
 
         self.stdout.write((self.style.SUCCESS if not n_fail else self.style.ERROR)(
             f"KẾT QUẢ: {n_ok} PASS / {n_fail} FAIL"))

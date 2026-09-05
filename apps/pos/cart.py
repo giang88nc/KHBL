@@ -26,7 +26,7 @@ def _chuoi(v):
 def _rong(emp=""):
     return {"trn_id": "", "bill_code": "", "status": "", "ngay": "", "cust": None, "emp": emp,
             "ban": [], "doi": [], "bot": "0", "cong_them": "0", "vang_them": "0",
-            "coc": "0", "ghi_chu": ""}
+            "coc": "0", "ghi_chu": "", "pay_method": "cash", "tien_mat": ""}
 
 
 def get(request):
@@ -145,6 +145,20 @@ def tong(request):
     # Chi tiết TL vàng theo TỪNG LOẠI (tuổi vàng) cho chân bảng 2 khối
     t["tl_ban_loai"] = _tl_theo_loai(g["ban"], "GoldReal")
     t["tl_doi_loai"] = _tl_theo_loai(g["doi"], "GoldWeight")
+
+    # ── Gợi ý TIỀN BỚT để tròn chục nghìn (tối đa 3 mức, dựa trên khách trả TRƯỚC bớt) ──
+    tra = t["khach_tra"]
+    t["botle_goiy"] = M.bot_le_goiy(tra + t["bot"])
+
+    # ── Tách PHƯƠNG THỨC THANH TOÁN: tiền mặt + chuyển khoản/thẻ = khách trả ──
+    t["pay_method"] = g.get("pay_method") or "cash"
+    raw = g.get("tien_mat")
+    if raw in (None, ""):                       # chưa đặt tay → mặc định theo phương thức
+        cash = tra if t["pay_method"] == "cash" else M.D0
+    else:
+        cash = min(max(M.dec(raw), M.D0), tra) if tra > 0 else M.D0
+    t["tien_mat"] = cash
+    t["tien_ck"] = tra - cash
     return t
 
 

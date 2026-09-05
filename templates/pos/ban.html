@@ -142,5 +142,34 @@ document.addEventListener("keydown", function (e) {
   document.addEventListener("DOMContentLoaded", gan);
   document.addEventListener("htmx:afterSwap", gan);
 })();
+
+/* PHƯƠNG THỨC THANH TOÁN: tiền mặt + CK/thẻ tự bù cho đủ TIỀN KHÁCH TRẢ (mượt, chốt khi rời ô) */
+(function () {
+  function mInt(s) { return parseInt(String(s || "").replace(/[^\d]/g, ""), 10) || 0; }
+  function fmt(n) { return Math.max(n, 0).toLocaleString("vi-VN"); }
+  function tra() {
+    var el = document.querySelector(".pg-tong__tra b");
+    return el ? mInt(el.textContent) : 0;   // TIỀN KHÁCH TRẢ hiển thị (âm → 0, không tách)
+  }
+  function sync(src) {
+    var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
+    if (!cash || !ck) return;
+    var t = tra();
+    if (src === "ck") { var k = Math.min(mInt(ck.value), t); cash.value = fmt(t - k); }
+    else { var c = Math.min(mInt(cash.value), t); ck.value = fmt(t - c); }
+  }
+  function ganPay() {
+    var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
+    if (!cash || cash.dataset.gan) return;
+    cash.dataset.gan = "1";
+    cash.addEventListener("input", function () { sync("cash"); });
+    if (ck) ck.addEventListener("input", function () { sync("ck"); });
+    document.querySelectorAll("input[name='pay_method']").forEach(function (r) {
+      r.addEventListener("change", function () { if (cash) cash.value = ""; });  // đổi cách → về auto
+    });
+  }
+  document.addEventListener("DOMContentLoaded", ganPay);
+  document.addEventListener("htmx:afterSwap", ganPay);
+})();
 </script>
 {% endblock %}

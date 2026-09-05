@@ -195,6 +195,30 @@ def bot_le(total, buoc=10000):
     return t - (t // b) * b
 
 
+def tron_ngan(x):
+    """Làm tròn tiền về HÀNG NGHÌN (nửa làm tròn ra xa số 0) — mọi giá trị trên màn
+    TÍNH TỔNG dùng hàm này để không lộ số lẻ dưới 1.000 ₫."""
+    return dec(x).quantize(_THOUSAND, rounding=ROUND_HALF_UP)
+
+
+def bot_le_goiy(total, buoc=10000, so_muc=3):
+    """Gợi ý các mức TIỀN BỚT để tròn xuống bội số `buoc` (mặc định 10.000):
+    lẻ hiện tại, lẻ + buoc, lẻ + 2·buoc… (lẻ=0 → buoc, 2·buoc…). Không vượt quá total.
+    VD total 7.346.000 → [6.000, 16.000, 26.000]."""
+    t = tron_ngan(total)
+    b = dec(buoc)
+    if t <= 0 or b <= 0:
+        return []
+    le = t - (t // b) * b
+    goc = le if le > 0 else b
+    ra = []
+    muc = goc
+    while len(ra) < so_muc and muc <= t:
+        ra.append(muc)
+        muc += b
+    return ra
+
+
 # ----------------------------- trọng lượng -----------------------------
 
 def vn_so(x, max_dp=3):

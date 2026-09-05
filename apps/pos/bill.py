@@ -119,11 +119,14 @@ def tinh_tong(tien_ban, tien_doi, bot=0, cong_them=0, vang_them=0, coc=0):
     ban, doi = M.dec(tien_ban), M.dec(tien_doi)
     bot, cong_them = M.dec(bot), M.dec(cong_them)
     vang_them, coc = M.dec(vang_them), M.dec(coc)
-    con_lai = ban - doi
+    # Làm tròn về HÀNG NGHÌN các con số quyết toán (GĐ chốt 05/09/2026): giá vàng/công đều
+    # theo nghìn nên trong thực tế đây là no-op, nhưng bảo đảm màn hình + PayAmount không lộ số lẻ.
+    con_lai = M.tron_ngan(ban - doi)
+    khach_tra = M.tron_ngan(con_lai - bot + cong_them + vang_them - coc)
     return {
         "vang_moi": ban, "vang_cu": doi, "con_lai": con_lai,
         "vang_them": vang_them, "cong_them": cong_them, "bot": bot, "coc": coc,
-        "khach_tra": con_lai - bot + cong_them + vang_them - coc,
+        "khach_tra": khach_tra,
     }
 
 

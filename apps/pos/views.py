@@ -285,7 +285,13 @@ def ban_dat(request):
         g["ghi_chu"] = (request.POST.get("ghi_chu") or "").strip()[:200]
     for o in ("bot", "cong_them", "vang_them", "coc"):
         if o in request.POST:
-            g[o] = str(_so(request.POST.get(o)))
+            g[o] = str(M.tron_ngan(_so(request.POST.get(o))))  # mọi khoản tiền tròn hàng nghìn
+    if "pay_method" in request.POST:
+        pm = (request.POST.get("pay_method") or "").strip()
+        g["pay_method"] = pm if pm in ("cash", "bank", "card") else "cash"
+    if "tien_mat" in request.POST:                 # rỗng = auto theo phương thức, có số = chốt tay
+        v = (request.POST.get("tien_mat") or "").strip()
+        g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
     cart.save(request, g)
     return _pos_oob(request)
 

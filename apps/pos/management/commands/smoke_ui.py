@@ -117,6 +117,12 @@ class Command(BaseCommand):
         # Số hóa đơn + nút CLEAR đã BỎ (05/09/2026); mã đơn nay là badge bên VÀNG BÁN
         check("mã đơn hiện dạng badge trên VÀNG BÁN", "pg-hd-badge" in b)
         check("ô Ngày chỉ xem", 'id="o-ngay"' in b and "readonly" in b)
+        # Phương thức thanh toán + gợi ý bớt lẻ + màu tiền khách trả (05/09/2026)
+        check("có form phương thức thanh toán (tiền mặt/CK/thẻ)",
+              "pg-pay" in b and 'name="pay_method"' in b and 'id="o-tienmat"' in b)
+        check("có ô tách chuyển khoản/thẻ", 'id="o-tienck"' in b)
+        check("có khối gợi ý BỚT LẺ", "pg-botle" in b)
+        check("TIỀN KHÁCH TRẢ có lớp màu theo giá trị", "pg-tong__tra" in b)
         check("ô tìm nhân viên theo tên", 'id="o-nv"' in b)
         check("ô tìm khách theo tên/SĐT/CCCD", "CCCD" in b and 'id="o-khach"' in b)
         check("nút + mở popup thêm khách", "khach_them" in b or "khach-hang/them" in b)

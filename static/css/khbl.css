@@ -623,13 +623,33 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tong__r--nhap .khbl-input{width:132px;padding:4px 8px;font-size:13px;text-align:right}
 .pg-tong__r--ghi{flex-direction:column;align-items:stretch;gap:3px}
 .pg-tong__r--ghi .khbl-input{width:100%;padding:4px 8px;font-size:12.5px}
-.pg-tong__botle{all:unset;cursor:pointer;align-self:flex-start;font-size:11.5px;
-  color:var(--gold-700);border-bottom:1px dashed var(--gold-300);margin:2px 0 4px}
-.pg-tong__botle:hover{color:var(--gold-500)}
+/* BỚT LẺ: nhãn + tối đa 3 nút giá trị + nút bỏ */
+.pg-botle{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:3px 0}
+.pg-botle__nhan{font-size:11px;font-weight:700;color:var(--gold-700);letter-spacing:.03em}
+.pg-botle__nut{cursor:pointer;font-family:var(--font-mono,ui-monospace,monospace);font-size:12px;
+  font-weight:700;color:var(--gold-700);background:var(--gold-100);border:1px solid var(--gold-300);
+  border-radius:6px;padding:3px 9px;line-height:1.1}
+.pg-botle__nut:hover{background:var(--gold-300);color:var(--ink)}
+.pg-botle__nut--bo{color:var(--ink-500);background:var(--surface);border-style:dashed;font-family:inherit;font-weight:600}
+
+/* PHƯƠNG THỨC THANH TOÁN */
+.pg-pay{display:flex;flex-direction:column;gap:5px;border-top:1px dashed var(--line);padding-top:6px;margin-top:2px}
+.pg-pay__ways{display:flex;gap:6px}
+.pg-pay__way{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;
+  font-size:11.5px;font-weight:600;color:var(--ink-600);background:var(--surface);
+  border:1px solid var(--line);border-radius:7px;padding:5px 6px;user-select:none;text-align:center}
+.pg-pay__way input{display:none}
+.pg-pay__way.on{color:var(--gold-700);background:var(--gold-100);border-color:var(--gold-300);box-shadow:inset 0 0 0 1px var(--gold-300)}
+.pg-pay__way:hover{border-color:var(--gold-300)}
+
 .pg-tong__tra{margin-top:auto;display:flex;flex-direction:column;gap:2px;padding:9px 11px;
-  border-radius:8px;background:linear-gradient(135deg,#8C6A1D,#C9A02C 60%,#E4C56A);color:#fff}
+  border-radius:8px;background:linear-gradient(135deg,#8C6A1D,#C9A02C 60%,#E4C56A);color:#fff;
+  border:1px solid transparent}
 .pg-tong__tra span{font-size:10.5px;font-weight:700;letter-spacing:.07em;opacity:.9}
 .pg-tong__tra b{font-size:24px;line-height:1.15}
+/* Đổi màu theo giá trị (GĐ chốt 05/09/2026): >0 xanh nhạt · <0 đỏ nhạt · =0 giữ vàng */
+.pg-tong__tra--duong{background:#E7F3EA;color:#1E5B33;border-color:#B7DCC0}
+.pg-tong__tra--am{background:#F7E2DC;color:#8A2E1B;border-color:#E3B9AC}
 
 /* chân trang nút */
 .pg-ban__foot{display:flex;align-items:center;gap:9px;padding:8px 12px;flex:none;
