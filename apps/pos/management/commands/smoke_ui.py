@@ -112,9 +112,11 @@ class Command(BaseCommand):
         # ── 4b. khối THÔNG TIN + TÍNH TỔNG ──
         b = body(c.get("/banle/ban-hang/"))
         for nhan in ("VÀNG BÁN", "VÀNG ĐỔI", "TÍNH TỔNG", "TIỀN KHÁCH TRẢ",
-                     "DANH SÁCH", "THÊM MỚI", "CLEAR", "THANH TOÁN", "IN HÓA ĐƠN"):
+                     "DANH SÁCH", "ĐƠN MỚI", "THANH TOÁN", "IN HÓA ĐƠN"):
             check(f"  màn bán hàng có '{nhan}'", nhan in b)
-        check("số hóa đơn KHÓA + ghi rõ dự kiến", "readonly" in b and "dự kiến" in b)
+        # Số hóa đơn + nút CLEAR đã BỎ (05/09/2026); mã đơn nay là badge bên VÀNG BÁN
+        check("mã đơn hiện dạng badge trên VÀNG BÁN", "pg-hd-badge" in b)
+        check("ô Ngày chỉ xem", 'id="o-ngay"' in b and "readonly" in b)
         check("ô tìm nhân viên theo tên", 'id="o-nv"' in b)
         check("ô tìm khách theo tên/SĐT/CCCD", "CCCD" in b and 'id="o-khach"' in b)
         check("nút + mở popup thêm khách", "khach_them" in b or "khach-hang/them" in b)

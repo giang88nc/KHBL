@@ -146,6 +146,17 @@ Các id `#pos-info/#pos-ban/#pos-doi/#pos-tong` GIỮ NGUYÊN nên OOB `hx-swap-
 xuống che mất `.pg-ban__foot`; sửa `.khbl-main--pos` còn 1 hàng `minmax(0,1fr)` để `.pg-ban` lấp đầy chiều
 cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92px` (layout đời cũ, không nơi dùng).
 
+**Đơn giản hóa UI (05/09/2026, GĐ chốt — chỉ đổi UI)**:
+- **`#pos-info` gộp 1 DÒNG** (`.pg-info--1d`): ＋ ĐƠN MỚI · Ngày (**chỉ xem** — hóa đơn luôn mang hôm nay) ·
+  Nhân viên · Khách hàng (nút **＋ THÊM gắn liền input** qua `.pg-inb`; đã chọn khách → `.pg-chon` + ✎ SỬA) ·
+  ☰ DANH SÁCH. **BỎ nút CLEAR + ô Số hóa đơn** (mã đơn chuyển sang badge bên VÀNG BÁN).
+- **VÀNG BÁN**: bỏ nút "Tìm hàng · F3" (không tìm hàng ở màn này) → thay bằng **badge mã đơn**
+  `.pg-hd-badge` = `bill_code | trn_id | ma_du_kien`; chưa quét món đầu / chưa có đơn → badge **"bỏ trống"**
+  (`.pg-hd-badge--trong`). Gỡ F3 khỏi keymap + gợi ý phím.
+- **VÀNG ĐỔI**: form `.pg-doi-nhap` **tích hợp lên header** (`.pg-doi-head`), **bỏ tiêu đề "VÀNG ĐỔI dẻ khách
+  đưa"**; checkbox ⇄ Đổi ngang **float phải** (`.pg-ngang--right`, `margin-left:auto`).
+- smoke_ui 122/122 (cập nhật assertion: bỏ CLEAR/Số HĐ, thêm badge + Ngày chỉ xem), smoke_ban_hang 51/51.
+
 **Công thức tiền** (phần "còn lại" đo trên 18.441 hóa đơn thật; hai khoản mới GĐ chốt):
 ```
 còn lại   = tiền vàng mới − tiền vàng cũ

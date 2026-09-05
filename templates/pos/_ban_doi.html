@@ -4,16 +4,9 @@ Checkbox "Đổi ngang vàng" (GĐ chốt 05/09/2026): TICK → phần dẻ tron
 cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách 1–2 dòng, đánh dấu DoiNgang.
 {% endcomment %}
 <section class="pg-box pg-box--doi">
-  <header class="pg-box__head">
-    <h3>VÀNG ĐỔI <i>dẻ khách đưa</i></h3>
-    <label class="pg-ngang" title="Đổi dẻ cùng tuổi vàng lấy hàng mới: phần trong hạn mức tính GIÁ BÁN RA (ngang giá), phần dư tính giá thâu">
-      <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1" checked>
-      <span>⇄ Đổi ngang vàng</span>
-    </label>
-  </header>
-
-  <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
-        hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=true;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
+  <header class="pg-box__head pg-doi-head">
+    <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
+          hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=true;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
     {% csrf_token %}
     <input type="hidden" name="doi_ngang" id="o-doingang-hidden" value="">
     <label><span>LOẠI DẺ</span>
@@ -42,7 +35,12 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
     <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
             hx-post="{% url 'pos:ban_doi_tinh_lai' %}" hx-swap="none"
             title="Gộp các dòng cùng loại vàng & tính lại theo từng loại (đổi ngang trong hạn mức bán ra, phần dư tính thâu)">↻ TÍNH LẠI</button>
-  </form>
+    </form>
+    <label class="pg-ngang pg-ngang--right" title="Đổi dẻ cùng tuổi vàng lấy hàng mới: phần trong hạn mức tính GIÁ BÁN RA (ngang giá), phần dư tính giá thâu">
+      <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1" checked>
+      <span>⇄ Đổi ngang vàng</span>
+    </label>
+  </header>
 
   <div class="pg-box__body pg-box__body--doi pg-box__body--cuon">
     <table class="pg-tb pg-tb--gon">

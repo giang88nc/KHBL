@@ -12,8 +12,13 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
              placeholder="Quét tem hoặc gõ mã hàng rồi Enter" value="{{ scan_val|default:'' }}">
       <span class="pg-scan__dots khbl-scan__dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
     </form>
-    <button id="nut-tim-hang" class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
-            hx-get="{% url 'pos:ban_tim_hang' %}" hx-target="#modal-root">Tìm hàng · F3</button>
+    {# Mã ĐƠN đang lập: hiện khi đã quét món đầu / đơn đã lưu, chưa có thì "bỏ trống" #}
+    {% if g.ban or g.trn_id %}
+      <span class="pg-hd-badge" title="Mã hóa đơn {% if g.trn_id %}(số thật){% else %}(dự kiến — cấp thật lúc lưu){% endif %}">
+        {{ g.bill_code|default:g.trn_id|default:ma_du_kien }}</span>
+    {% else %}
+      <span class="pg-hd-badge pg-hd-badge--trong" title="Quét mã món đầu hoặc bấm ＋ ĐƠN MỚI để bắt đầu">bỏ trống</span>
+    {% endif %}
   </header>
 
   {% if scan_err %}

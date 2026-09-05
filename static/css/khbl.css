@@ -532,6 +532,20 @@ button,input,select,textarea{font:inherit;color:inherit}
   gap:10px;padding:7px 11px;border-bottom:1px solid var(--line);width:100%;box-sizing:border-box}
 .pg-goiy__i:hover{background:var(--gold-100)}
 .pg-goiy__i i{font-size:10.5px;color:var(--ink-400);font-style:normal}
+/* ── THÔNG TIN 1 dòng (05/09/2026): các ô nằm ngang, khách hàng có nút +THÊM gắn liền ── */
+.pg-info--1d{flex-direction:row;align-items:flex-end;flex-wrap:wrap;gap:10px}
+.pg-info--1d .pg-f--khach{flex:1 1 300px;min-width:240px;flex-direction:column;align-items:stretch}
+.pg-info--1d .pg-f--khach > span{position:static}
+.pg-inb{display:flex;align-items:stretch}
+.pg-inb .khbl-input{flex:1;min-width:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.pg-inb__btn{flex:none;white-space:nowrap;border-top-left-radius:0;border-bottom-left-radius:0;border-left:0}
+.pg-chon__sua{margin-left:2px;font-size:12px;padding:4px 9px}
+/* Mã ĐƠN dạng badge trên khối VÀNG BÁN (thay nút Tìm hàng) */
+.pg-hd-badge{margin-left:auto;font-family:var(--font-mono,ui-monospace,monospace);font-weight:700;
+  font-size:12.5px;color:var(--gold-700);background:var(--gold-100);border:1px solid var(--gold-300);
+  border-radius:6px;padding:3px 10px;letter-spacing:.02em;white-space:nowrap}
+.pg-hd-badge--trong{color:var(--ink-400);background:var(--surface);border-style:dashed;
+  font-family:inherit;font-weight:600;letter-spacing:0}
 
 /* ── khung chung của 3 khối ── */
 .pg-box{display:flex;flex-direction:column;min-height:0;background:var(--white);
@@ -631,7 +645,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-btn-noi:hover{transform:translateY(-1px)}
 
 /* ── VÀNG ĐỔI: checkbox "Đổi ngang vàng" + hạn mức + hiệu ứng phân biệt ── */
-.pg-box--doi .pg-box__head{display:flex;align-items:center;gap:12px}
+.pg-box--doi .pg-box__head{display:flex;align-items:flex-end;gap:10px;flex-wrap:nowrap}
+/* form nhập tích hợp LÊN header; checkbox đổi ngang float phải */
+.pg-doi-head .pg-doi-nhap{flex:1;min-width:0;padding:0;background:none;border-bottom:0}
+.pg-ngang--right{margin-left:auto;flex:none;align-self:center}
 .pg-ngang{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:3px 10px;border:1px solid var(--gold-300);
   border-radius:16px;font-size:12.5px;font-weight:600;color:var(--gold-700);cursor:pointer;user-select:none;background:var(--surface)}
 .pg-ngang input{accent-color:var(--gold-500);width:15px;height:15px}

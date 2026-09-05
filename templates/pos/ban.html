@@ -42,7 +42,6 @@
   <div class="khbl-keys">
     <span><kbd>Enter</kbd>Thêm món</span>
     <span><kbd>F2</kbd>Khách hàng</span>
-    <span><kbd>F3</kbd>Tìm hàng</span>
     <span><kbd>F4</kbd>Vàng đổi</span>
     <span><kbd>F6</kbd>Bớt lẻ</span>
     <span class="dim" style="margin-left:auto">{{ pmv_dich_mo_ta }}</span>
@@ -73,7 +72,7 @@ document.addEventListener("mousedown", function (e) {
 
 /* phím tắt */
 document.addEventListener("keydown", function (e) {
-  var map = { F2: "#o-khach", F3: "#nut-tim-hang", F4: "#o-de", F6: "#nut-bot-le" };
+  var map = { F2: "#o-khach", F4: "#o-de", F6: "#nut-bot-le" };
   var sel = map[e.key];
   if (!sel) return;
   var el = document.querySelector(sel);
