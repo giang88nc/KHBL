@@ -12,15 +12,8 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
     </label>
   </header>
 
-  {% if hm_ngang %}
-  <div class="pg-ngang-hm" id="pg-ngang-hm">
-    Hạn mức đổi ngang còn:
-    {% for h in hm_ngang %}<b data-base="{{ h.base }}" data-con="{{ h.con|sokhong }}">{{ h.base }} {{ h.con|tl_man }}</b>{% endfor %}
-  </div>
-  {% endif %}
-
   <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
-        hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=false;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
+        hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=true;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
     {% csrf_token %}
     <input type="hidden" name="doi_ngang" id="o-doingang-hidden" value="">
     <label><span>LOẠI DẺ</span>
@@ -83,7 +76,10 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
 
   <footer class="pg-box__foot">
     <span>{{ t.so_doi }} dòng</span>
-    <span class="dim">TL đổi <b class="mono">{{ t.tl_doi|tl_man }}</b></span>
+    <span class="pg-tl">TL đổi <b class="mono">{{ t.tl_doi|tl_man }}</b></span>
+    {% if t.tl_doi_loai %}
+    <span class="pg-tl-loai">{% for l in t.tl_doi_loai %}<b title="Vàng đổi loại {{ l.loai }}"><i>{{ l.loai }}</i>{{ l.tl|tl_chi:l.unit }}<em>{% if l.unit == 'G' or l.unit == 'K' %}g{% else %}c{% endif %}</em></b>{% endfor %}</span>
+    {% endif %}
     <span class="pg-box__sum">TIỀN VÀNG CŨ <b>{{ t.vang_cu|tien }}</b></span>
   </footer>
 </section>

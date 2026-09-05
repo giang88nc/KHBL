@@ -193,19 +193,20 @@ def ban_doi_them(request):
         return _pos_oob(request)
 
     # ── ĐỔI NGANG ──
+    # Hạn mức = TL vàng bán ra cùng loại còn lại. Không có hàng bán loại đó (hạn mức ≤ 0)
+    # thì KHÔNG chặn (GĐ chốt 05/09/2026): coi như hạn mức 0 → toàn bộ TL vàng đổi tính
+    # GIÁ THÂU như thường ((tổng − hột) × giá thâu). Có hàng bán thì phần trong hạn mức mới
+    # tính giá BÁN RA.
     g = cart.get(request)
     base = de.get("base") or M.de_base(ma)
-    han_muc = _han_muc_doi_ngang(g, base)
-    if han_muc <= 0:
-        return _loi(request, f"Chưa có (hoặc hết) hàng bán loại {base} để đổi ngang với {de['GoldDesc']} — "
-                             f"bỏ tick 'Đổi ngang' để tính giá thâu, hoặc quét hàng {base} trước")
+    han_muc = max(_han_muc_doi_ngang(g, base), M.D0)
     sell = M.dec(de.get("SellRate"))
-    if sell <= 0:
+    if han_muc > 0 and sell <= 0:
         return _loi(request, f"Bảng giá chưa có giá BÁN RA cho {de['GoldDesc']} — không đổi ngang được")
     tl_vang = tong_tl - tl_hot
     phan = M.chia_doi_ngang(tl_vang, tl_hot, han_muc, sell, gia_thau, pu)
-    if len(phan) > 1 and gia_thau <= 0:
-        return _loi(request, f"Phần dư quá hạn mức cần GIÁ THÂU cho {de['GoldDesc']} — nhập tay giá đổi")
+    if any(not p["ngang"] and p["w"] > 0 for p in phan) and gia_thau <= 0:
+        return _loi(request, f"Phần tính GIÁ THÂU của {de['GoldDesc']} chưa có giá — nhập tay giá đổi")
     for p in phan:
         tien, dong = B.dong_doi(ma, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu, doi_ngang=p["ngang"])
         cart.them_doi(request, tien, dong)

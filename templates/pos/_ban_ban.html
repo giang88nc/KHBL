@@ -60,7 +60,10 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
 
   <footer class="pg-box__foot">
     <span>{{ t.so_mon }} món</span>
-    <span class="dim">TL vàng <b class="mono">{{ t.tl_ban|tl_man }}</b></span>
+    <span class="pg-tl">TL vàng <b class="mono">{{ t.tl_ban|tl_man }}</b></span>
+    {% if t.tl_ban_loai %}
+    <span class="pg-tl-loai">{% for l in t.tl_ban_loai %}<b title="Loại {{ l.loai }}"><i>{{ l.loai }}</i>{{ l.tl|tl_chi:l.unit }}<em>{% if l.unit == 'G' or l.unit == 'K' %}g{% else %}c{% endif %}</em></b>{% endfor %}</span>
+    {% endif %}
     <span class="pg-box__sum">TIỀN VÀNG MỚI <b>{{ t.vang_moi|tien }}</b></span>
   </footer>
 </section>

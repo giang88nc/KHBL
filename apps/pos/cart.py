@@ -9,6 +9,7 @@ Mọi giá trị ép về CHUỖI — session đi qua JSON, Decimal không sốn
 
 trn_id rỗng = phiếu MỚI chưa lưu · có trn_id = đang sửa hóa đơn đã lưu.
 """
+from collections import OrderedDict
 from decimal import Decimal
 
 from apps.pmv import money as M
@@ -134,4 +135,21 @@ def tong(request):
     t["so_doi"] = len(g["doi"])
     t["tl_ban"] = sum((M.dec(x["row"].get("GoldReal")) for x in g["ban"]), M.D0)
     t["tl_doi"] = sum((M.dec(x["row"].get("TotalGoldWeight")) for x in g["doi"]), M.D0)
+    # Chi tiết TL vàng theo TỪNG LOẠI (tuổi vàng) cho chân bảng 2 khối
+    t["tl_ban_loai"] = _tl_theo_loai(g["ban"], "GoldReal")
+    t["tl_doi_loai"] = _tl_theo_loai(g["doi"], "GoldWeight")
     return t
+
+
+def _tl_theo_loai(rows, field):
+    """Gộp trọng lượng vàng theo TUỔI VÀNG (nhãn) + đơn vị giá, giữ khối lượng THÔ
+    để filter tl_chi quy về chỉ/gram khi hiển thị. Trả list giữ thứ tự xuất hiện."""
+    out = OrderedDict()
+    for x in rows:
+        r = x["row"]
+        w = M.dec(r.get(field))
+        if not w:
+            continue
+        key = (M.tuoi(r.get("GoldCode")), (r.get("PriceUnit") or "L"))
+        out[key] = out.get(key, M.D0) + w
+    return [{"loai": k[0], "unit": k[1], "tl": v} for k, v in out.items()]

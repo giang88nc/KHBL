@@ -4,7 +4,7 @@
   {% for e in ds %}
   <button type="button" class="pg-goiy__i"
           hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": "{{ e.EmpID }}"}' hx-swap="none">
-    <b>{{ e.EmpName }}</b><i class="mono">{{ e.EmpID }}</i>
+    <b>{{ e.EmpName }}</b>
   </button>
   {% endfor %}
 </div>

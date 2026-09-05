@@ -179,6 +179,19 @@ nút **DANH SÁCH + THÊM MỚI** làm nổi bật (`khbl-btn--gold pg-btn-noi`,
 `ban.html`: JS ẩn dropdown gợi ý NV/Khách khi bấm ra ngoài `.pg-f--tim`; **BỎ dải giá đỉnh `#gia-strip`**
 (kéo theo bỏ poll 15s của dải). smoke_ui 122/122, smoke_pmv_money 11/11.
 
+**Tinh chỉnh chân bảng + khách + đổi ngang (05/09/2026, GĐ chốt)**:
+- Dropdown NV: **KHÔNG hiện EmpID** (chỉ tên gọi).
+- Khách hàng: đã chọn → **ẩn nút ＋ THÊM, hiện nút ✎ SỬA** mở popup `khach_sua` ngay trên bán hàng;
+  lưu xong (`HX-Trigger khachSaved`) → `ban.html` nghe sự kiện, `htmx.ajax` POST `ban_dat` với `custId`
+  để nạp lại tên/SĐT khách đang chọn (CSRF qua `KHBL_CSRF`).
+- Chân bảng VÀNG BÁN/ĐỔI: ngoài TL tổng còn **chi tiết theo TỪNG LOẠI VÀNG** (chip `.pg-tl-loai`,
+  helper `cart._tl_theo_loai` gộp theo `money.tuoi` + đơn vị giá; bán dùng `GoldReal`, đổi dùng `GoldWeight`).
+- VÀNG ĐỔI: **BỎ dải "Hạn mức đổi ngang còn:"**; form nhập `flex-wrap:nowrap` + `overflow-x:auto`
+  để KHÔNG đẩy mất chân bảng khi thêm nhiều dòng; checkbox "Đổi ngang" giữ **CHECKED** sau mỗi lần thêm.
+- ⚠ **Đổi ngang khi KHÔNG có hàng bán cùng loại** (hạn mức ≤ 0): KHÔNG chặn nữa — coi hạn mức = 0 →
+  toàn bộ `(tổng − hột) × giá thâu` như thâu thường (`views.ban_doi_them`, `chia_doi_ngang` với hm=0 trả 1
+  dòng giá thâu). smoke_ban_hang 48/48.
+
 **Số hóa đơn** ô khóa, chữ mờ + nhãn "dự kiến": chỉ là `MAX(TrnID)+1` cho người bán dễ
 hình dung. Số THẬT do vendor cấp lúc lưu (RULE 5) — máy KK bán song song có thể lấy
 trước số đó. Lưu xong ô hiện `BillCode` thật.

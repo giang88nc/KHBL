@@ -648,3 +648,16 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tuoi{display:inline-block;font-weight:700;font-size:11px;color:var(--gold-700);background:var(--gold-100);
   border:1px solid var(--gold-300);border-radius:5px;padding:0 6px;letter-spacing:.02em}
 .pg-box__body--cuon{overflow:auto}
+
+/* ── Chân bảng: TL vàng tổng + chi tiết theo từng LOẠI VÀNG ── */
+.pg-tl{font-weight:600;color:var(--ink-700)}
+.pg-tl b{color:var(--gold-700);margin-left:5px}
+.pg-tl-loai{display:flex;gap:6px;flex-wrap:wrap;align-items:center;overflow-x:auto;max-width:52%}
+.pg-tl-loai b{display:inline-flex;align-items:baseline;gap:4px;font-weight:700;font-size:11.5px;
+  color:var(--gold-700);background:var(--gold-100);border:1px solid var(--gold-300);
+  border-radius:5px;padding:1px 7px;white-space:nowrap}
+.pg-tl-loai b i{font-style:normal;font-weight:800;letter-spacing:.02em}
+.pg-tl-loai b em{font-style:normal;font-weight:400;color:var(--ink-500);font-size:9.5px}
+
+/* ── VÀNG ĐỔI: giữ form 1 hàng (cuộn ngang khi hẹp) để KHÔNG đẩy mất chân bảng ── */
+.pg-box--doi .pg-doi-nhap{flex-wrap:nowrap;overflow-x:auto}

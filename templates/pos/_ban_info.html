@@ -73,16 +73,20 @@ Ngày + DANH SÁCH + THÊM MỚI · số hóa đơn (khóa) · nhân viên · kh
           <button class="pg-chon__x" type="button" title="Bỏ chọn khách"
                   hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": ""}' hx-swap="none">×</button>
         </div>
+        {# Đã chọn khách → hiện SỬA (cập nhật khách ngay trên bán hàng), ẩn nút THÊM #}
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-f__them" type="button"
+                title="Sửa thông tin khách hàng này"
+                hx-get="{% url 'pos:khach_sua' g.cust.id %}" hx-target="#modal-root">✎ SỬA</button>
       {% else %}
         <input id="o-khach" class="khbl-input" autocomplete="off"
                placeholder="F2 — tên · số điện thoại · CCCD"
                hx-get="{% url 'pos:ban_tim_khach' %}" hx-trigger="keyup changed delay:220ms"
                hx-target="#khach-goiy" name="q">
         <div id="khach-goiy" class="pg-goiy"></div>
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-f__them" type="button"
+                title="Thêm khách hàng mới"
+                hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋ THÊM</button>
       {% endif %}
-      <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-f__them" type="button"
-              title="Thêm khách hàng mới"
-              hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋</button>
     </div>
   </div>
 </div>

@@ -51,6 +51,16 @@
 
 {% block extra_js %}
 <script>
+var KHBL_CSRF = "{{ csrf_token }}";
+
+/* Sửa khách NGAY trên bán hàng: lưu xong (khachSaved) → nạp lại khách đang chọn để cập nhật tên/SĐT */
+document.body.addEventListener("khachSaved", function (e) {
+  var id = e.detail && e.detail.custId;
+  if (!id || !window.htmx) return;
+  htmx.ajax("POST", "{% url 'pos:ban_dat' %}",
+            { values: { cust_id: id }, swap: "none", headers: { "X-CSRFToken": KHBL_CSRF } });
+});
+
 /* Ẩn dropdown gợi ý NV/Khách khi bấm RA NGOÀI vùng ô tìm (chọn 1 mục đã tự re-render) */
 document.addEventListener("mousedown", function (e) {
   if (e.target.closest(".pg-f--tim")) return;   // đang bấm trong ô tìm / mục gợi ý
