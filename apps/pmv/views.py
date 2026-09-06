@@ -136,8 +136,15 @@ def _thu_trace():
 
 @require_POST
 def danh_dau_truoc(request):
-    """Chụp FULL KK + ghim mốc trace. Sau đó GĐ làm ĐÚNG 1 thao tác trên PMVGoldRT rồi bấm SAU."""
+    """Chụp FULL KK + ghim mốc trace. Sau đó GĐ làm ĐÚNG 1 thao tác trên PMVGoldRT rồi bấm SAU.
+    GĐ chốt 06/09/2026: job 2 phút đã TẮT, trace KK bình thường TẮT → TRƯỚC tự BẬT trace, SAU tự TẮT."""
+    from django.core.management import call_command
+    from .management.commands.pmv_trace import trace_status
+
     try:
+        st = trace_status() or {}
+        if str(st.get("status")) != "1":
+            call_command("pmv_trace", "start")
         _thu_trace()
         seq = int(PmvState.get("pmv_trace_last_seq") or 0)
         snap = BL.chup_kk()
@@ -206,6 +213,12 @@ def danh_dau_sau(request):
             lines.append("    " + " | ".join(f"{k}={v}" for k, v in d.items()))
     BL.ghi_thay_doi(ngay, lines, ten=ten)
     PmvState.objects.filter(key=DANH_DAU_KEY).delete()
+    # Học xong thì TẮT trace để KK nhẹ (TRƯỚC sẽ bật lại khi cần) — GĐ chốt 06/09/2026
+    try:
+        from django.core.management import call_command
+        call_command("pmv_trace", "stop")
+    except Exception as exc:
+        messages.warning(request, f"Không tắt được trace KK: {exc}")
     return render(request, "pmv/danh_dau.html", {
         "ws": ws, "we": now, "hanh_vi": hanh_vi, "khac": khac, "procs": procs, "mau": mau,
         "truoc": truoc, "sau": sau, "file": str(BL.thu_muc_ngay(ngay) / f"{ten}.log"),

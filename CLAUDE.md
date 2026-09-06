@@ -363,6 +363,13 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   lúc chụp (KK dọn thì bản mới mất theo, bản cũ còn) để phục hồi toàn bộ; kho lịch sử = superset giữ mãi để đọc
   quá khứ/failover — khác vai trò, restore `.bak` đè kho sẽ mất chính giá trị "giữ mãi". Khi có NAS/USB → trỏ
   `PMV_BACKUP_DIR_LOCAL` + `PMV_HIST_BACKUP_DIR` ra ngoài máy.
+- **CHỐT KIẾN TRÚC DỮ LIỆU + LỊCH (GĐ, 06/09/2026)**: **KK MSSQL** = thực thi CRUD chính (qua proc) ·
+  **GIANG MySQL** = nguồn bổ sung, CRUD trên app · **HIST MSSQL** = bản đầy đủ để tra cứu/failover + `.bak`.
+  Lịch scheduler còn: **sync kho 09:00/21:00 · backup KK+kho 09:30/21:30 (bù 1h) · check KK + vân tay
+  version vendor 60'** (giữ — cầu chì khóa ghi khi vendor nâng cấp). **Job thu thập hành vi 2' ĐÃ TẮT** + trace
+  KK tắt (việc học đã xong; code + dòng add_job comment sẵn để bật lại). Học hành vi mới = **tay**: ĐÁNH DẤU
+  TRƯỚC (tự BẬT trace) → thao tác PMVGoldRT → ĐÁNH DẤU SAU (tự TẮT trace) → HỌC → quy trình. Web 8100 tự bật
+  cùng Windows (`KHBL_Server.vbs` Startup → TURN_ON + watchdog), chỉ tắt bằng TURN_OFF.
 - **SQL-auth `kimhanh2/KimHanh2` ĐÃ DÙNG ĐƯỢC** (06/09/2026): GĐ bật Mixed Mode bằng
   `xp_instance_regwrite … LoginMode=2` rồi `Restart-Service 'MSSQL$SQL2014'` (SSMS 2008 R2 cũ hơn engine 2014
   nên dialog Properties không dùng được — dùng lệnh). Xác minh: `IsIntegratedSecurityOnly=0`, login vào
