@@ -168,6 +168,50 @@ def doc(trn_id, c=None):
     }
 
 
+DS_TRAN = 2000   # trần dòng popup DANH SÁCH — chạm trần thì popup cảnh báo thống kê chưa đủ
+
+
+def danh_sach(d1, d2, *, emp_id="", khach="", trang_thai="", c=None, limit=DS_TRAN):
+    """Danh sách hóa đơn BÁN theo KHOẢNG NGÀY [d1, d2] + lọc NV / khách / trạng thái — popup
+    DANH SÁCH (thiết kế lại 07/09/2026). Trả (rows, thong_ke).
+    Nguồn: d1 quá khứ → kho lịch sử, d1 = hôm nay → live (KK chết → lùi về kho) — cùng quy ước
+    services.hoa_don_loc. Khoảng ngày chỉ dùng tham số, không ghép chuỗi vào SQL."""
+    emp_id, key = (emp_id or "").strip(), (khach or "").strip()
+    tt = (trang_thai or "").strip().upper()
+    sql = (f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.PayAmount, "
+           "b.SellTotalAmount, b.BuyTotalAmount, ISNULL(b.Discount,0) AS Discount, "
+           "ISNULL(b.TienCoc,0) AS TienCoc, k.CustName, k.Phone, e.EmpName "
+           "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
+           "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = b.CustID "
+           "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
+           "WHERE b.IsDel = '0' AND b.TrnDate >= CAST(? AS datetime) "
+           "AND b.TrnDate < DATEADD(day, 1, CAST(? AS datetime)) "
+           "AND (? = '' OR b.EmpID = ?) AND (? = '' OR b.Status = ?) "
+           "AND (? = '' OR k.CustName LIKE ? OR k.Phone LIKE ? OR k.CMND LIKE ?) "
+           "ORDER BY b.TrnDate DESC, b.TrnTime DESC")
+    args = (d1, d2, emp_id, emp_id, tt, tt, key, f"%{key}%", f"%{key}%", f"%{key}%")
+    if c is not None:
+        rows = c.query(sql, args)
+    else:
+        from apps.pmv import hist_read as HR
+        rows = HR.doc(lambda cl: cl.query(sql, args), ngay_iso=d1, tag="ds_hoa_don")
+    return rows, thong_ke_ds(rows)
+
+
+def thong_ke_ds(rows):
+    """Số liệu tổng cho đầu popup DANH SÁCH: số đơn, đã chốt / nháp, Σ vàng mới·cũ·bớt·cọc·khách trả."""
+    tk = {"so": len(rows), "chot": 0, "nhap": 0, "vang_moi": Decimal(0), "vang_cu": Decimal(0),
+          "bot": Decimal(0), "coc": Decimal(0), "khach_tra": Decimal(0)}
+    for r in rows:
+        tk["chot" if r.get("Status") == CHOT_ROI else "nhap"] += 1
+        tk["vang_moi"] += M.dec(r.get("SellTotalAmount"))
+        tk["vang_cu"] += M.dec(r.get("BuyTotalAmount"))
+        tk["bot"] += M.dec(r.get("Discount"))
+        tk["coc"] += M.dec(r.get("TienCoc"))
+        tk["khach_tra"] += M.dec(r.get("PayAmount"))
+    return tk
+
+
 def trong_ngay(ngay, c=None, limit=100):
     """Danh sách hóa đơn của 1 ngày — cho nút DANH SÁCH.
     Không truyền c: ngày QUÁ KHỨ → kho lịch sử, hôm nay → live (KK chết → lùi về kho)."""

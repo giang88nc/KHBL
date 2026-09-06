@@ -103,7 +103,14 @@ def _danh_so(g):
 # ─────────────── nạp hóa đơn đã lưu ───────────────
 def nap(request, phieu):
     """Đổ hóa đơn đọc từ PMV (bill.doc) vào phiếu đang làm để xem/sửa."""
-    g = _rong(get(request).get("emp", ""))
+    g = tu_phieu(phieu, emp=get(request).get("emp", ""))
+    save(request, g)
+    return g
+
+
+def tu_phieu(phieu, emp=""):
+    """Dựng dict phiếu (dạng _rong) từ hóa đơn bill.doc — KHÔNG đụng session."""
+    g = _rong(emp)
     g.update(trn_id=phieu["trn_id"], bill_code=phieu["bill_code"], status=phieu["status"],
              ngay=_ngay_iso(phieu.get("ngay")), emp=phieu.get("emp_id") or "",
              ghi_chu=phieu.get("ghi_chu") or "",
@@ -114,7 +121,6 @@ def nap(request, phieu):
     if phieu.get("cust_id") and phieu["cust_id"] != "CU0000000000000":
         g["cust"] = {"id": phieu["cust_id"], "name": phieu.get("khach") or "",
                      "code": "", "phone": "", "diem": "0"}
-    save(request, g)
     return g
 
 
@@ -135,10 +141,15 @@ def dong_doi(g):
 
 
 def tong(request):
-    """Tổng kết phiếu — dùng ĐÚNG công thức trong apps/pos/bill.py, không tính lại."""
+    """Tổng kết phiếu đang lập trong session."""
+    return tong_cua(get(request))
+
+
+def tong_cua(g):
+    """Tổng kết 1 phiếu bất kỳ (dict dạng _rong) — dùng ĐÚNG công thức trong apps/pos/bill.py,
+    không tính lại. Tách khỏi session để in hóa đơn theo trn_id sau khi form đã xóa trắng."""
     from . import bill as B
 
-    g = get(request)
     t = B.tinh_tong(sum((M.dec(x["tien"]) for x in g["ban"]), M.D0),
                     sum((M.dec(x["tien"]) for x in g["doi"]), M.D0),
                     g.get("bot"), g.get("cong_them"), g.get("vang_them"), g.get("coc"))

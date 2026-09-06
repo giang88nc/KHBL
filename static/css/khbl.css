@@ -623,6 +623,19 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tb__trong span{display:block;font-size:12px;margin-top:2px}
 .pg-tb__trong--nho td{padding:10px}
 .pg-tb--ds td{font-size:13px}
+/* popup DANH SÁCH (07/09/2026): thống kê ở đầu popup + bộ lọc */
+.pg-ds__nguon{font-size:12px;font-weight:600;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 9px;vertical-align:middle}
+.pg-ds__tk{display:flex;gap:18px;margin-left:18px;flex-wrap:wrap}
+.pg-ds__tk span{display:flex;flex-direction:column;line-height:1.15}
+.pg-ds__tk i{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-400)}
+.pg-ds__tk b{font-size:14px;color:var(--ink-900)}
+.pg-ds__tk small{font-size:10.5px;color:var(--ink-400)}
+.pg-ds__tk--tra b{color:var(--gold-700);font-size:16px}
+.pg-ds__loc{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.pg-ds__loc .khbl-field span{font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-600)}
+.pg-ds__loc .khbl-input,.pg-ds__loc .khbl-select{padding:5px 8px;font-size:13px}
+.pg-ds__loc-khach{flex:1;min-width:200px}
+.pg-ds__homnay{padding:6px 12px}
 .pg-x{all:unset;cursor:pointer;color:var(--ink-400);font-size:16px;line-height:1;padding:0 4px}
 .pg-x:hover{color:var(--flame-500)}
 
@@ -769,11 +782,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── GIẤY ĐẢM BẢO A5: tờ trống quét thật làm nền, dữ liệu đè theo đúng khuôn ── */
 .gdb-a5-toolbar{display:flex;align-items:center;gap:10px;margin:0 auto 10px;max-width:590px;font-size:12px;color:var(--ink-600)}
-.gdb-a5{position:relative;width:min(100%,590px);aspect-ratio:148/210;margin:0 auto;overflow:hidden;background:#fffceb url("../img/gdb-a5-blank.jpg") center/100% 100% no-repeat;color:#4a3821;font-family:"Times New Roman",serif;line-height:1.08;box-shadow:0 8px 24px rgba(50,37,17,.18)}
+.gdb-a5{position:relative;width:min(100%,510px);aspect-ratio:170/210;margin:0 auto;overflow:hidden;background:#fffceb url("../img/gdb-a5-blank.jpg") center/100% 100% no-repeat;color:#4a3821;font-family:"Times New Roman",serif;line-height:1.08;box-shadow:0 8px 24px rgba(50,37,17,.18)}
 .gdb-a5__front,.gdb-a5__store{position:absolute;inset:0;font-size:clamp(6px,.72vw,9px)}
 .gdb-codebar{display:flex;align-items:stretch;height:100%;background:rgba(255,253,235,.48);padding:0 1px;overflow:hidden}
 .gdb-codebar i{display:block;flex:var(--w) 0 0;height:100%}.gdb-codebar__bar{background:#30261e}.gdb-codebar__text{position:absolute;display:block;text-align:center;letter-spacing:2px;font:600 clamp(4.5px,.54vw,7px)/1 Arial,sans-serif;color:#3a2e23;white-space:nowrap}
-.gdb-a5__front-code{position:absolute;left:53.5%;top:19.6%;width:20.4%;height:3.1%}.gdb-a5__front-code-text{left:53.5%;top:22.85%;width:20.4%}
+.gdb-a5__front-code{position:absolute;left:53.5%;top:19.6%;width:20.4%;height:5.1%}.gdb-a5__front-code-text{left:53.5%;top:24.85%;width:20.4%}
 .gdb-a5__front-info{position:absolute;top:20.7%;left:1.7%;width:73%;display:grid;grid-template-columns:32% 48%;grid-template-areas:"type bill" "customer customer" "phone address";gap:2px 0;font-size:1em}.gdb-a5__front-info b,.gdb-a5__store-meta b{font-weight:bold}.gdb-a5__type{grid-area:type}.gdb-a5__bill{grid-area:bill}.gdb-a5__customer{grid-area:customer}.gdb-a5__phone{grid-area:phone}.gdb-a5__address{grid-area:address}
 .gdb-a5 table{width:100%;border-collapse:collapse;table-layout:fixed}.gdb-a5 th,.gdb-a5 td{border:1px solid rgba(71,52,28,.72);padding:1px 2px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gdb-a5 th{text-align:center;font-weight:bold;background:rgba(255,255,235,.2)}.gdb-a5 .num{text-align:right}.gdb-a5 .mono{font-family:"Courier New",monospace}.gdb-a5__empty{text-align:center;color:#806e4d}
 .gdb-a5__front-items{position:absolute;left:2%;top:26.45%;width:96%;height:12.25%;overflow:hidden;font-size:clamp(4.4px,.58vw,7.2px)}.gdb-a5__front-items th:nth-child(1){width:5%}.gdb-a5__front-items th:nth-child(2){width:15%}.gdb-a5__front-items th:nth-child(3){width:20%}.gdb-a5__front-items th:nth-child(4){width:9%}.gdb-a5__front-items th:nth-child(5),.gdb-a5__front-items th:nth-child(6){width:9%}.gdb-a5__front-items th:nth-child(7){width:11%}.gdb-a5__front-items th:nth-child(8){width:7%}.gdb-a5__front-items th:nth-child(9){width:15%}.gdb-a5__front-items tfoot td{font-size:1.05em}
@@ -783,6 +796,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .gdb-a5__store-payment{position:absolute;top:89%;left:66.3%;width:31%;border:1px solid rgba(71,52,28,.72);font-size:clamp(4.5px,.54vw,6.7px);background:rgba(255,253,235,.18)}.gdb-a5__store-payment>div{display:flex;justify-content:space-between;gap:3px;padding:1px 3px;border-top:1px solid rgba(71,52,28,.55)}.gdb-a5__store-payment>div:first-child{border-top:0}.gdb-a5__store-final{font-size:1.08em;font-weight:bold}.gdb-a5__store-date{position:absolute;top:94.95%;left:11%;font-size:clamp(4.8px,.56vw,7px);font-style:italic}.gdb-a5__store-emp{position:absolute;top:97.05%;left:9%;font-size:clamp(4.8px,.56vw,7px)}
 
 @media print{@page{size:A5 portrait;margin:0}.gdb-toolbar,.gdb-a5-toolbar{display:none!important}.gdb-a5{width:148mm!important;height:210mm!important;aspect-ratio:auto!important;margin:0!important;box-shadow:none!important}.gdb-a5__front,.gdb-a5__store{font-size:9px!important}}
+
+.gdb-a5__front-emp span{margin-top:1.3em}
 
 /* ── v5: badge đơn chờ treo >30' trên nút DANH SÁCH ── */
 .pg-treo{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#B3402A;background:#FDF2F0;border:1px solid #E3B9AC;border-radius:99px;padding:0 8px;vertical-align:middle}

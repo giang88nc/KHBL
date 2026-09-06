@@ -253,6 +253,13 @@ class Command(BaseCommand):
             self.ok("C7 hóa đơn vào CSDL ở trạng thái ĐÃ CHỐT", hd["Status"] == B.CHOT_ROI,
                     f"{hd['BillCode']} · {hd['TrnID']}")
             self.ok("C8 ghi chú lưu theo", (hd["Description"] or "").strip() == "kiểm thử web")
+            # 07/09/2026: thanh toán xong → form XÓA TRẮNG kể cả NV; bản in mở theo trn_id
+            self.ok("C8b thanh toán xong form trắng (không còn ĐÃ CHỐT, ô NV trống lại)",
+                    "ĐÃ CHỐT" not in b and 'id="o-nv"' in b)
+            bi = body(cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}"))
+            self.ok("C8c in hóa đơn theo trn_id vẫn ra đúng số phiếu", hd["BillCode"] in bi and ma1 in bi)
+            self.ok("C8d ĐƠN MỚI xóa cả nhân viên bán",
+                    'id="o-nv"' in body(cl.post("/banle/ban-hang/moi/")))
 
             b = body(cl.get("/banle/ban-hang/danh-sach/"))
             self.ok("C9 hóa đơn hiện trong popup DANH SÁCH", hd["BillCode"] in b)

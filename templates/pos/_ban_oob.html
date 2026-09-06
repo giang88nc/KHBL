@@ -8,4 +8,4 @@
   {% if tin %}<div class="success">{{ tin }}</div>{% endif %}
   {% include "partials/messages.html" %}
 </div>
-{% if in_luon %}<script>window.open("{% url 'pos:ban_in' %}", "_blank");</script>{% endif %}
+{% if in_luon %}<script>window.open("{% url 'pos:ban_in' %}?trn_id={{ vua_chot|urlencode }}", "_blank");</script>{% endif %}

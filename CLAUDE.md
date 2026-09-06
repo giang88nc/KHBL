@@ -257,8 +257,10 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
 
 | Nút | Việc |
 |---|---|
-| DANH SÁCH | popup hóa đơn trong ngày → MỞ nạp lên form |
-| THANH TOÁN | `bill.luu` (Ins hoặc Upd) rồi `bill.chot` |
+| DANH SÁCH | popup **80vw** (07/09/2026): lọc **d1→d2** (mặc định hôm nay, `max` hôm nay) + NV + khách + trạng thái, đổi ô là lọc ngay (hx-get `ban_ds` thay trọn `#modal-root`); **đầu popup = thống kê** khoảng ngày (block mới `modal_head_extra` trong `modal_shell`): đơn/chốt/nháp · Σ vàng mới · vàng cũ · **tiền bớt · tiền cọc** · khách trả; bảng thêm 2 cột TIỀN BỚT, TIỀN CỌC sau VÀNG CŨ; d1≠d2 hiện thêm ngày. Nguồn: `bill.danh_sach` — d1 quá khứ → kho HIST, hôm nay → live (quy ước hoa_don_loc); trần `DS_TRAN=2000` dòng → chạm trần hiện cảnh báo cam "thống kê chưa đủ". MỞ nạp lên form |
+| ĐƠN MỚI / THÊM MỚI | **xóa trắng CẢ nhân viên bán** (GĐ chốt 07/09 — `cart.clear(giu_nv=False)`) |
+| THANH TOÁN / & IN | `bill.luu` (Ins hoặc Upd) rồi `bill.chot` → **form XÓA TRẮNG** (kể cả NV) sẵn cho khách kế; bản in mở `ban_in?trn_id=` (đọc lại từ PMV qua `cart.tu_phieu`/`tong_cua`, không đụng session). Muốn xem lại đơn vừa chốt → DANH SÁCH → MỞ |
+| IN HÓA ĐƠN | in phiếu ĐANG LẬP trên form, không xóa gì |
 | MỞ LẠI ĐỂ SỬA | chỉ hiện khi phiếu ĐÃ CHỐT — `bill.mo_lai` đưa về nháp |
 | XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho) |
 
@@ -416,6 +418,9 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
   **`{% block page_head %}`** — trang có hero riêng (Hóa đơn, Tổng quan) override block RỖNG để tắt, KHÔNG xóa
   khỏi base. Chú thích Django `{# #}` **không được xuống dòng** và không được chứa `{% block %}` (sẽ thành block
   thật → "appears more than once"). smoke_ui 129/129.
+- **07/09/2026 — popup DANH SÁCH thiết kế lại + luồng xóa trắng form** (xem bảng Vòng đời mục 4d): smoke_ban_hang
+  **56/56** (C8b form trắng sau thanh toán · C8c in theo trn_id · C8d ĐƠN MỚI xóa NV) + smoke_ui **130/130**; kiểm
+  trên KK thật: lọc 01–07/09 đọc HIST, 01/08→07/09 chạm trần 2000 báo cam, in `?trn_id=` ra đúng số phiếu.
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 

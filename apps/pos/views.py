@@ -422,7 +422,9 @@ def ban_bot_le(request):
 
 @require_POST
 def ban_moi(request):
-    cart.clear(request)
+    """ĐƠN MỚI / THÊM MỚI: xóa trắng form — KỂ CẢ nhân viên bán (GĐ chốt 07/09/2026: mỗi đơn
+    chọn lại NV để không ghi nhầm doanh số người trước)."""
+    cart.clear(request, giu_nv=False)
     return _pos_oob(request, {"tin": "Đã mở phiếu mới."})
 
 
@@ -444,13 +446,26 @@ def ban_tim_hang(request):
 # ─────── hóa đơn đã lưu: danh sách · mở · mở lại · thanh toán · xóa ───────
 
 def ban_ds(request):
-    """Popup DANH SÁCH hóa đơn theo ngày."""
-    ngay = request.GET.get("ngay") or datetime.date.today().isoformat()
+    """Popup DANH SÁCH hóa đơn (thiết kế lại 07/09/2026): khoảng ngày d1→d2 (mặc định hôm nay)
+    + lọc nhân viên / khách / trạng thái; đầu popup = thống kê khoảng ngày. Lọc lại = hx-get
+    chính URL này, thay trọn popup trong #modal-root."""
+    hom_nay = datetime.date.today().isoformat()
+    d1 = _ngay_hd(request.GET.get("d1") or request.GET.get("ngay"), hom_nay)
+    d2 = _ngay_hd(request.GET.get("d2") or request.GET.get("ngay"), hom_nay)
+    if d1 > d2:
+        d1, d2 = d2, d1
+    loc = {"emp_id": (request.GET.get("emp_id") or "").strip(),
+           "khach": (request.GET.get("khach") or "").strip(),
+           "trang_thai": (request.GET.get("trang_thai") or "").strip().upper()}
     try:
-        ds, loi = B.trong_ngay(ngay), ""
+        ds, tk = B.danh_sach(d1, d2, **loc)
+        loi = ""
     except Exception as exc:
-        ds, loi = [], str(exc)
-    return render(request, "pos/_ban_ds.html", {"ds": ds, "ngay": ngay, "loi": loi})
+        ds, tk, loi = [], B.thong_ke_ds([]), str(exc)
+    return render(request, "pos/_ban_ds.html", {
+        "ds": ds, "tk": tk, "d1": d1, "d2": d2, "hom_nay": hom_nay, "loc": loc,
+        "nvs": S.nhan_vien_ban(), "nhieu_ngay": d1 != d2, "loi": loi,
+        "cham_tran": len(ds) >= B.DS_TRAN, "tran": B.DS_TRAN})
 
 
 @require_POST
@@ -518,7 +533,9 @@ def ban_thanh_toan(request):
         B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
     except Exception as exc:
         return _loi(request, _loi_goi(exc))
-    cart.nap(request, B.doc(kq["trn_id"], c))
+    # GĐ chốt 07/09/2026: thanh toán xong → XÓA TRẮNG form (cả NV) sẵn cho khách kế; bản in
+    # (THANH TOÁN & IN) mở theo trn_id nên không cần giữ đơn trên form. Xem lại → DANH SÁCH → MỞ.
+    cart.clear(request, giu_nv=False)
     tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
     return _pos_oob(request, {"tin": tin, "vua_chot": kq["trn_id"],
                               "in_luon": request.POST.get("in") == "1"})
@@ -555,8 +572,19 @@ def _loi_goi(exc):
 
 
 def ban_in(request):
-    """GIẤY ĐẢM BẢO — mẫu tạm, chờ GĐ đưa mẫu giấy thật."""
+    """GIẤY ĐẢM BẢO — mẫu tạm, chờ GĐ đưa mẫu giấy thật.
+    ?trn_id=... → in ĐÚNG hóa đơn đó đọc từ PMV (không đụng phiếu đang lập trên form — dùng cho
+    THANH TOÁN & IN vì form đã được xóa trắng); không có → in phiếu đang lập như cũ."""
+    trn = (request.GET.get("trn_id") or "").strip()
     ctx = _ctx_pos(request)
+    if trn:
+        phieu = B.doc(trn)
+        if not phieu:
+            return HttpResponse(f"Không thấy hóa đơn {trn}", status=404)
+        ctx["g"] = cart.tu_phieu(phieu)
+        ctx["t"] = cart.tong_cua(ctx["g"])
+        ctx["ten_nv"] = phieu.get("nhan_vien") or next(
+            (e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == phieu.get("emp_id")), "")
     ctx["hom_nay"] = datetime.date.today()
     ctx["tiem"] = S.thong_tin_tiem()
     return render(request, "pos/in_phieu.html", ctx)

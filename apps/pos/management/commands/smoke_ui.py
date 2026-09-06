@@ -135,7 +135,10 @@ class Command(BaseCommand):
         check("gợi ý nhân viên trả về được",
               "pg-goiy__i" in body(c.get("/banle/ban-hang/tim-nv/?q=ng")))
         check("popup DANH SÁCH hóa đơn mở được",
-              "Hóa đơn ngày" in body(c.get("/banle/ban-hang/danh-sach/")))
+              "Hóa đơn bán" in body(c.get("/banle/ban-hang/danh-sach/")))
+        b2 = body(c.get("/banle/ban-hang/danh-sach/?d1=2026-09-01&d2=2026-09-06&trang_thai=C"))
+        check("popup DANH SÁCH lọc khoảng ngày + thống kê + cột BỚT/CỌC",
+              "pg-ds__tk" in b2 and "TIỀN BỚT" in b2 and "TIỀN CỌC" in b2 and 'value="2026-09-01"' in b2)
         check("6 khoản tiền đủ trong cột TÍNH TỔNG",
               all(x in b for x in ("Tiền vàng mới", "Tiền vàng cũ", "CÒN LẠI", "Tiền vàng thêm",
                                    "Tiền công thêm", "Tiền bớt", "Tiền cọc", "Ghi chú")))

@@ -60,8 +60,7 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
   </div>
 
   <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
-          hx-get="{% url 'pos:ban_ds' %}" hx-target="#modal-root"
-          hx-include="#o-ngay" hx-vals='js:{ngay: document.getElementById("o-ngay").value}'>
+          hx-get="{% url 'pos:ban_ds' %}" hx-target="#modal-root">
     ☰ DANH SÁCH{% if treo %} <span class="pg-treo" title="Đơn chờ tạo quá 30 phút chưa duyệt: {% for t in treo %}{{ t.BillCode|default:t.TrnID }} ({{ t.CreatedDate|date:'H:i d/m' }}){% if not forloop.last %}, {% endif %}{% endfor %} — mở tiếp hoặc XÓA ĐƠN">⚠ {{ treo|length }} treo</span>{% endif %}</button>
 
   {% if dang_sua %}

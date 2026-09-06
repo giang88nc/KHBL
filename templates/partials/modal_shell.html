@@ -4,6 +4,7 @@
   <div class="khbl-modal__box" style="{% block modal_style %}{% endblock %}">
     <div class="khbl-modal__head">
       <h2>{% block modal_title %}{% endblock %}</h2>
+      {% block modal_head_extra %}{% endblock %}
       <button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button>
     </div>
     <div class="khbl-modal__body">{% block modal_body %}{% endblock %}</div>
