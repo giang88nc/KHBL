@@ -127,6 +127,10 @@ PMV_HIST_DB = env("PMV_HIST_DB", default="PMV_KH2_HIST")
 PMV_HIST_USER = env("PMV_HIST_USER", default="")                                  # trống = Trusted (Windows)
 PMV_HIST_PASSWORD = env("PMV_HIST_PASSWORD", default="")
 PMV_HIST_VOID_DAYS = env.int("PMV_HIST_VOID_DAYS", default=60)                    # cửa sổ phát hiện đơn bị xóa/void
+# Backup kho lịch sử (GĐ chốt 06/09/2026): DB nằm ổ C (default path instance) → .bak sang Ổ KHÁC (D).
+# Lệnh backup_hist tự từ chối nếu thư mục backup cùng ổ với file .mdf.
+PMV_HIST_BACKUP_DIR = env("PMV_HIST_BACKUP_DIR", default=r"D:\KHBL_BACKUP\hist")
+PMV_HIST_BACKUP_RETENTION = env.int("PMV_HIST_BACKUP_RETENTION", default=30)      # giữ bao nhiêu BẢN
 # ─────────── ĐÍCH DỮ LIỆU NGHIỆP VỤ + CHỐT AN TOÀN GHI ───────────
 # PMV_TARGET quyết định màn bán lẻ ĐỌC/GHI vào đâu:
 #   "sandbox" = bản sao trên máy Mr Giang (mặc định — tha hồ thử)

@@ -13,7 +13,13 @@ from django.core.management import call_command
 
 
 def _job_backup_pmv():
+    # 09:30 & 21:30 (GĐ chốt 06/09/2026 — đêm KK/GIANG có thể tắt; giờ này cả 2 máy chắc chắn bật,
+    # đứng SAU sync kho 09:00/21:00 30 phút để không cùng lúc đọc KK). Bước 2: backup kho lịch sử → ổ D.
     call_command("backup_pmv")
+    try:
+        call_command("backup_hist")
+    except Exception as exc:  # kho lỗi không được làm mất bản KK vừa xong
+        print(f"backup_hist LỖI: {exc}", flush=True)
 
 
 def _job_check_pmv():
@@ -31,7 +37,9 @@ def _job_sync_hist():
 
 def start():
     scheduler = BlockingScheduler(timezone="Asia/Ho_Chi_Minh")
-    scheduler.add_job(_job_backup_pmv, CronTrigger(hour=2, minute=0), name="Backup PMV 02:00")
+    # misfire_grace_time=3600: máy bật muộn trong vòng 1h vẫn CHẠY BÙ thay vì bỏ lượt (lý do đổi giờ 02:00→09:30)
+    scheduler.add_job(_job_backup_pmv, CronTrigger(hour="9,21", minute=30), name="Backup PMV + kho lịch sử 09:30 & 21:30",
+                      max_instances=1, coalesce=True, misfire_grace_time=3600)
     scheduler.add_job(_job_check_pmv, IntervalTrigger(minutes=30), name="Check PMV 30 phút")
     scheduler.add_job(_job_collect_behavior, IntervalTrigger(minutes=2), name="Thu thập hành vi PMV 2 phút",
                       max_instances=1, coalesce=True)
@@ -39,6 +47,6 @@ def start():
                       max_instances=1, coalesce=True)
     # flush=True: stdout đổ vào logs/scheduler.log bị block-buffer, BlockingScheduler không bao giờ thoát
     # → banner nằm kẹt trong buffer, nhìn log tưởng chưa nạp job mới (đã dính 06/09/2026).
-    print("KHBL scheduler khởi động: backup 02:00 + check 30' + hành vi 2' + sync lịch sử 09:00/21:00. Ctrl+C để dừng.",
+    print("KHBL scheduler khởi động: sync lịch sử 09:00/21:00 + backup PMV+kho 09:30/21:30 (bù 1h) + check 30' + hành vi 2'. Ctrl+C để dừng.",
           flush=True)
     scheduler.start()

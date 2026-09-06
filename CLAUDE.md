@@ -352,6 +352,17 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   "scheduler khởi động" KHÔNG hiện trong `logs/scheduler.log` vì print bị block-buffer (BlockingScheduler
   không thoát) → đã vá `flush=True` (hiệu lực từ lần restart sau); muốn chắc scheduler nạp code mới thì so
   **CreationDate tiến trình `run_scheduler` với mtime file**, đừng tin banner cũ.
+- **BACKUP 2 LỚP, ĐỔI GIỜ 02:00 → 09:30 & 21:30** (GĐ chốt 06/09/2026, RESET 15:25 đã nạp): đêm KK/GIANG có
+  thể tắt nên chuyển sang giờ cả 2 máy chắc chắn bật; đứng SAU sync kho 30 phút để không cùng lúc đọc KK;
+  `coalesce + misfire_grace_time=3600` → máy bật muộn trong 1h vẫn **chạy bù** (điểm cứu khỏi mất bản, quan
+  trọng hơn cả đổi giờ). Job `_job_backup_pmv` = `backup_pmv` (KK, 251 bảng, `.bak` trên KK + copy D) rồi
+  **`backup_hist`** (kho `PMV_KH2_HIST`, lệnh mới): DB nằm **ổ C** (default path instance, C chỉ còn ~21GB) →
+  `.bak` COPY_ONLY+CHECKSUM+VERIFY sang **ổ D** `PMV_HIST_BACKUP_DIR=D:\KHBL_BACKUP\hist`, giữ
+  `PMV_HIST_BACKUP_RETENTION=30` bản; lệnh **tự từ chối nếu thư mục backup cùng ổ với .mdf** (quy tắc GĐ: SQL ở
+  C → backup D và ngược lại). Chạy thật 06/09 15:24: 162MB VERIFY OK. **Không gộp 2 kho**: `.bak` = ảnh 100% KK
+  lúc chụp (KK dọn thì bản mới mất theo, bản cũ còn) để phục hồi toàn bộ; kho lịch sử = superset giữ mãi để đọc
+  quá khứ/failover — khác vai trò, restore `.bak` đè kho sẽ mất chính giá trị "giữ mãi". Khi có NAS/USB → trỏ
+  `PMV_BACKUP_DIR_LOCAL` + `PMV_HIST_BACKUP_DIR` ra ngoài máy.
 - **SQL-auth `kimhanh2/KimHanh2` ĐÃ DÙNG ĐƯỢC** (06/09/2026): GĐ bật Mixed Mode bằng
   `xp_instance_regwrite … LoginMode=2` rồi `Restart-Service 'MSSQL$SQL2014'` (SSMS 2008 R2 cũ hơn engine 2014
   nên dialog Properties không dùng được — dùng lệnh). Xác minh: `IsIntegratedSecurityOnly=0`, login vào
