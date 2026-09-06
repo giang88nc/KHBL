@@ -546,3 +546,47 @@ def pmv_read_stream(sql, params=(), *, tag, target="kk", chunk=5000, timeout=600
             yield [tuple(r) for r in rows]
     finally:
         cn.close()
+
+
+def hist_bulk_merge(target, data_cols, pk_cols, rows, *, fast=True, reset_deleted=True,
+                    tag="hist"):
+    """UPSERT hàng loạt vào kho lịch sử theo PK (staging #stg + MERGE, 1 kết nối).
+    Trả (them_moi, cap_nhat). KHÔNG xóa dòng nào (kho backup = superset)."""
+    rows = list(rows)
+    if not rows:
+        return (0, 0)
+    q = lambda c: f"[{c}]"
+    on = " AND ".join(f"t.{q(c)}=s.{q(c)}" for c in pk_cols)
+    setc = ", ".join(f"t.{q(c)}=s.{q(c)}" for c in data_cols if c not in pk_cols)
+    setc += ", t.[_sync_seen_at]=GETDATE()" + (", t.[_sync_deleted]=0" if reset_deleted else "")
+    inscols = ", ".join(q(c) for c in data_cols) + ", [_sync_seen_at]"
+    insvals = ", ".join(f"s.{q(c)}" for c in data_cols) + ", GETDATE()"
+    ins_stg = (f"INSERT INTO #stg ({', '.join(q(c) for c in data_cols)}) "
+               f"VALUES ({', '.join(['?'] * len(data_cols))})")
+    merge = (f"MERGE [{target}] AS t USING #stg AS s ON ({on}) "
+             f"WHEN MATCHED THEN UPDATE SET {setc} "
+             f"WHEN NOT MATCHED BY TARGET THEN INSERT ({inscols}) VALUES ({insvals}) "
+             f"OUTPUT $action;")
+    t0 = time.monotonic()
+    try:
+        with _hist_connect(autocommit=False, timeout=1800) as cn:
+            cur = cn.cursor()
+            cur.execute(f"SELECT TOP 0 {', '.join(q(c) for c in data_cols)} INTO #stg FROM [{target}]")
+            if fast:
+                try:
+                    cur.fast_executemany = True
+                except Exception:
+                    pass
+            step = 5000 if fast else 500
+            for i in range(0, len(rows), step):
+                cur.executemany(ins_stg, rows[i:i + step])
+            cur.execute(merge)
+            acts = [r[0] for r in cur.fetchall()]
+            cur.execute("DROP TABLE #stg")
+            cn.commit()
+        _audit("HIST", tag, f"MERGE [{target}] × {len(rows)}", ms=int((time.monotonic() - t0) * 1000))
+        return (acts.count("INSERT"), acts.count("UPDATE"))
+    except Exception as exc:
+        _audit("HIST", tag, f"MERGE [{target}] × {len(rows)}", ok=False,
+               ms=int((time.monotonic() - t0) * 1000), error=exc)
+        raise

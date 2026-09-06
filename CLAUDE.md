@@ -312,9 +312,22 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   489.071 dòng, 0 lệch, 0 lỗi** (mọi bảng KHỚP count+checksum). `smoke_hist` 16/16.
 - ⚠ **Bẫy**: `fast_executemany` nổ RAM với cột `nvarchar(max)` (I_CUSTOMER) → backfill tự TẮT fast + lô nhỏ
   khi bảng có cột `(max)`. text/ntext/image/xml bị loại khỏi BINARY_CHECKSUM (chỉ so COUNT).
-- **CHƯA làm (Phase 2–4, chờ duyệt)**: sync incremental hằng đêm (upsert cha→refresh con, append log) +
-  reconcile đánh `_sync_deleted` trong cửa sổ **60 ngày** (`PMV_HIST_VOID_DAYS`) để phân biệt VOID (hủy đơn =
-  xóa cứng ở KK) với PRUNE (giữ nguyên) + trang báo cáo Hệ thống + định tuyến đọc quá khứ→HIST/failover.
+- **Phase 2 XONG 06/09/2026 — SYNC INCREMENTAL theo LỊCH 09:00 & 21:00** (GĐ chốt): `manage.py sync_hist
+  --sync` (job scheduler `_job_sync_hist`, CronTrigger hour="9,21"). Chiến lược: **append** (log, chỉ chép dòng
+  có watermark > MAX ở HIST) · **upsert** (cha: đọc KK `TrnDateTime_Upd > MAX(HIST)` → `hist_bulk_merge` staging
+  #stg + MERGE theo PK, thu tập `TrnID` đổi) · **child** (xóa+chép lại dòng con theo `TrnID` cha vừa đổi) ·
+  **snapshot** (I_CUSTOMER/T_PRODUCT: MERGE toàn bộ theo PK — không watermark). **KHÔNG XÓA** dòng nào (kho =
+  superset). **VOID**: `detect_void` đánh `_sync_deleted=1` cho dòng trong cửa sổ `PMV_HIST_VOID_DAYS`=60 còn ở
+  HIST nhưng đã mất ở KK (hủy đơn = xóa cứng), ngoài cửa sổ coi là KK prune → giữ. Reconcile "lành" =
+  `HIST ≥ KK` (superset). Kiểm chứng: sync sau backfill bắt đúng hoạt động live (+52 HĐ, +95 dòng bán qua
+  child-refresh, +19 khách), 0 lỗi, reconcile khớp.
+- **TÀI KHOẢN SQL `kimhanh2/KimHanh2` (sysadmin) đã TẠO trên `localhost\SQL2014`** để GĐ vào SSMS kiểm tay.
+  ⚠ instance đang **Windows-only auth** (`IntegratedSecurityOnly=1`) → phải bật **Mixed Mode** (SSMS: chuột phải
+  server → Properties → Security → "SQL Server and Windows Authentication mode") + **khởi động lại service
+  `MSSQL$SQL2014`** thì SQL-auth mới dùng được. App HIST hiện chạy **Trusted** (chạy tốt); muốn app dùng SQL-auth
+  thì sau khi bật Mixed Mode đặt `.env PMV_HIST_USER=kimhanh2 / PMV_HIST_PASSWORD=KimHanh2`.
+- **CHƯA làm (Phase 3–4)**: trang báo cáo sync trong Hệ thống + định tuyến đọc quá khứ→HIST/failover khi KK tắt.
+- ⚠ Kích hoạt job 09:00/21:00 cần **khởi động lại tiến trình scheduler** (RESET_KHBL) — làm khi code toàn hệ ổn.
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 

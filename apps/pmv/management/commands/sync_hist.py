@@ -19,6 +19,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--backfill", action="store_true", help="Dựng schema + chép trọn + đối soát")
+        parser.add_argument("--sync", action="store_true", help="Đồng bộ incremental (append+upsert+con+void)")
         parser.add_argument("--reconcile", action="store_true", help="Chỉ đối soát")
         parser.add_argument("--list", action="store_true", help="Liệt kê danh mục bảng")
         parser.add_argument("--table", default="", help="Giới hạn bảng (phân tách dấu phẩy)")
@@ -33,6 +34,20 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {m['table']:<32} {m['strategy']:<9} "
                                   f"wm={m['watermark'] or '-':<16} pk={','.join(m['pk']) or '-'}"
                                   f"{'  ← cha '+m['parent'] if m['parent'] else ''}")
+            return
+
+        if o["sync"]:
+            self.stdout.write(self.style.MIGRATE_HEADING("ĐỒNG BỘ INCREMENTAL KK → PMV_KH2_HIST"))
+            rep = H.run_sync(tables, log=self.stdout.write)
+            loi = [r for r in rep if r.get("error")]
+            them = sum(r.get("ins", 0) or 0 for r in rep) + sum(r.get("child_refresh", 0) or 0 for r in rep)
+            sua = sum(r.get("upd", 0) or 0 for r in rep)
+            void = sum(r.get("void", 0) or 0 for r in rep)
+            self.stdout.write("")
+            msg = f"XONG {len(rep)} bảng · +{them} mới · ~{sua} sửa · void {void} · lỗi {len(loi)}"
+            self.stdout.write((self.style.ERROR if loi else self.style.SUCCESS)(msg))
+            for r in loi:
+                self.stdout.write(self.style.ERROR(f"  LỖI {r['table']}: {r['error'][:160]}"))
             return
 
         if o["backfill"] or o["reconcile"]:
