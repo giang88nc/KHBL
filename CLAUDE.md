@@ -379,6 +379,39 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   `PMV_KH2_HIST` sysadmin. **App HIST vẫn giữ Trusted** (GĐ chốt — chạy tốt, không đổi `.env`); tài khoản
   SQL chỉ để GĐ vào SSMS kiểm tay (Server `localhost\SQL2014`, SQL Server Authentication).
 
+## 4f. BÁN HÀNG THEO QUY TRÌNH BAN_HANG v5 — CHẠY THẬT TRÊN KK (06/09/2026)
+
+Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` (điểm ra của MỌI thao tác):
+- **GĐ chốt 1 — Ins ngay món đầu**: quét món đầu = `TRN_RT_BUYSELL_Ins` thành đơn **W thật** trên PMV (SP bị khóa
+  P-008 trên mọi máy như app); mỗi thêm/bỏ SP, thêm/bỏ/tính lại dẻ, đổi khách/NV/tiền/ghi chú = **1 Upd**.
+  `don.dong_bo()` so **vân tay giỏ** (`van_tay`) với lần ghi trước → không đổi thì không gọi KK (idempotent,
+  gọi thừa không tốn); cách thanh toán/bank KHÔNG vào vân tay (chỉ ở app). Ghi lỗi → giỏ **quay về sự thật
+  KK** (`cart.nap(B.doc)`) hoặc rỗng (Ins hỏng) + toast lỗi — không bao giờ để giỏ lệch KK âm thầm. Giỏ trống
+  mà đang có đơn W → `huy` đơn (đơn W không món vô nghĩa). Đơn đã C → không tự Upd (luật 1, chờ MỞ LẠI).
+  ĐƠN MỚI chỉ dọn session — đơn W cũ **vẫn nằm trên KK** = "đơn treo".
+- **GĐ chốt 2 — xóa đơn ĐÃ THANH TOÁN = 2 bước, 2 xác nhận**: `bill.huy` **từ chối đơn C** (không tự chuỗi
+  như app); chân màn: đơn C hiện nút **↩ HỦY THANH TOÁN (1/2)** (`ban_mo_lai`) → về W → nút **🗑 XÓA ĐƠN (2/2)**.
+- **GĐ chốt 5 — `bill.mo_lai` dùng `p_Type='0'`** (hoàn cả két, đo thật đơn 606) khi đơn đã vào két
+  (`T_TILL_TXN Status='P'`, TillID có); đơn C mà chưa vào két (chốt dở) → `'1'` (không có két để hoàn — '0' nổ
+  NULL TillID, đã dính trên sandbox).
+- **v5 pha 5 — `bill.chot` idempotent + kiểm 6 điểm**: đã C thì không Complete lại; ⚠ **`Complete` tự tạo dòng
+  `T_TILL_TXN` CHỜ (`Status='U'`, TillID NULL) — `T_TILL_TXN_Proc` mới gán két + 'P'** → chỉ coi "đã vào sổ
+  quỹ" khi `Status='P'` (thấy dòng U mà bỏ Proc = đơn C không két, đã dính 06/09); sau duyệt kiểm Status C ·
+  mọi món `T_PRODUCT.Status='S'` · có dòng két P.
+- **v5 pha 9**: quét SP đang trong đơn → P-008 (⚠ vendor ghi "Mã hàng không tồn tại" — gây hiểu nhầm) → KHBL
+  nối thêm **đơn nào đang giữ · user · két · giờ** (`don.don_giu_sp`) + nút **MỞ đơn đó** nếu là đơn W của chính
+  mình; badge **⚠ N treo** trên nút DANH SÁCH = đơn W tạo quá **30'** (`don.don_treo`, cache 60s).
+- Chốt 3 (BirthDate trống → 01/01/1900) đã có sẵn trong `customer.py`; chốt 6 giữ mã BAN_HANG; HĐĐT vẫn
+  "cần kiểm" (chưa làm ZNS/HĐĐT).
+- **Kiểm chứng**: sandbox `smoke_ban_hang` **53/53** với engine v5 (C-flow: quét→Ins→đổi→thanh toán→mở lại
+  p_Type 0→xóa) + `smoke_ui` (cập nhật: quét lại cùng mã = P-008; dọn bằng XÓA ĐƠN để sandbox không treo).
+  **THẬT TRÊN KK 06/09 ~17:05** (công tắc đích → **kk**, user kimhanh2/két TIL250200000002): quét món thật
+  `1D60001400` → đơn **W `26-09-06-000135` (TRB260900000842)** xuất hiện ngay trên KK, dòng SELL 11.349.000,
+  sổ quỹ rỗng (chưa duyệt), quét lại bị P-008, đổi NV + ghi chú = Upd đúng cột. Đơn **để nguyên ở DS CHỜ** cho
+  GĐ đối chiếu trên PMVGoldRT.
+- ⚠ Công tắc đích đang **kk** (trang Hệ thống có thể đổi lại). Phiên "Bảng giá/Thâu" đang sửa cùng lúc
+  `bill.py`/`views.py`/`services.py`/`smoke_ui.py`/`khbl.css` — commit v5 phải tách hunk hoặc chờ phiên đó chốt.
+
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy

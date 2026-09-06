@@ -24,6 +24,9 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
   {% if scan_err %}
     <div class="pg-scan__err pg-scan__err--{{ scan_err.style }}">
       {% icon "tem" 15 %}<b>{{ scan_err.desc }}</b>{% if scan_err.code %}<code>{{ scan_err.code }}</code>{% endif %}
+      {% if scan_err.mo_don %}<button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+              hx-post="{% url 'pos:ban_mo' %}" hx-vals='{"trn_id": "{{ scan_err.mo_don }}"}' hx-swap="none"
+              hx-confirm="Bỏ phiếu đang nhập và MỞ đơn chờ đang giữ món này?">MỞ đơn đó</button>{% endif %}
     </div>
   {% endif %}
 

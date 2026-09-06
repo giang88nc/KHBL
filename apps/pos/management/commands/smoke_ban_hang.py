@@ -362,6 +362,9 @@ class Command(BaseCommand):
     def _don(self):
         for hd in list(self.rac):
             try:
+                # v5 chốt 2: đơn ĐÃ THANH TOÁN phải HỦY THANH TOÁN (mo_lai) trước rồi mới XÓA
+                if self._trang_thai(hd) == B.CHOT_ROI:
+                    B.mo_lai(hd, user_id=NGUOI, c=self.c)
                 B.huy(hd, user_id=NGUOI, c=self.c)
                 self.stdout.write(f"\n  -> đã dọn hóa đơn kiểm thử {hd}")
             except Exception as e:
