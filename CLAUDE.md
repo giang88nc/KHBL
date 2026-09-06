@@ -362,7 +362,10 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   C → backup D và ngược lại). Chạy thật 06/09 15:24: 162MB VERIFY OK. **Không gộp 2 kho**: `.bak` = ảnh 100% KK
   lúc chụp (KK dọn thì bản mới mất theo, bản cũ còn) để phục hồi toàn bộ; kho lịch sử = superset giữ mãi để đọc
   quá khứ/failover — khác vai trò, restore `.bak` đè kho sẽ mất chính giá trị "giữ mãi". Khi có NAS/USB → trỏ
-  `PMV_BACKUP_DIR_LOCAL` + `PMV_HIST_BACKUP_DIR` ra ngoài máy.
+  `PMV_BACKUP_DIR_LOCAL` + `PMV_HIST_BACKUP_DIR` ra ngoài máy. **Diễn tập phục hồi 06/09/2026 15:45 PASS**:
+  `RESTORE … WITH MOVE` bản 15:24 vào DB tạm `PMV_KH2_HIST_TEST` (file ở D) mất **2,3s**, 57/57 bảng, số dòng
+  = bản chụp (≤ kho sống vì kho đã sync thêm sau đó), DROP tạm sạch. Cách làm lại: RESTORE FILELISTONLY →
+  MOVE 2 logical file `PMV_KH2_HIST`/`_log` → so COUNT → DROP.
 - **CHỐT KIẾN TRÚC DỮ LIỆU + LỊCH (GĐ, 06/09/2026)**: **KK MSSQL** = thực thi CRUD chính (qua proc) ·
   **GIANG MySQL** = nguồn bổ sung, CRUD trên app · **HIST MSSQL** = bản đầy đủ để tra cứu/failover + `.bak`.
   Lịch scheduler còn: **sync kho 09:00/21:00 · backup KK+kho 09:30/21:30 (bù 1h) · check KK + vân tay
