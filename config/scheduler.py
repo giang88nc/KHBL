@@ -37,5 +37,8 @@ def start():
                       max_instances=1, coalesce=True)
     scheduler.add_job(_job_sync_hist, CronTrigger(hour="9,21", minute=0), name="Sync kho lịch sử 09:00 & 21:00",
                       max_instances=1, coalesce=True)
-    print("KHBL scheduler khởi động: backup 02:00 + check 30' + hành vi 2' + sync lịch sử 09:00/21:00. Ctrl+C để dừng.")
+    # flush=True: stdout đổ vào logs/scheduler.log bị block-buffer, BlockingScheduler không bao giờ thoát
+    # → banner nằm kẹt trong buffer, nhìn log tưởng chưa nạp job mới (đã dính 06/09/2026).
+    print("KHBL scheduler khởi động: backup 02:00 + check 30' + hành vi 2' + sync lịch sử 09:00/21:00. Ctrl+C để dừng.",
+          flush=True)
     scheduler.start()

@@ -347,7 +347,16 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   → **56 bảng**. ⚠ Bẫy: `fast_executemany` nổ với chuỗi RỖNG `''` (HY090 buffer length 0) và Decimal lệch
   scale ("loses precision") → `hist_bulk_merge`/`hist_executemany` **tự thử lại đường CHẬM** khi fast lỗi.
   `smoke_hist` 33/33; sync steady-state 56 bảng +0 mới 0 lệch 0 lỗi.
-- ⚠ Kích hoạt job 09:00/21:00 + code Phase 3–4 cần **RESET_KHBL** — chưa làm vì phiên Bảng giá còn code dở.
+- **ĐÃ KÍCH HOẠT 06/09/2026 14:20** — GĐ chạy RESET_KHBL: web + scheduler đều tạo 14:20:07 (sau mtime
+  `scheduler.py`) → job sync 09:00/21:00 + trang Kho lịch sử + định tuyến đang chạy thật. ⚠ Bẫy: banner
+  "scheduler khởi động" KHÔNG hiện trong `logs/scheduler.log` vì print bị block-buffer (BlockingScheduler
+  không thoát) → đã vá `flush=True` (hiệu lực từ lần restart sau); muốn chắc scheduler nạp code mới thì so
+  **CreationDate tiến trình `run_scheduler` với mtime file**, đừng tin banner cũ.
+- **SQL-auth `kimhanh2/KimHanh2` ĐÃ DÙNG ĐƯỢC** (06/09/2026): GĐ bật Mixed Mode bằng
+  `xp_instance_regwrite … LoginMode=2` rồi `Restart-Service 'MSSQL$SQL2014'` (SSMS 2008 R2 cũ hơn engine 2014
+  nên dialog Properties không dùng được — dùng lệnh). Xác minh: `IsIntegratedSecurityOnly=0`, login vào
+  `PMV_KH2_HIST` sysadmin. **App HIST vẫn giữ Trusted** (GĐ chốt — chạy tốt, không đổi `.env`); tài khoản
+  SQL chỉ để GĐ vào SSMS kiểm tay (Server `localhost\SQL2014`, SQL Server Authentication).
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
