@@ -1,0 +1,27 @@
+{% load static pos_extras %}<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=1280">
+<title>Bảng giá vàng · Kim Hạnh II</title>
+<link rel="stylesheet" href="{% static 'vendor/gold-board/gold-prices.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/gold-board/board-fonts.css' %}">
+<style>html{width:1160px}body{width:1160px;min-width:1160px;background:transparent}.gold-board{width:1160px}.gold-row>b small{display:block;font-size:14px}.gold-rows>p{padding:24px}</style>
+<script defer src="{% static 'js/vendor/html2canvas-1.4.1.min.js' %}"></script>
+<script defer src="{% static 'js/gold_board_export.js' %}?v=20260906.2"></script>
+</head><body class="gold-public-page" data-row-count="{{ prices|length }}">
+<section class="gold-board" data-gold-board aria-label="Bảng giá vàng Kim Hạnh II">
+  <aside>
+    <img src="{% static 'vendor/gold-board/logo-gold-600.png' %}" alt="Kim Hạnh Jewelry">
+    <strong>TIỆM VÀNG</strong><h2>KIM HẠNH II</h2>
+    <p>1276 Kha Vạn Cân, P. Linh Xuân, TP.HCM</p>
+    <small>(028) 38.961.484 · 0977.961.484</small>
+  </aside>
+  <div class="gold-table">
+    <header><h2>BẢNG GIÁ VÀNG</h2><p>Cập nhật: <time>{% if price_updated_at %}{{ price_updated_at|date:"d-m-Y H:i:s" }}{% else %}Chưa có dữ liệu{% endif %}</time></p></header>
+    <div class="gold-columns"><b>LOẠI VÀNG</b><b>MUA VÀO<small>({{ board_unit }})</small></b><b>BÁN RA<small>({{ board_unit }})</small></b></div>
+    <div class="gold-rows">
+      {% for r in prices %}<div class="gold-row"><b>{{ r.gold_name|upper }}{% if mixed_units %}<small>/{{ r.unit }}</small>{% endif %}</b><div class="gold-value"><span>{{ r.buy|tien_tran }}</span><i class="gold-trend {{ r.buy_trend }}" title="{% if r.previous_buy != None %}Giá trước: {{ r.previous_buy|tien_tran }} VNĐ/{{ r.unit }}{% else %}Chưa có giá trước đó{% endif %}">{% if r.buy_trend == 'up' %}▲{% elif r.buy_trend == 'down' %}▼{% else %}•{% endif %}</i></div><div class="gold-value"><span>{{ r.sell|tien_tran }}</span><i class="gold-trend {{ r.sell_trend }}" title="{% if r.previous_sell != None %}Giá trước: {{ r.previous_sell|tien_tran }} VNĐ/{{ r.unit }}{% else %}Chưa có giá trước đó{% endif %}">{% if r.sell_trend == 'up' %}▲{% elif r.sell_trend == 'down' %}▼{% else %}•{% endif %}</i></div></div>
+      {% empty %}<p>Chưa ghim loại vàng nào.<br>Chọn Ghim bảng và bấm Cập nhật tại trang quản lý.</p>{% endfor %}
+      <div class="gold-row gold-note-row"><small>Bảng giá có hiệu lực trong vòng 60 phút kể từ thời điểm cập nhật. Sau thời gian này, giá chỉ mang tính tham khảo.</small><small>Quý khách vui lòng đến tiệm hoặc liên hệ CSKH để nhận giá chính xác nhất.</small></div>
+    </div>
+  </div>
+</section>
+</body></html>

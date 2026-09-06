@@ -46,7 +46,7 @@ class Command(BaseCommand):
         for url, phai_co in [("/", "KIM HẠNH 2"), ("/banle/", "KIM HẠNH 2"),
                              ("/banle/ban-hang/", "Quét tem"), ("/banle/thau-vao/", "Thâu vàng vào"),
                              ("/banle/khach-hang/", "Khách hàng"), ("/banle/bang-gia/", "Bảng giá vàng"),
-                             ("/banle/hoa-don/", "Hóa đơn trong ngày")]:
+                             ("/banle/hoa-don/", "giao dịch")]:   # 06/09: trang đổi thành "Hóa đơn & giao dịch" (hero)
             r = c.get(url)
             check(f"GET {url}", r.status_code == 200 and phai_co in body(r), f"status={r.status_code}")
         check("URL thiếu dấu / cuối vẫn vào được", c.get("/banle/ban-hang", follow=True).status_code == 200)
@@ -81,9 +81,12 @@ class Command(BaseCommand):
               'khbl-top__i khbl-top__i--chinh is-on' in body(c.get("/banle/ban-hang/")))
 
         # ── 3. nội dung trang chủ + chân trang ──
-        check("trang chủ: 4 thẻ số liệu", b.count("dash-kpi__val") == 4)
-        check("trang chủ: biểu đồ 7 cột", b.count("dash-bar__col") == 7)
+        check("trang chủ: 4 thẻ số liệu", b.count('class="pg-tong__kpi-val') == 4)
+        check("trang chủ: biểu đồ 7 cột", b.count("pg-tong__bar-track") == 7)
         check("trang chủ: bảng tồn theo nhóm vàng", "Tồn theo nhóm vàng" in b)
+        check("trang chủ: tổng bán trong tháng", "TỔNG BÁN TRONG THÁNG" in b)
+        check("trang chủ: cảnh báo PMV", "Cảnh báo từ PMV" in b and "pg-tong__alerts" in b)
+        check("trang chủ: bảng nhẫn 9999", "Vàng nhẫn 9999" in b and "pg-tong__ring-table" in b)
         check("chân trang: tên công ty từ T_SHOP", "khbl-foot__co" in b and "KIM HẠNH" in b.upper())
         check("chân trang: thông tin phần mềm", "khbl-foot__pm" in b and "KHBL" in b)
         check("chân trang: ô đồng hồ", 'id="khbl-dongho"' in b and "data-gio" in b)
@@ -95,8 +98,11 @@ class Command(BaseCommand):
             "WHERE Status='I' AND TaskPrice>0 AND ISNULL(DiamondWeight,0)>0 ORDER BY InDate DESC")[0]["ProductCode"]
         b = body(c.post("/banle/ban-hang/quet/", {"ma": ma}))
         check(f"quét mã thật {ma} → thêm dòng VÀNG BÁN", ma in b and "pos-ban" in b)
-        check("quét lại cùng mã → báo đã có trong phiếu",
-              "đã có trong phiếu" in body(c.post("/banle/ban-hang/quet/", {"ma": ma})))
+        # v5: món đầu đã Ins thành đơn W thật → quét lại bị vendor chặn P-008 (kèm tên đơn đang giữ);
+        # giỏ chưa ghi được KK thì vẫn là "đã có trong phiếu"
+        b2 = body(c.post("/banle/ban-hang/quet/", {"ma": ma}))
+        check("quét lại cùng mã → báo đã có trong phiếu / P-008 đang trong đơn",
+              "đã có trong phiếu" in b2 or "P-008" in b2 or "đang trong đơn" in b2)
         check("mã không tồn tại → câu lỗi vendor P-002",
               "P-002" in body(c.post("/banle/ban-hang/quet/", {"ma": "ZZZKHONGCO"})))
         b = body(c.post("/banle/ban-hang/vang-doi/",
@@ -134,7 +140,8 @@ class Command(BaseCommand):
               all(x in b for x in ("Tiền vàng mới", "Tiền vàng cũ", "CÒN LẠI", "Tiền vàng thêm",
                                    "Tiền công thêm", "Tiền bớt", "Tiền cọc", "Ghi chú")))
         check("giấy đảm bảo in được", "GIẤY ĐẢM BẢO" in body(c.get("/banle/ban-hang/in/")))
-        c.post("/banle/ban-hang/moi/")
+        # v5: giỏ = đơn W THẬT trên sandbox → dọn bằng XÓA ĐƠN (hàng về kho), không để đơn treo
+        c.post("/banle/ban-hang/huy/")
         c.post("/banle/ban-hang/moi/")
 
         # ── 5. bảng giá + nhịp 204 ──

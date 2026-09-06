@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Tổng quan{% endblock %}
+{% block page_head %}{% endblock %}{# trang có hero riêng → tắt đầu trang chuẩn của base #}
 {% block page_title %}Tổng quan bán lẻ{% endblock %}
 {% block page_sub %}{% if nguon_hist %}<span style="display:inline-block;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 10px;font-weight:600">📚 Kho lịch sử · dữ liệu tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · máy KK không đọc được{% endif %}</span>{% else %}Số liệu đọc thẳng từ máy KK{% endif %} · ngày {{ ngay|slice:"8:10" }}/{{ ngay|slice:"5:7" }}/{{ ngay|slice:":4" }}{% endblock %}
 {% block page_tools %}
@@ -21,61 +22,104 @@
     <div><b>Không đọc được số liệu từ máy KK</b><br><span class="dim">{{ loi_kk }}</span></div></div>
 {% else %}
 
-{% include "pos/_gia_strip.html" %}
+<section class="pg-tong__hero dash-in" style="--i:0">
+  <div class="pg-tong__hero-copy">
+    <span class="pg-tong__eyebrow"><i></i> Trung tâm điều hành bán lẻ</span>
+    <h1>TỔNG QUAN <em>BÁN HÀNG</em></h1>
+  </div>
+  <div class="pg-tong__hero-stat">
+    <span>TỔNG BÁN TRONG THÁNG</span>
+    <b class="num">{{ tq.thang_ban|tien_gon }}</b>
+    <small>{{ tq.thang_so_ban }} hóa đơn đã phát sinh</small>
+  </div>
+  <div class="pg-tong__hero-actions">
+    <a class="khbl-btn khbl-btn--gold" href="{% url 'pos:ban' %}">Tạo đơn bán <span>→</span></a>
+    <a class="pg-tong__soft-btn" href="{% url 'pos:bang_gia' %}">Bảng giá vàng</a>
+  </div>
+</section>
 
-<div class="dash-grid" style="margin-top:14px">
-  <div class="dash-kpi dash-in" style="--i:0">
-    <span class="dash-kpi__lbl">Bán ra hôm nay</span>
-    <b class="dash-kpi__val num">{{ tq.hom_nay.tien_ban|tien_tran }}</b>
-    <span class="dash-kpi__sub">{{ tq.hom_nay.so_ban }} hóa đơn</span>
-  </div>
-  <div class="dash-kpi dash-in" style="--i:1">
-    <span class="dash-kpi__lbl">Thâu vào hôm nay</span>
-    <b class="dash-kpi__val num" style="color:var(--ink-mua)">{{ tq.hom_nay.tien_thau|tien_tran }}</b>
-    <span class="dash-kpi__sub">{{ tq.hom_nay.so_thau }} phiếu</span>
-  </div>
-  <div class="dash-kpi dash-in" style="--i:2">
-    <span class="dash-kpi__lbl">Khách mới hôm nay</span>
-    <b class="dash-kpi__val num">{{ tq.khach_moi }}</b>
-    <span class="dash-kpi__sub">tổng {{ tq.tong_khach|sokhong }} khách</span>
-  </div>
-  <div class="dash-kpi dash-in" style="--i:3">
-    <span class="dash-kpi__lbl">Hàng còn tồn</span>
-    <b class="dash-kpi__val num">{{ tq.hang_ton|sokhong }}</b>
-    <span class="dash-kpi__sub">món đang bày bán</span>
-  </div>
+<div class="pg-tong__kpis">
+  <article class="pg-tong__kpi dash-in" style="--i:1">
+    <span class="pg-tong__kpi-ico pg-tong__kpi-ico--gold">↗</span>
+    <div><span class="pg-tong__kpi-lbl">Bán ra hôm nay</span><b class="pg-tong__kpi-val num">{{ tq.hom_nay.tien_ban|tien_tran }}</b><small>{{ tq.hom_nay.so_ban }} hóa đơn</small></div>
+  </article>
+  <article class="pg-tong__kpi dash-in" style="--i:2">
+    <span class="pg-tong__kpi-ico pg-tong__kpi-ico--jade">↓</span>
+    <div><span class="pg-tong__kpi-lbl">Thâu vào hôm nay</span><b class="pg-tong__kpi-val pg-tong__kpi-val--mua num">{{ tq.hom_nay.tien_thau|tien_tran }}</b><small>{{ tq.hom_nay.so_thau }} phiếu thu mua</small></div>
+  </article>
+  <article class="pg-tong__kpi dash-in" style="--i:3">
+    <span class="pg-tong__kpi-ico pg-tong__kpi-ico--ink">◎</span>
+    <div><span class="pg-tong__kpi-lbl">Khách mới hôm nay</span><b class="pg-tong__kpi-val num">{{ tq.khach_moi|sokhong }}</b><small>Tệp khách: {{ tq.tong_khach|sokhong }}</small></div>
+  </article>
+  <article class="pg-tong__kpi dash-in" style="--i:4">
+    <span class="pg-tong__kpi-ico pg-tong__kpi-ico--amber">◇</span>
+    <div><span class="pg-tong__kpi-lbl">Hàng còn tồn</span><b class="pg-tong__kpi-val num">{{ tq.hang_ton|sokhong }}</b><small>Món đang sẵn sàng bán</small></div>
+  </article>
 </div>
 
-<div class="dash-2col">
-  <section class="khbl-card dash-in" style="--i:4">
-    <div class="khbl-card__head"><h3>Doanh số 7 ngày</h3><span class="khbl-card__rule"></span>
-      <span class="dim num" style="font-size:12.5px">{{ tq.tuan_so_ban }} hóa đơn · {{ tq.tuan_ban|tien }}</span></div>
-    <div class="khbl-card__body" style="padding-bottom:14px">
-      <div class="dash-bars">
-        {% for d in tq.chuoi %}
-          <div class="dash-bar{% if forloop.last %} is-now{% endif %}" title="{{ d.nhan }} — {{ d.so_ban }} hóa đơn · bán {{ d.tien_ban|tien }} · thâu {{ d.tien_thau|tien }}">
-            <span class="dash-bar__v num">{{ d.tien_ban|tien_gon }}</span>
-            <span class="dash-bar__track"><span class="dash-bar__col" style="height:{{ d.pct }}%"></span></span>
-            <span class="dash-bar__x">{{ d.nhan }}</span>
-            <span class="dash-bar__n num">{{ d.so_ban }} HĐ</span>
-          </div>
-        {% endfor %}
-      </div>
+<div class="pg-tong__layout">
+  <section class="pg-tong__panel pg-tong__sales dash-in" style="--i:5">
+    <div class="pg-tong__panel-head">
+      <div><span class="pg-tong__section-kicker">HIỆU SUẤT</span><h2>Doanh số 7 ngày</h2></div>
+      <span class="pg-tong__period">{{ tq.tuan_so_ban }} hóa đơn</span>
+    </div>
+    <div class="pg-tong__chart-note"><span class="pg-tong__chart-dot"></span> Giá trị bán ra theo ngày <b class="num">{{ tq.tuan_ban|tien }}</b></div>
+    <div class="pg-tong__bars">
+      {% for d in tq.chuoi %}
+        <div class="pg-tong__bar{% if forloop.last %} is-now{% endif %}" title="{{ d.nhan }} — {{ d.so_ban }} hóa đơn · bán {{ d.tien_ban|tien }} · thâu {{ d.tien_thau|tien }}">
+          <span class="pg-tong__bar-val num">{{ d.tien_ban|tien_gon }}</span>
+          <span class="pg-tong__bar-track"><i style="height:{{ d.pct }}%"></i></span>
+          <b>{{ d.nhan }}</b><small class="num">{{ d.so_ban }} HĐ</small>
+        </div>
+      {% endfor %}
     </div>
   </section>
 
-  <section class="khbl-card khbl-card--flat dash-in" style="--i:5">
-    <div class="khbl-card__head"><h3>Tồn theo nhóm vàng</h3></div>
-    <div class="khbl-card__body" style="padding-bottom:10px">
-      <table class="khbl-tbl">
-        <thead><tr><th>Nhóm</th><th class="num">Số món</th><th class="num">TL vàng</th></tr></thead>
-        <tbody>
-        {% for t in tq.ton %}
-          <tr><td><b>{{ t.nhom }}</b></td><td class="num">{{ t.sl|sokhong }}</td>
-              <td class="num">{{ t.tl|tl_man }}</td></tr>
-        {% empty %}<tr><td colspan="3" class="dim">Chưa có số liệu tồn.</td></tr>{% endfor %}
-        </tbody>
-      </table>
+  <section class="pg-tong__panel pg-tong__inventory dash-in" style="--i:6">
+    <div class="pg-tong__panel-head"><div><span class="pg-tong__section-kicker">KHO HÀNG</span><h2>Tồn theo nhóm vàng</h2></div><a href="{% url 'pos:ban' %}">Xem hàng →</a></div>
+    <div class="pg-tong__inventory-list">
+      {% for t in tq.ton %}
+        <div class="pg-tong__stock-row">
+          <span class="pg-tong__stock-mark pg-tong__stock-mark--{{ forloop.counter }}"></span>
+          <div class="pg-tong__stock-name"><b>{{ t.nhom }}</b><small>{{ t.tl|tl_man }}</small></div>
+          <strong class="num">{{ t.sl|sokhong }}</strong><small>món</small>
+        </div>
+      {% empty %}<p class="dim">Chưa có số liệu tồn.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="pg-tong__bottom">
+  <section class="pg-tong__alerts dash-in" style="--i:7">
+    <div class="pg-tong__panel-head"><div><span class="pg-tong__section-kicker">KIỂM SOÁT VẬN HÀNH</span><h2>Cảnh báo từ PMV</h2></div><span class="pg-tong__live"><i></i> MSSQL đang kết nối</span></div>
+    {% if tq.canh_bao %}
+      <div class="pg-tong__alert-list">
+        {% for cb in tq.canh_bao %}
+          <div class="pg-tong__alert pg-tong__alert--{{ cb.kind }}">
+            <span class="pg-tong__alert-ico">!</span><div><b>{{ cb.title }}</b><small>{{ cb.detail }}{% if cb.luc %} · cũ nhất {{ cb.luc|date:"d/m H:i" }}{% endif %}</small></div><strong class="num">{{ cb.count }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="pg-tong__all-clear"><span>✓</span><div><b>Không có phiếu đang chờ xử lý</b><small>PMV không ghi nhận đơn bán, thâu vào hoặc phiếu nhập tồn đọng.</small></div></div>
+    {% endif %}
+  </section>
+
+  <section class="pg-tong__rings dash-in" style="--i:8">
+    <div class="pg-tong__panel-head"><div><span class="pg-tong__section-kicker">TỒN RIÊNG</span><h2>Vàng nhẫn 9999</h2></div><span class="pg-tong__period num">{{ tq.nhan_9999_tong.sl|sokhong }} món</span></div>
+    <div class="pg-tong__ring-total"><span>Tổng trọng lượng tồn</span><b class="num">{{ tq.nhan_9999_tong.chi }} chỉ</b></div>
+    <div class="pg-tong__ring-table">
+      <div class="pg-tong__ring-head"><span>STT</span><span>TÊN</span><span>TRỌNG LƯỢNG</span><span>SL</span><span>TỔNG</span></div>
+      {% for r in tq.nhan_9999 %}
+        <div class="pg-tong__ring-row"><span class="pg-tong__ring-stt">{{ forloop.counter|stringformat:"02d" }}</span><b>{{ r.name }}</b><span class="num">{{ r.weight_chi }} chỉ</span><span class="num">{{ r.sl|sokhong }}</span><strong class="num">{{ r.total_chi }} chỉ</strong></div>
+        {% if r.chi_tiet %}
+          <details class="pg-tong__ring-detail">
+            <summary>Báo cáo chi tiết {{ r.name }} · {{ r.total_chi }} chỉ <span>{{ r.chi_tiet|length }} mã</span></summary>
+            <div class="pg-tong__ring-detail-head"><span>MÃ</span><span>TÊN HÀNG</span><span>TRỌNG LƯỢNG</span></div>
+            {% for item in r.chi_tiet %}<div class="pg-tong__ring-detail-row"><code>{{ item.ProductCode }}</code><b>{{ item.ProductDesc }}</b><strong class="num">{{ item.chi }} chỉ</strong></div>{% endfor %}
+          </details>
+        {% endif %}
+      {% empty %}<p class="dim">Chưa có vàng nhẫn 9999 đang tồn.</p>{% endfor %}
     </div>
   </section>
 </div>

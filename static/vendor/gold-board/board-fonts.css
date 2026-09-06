@@ -1,0 +1,11 @@
+/* Font được cố định từ máy gốc để trình duyệt không thay font khi xuất PNG. */
+@font-face{font-family:KHSegoe;src:url('segoe-regular.ttf');font-weight:400;font-style:normal}
+@font-face{font-family:KHSegoe;src:url('segoe-bold.ttf');font-weight:700;font-style:normal}
+@font-face{font-family:KHSegoe;src:url('segoe-black.ttf');font-weight:900 1000;font-style:normal}
+@font-face{font-family:KHSegoe;src:url('segoe-italic.ttf');font-weight:400;font-style:italic}
+@font-face{font-family:KHGeorgia;src:url('georgia-regular.ttf');font-weight:400;font-style:normal}
+@font-face{font-family:KHGeorgia;src:url('georgia-bold.ttf');font-weight:700 1000;font-style:normal}
+.gold-board{font-family:KHSegoe,Arial,sans-serif}
+.gold-table h2,.gold-columns b,.gold-row>b{font-family:KHSegoe,Arial,sans-serif}
+.gold-table header p,.gold-board>aside strong,.gold-board>aside h2,.gold-board>aside p,.gold-board>aside small{font-family:KHGeorgia,Georgia,serif}
+.gold-table header time{font-family:KHSegoe,Arial,sans-serif}

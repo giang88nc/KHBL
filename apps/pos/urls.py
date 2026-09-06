@@ -37,6 +37,11 @@ urlpatterns = [
 
     # Bảng giá
     path("banle/bang-gia/", views.bang_gia, name="bang_gia"),
+    path("banle/bang-gia/cap-nhat/", views.gia_cap_nhat, name="gia_cap_nhat"),
+    path("banle/bang-gia/xem/", views.gia_xem_bang, name="gia_xem_bang"),
+    path("banle/bang-gia/luu-png/", views.gia_luu_png, name="gia_luu_png"),
+    path("banle/bang-gia/anh/<uuid:export_id>/", views.gia_tai_png, name="gia_tai_png"),
+    path("banle/bang-gia/dong-bo/<uuid:batch_id>/", views.gia_dong_bo_lai, name="gia_dong_bo_lai"),
     path("banle/bang-gia/nhip/", views.gia_nhip, name="gia_nhip"),
 
     # Khách hàng
@@ -49,5 +54,7 @@ urlpatterns = [
 
     # Hóa đơn
     path("banle/hoa-don/", views.hoa_don, name="hoa_don"),
-    path("banle/hoa-don/nhip/", views.hoa_don_nhip, name="hoa_don_nhip"),
+    path("banle/hoa-don/xem/", views.hoa_don_chi_tiet, name="hoa_don_chi_tiet"),
+    path("banle/hoa-don/xac-nhan/", views.hoa_don_xac_nhan, name="hoa_don_xac_nhan"),
+    path("banle/hoa-don/huy/", views.hoa_don_huy, name="hoa_don_huy"),
 ]

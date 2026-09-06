@@ -6,24 +6,26 @@
 <title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260905.camera2">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260906.invoice4">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/vn_text.js' %}?v=20260905.qr5"></script>
   <script defer src="{% static 'js/cccd.js' %}?v=20260905.qr5"></script>
-  <script defer src="{% static 'js/khbl.js' %}?v=20260905.upsert1"></script>
+  <script defer src="{% static 'js/khbl.js' %}?v=20260906.confirm1"></script>
 {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {# KHUNG CHUNG TOÀN HỆ: topbar (logo + menu ngang + tài khoản) · nội dung · chân trang #}
 <div class="khbl-shell">
   {% include "partials/topbar.html" %}
-  {% include "partials/dich.html" %}
+  {% if not hide_dich %}{% include "partials/dich.html" %}{% endif %}
 
   <main class="khbl-main{% block main_mod %}{% endblock %}">
     {% block chrome %}{% endblock %}
     {% block body %}
     <div class="khbl-page">
-      {% if write_lock %}<div class="khbl-lock">Kênh ghi đang khóa — vendor vừa đổi phiên bản CSDL. Chỉ tra cứu, chưa gửi phiếu.</div>{% endif %}
+      {% comment %}Đầu trang chuẩn (tiêu đề · phụ đề · nút công cụ). Trang có hero riêng thì override
+         block page_head rỗng để tắt — đừng bỏ khỏi base (06/09 từng làm mất nút THÊM KHÁCH).{% endcomment %}
+      {% block page_head %}
       <div class="khbl-page__head">
         <div>
           <div class="khbl-page__title">{% block page_title %}{% endblock %}</div>
@@ -31,6 +33,7 @@
         </div>
         <div class="khbl-page__tools">{% block page_tools %}{% endblock %}</div>
       </div>
+      {% endblock %}
       {% block content %}{% endblock %}
     </div>
     {% endblock %}

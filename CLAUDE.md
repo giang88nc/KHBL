@@ -409,8 +409,13 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
   `1D60001400` → đơn **W `26-09-06-000135` (TRB260900000842)** xuất hiện ngay trên KK, dòng SELL 11.349.000,
   sổ quỹ rỗng (chưa duyệt), quét lại bị P-008, đổi NV + ghi chú = Upd đúng cột. Đơn **để nguyên ở DS CHỜ** cho
   GĐ đối chiếu trên PMVGoldRT.
-- ⚠ Công tắc đích đang **kk** (trang Hệ thống có thể đổi lại). Phiên "Bảng giá/Thâu" đang sửa cùng lúc
-  `bill.py`/`views.py`/`services.py`/`smoke_ui.py`/`khbl.css` — commit v5 phải tách hunk hoặc chờ phiên đó chốt.
+- **GĐ chốt 06/09 tối: công tắc đích GIỮ `kk` — bán thật.** Phần 2 v5 + code phiên Bảng giá/Thâu đã commit chung
+  (GĐ duyệt "commit tất cả").
+- ⚠ **Bẫy `base.html`**: phiên Bảng giá từng BỎ khối đầu trang (`khbl-page__head`) → mất nút **+ THÊM KHÁCH**,
+  tiêu đề Thâu/Khách; smoke_ui báo 3 FAIL nhưng nhìn tưởng "lỗi cũ". Nay đầu trang nằm trong
+  **`{% block page_head %}`** — trang có hero riêng (Hóa đơn, Tổng quan) override block RỖNG để tắt, KHÔNG xóa
+  khỏi base. Chú thích Django `{# #}` **không được xuống dòng** và không được chứa `{% block %}` (sẽ thành block
+  thật → "appears more than once"). smoke_ui 129/129.
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 

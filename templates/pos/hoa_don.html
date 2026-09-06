@@ -1,25 +1,9 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Hóa đơn{% endblock %}
-{% block page_title %}Hóa đơn trong ngày{% endblock %}
-{% block page_sub %}{% if nguon_hist %}<span style="display:inline-block;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 10px;font-weight:600">📚 Kho lịch sử · dữ liệu tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · máy KK không đọc được{% endif %}</span> — gồm cả phiếu do PMVGoldRT lập{% else %}Đọc thẳng từ máy KK — gồm cả phiếu do phần mềm PMVGoldRT lập{% if la_hom_nay %} · tự làm mới mỗi 3 giây{% endif %}{% endif %}{% endblock %}
-{% block page_tools %}
-  <form method="get" style="display:flex;gap:8px;align-items:center">
-    <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
-    <button class="khbl-btn khbl-btn--outline" type="submit">Xem</button>
-  </form>
-{% endblock %}
-
+{% block page_head %}{% endblock %}{# trang có hero riêng → tắt đầu trang chuẩn của base #}
+{% block page_title %}Hóa đơn & giao dịch{% endblock %}
+{% block page_sub %}<span class="hd-source {% if nguon_kk %}hd-source--live{% endif %}">{% if nguon_kk %}● Trực tiếp MSSQL KK{% else %}◈ Kho lịch sử MSSQL{% endif %}</span>{% endblock %}
 {% block content %}
-{% if nguon_hist %}
-<div class="khbl-alert" style="margin-bottom:10px;background:var(--gold-100);border:1px solid var(--gold-300);color:var(--gold-700);font-weight:600">
-  📚 Đang xem <b>KHO LỊCH SỬ</b> — dữ liệu tới {{ hist_asof|date:"d/m/Y H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · <b>máy KK không đọc được</b>, tạm dùng bản sao{% else %} · ngày quá khứ đọc từ bản sao đầy đủ (KK có thể đã dọn){% endif %}
-</div>
-{% endif %}
-<div id="hd-bang"
-  {% if la_hom_nay %}hx-get="{% url 'pos:hoa_don_nhip' %}?ngay={{ ngay }}"
-     hx-trigger="every 3s [document.visibilityState === 'visible']" hx-sync="this:drop"
-     hx-vals='js:{sig: document.getElementById("hd-bang").dataset.sig}' hx-swap="none"{% endif %}
-  data-sig="">
-  {% include "pos/_hoa_don_bang.html" %}
-</div>
+<form method="get" class="hd-filter"><div class="khbl-field"><label>Từ ngày</label><input class="khbl-input" type="date" name="d1" value="{{ d1 }}"></div><div class="khbl-field"><label>Đến ngày</label><input class="khbl-input" type="date" name="d2" value="{{ d2 }}"></div><div class="khbl-field"><label>Loại hóa đơn</label><select class="khbl-select" name="loai"><option value="">Tất cả loại</option><option value="BAN" {% if loc.loai == 'BAN' %}selected{% endif %}>Bán hàng</option><option value="BAN_DOI" {% if loc.loai == 'BAN_DOI' %}selected{% endif %}>Bán đổi</option><option value="THAU" {% if loc.loai == 'THAU' %}selected{% endif %}>Thâu vàng</option></select></div><div class="khbl-field"><label>Nhân viên</label><select class="khbl-select" name="emp_id"><option value="">Tất cả nhân viên</option>{% for nv in nvs %}<option value="{{ nv.EmpID }}" {% if loc.emp_id == nv.EmpID %}selected{% endif %}>{{ nv.EmpName }}</option>{% endfor %}</select></div><div class="khbl-field hd-filter__customer"><label>Khách hàng</label><input class="khbl-input" name="khach" value="{{ loc.khach }}" placeholder="SĐT, CCCD hoặc tên"></div><div class="khbl-field"><label>Tình trạng</label><select class="khbl-select" name="trang_thai"><option value="">Tất cả trạng thái</option><option value="C" {% if loc.trang_thai == 'C' %}selected{% endif %}>Hoàn thành</option><option value="W" {% if loc.trang_thai == 'W' %}selected{% endif %}>Treo / nháp</option><option value="HUY" {% if loc.trang_thai == 'HUY' %}selected{% endif %}>Đã hủy</option></select></div><button class="khbl-btn khbl-btn--gold hd-filter__submit" type="submit">⌕ Lọc dữ liệu</button></form>
+{% if loi_hd %}<div class="khbl-alert khbl-alert--do"><div><b>Không thể tải danh sách hóa đơn</b>{{ loi_hd }}</div></div>{% endif %}{% include "pos/_hoa_don_bang.html" %}
 {% endblock %}

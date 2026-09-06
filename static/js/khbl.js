@@ -110,6 +110,12 @@
     (detail.warnings || []).forEach(function (warning) { showToast(warning, "warning"); });
   });
 
+  /* Popup xác nhận dùng chung: khóa double-submit, hiển thị tải rồi làm mới dữ liệu. */
+  function confirmFormFromEvent(e) { var el = e.detail && e.detail.elt; return el && el.closest ? el.closest(".khbl-confirm__form") : null; }
+  document.addEventListener("htmx:beforeRequest", function (e) { var form = confirmFormFromEvent(e); if (!form) return; form.setAttribute("aria-busy", "true"); var b = form.querySelector("button[type='submit']"); if (b) b.disabled = true; });
+  document.addEventListener("htmx:afterRequest", function (e) { var form = confirmFormFromEvent(e); if (!form) return; form.removeAttribute("aria-busy"); var b = form.querySelector("button[type='submit']"); if (b) b.disabled = false; });
+  document.addEventListener("khblConfirmDone", function (e) { window.closeKhblModal(); showToast((e.detail || {}).message || "Đã hoàn tất thao tác", "success"); window.setTimeout(function () { window.location.reload(); }, 150); });
+
   /* ---------- bảng giá: không cướp DOM khi đang gõ ---------- */
   var pendingGia = null;
   document.addEventListener("htmx:beforeSwap", function (e) {

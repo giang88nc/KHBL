@@ -347,33 +347,78 @@ def loai_vang_thau():
 
 # ─────────────────────────── HÓA ĐƠN TRONG NGÀY ───────────────────────────
 
-def hoa_don_ngay(ngay_iso, limit=200):
-    """Bán + thâu trong 1 ngày. CAST tham số cho ăn chỉ mục (SQL 2005).
-    Ngày QUÁ KHỨ → kho lịch sử; hôm nay → live (KK chết → lùi về kho)."""
-    from apps.pmv import hist_read as HR
-    return HR.doc(lambda c: c.query(
-        f"SELECT TOP {int(limit)} * FROM ("
-        "SELECT 'BAN' AS loai, b.TrnID, b.BillCode, b.TrnTime, b.Status, b.IsDel, "
-        "b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, b.PayAmount AS SoTien, "
-        "ISNULL(c.CustName,'') AS CustName, ISNULL(e.EmpName,'') AS EmpName, b.CreatedDate "
-        "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
-        "LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID "
-        "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
-        "WHERE b.TrnDate = CAST(? AS datetime) "
-        "UNION ALL "
-        "SELECT 'THAU', t.TrnID, t.BillCode, t.TrnTime, t.Status, t.IsDel, "
-        "0, t.TotalAmount, t.TotalAmount, ISNULL(c.CustName,''), ISNULL(e.EmpName,''), t.CreatedDate "
-        "FROM TRN_RT_BUYGOLD t WITH (NOLOCK) "
-        "LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = t.CustID "
-        "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID "
-        "WHERE t.TrnDate = CAST(? AS datetime)"
-        ") x ORDER BY x.TrnTime DESC", (ngay_iso, ngay_iso)), ngay_iso=ngay_iso, tag="hd_ngay")
+def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=500):
+    """Danh sách hóa đơn có lọc.
+
+    Quy ước vận hành: *chỉ* đúng hôm nay đọc trực tiếp máy KK. Mọi ngày hoặc
+    khoảng ngày khác đọc kho HIST, để một báo cáo cũ không vô tình đụng dữ liệu
+    đang bán trên quầy.  ``loai`` là BAN / BAN_DOI / THAU.
+    """
+    hom_nay = __import__("datetime").date.today().isoformat()
+    live = d1 == hom_nay and d2 == hom_nay
+    c = PmvClient("kk" if live else "hist", tag="hd_kk" if live else "hd_hist")
+    key = (khach or "").strip()
+    loai, emp_id, trang_thai = (loai or "").strip(), (emp_id or "").strip(), (trang_thai or "").strip().upper()
+    # TOP là số nguyên nội bộ; phần còn lại luôn dùng tham số, không ghép dữ liệu người dùng vào SQL.
+    sql = f"""SELECT TOP {int(limit)} * FROM (
+      SELECT CASE WHEN ISNULL(b.BuyTotalAmount,0) > 0 THEN 'BAN_DOI' ELSE 'BAN' END AS loai,
+        b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.IsDel,
+        b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, b.PayAmount AS SoTien,
+        ISNULL(b.AddMoney,0) AS TienVangThem, ISNULL(b.TaskPriceAdd,0) AS TienCongThem,
+        ISNULL(b.Discount,0) AS TienBot, ISNULL(b.TienCoc,0) AS TienCoc,
+        ISNULL(c.CustName,'') AS CustName, ISNULL(c.Phone,'') AS Phone, ISNULL(c.CMND,'') AS CMND,
+        ISNULL(e.EmpID,'') AS EmpID, ISNULL(e.EmpName,'') AS EmpName, b.CreatedDate
+      FROM TRN_RT_BUYSELL b WITH (NOLOCK)
+      LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID
+      LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID
+      WHERE b.TrnDate >= CAST(? AS datetime) AND b.TrnDate < DATEADD(day,1,CAST(? AS datetime))
+      UNION ALL
+      SELECT 'THAU', t.TrnID, t.BillCode, t.TrnDate, t.TrnTime, t.Status, t.IsDel,
+        0, t.TotalAmount, t.TotalAmount, 0, 0, 0, 0, ISNULL(c.CustName,''), ISNULL(c.Phone,''), ISNULL(c.CMND,''),
+        ISNULL(e.EmpID,''), ISNULL(e.EmpName,''), t.CreatedDate
+      FROM TRN_RT_BUYGOLD t WITH (NOLOCK)
+      LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = t.CustID
+      LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID
+      WHERE t.TrnDate >= CAST(? AS datetime) AND t.TrnDate < DATEADD(day,1,CAST(? AS datetime))
+    ) x
+    WHERE (? = '' OR x.loai = ?) AND (? = '' OR x.EmpID = ?)
+      AND (? = '' OR x.CustName LIKE ? OR x.Phone LIKE ? OR x.CMND LIKE ?)
+    ORDER BY x.TrnDate DESC, x.TrnTime DESC, x.CreatedDate DESC"""
+    rows = c.query(sql, (d1, d2, d1, d2, loai, loai, emp_id, emp_id,
+                         key, f"%{key}%", f"%{key}%", f"%{key}%"))
+    if trang_thai:
+        def dung(r):
+            if trang_thai == "HUY":
+                return str(r.get("IsDel")) != "0"
+            return str(r.get("IsDel")) == "0" and str(r.get("Status")) == trang_thai
+        rows = [r for r in rows if dung(r)]
+    return rows, live
+
+
+def nhan_vien_hoa_don(live):
+    """Danh sách chọn nhân viên phải cùng nguồn dữ liệu với báo cáo."""
+    return PmvClient("kk" if live else "hist", tag="hd_nv").query(
+        "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) "
+        "WHERE ISNULL(Active,'1') = '1' ORDER BY EmpName")
 
 
 def tong_quan(ngay_iso, so_ngay=7):
     """Số liệu trang Tổng quan. Ngày QUÁ KHỨ → kho lịch sử; hôm nay → live (KK chết → lùi về kho)."""
     from apps.pmv import hist_read as HR
     return HR.doc(lambda c: _tong_quan(c, ngay_iso, so_ngay), ngay_iso=ngay_iso, tag="tong_quan")
+
+
+def tong_quan_realtime(ngay_iso, so_ngay=7):
+    """Tổng quan điều hành luôn đọc thẳng MSSQL máy KK: không cache, không lùi kho HIST."""
+    return _tong_quan(PmvClient("kk", tag="tong_quan_realtime"), ngay_iso, so_ngay)
+
+
+def _ten_nhan_9999(weight):
+    """PMV lưu 100 ly = 1 chỉ. Tên quy cách chuẩn hóa hoàn toàn theo trọng lượng."""
+    chi = M.dec(weight) / M.dec(100)
+    if chi < 1:
+        return f"Nhẫn {M.vn_so(chi * 10, 1)} phân"
+    return f"Nhẫn {M.vn_so(chi, 1)} chỉ"
 
 
 def _tong_quan(c, ngay_iso, so_ngay=7):
@@ -412,6 +457,66 @@ def _tong_quan(c, ngay_iso, so_ngay=7):
         x["pct"] = int(x["tien_ban"] / dinh * 100) if dinh > 0 else 0
 
     hom_nay = chuoi[-1]
+    dau_thang = d0.replace(day=1).isoformat()
+    thang = c.query(
+        "SELECT COUNT(*) AS so, SUM(ISNULL(PayAmount,0)) AS tien "
+        "FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+        "WHERE TrnDate >= CAST(? AS datetime) AND TrnDate <= CAST(? AS datetime) AND IsDel = '0'",
+        (dau_thang, ngay_iso))[0]
+
+    # Cảnh báo chỉ đọc: đơn bán / thâu Status W chưa hoàn tất và phiếu nhập chờ duyệt.
+    # Đây là các trạng thái nghiệp vụ thực của PMV, không suy diễn từ dữ liệu giao diện.
+    cho_ban = c.query(
+        "SELECT COUNT(*) AS n, MIN(CreatedDate) AS luc "
+        "FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+        "WHERE Status = 'W' AND IsDel = '0' AND CreatedDate < DATEADD(minute,-30,GETDATE())")[0]
+    cho_thau = c.query(
+        "SELECT COUNT(*) AS n, MIN(CreatedDate) AS luc "
+        "FROM TRN_RT_BUYGOLD WITH (NOLOCK) "
+        "WHERE Status = 'W' AND IsDel = '0' AND CreatedDate < DATEADD(minute,-30,GETDATE())")[0]
+    cho_nhap = c.query(
+        "SELECT COUNT(*) AS n, MIN(TrnDate) AS luc "
+        "FROM TRN_PRODUCT_IN WITH (NOLOCK) WHERE Status = 'W'")[0]
+    canh_bao = [
+        {"kind": "do", "title": "Đơn bán đang chờ thanh toán", "count": cho_ban["n"] or 0,
+         "detail": "đơn nháp quá 30 phút cần kiểm tra", "luc": cho_ban["luc"]},
+        {"kind": "cam", "title": "Phiếu nhập chờ duyệt", "count": cho_nhap["n"] or 0,
+         "detail": "phiếu chưa tạo hàng chính thức vào kho", "luc": cho_nhap["luc"]},
+        {"kind": "cam", "title": "Phiếu thâu vào chưa hoàn tất", "count": cho_thau["n"] or 0,
+         "detail": "phiếu thu mua quá 30 phút cần xử lý", "luc": cho_thau["luc"]},
+    ]
+    canh_bao = [x for x in canh_bao if x["count"]]
+
+    # Vàng nhẫn 9999 nhận diện bằng MÃ HÀNG 9N% (không suy từ tên: "Vòng nhẫn" 9V phải loại).
+    # Tổng trọng lượng PMV lưu theo đơn vị nội bộ, dùng cùng quy đổi 100 ly = 1 chỉ.
+    nhan_9999 = c.query(
+        "SELECT TotalWeight AS weight, COUNT(*) AS sl, SUM(ISNULL(TotalWeight,0)) AS total "
+        "FROM T_PRODUCT WITH (NOLOCK) "
+        "WHERE Status = 'I' AND GoldCode = 'N9999' AND ProductCode LIKE '9N%' "
+        "GROUP BY TotalWeight ORDER BY TotalWeight ASC")
+    for ring in nhan_9999:
+        ring["name"] = _ten_nhan_9999(ring["weight"])
+        ring["weight_chi"] = M.weight_chi(ring["weight"], "L")
+        ring["total_chi"] = M.weight_chi(ring["total"], "L")
+        ring["key"] = format(M.dec(ring["weight"]).normalize(), "f")
+        ring["chi_tiet"] = []
+    # Các quy cách không thuộc dải nhẫn tiêu chuẩn được mở báo cáo dòng hàng để quản lý
+    # đối chiếu ngay trên Tổng quan (mã + tên + trọng lượng thực tế).
+    nhan_9999_le = c.query(
+        "SELECT ProductCode, ProductDesc, TotalWeight FROM T_PRODUCT WITH (NOLOCK) "
+        "WHERE Status = 'I' AND GoldCode = 'N9999' AND ProductCode LIKE '9N%' "
+        "AND TotalWeight NOT IN (10,20,30,50,100,200,300,500) ORDER BY TotalWeight, ProductCode")
+    nhan_by_weight = {x["key"]: x for x in nhan_9999}
+    for item in nhan_9999_le:
+        item["chi"] = M.weight_chi(item["TotalWeight"], "L")
+        key = format(M.dec(item["TotalWeight"]).normalize(), "f")
+        if key in nhan_by_weight:
+            nhan_by_weight[key]["chi_tiet"].append(item)
+    nhan_9999_tong = c.query(
+        "SELECT COUNT(*) AS sl, SUM(ISNULL(TotalWeight,0)) AS tl "
+        "FROM T_PRODUCT WITH (NOLOCK) "
+        "WHERE Status = 'I' AND GoldCode = 'N9999' AND ProductCode LIKE '9N%'")[0]
+    nhan_9999_tong["chi"] = M.weight_chi(nhan_9999_tong.get("tl"), "L")
     khach_moi = c.query(
         "SELECT COUNT(*) AS n FROM I_CUSTOMER WITH (NOLOCK) WHERE DateOfJoining = CAST(? AS datetime)",
         (ngay_iso,))[0]["n"]
@@ -422,8 +527,10 @@ def _tong_quan(c, ngay_iso, so_ngay=7):
         "LEFT JOIN T_MAINSECTION ms WITH (NOLOCK) ON ms.MainSectionID = s.MainSectionID "
         "GROUP BY ms.MainSectionName ORDER BY 1")
     return {
-        "chuoi": chuoi, "hom_nay": hom_nay, "khach_moi": khach_moi, "ton": ton,
-        "tuan_ban": sum((x["tien_ban"] for x in chuoi), M.D0),
+          "chuoi": chuoi, "hom_nay": hom_nay, "khach_moi": khach_moi, "ton": ton,
+          "thang_ban": M.dec(thang.get("tien")), "thang_so_ban": thang.get("so") or 0,
+          "canh_bao": canh_bao, "nhan_9999": nhan_9999, "nhan_9999_tong": nhan_9999_tong,
+          "tuan_ban": sum((x["tien_ban"] for x in chuoi), M.D0),
         "tuan_thau": sum((x["tien_thau"] for x in chuoi), M.D0),
         "tuan_so_ban": sum(x["so_ban"] for x in chuoi),
         "tong_khach": c.query("SELECT COUNT(*) AS n FROM I_CUSTOMER WITH (NOLOCK)")[0]["n"],
@@ -432,11 +539,15 @@ def _tong_quan(c, ngay_iso, so_ngay=7):
 
 
 def tong_ngay(rows):
-    ban = [r for r in rows if r["loai"] == "BAN" and str(r["IsDel"]) == "0"]
-    thau = [r for r in rows if r["loai"] == "THAU" and str(r["IsDel"]) == "0"]
+    active = [r for r in rows if str(r["IsDel"]) == "0"]
+    ban = [r for r in active if r["loai"] == "BAN"]
+    doi = [r for r in active if r["loai"] == "BAN_DOI"]
+    thau = [r for r in active if r["loai"] == "THAU"]
+    tien = lambda ds: sum((M.dec(r["SoTien"]) for r in ds), M.D0)
     return {
-        "so_ban": len(ban), "tien_ban": sum((M.dec(r["SoTien"]) for r in ban), M.D0),
-        "so_thau": len(thau), "tien_thau": sum((M.dec(r["SoTien"]) for r in thau), M.D0),
+        "so_tong": len(active), "tien_tong": tien(active),
+        "so_ban": len(ban), "tien_ban": tien(ban), "so_doi": len(doi), "tien_doi": tien(doi),
+        "so_thau": len(thau), "tien_thau": tien(thau),
     }
 
 

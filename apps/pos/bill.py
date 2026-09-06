@@ -249,42 +249,100 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
 
 
 def chot(trn_id, *, till_id, user_id, c=None):
-    """Chốt hóa đơn: Complete + đẩy sổ quỹ. Xong là Status 'C', hàng sang 'S'."""
+    """DUYỆT (v5 pha 5): Complete → (kiểm chưa có sổ quỹ) → T_TILL_TXN_Proc → KIỂM 6 ĐIỂM.
+    Idempotent: đơn đã C thì không Complete lại; đã có dòng sổ quỹ thì không Proc lần 2."""
     c = c or S.client("chot_hoa_don")
-    c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")
-    c.call("T_TILL_TXN_Proc", write=True, p_TrnIDs=trn_id, p_TillID=till_id, p_UserID=user_id)
-    st = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
-    if not st or st[0]["Status"] != CHOT_ROI:
+    st = (c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)) or [{}])[0].get("Status")
+    if st != CHOT_ROI:
+        c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")
+    # ⚠ Complete tự tạo dòng T_TILL_TXN CHỜ (Status 'U', TillID NULL); Proc mới gán két + 'P'.
+    # Chỉ coi là "đã vào sổ quỹ" khi Status='P' — thấy dòng U mà bỏ qua Proc là đơn C không két (đã dính 06/09).
+    da_vao_ket = c.query("SELECT TOP 1 1 AS co FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ? AND Status = 'P'",
+                         (trn_id,))
+    if not da_vao_ket:
+        c.call("T_TILL_TXN_Proc", write=True, p_TrnIDs=trn_id, p_TillID=till_id, p_UserID=user_id)
+    # ── kiểm sau DUYỆT (v5 5.40) ──
+    h = c.query("SELECT Status, PayAmount FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
+    if not h or h[0]["Status"] != CHOT_ROI:
         raise PmvProcError("TRN_RT_BUYSELL_Complete", -2, [{
-            "loi": f"Chốt xong mà trạng thái vẫn {st and st[0]['Status']} — chưa vào sổ quỹ."}])
+            "loi": f"Chốt xong mà trạng thái vẫn {h and h[0]['Status']} — chưa vào sổ quỹ."}])
+    chua_s = c.query(
+        "SELECT s.ProductCode FROM TRN_RT_BUYSELL_SELL s WITH (NOLOCK) JOIN T_PRODUCT p WITH (NOLOCK) "
+        "ON p.ProductID = s.ProductID WHERE s.TrnID = ? AND p.Status <> 'S'", (trn_id,))
+    if chua_s:
+        raise PmvProcError("TRN_RT_BUYSELL_Complete", -2, [{
+            "loi": "Đã chốt nhưng hàng chưa sang trạng thái ĐÃ BÁN: " + ", ".join(r["ProductCode"] for r in chua_s)}])
+    quy = c.query("SELECT TOP 1 1 AS co FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ? AND Status = 'P' "
+                  "AND TillID IS NOT NULL", (trn_id,))
+    if not quy:
+        raise PmvProcError("T_TILL_TXN_Proc", -2, [{"loi": "Đã chốt nhưng sổ quỹ chưa vào KÉT (Status≠P) cho hóa đơn."}])
     return True
 
 
 def mo_lai(trn_id, *, user_id, c=None):
-    """Mở hóa đơn ĐÃ CHỐT về lại nháp để sửa (hủy phần sổ quỹ).
-    ⚠ @p_Type='1' cho phiếu đã chốt — dùng '0' là không ăn gì mà cũng không báo lỗi."""
+    """HỦY THANH TOÁN: hóa đơn ĐÃ CHỐT (C) về nháp (W), hoàn toàn bộ pha DUYỆT (sổ quỹ, hàng S→I, tracking).
+    Quy trình v5 pha 7 (đo thật 06:58:30 đơn 606): app dùng **@p_Type='0'**. Ghi chú cũ "'0' không ăn gì"
+    chỉ đúng khi đơn còn W (không có gì để hoàn) — GĐ chốt 5 (05/09/2026)."""
     c = c or S.client("mo_lai_hoa_don")
+    # '0' hoàn cả két (đòi T_TILL_TXN có TillID) — đơn C mà chưa vào két (Status U, TillID NULL,
+    # vd chốt dở giữa chừng) thì '0' nổ NULL TillID → dùng '1' (chỉ trả trạng thái, không có két để hoàn)
+    da_vao_ket = c.query("SELECT TOP 1 1 AS co FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ? AND Status = 'P' "
+                         "AND TillID IS NOT NULL", (trn_id,))
     c.goi_co_khoa(
         "T_TILL_TXN_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=trn_id,
         kiem_tra=lambda cl: (cl.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
                                       (trn_id,)) or [{}])[0].get("Status") == NHAP,
         p_TrnRefID=trn_id, pType="SRT", pCongNoBanLe=0, p_UserUpd=user_id,
-        p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_Type="1")
+        p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_Type="0" if da_vao_ket else "1")
     return True
 
 
 def huy(trn_id, *, user_id, c=None):
-    """Hủy hẳn hóa đơn, trả hàng về kho. Phiếu đã chốt thì mở lại trước."""
+    """XÓA ĐƠN (chỉ còn trong *_Log), hàng + dẻ về kho. Chỉ nhận đơn W.
+    GĐ chốt 2 (05/09/2026): đơn ĐÃ THANH TOÁN phải qua 2 BƯỚC, 2 XÁC NHẬN rõ ràng —
+    bước 1 HỦY THANH TOÁN (mo_lai) → bước 2 XÓA — KHÔNG tự chuỗi 2 proc như app."""
     c = c or S.client("huy_hoa_don")
     st = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,))
     if not st:
         return False
     if st[0]["Status"] == CHOT_ROI:
-        mo_lai(trn_id, user_id=user_id, c=c)
+        raise PmvProcError("TRN_RT_BUYSELL_Del", -1, [{
+            "loi": "Hóa đơn ĐÃ THANH TOÁN — bước 1 bấm HỦY THANH TOÁN (đơn về chờ), bước 2 mới XÓA được."}])
     c.goi_co_khoa(
         "TRN_RT_BUYSELL_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=trn_id,
         kiem_tra=lambda cl: not cl.query(
             "SELECT TrnID FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,)),
         p_TrnID=trn_id, p_UserUpd=user_id,
         p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_LogDel="0")
+    return True
+
+
+def huy_thau(trn_id, *, user_id, c=None):
+    """Hủy phiếu thâu đang ở nháp; phiếu đã chốt phải hủy thanh toán trước.
+
+    Hai bước giống hóa đơn bán: trả sổ quỹ bằng BRT rồi mới gọi proc xóa phiếu.
+    Mỗi bước dùng mốc khóa mới và đọc lại để tránh báo thành công giả.
+    """
+    c = c or S.client("huy_thau")
+    st = c.query("SELECT Status FROM TRN_RT_BUYGOLD WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,))
+    if not st:
+        return False
+    if st[0]["Status"] == CHOT_ROI:
+        mo_lai_thau(trn_id, user_id=user_id, c=c)
+    c.goi_co_khoa(
+        "TRN_RT_BUYGOLD_Del", bang="TRN_RT_BUYGOLD", cot_id="TrnID", gia_tri=trn_id,
+        kiem_tra=lambda cl: not cl.query("SELECT TrnID FROM TRN_RT_BUYGOLD WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,)),
+        p_TrnID=trn_id, p_UserUpd=user_id, p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG,
+        p_TrnID_GDN="")
+    return True
+
+
+def mo_lai_thau(trn_id, *, user_id, c=None):
+    """Hủy phần thanh toán của phiếu thâu, đưa C về W."""
+    c = c or S.client("mo_lai_thau")
+    c.goi_co_khoa(
+        "T_TILL_TXN_Del", bang="TRN_RT_BUYGOLD", cot_id="TrnID", gia_tri=trn_id,
+        kiem_tra=lambda cl: (cl.query("SELECT Status FROM TRN_RT_BUYGOLD WITH (NOLOCK) WHERE TrnID=?", (trn_id,)) or [{}])[0].get("Status") == NHAP,
+        p_TrnRefID=trn_id, pType="BRT", pCongNoBanLe=0, p_UserUpd=user_id,
+        p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_Type="1")
     return True

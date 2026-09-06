@@ -1,0 +1,84 @@
+{% extends "partials/modal_shell.html" %}
+{% load static pos_extras %}
+
+{% block modal_title %}Giấy đảm bảo · {{ r.BillCode|default:r.TrnID }}{% endblock %}
+{% block modal_style %}width:min(760px,96vw);max-height:94vh{% endblock %}
+
+{% block modal_body %}
+<div class="gdb-a5-toolbar">
+  <button class="khbl-btn khbl-btn--gold" type="button" onclick="window.print()">🖨 In giấy đảm bảo A5</button>
+  <span>Biểu mẫu A5 dọc · phần giao khách và phần tiệm lưu.</span>
+</div>
+
+<article class="gdb-a5" aria-label="Giấy đảm bảo Kim Hạnh II khổ A5">
+  <section class="gdb-a5__front" aria-label="Phần giao khách">
+    <div class="gdb-codebar gdb-a5__front-code" aria-label="Mã vạch hóa đơn {{ r.BillCode|default:r.TrnID }}">
+      {% for b in codebar %}<i class="{% if b.bar %}gdb-codebar__bar{% endif %}" style="--w:{{ b.w }}"></i>{% endfor %}
+    </div>
+    <span class="gdb-codebar__text gdb-a5__front-code-text">{{ r.BillCode|default:r.TrnID }}</span>
+
+    <div class="gdb-a5__front-info">
+      <span class="gdb-a5__type"><b>Loại GD:</b> {% if loai == 'THAU' %}Thâu vàng{% elif loai == 'BAN_DOI' %}Mua - Bán{% else %}Bán hàng{% endif %}</span>
+      <span class="gdb-a5__bill"><b>Số HĐ:</b> {{ r.BillCode|default:r.TrnID }}</span>
+      <span class="gdb-a5__customer"><b>Khách hàng:</b> {{ r.CustName|default:"Khách lẻ" }}</span>
+      <span class="gdb-a5__phone"><b>Điện thoại:</b> {{ r.Phone|default:"—" }}</span>
+      <span class="gdb-a5__address"><b>Địa chỉ:</b> {{ r.Address|default:"—" }}</span>
+    </div>
+
+    <section class="gdb-a5__front-items" aria-label="Danh sách món khách mua">
+      <table>
+        <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>Loại vàng</th><th>TL vàng</th><th>TL hột</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
+        <tbody>
+          {% for x in lines %}
+          <tr><td>{{ forloop.counter }}</td><td class="mono">{{ x.ProductCode|default:"—" }}</td><td>{{ x.ProductDesc }}</td><td>{{ x.GoldLabel|default:x.GoldCode|default:"—" }}</td><td>{{ x.tl_text|default:"—" }}</td><td>0</td><td class="num">{{ x.rate|don_gia }}</td><td class="num">{% if x.task %}{{ x.task|don_gia }}{% else %}0{% endif %}</td><td class="num"><b>{{ x.amount|tien_tran }}</b></td></tr>
+          {% empty %}
+          <tr><td colspan="9" class="gdb-a5__empty">Không có món hàng chi tiết</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr><td colspan="7"><b>Số lượng: {{ tong_mon }} món</b></td><td class="num"><b>Tổng tiền</b></td><td class="num"><b>{% if r.TienBan %}{{ r.TienBan|tien_tran }}{% else %}{{ r.TienMua|tien_tran }}{% endif %}</b></td></tr></tfoot>
+      </table>
+    </section>
+
+    <section class="gdb-a5__front-total">
+      <div><b>TỔNG TIỀN THANH TOÁN:</b><strong class="{% if r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}đ</strong></div>
+      <em>(Bằng chữ: {{ tien_chu }})</em>
+    </section>
+    <div class="gdb-a5__front-date">{{ r.TrnTime }}, ngày {{ r.TrnDate|date:"d" }} tháng {{ r.TrnDate|date:"m" }} năm {{ r.TrnDate|date:"Y" }}</div>
+    <div class="gdb-a5__front-emp"><span>{{ r.EmpName|default:"" }}</span></div>
+  </section>
+
+  <section class="gdb-a5__store" aria-label="Phần tiệm giữ">
+    <section class="gdb-a5__store-old" aria-label="Danh sách vàng khách bán">
+      <table>
+        <thead><tr><th>Mã SP</th><th>Tên SP</th><th>Loại vàng</th><th>TLV</th><th>TLH</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
+        <tbody>
+          {% for x in old_lines %}
+          <tr><td class="mono">{{ x.ProductCode }}</td><td>{{ x.ProductDesc }}</td><td>{{ x.GoldLabel }}</td><td>{{ x.tl_vang }}</td><td>{{ x.tl_hot }}</td><td class="num">{{ x.rate|don_gia }}</td><td class="num">{% if x.task %}{{ x.task|don_gia }}{% else %}0{% endif %}</td><td class="num">{{ x.amount|tien_tran }}</td></tr>
+          {% empty %}
+          <tr><td colspan="8" class="gdb-a5__empty">Không có vàng khách bán</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <aside class="gdb-a5__store-meta">
+      <div><b>Loại GD:</b> {% if loai == 'THAU' %}Thâu vàng{% elif loai == 'BAN_DOI' %}Mua - Bán{% else %}Bán hàng{% endif %}</div>
+      <div><b>Số HĐ:</b> {{ r.BillCode|default:r.TrnID }}</div>
+      <div><b>KH:</b> {{ r.CustName|default:"Khách lẻ" }}</div>
+      <div><b>SĐT:</b> {{ r.Phone|default:"—" }}</div>
+    </aside>
+    <div class="gdb-codebar gdb-a5__store-code" aria-hidden="true">{% for b in codebar %}<i class="{% if b.bar %}gdb-codebar__bar{% endif %}" style="--w:{{ b.w }}"></i>{% endfor %}</div>
+    <span class="gdb-codebar__text gdb-a5__store-code-text">{{ r.BillCode|default:r.TrnID }}</span>
+
+    <section class="gdb-a5__store-payment" aria-label="Thống kê thanh toán">
+      <div><span>Tiền vàng mới</span><b>{{ r.TienBan|tien_tran }}</b></div>
+      <div><span>Tiền vàng khách</span><b>{{ r.TienMua|tien_tran }}</b></div>
+      <div><span>Tiền công thêm</span><b>{{ r.TienCongThem|tien_tran }}</b></div>
+      <div><span>Tiền bớt / cọc</span><b>{% if r.TienBot or r.TienCoc %}−{{ r.TienBot|add:r.TienCoc|tien_tran }}{% else %}0{% endif %}</b></div>
+      <div class="gdb-a5__store-final"><span>Tổng thanh toán</span><b class="{% if r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}</b></div>
+    </section>
+    <span class="gdb-a5__store-date">{{ r.TrnTime }}, ngày {{ r.TrnDate|date:"d" }} tháng {{ r.TrnDate|date:"m" }} năm {{ r.TrnDate|date:"Y" }}</span>
+    <span class="gdb-a5__store-emp">NV bán hàng: <b>{{ r.EmpName|default:"" }}</b></span>
+  </section>
+</article>
+{% endblock %}

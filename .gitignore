@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 setup/*.exe
 db.sqlite3
+
+# Anh bang gia xuat tu popup
+/exports/

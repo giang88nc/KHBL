@@ -285,7 +285,7 @@ PROC_WRITE_ALLOW = frozenset({
     "I_DiemTichLuy_InsFromGT",                                 # 05/09/2026
     "TRN_RT_BUYSELL_Ins", "TRN_RT_BUYSELL_Upd",               # 03/09/2026
     "TRN_RT_BUYSELL_Complete",                                # 03/09/2026
-    "TRN_RT_BUYSELL_Del", "T_TILL_TXN_Proc", "T_TILL_TXN_Del",# 03/09/2026
+    "TRN_RT_BUYSELL_Del", "TRN_RT_BUYGOLD_Del", "T_TILL_TXN_Proc", "T_TILL_TXN_Del",# 03/09/2026
 })
 _PROC_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
