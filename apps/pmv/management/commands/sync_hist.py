@@ -36,6 +36,32 @@ class Command(BaseCommand):
                                   f"{'  ← cha '+m['parent'] if m['parent'] else ''}")
             return
 
+        if o["sync"] or o["backfill"] or o["reconcile"]:
+            # Cờ liên tiến trình: job 09:00/21:00, nút web và lệnh tay KHÔNG chạy chồng nhau
+            if H.dang_chay():
+                self.stdout.write(self.style.WARNING(
+                    "Đang có lượt đồng bộ khác chạy (hist_sync_running=1) — bỏ qua lượt này."))
+                return
+            H._bat_co()
+            try:
+                self._chay(o, tables)
+            finally:
+                H._tat_co()
+            return
+
+        # mặc định: trạng thái
+        rows = H.status()
+        if not rows:
+            self.stdout.write("Chưa chạy lần nào. Dùng --backfill để khởi tạo kho lịch sử.")
+            return
+        self.stdout.write(self.style.MIGRATE_HEADING("TRẠNG THÁI KHO LỊCH SỬ PMV_KH2_HIST"))
+        for r in rows:
+            flag = "KHỚP" if r["is_match"] else "LỆCH"
+            self.stdout.write(f"  {'OK ' if r['is_match'] else '≠  '}{r['table_name']:<32} "
+                              f"{r['strategy'] or '':<9} KK={r['rows_kk']} HIST={r['rows_hist']} {flag}"
+                              + (f"  {r['note']}" if r["note"] else ""))
+
+    def _chay(self, o, tables):
         if o["sync"]:
             self.stdout.write(self.style.MIGRATE_HEADING("ĐỒNG BỘ INCREMENTAL KK → PMV_KH2_HIST"))
             rep = H.run_sync(tables, log=self.stdout.write)
@@ -66,16 +92,3 @@ class Command(BaseCommand):
                     f"  LỆCH {r['table']}: KK={r.get('rows_kk')} HIST={r.get('rows_hist')}"))
             for r in loi:
                 self.stdout.write(self.style.ERROR(f"  LỖI {r['table']}: {r['error'][:160]}"))
-            return
-
-        # mặc định: trạng thái
-        rows = H.status()
-        if not rows:
-            self.stdout.write("Chưa chạy lần nào. Dùng --backfill để khởi tạo kho lịch sử.")
-            return
-        self.stdout.write(self.style.MIGRATE_HEADING("TRẠNG THÁI KHO LỊCH SỬ PMV_KH2_HIST"))
-        for r in rows:
-            flag = "KHỚP" if r["is_match"] else "LỆCH"
-            self.stdout.write(f"  {'OK ' if r['is_match'] else '≠  '}{r['table_name']:<32} "
-                              f"{r['strategy'] or '':<9} KK={r['rows_kk']} HIST={r['rows_hist']} {flag}"
-                              + (f"  {r['note']}" if r["note"] else ""))

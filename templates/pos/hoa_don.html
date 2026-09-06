@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Hóa đơn{% endblock %}
 {% block page_title %}Hóa đơn trong ngày{% endblock %}
-{% block page_sub %}Đọc thẳng từ máy KK — gồm cả phiếu do phần mềm PMVGoldRT lập{% if la_hom_nay %} · tự làm mới mỗi 3 giây{% endif %}{% endblock %}
+{% block page_sub %}{% if nguon_hist %}<span style="display:inline-block;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 10px;font-weight:600">📚 Kho lịch sử · dữ liệu tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · máy KK không đọc được{% endif %}</span> — gồm cả phiếu do PMVGoldRT lập{% else %}Đọc thẳng từ máy KK — gồm cả phiếu do phần mềm PMVGoldRT lập{% if la_hom_nay %} · tự làm mới mỗi 3 giây{% endif %}{% endif %}{% endblock %}
 {% block page_tools %}
   <form method="get" style="display:flex;gap:8px;align-items:center">
     <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
@@ -10,6 +10,11 @@
 {% endblock %}
 
 {% block content %}
+{% if nguon_hist %}
+<div class="khbl-alert" style="margin-bottom:10px;background:var(--gold-100);border:1px solid var(--gold-300);color:var(--gold-700);font-weight:600">
+  📚 Đang xem <b>KHO LỊCH SỬ</b> — dữ liệu tới {{ hist_asof|date:"d/m/Y H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · <b>máy KK không đọc được</b>, tạm dùng bản sao{% else %} · ngày quá khứ đọc từ bản sao đầy đủ (KK có thể đã dọn){% endif %}
+</div>
+{% endif %}
 <div id="hd-bang"
   {% if la_hom_nay %}hx-get="{% url 'pos:hoa_don_nhip' %}?ngay={{ ngay }}"
      hx-trigger="every 3s [document.visibilityState === 'visible']" hx-sync="this:drop"

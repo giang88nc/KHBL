@@ -169,15 +169,18 @@ def doc(trn_id, c=None):
 
 
 def trong_ngay(ngay, c=None, limit=100):
-    """Danh sách hóa đơn của 1 ngày — cho nút DANH SÁCH."""
-    c = c or S.client("ds_hoa_don")
-    return c.query(
-        f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnTime, b.Status, b.PayAmount, "
-        "b.SellTotalAmount, b.BuyTotalAmount, k.CustName, e.EmpName "
-        "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
-        "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = b.CustID "
-        "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
-        "WHERE b.IsDel = '0' AND b.TrnDate = ? ORDER BY b.TrnTime DESC", (ngay,))
+    """Danh sách hóa đơn của 1 ngày — cho nút DANH SÁCH.
+    Không truyền c: ngày QUÁ KHỨ → kho lịch sử, hôm nay → live (KK chết → lùi về kho)."""
+    sql = (f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnTime, b.Status, b.PayAmount, "
+           "b.SellTotalAmount, b.BuyTotalAmount, k.CustName, e.EmpName "
+           "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
+           "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = b.CustID "
+           "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
+           "WHERE b.IsDel = '0' AND b.TrnDate = ? ORDER BY b.TrnTime DESC")
+    if c is not None:
+        return c.query(sql, (ngay,))
+    from apps.pmv import hist_read as HR
+    return HR.doc(lambda cl: cl.query(sql, (ngay,)), ngay_iso=ngay, tag="ds_hoa_don")
 
 
 # ─────────────────────────── ghi ───────────────────────────

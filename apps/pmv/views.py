@@ -592,3 +592,45 @@ def snapshot_delete(request, pk):
     PmvSnapshot.objects.filter(pk=pk).delete()
     messages.success(request, f"Đã xóa snapshot #{pk}.")
     return redirect("pmv:diff")
+
+
+# ─────────────────────────── KHO LỊCH SỬ PMV_KH2_HIST (Phase 3, 06/09/2026) ───────────────────────────
+def _hist_ctx():
+    from . import hist_sync as H
+
+    try:
+        rows = H.status()
+        tt = H.tom_tat(rows)
+    except Exception as exc:
+        rows, tt = [], {"loi": str(exc)}
+    return {"rows": rows, "tt": tt, "dang_chay": H.dang_chay(),
+            "log": PmvState.get("hist_sync_log") or "",
+            "void_days": settings.PMV_HIST_VOID_DAYS, "hist_db": settings.PMV_HIST_DB,
+            "hist_host": settings.PMV_HIST_MSSQL}
+
+
+def hist_view(request):
+    """Trang báo cáo kho lịch sử: tóm tắt · bảng từng bảng · nút Đồng bộ/Đối soát/Chép lại (chạy nền)."""
+    return render(request, "pmv/hist.html", _hist_ctx())
+
+
+def hist_bang(request):
+    """Mảnh bảng để trang poll 4s khi đang có lượt chạy nền."""
+    return render(request, "pmv/_hist_bang.html", _hist_ctx())
+
+
+@require_POST
+def hist_action(request):
+    from . import hist_sync as H
+
+    mode = request.POST.get("mode", "sync")
+    if mode not in ("sync", "reconcile", "backfill"):
+        mode = "sync"
+    table = (request.POST.get("table") or "").strip()
+    ten = {"sync": "Đồng bộ", "reconcile": "Đối soát",
+           "backfill": f"Chép lại {table or 'TẤT CẢ'}"}[mode]
+    if H.chay_nen(mode, [table] if table else None):
+        messages.success(request, f"▶ {ten} đã bắt đầu chạy nền — bảng dưới tự cập nhật.")
+    else:
+        messages.warning(request, "Đang có lượt chạy khác — chờ xong rồi bấm lại.")
+    return redirect("pmv:hist")

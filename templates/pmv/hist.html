@@ -1,0 +1,75 @@
+{% load static %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KHBL — Kho lịch sử</title>
+<style>
+  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-family: "Cormorant Garamond", Georgia, serif; color: var(--gold-700); margin: 0 0 4px; }
+  .sub { color:#78716c; margin-bottom:14px; }
+  .nav { margin-bottom:18px; font-size:13px; }
+  .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
+  .nav a.active { font-weight:700; border-bottom:2px solid var(--gold-500); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold-500); border-radius:8px; padding:10px 12px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--gold-700); }
+  .card .val { font-size:18px; font-weight:700; margin-top:2px; }
+  .card .val.bad { color:#B3402A; } .card .val.ok { color:#2E7D46; }
+  .acts { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .btn { cursor:pointer; border:1px solid var(--gold-500); background:var(--gold-100); color:var(--gold-700); font-weight:700; border-radius:7px; padding:7px 14px; font-size:13px; }
+  .btn:hover { background:var(--gold-500); color:#fff; } .btn:disabled { opacity:.45; cursor:default; }
+  .btn--sm { padding:2px 8px; font-size:11.5px; font-weight:600; }
+  .btn--out { background:#fff; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th { background:var(--gold-100); color:var(--gold-700); text-align:left; padding:7px 9px; font-size:12px; white-space:nowrap; }
+  td { padding:5px 9px; border-top:1px solid var(--line); font-size:12.5px; vertical-align:middle; }
+  td.r, th.r { text-align:right; font-variant-numeric:tabular-nums; }
+  .mono { font-family:Consolas,monospace; font-size:12px; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:10px; }
+  .tag-OK { background:#E7F3EA; color:#2E7D46; } .tag-THIEU { background:#FDF6E9; color:#8A560F; } .tag-LOI { background:#FDF2F0; color:#B3402A; }
+  .strat { color:#78716c; font-size:11.5px; }
+  .banner { border:1px solid #B3402A; background:#FDF2F0; color:#B3402A; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-weight:600; }
+  .banner.run { border-color:var(--gold-500); background:var(--gold-100); color:var(--gold-700); }
+  .msg { border-radius:8px; padding:9px 14px; margin-bottom:10px; font-size:13px; border:1px solid; }
+  .msg-success { border-color:#2E7D46; background:#EDF6F0; color:#1E5B32; }
+  .msg-warning { border-color:#C07A1A; background:#FDF6E9; color:#8A560F; }
+  .msg-error   { border-color:#B3402A; background:#FDF2F0; color:#B3402A; }
+  .log { background:#1C1917; color:#E4C56A; font:12px/1.45 Consolas,monospace; border-radius:8px; padding:10px 12px; max-height:260px; overflow:auto; white-space:pre-wrap; margin-bottom:12px; }
+  .dim { color:#78716c; }
+</style>
+<script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Kho lịch sử <span class="mono" style="font-size:16px">{{ hist_db }}</span></h1>
+  <div class="sub">Bản sao ĐẦY ĐỦ từ máy KK (KK có thể dọn dữ liệu cũ — kho giữ mãi) · {{ hist_host }} ·
+    tự đồng bộ <b>09:00 &amp; 21:00</b> · cửa sổ phát hiện đơn hủy (void) <b>{{ void_days }} ngày</b> ·
+    KK chỉ ĐỌC, mọi ghi vào kho này.</div>
+
+  <div class="nav">
+    <a href="{% url 'pmv:status' %}">Trạng thái</a>
+    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
+    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
+    <a href="{% url 'pmv:quy_trinh' %}">Quy trình</a>
+    <a href="{% url 'pmv:hist' %}" class="active">Kho lịch sử</a>
+  </div>
+
+  {% for m in messages %}<div class="msg msg-{{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <form method="post" action="{% url 'pmv:hist_action' %}" class="acts">
+    {% csrf_token %}
+    <button class="btn" name="mode" value="sync" {% if dang_chay %}disabled{% endif %}
+            title="Chép mới/sửa từ KK (append log · upsert cha · làm mới con · MERGE khách/sản phẩm · đánh void)">⟳ Đồng bộ ngay</button>
+    <button class="btn btn--out" name="mode" value="reconcile" {% if dang_chay %}disabled{% endif %}
+            title="Chỉ so COUNT + checksum KK ↔ kho, không chép">✓ Đối soát</button>
+    <span class="dim" style="font-size:12px">Lệnh tay: <span class="mono">manage.py sync_hist --sync | --reconcile | --backfill --table X</span></span>
+  </form>
+
+  {% include "pmv/_hist_bang.html" %}
+</div>
+</body>
+</html>

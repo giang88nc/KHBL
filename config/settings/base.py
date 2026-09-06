@@ -60,6 +60,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.pos.context_processors.khbl",
+                "apps.pmv.hist_read.nguon",   # nhãn "kho lịch sử · dữ liệu tới HH:mm" (Phase 4)
             ],
         },
     },

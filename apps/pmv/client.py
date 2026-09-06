@@ -37,7 +37,7 @@ class PmvClient:
             target = gateway.dich_hien_tai()
         elif target == "pmv":
             target = "kk"
-        if target not in ("kk", "sandbox"):
+        if target not in ("kk", "sandbox", "hist"):   # "hist" = kho lịch sử PMV_KH2_HIST, chỉ đọc (Phase 4)
             raise ValueError(f"Đích không hợp lệ: {target!r}")
         self.target = target
         self.tag = tag

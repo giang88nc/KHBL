@@ -1,5 +1,5 @@
 {% extends "partials/modal_shell.html" %}{% load pos_extras %}
-{% block modal_title %}Hóa đơn ngày {{ ngay }}{% endblock %}
+{% block modal_title %}Hóa đơn ngày {{ ngay }}{% if nguon_hist %} <span style="font-size:12px;font-weight:600;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 9px;vertical-align:middle">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>{% endif %}{% endblock %}
 {% block modal_style %}max-width:1040px{% endblock %}
 {% block modal_body %}
   {% if loi %}

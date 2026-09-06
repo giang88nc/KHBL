@@ -52,6 +52,54 @@ class Command(BaseCommand):
         self.ok("ghi được trạng thái vào bảng điều khiển",
                 "T_PRODUCT_TYPE" in st and st["T_PRODUCT_TYPE"]["is_match"])
 
+        # ── Phase 3–4 (06/09/2026): bảng tham chiếu · đích "hist" · định tuyến · cờ liên tiến trình · trang ──
+        for t in ("T_EMPLOYEE", "T_SECTION", "T_MAINSECTION", "I_GOLD_BAL", "I_XRATE", "SYS_USERS"):
+            self.ok(f"bảng tham chiếu {t} trong danh mục (snapshot)",
+                    t in names and by[t]["strategy"] == "snapshot")
+        import datetime as _d
+        from apps.pmv import hist_read as HR
+        from apps.pmv.client import PmvClient
+        r = PmvClient("hist", tag="smoke").query("SELECT TOP 1 EmpID FROM T_EMPLOYEE WITH (NOLOCK)")
+        self.ok("PmvClient('hist') đọc kho bằng SQL y hệt KK", bool(r))
+        try:
+            G.pmv_call("TRN_RT_BUYSELL_Get", {"p_TrnID": "x"}, tag="smoke", target="hist")
+            chan = False
+        except G.PmvBlocked:
+            chan = True
+        self.ok("gọi proc trên kho lịch sử bị CHẶN", chan)
+        qua = (_d.date.today() - _d.timedelta(days=1)).isoformat()
+        hom = _d.date.today().isoformat()
+        self.ok("la_qua_khu: hôm qua True / hôm nay False / rác False",
+                HR.la_qua_khu(qua) and not HR.la_qua_khu(hom) and not HR.la_qua_khu("x"))
+        HR.doc(lambda c: c.query("SELECT TOP 1 1 AS x FROM T_EMPLOYEE WITH (NOLOCK)"), ngay_iso=qua, tag="smoke")
+        self.ok("doc(quá khứ) → cờ nguồn = hist/qua_khu", HR.co_hien_tai() == ("hist", "qua_khu"))
+        ctx = HR.nguon(None)
+        self.ok("context processor báo nguon_hist + hist_asof rồi XÓA cờ (consume-once)",
+                ctx["nguon_hist"] and ctx["hist_asof"] is not None and HR.co_hien_tai() == ("live", ""))
+        HR.doc(lambda c: c.query("SELECT TOP 1 1 AS x FROM T_EMPLOYEE WITH (NOLOCK)"), ngay_iso=hom, tag="smoke")
+        self.ok("doc(hôm nay) → cờ nguồn = live", HR.co_hien_tai() == ("live", ""))
+        ranh0 = not H.dang_chay()
+        H._bat_co(); ban = H.dang_chay()
+        H._tat_co(); ranh1 = not H.dang_chay()
+        self.ok("cờ liên tiến trình: rảnh → bật=đang chạy → tắt=rảnh", ranh0 and ban and ranh1)
+        from django.conf import settings as _s
+        from django.contrib.auth import get_user_model
+        from django.test import Client
+        if "testserver" not in _s.ALLOWED_HOSTS:
+            _s.ALLOWED_HOSTS.append("testserver")
+        u = get_user_model().objects.filter(username="kimhanh2").first()
+        if u:
+            cl = Client(); cl.force_login(u)
+            b = cl.get("/he-thong/kho-lich-su/").content.decode("utf-8", "replace")
+            self.ok("trang /he-thong/kho-lich-su/ render (bảng + nút Đồng bộ + Đối soát)",
+                    'id="hist-bang"' in b and 'value="sync"' in b and 'value="reconcile"' in b)
+            p = cl.get("/he-thong/kho-lich-su/bang/").status_code
+            self.ok("mảnh poll /kho-lich-su/bang/ trả 200", p == 200)
+            d = cl.get(f"/banle/ban-hang/danh-sach/?ngay={qua}").content.decode("utf-8", "replace")
+            self.ok("DANH SÁCH hóa đơn ngày QUÁ KHỨ gắn nhãn kho lịch sử", "kho lịch sử" in d)
+            d2 = cl.get(f"/banle/ban-hang/danh-sach/?ngay={hom}").content.decode("utf-8", "replace")
+            self.ok("DANH SÁCH hóa đơn HÔM NAY đọc live (không nhãn)", "kho lịch sử" not in d2)
+
         # KK tuyệt đối không bị đụng: kênh hist KHÔNG được trỏ 206
         from django.conf import settings
         self.ok("kênh HIST trỏ instance nội bộ (không phải KK 206)",

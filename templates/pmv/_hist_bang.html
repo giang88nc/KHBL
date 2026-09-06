@@ -1,0 +1,53 @@
+{% comment %}Bảng trạng thái kho lịch sử — tự poll 4s khi đang có lượt chạy nền (swap outerHTML){% endcomment %}
+<div id="hist-bang"{% if dang_chay %} hx-get="{% url 'pmv:hist_bang' %}" hx-trigger="every 4s" hx-swap="outerHTML"{% endif %}>
+  {% if dang_chay %}<div class="banner run">⏳ Đang chạy nền… bảng tự cập nhật mỗi 4 giây.</div>{% endif %}
+  {% if tt.loi %}
+    <div class="banner">Không đọc được kho lịch sử: {{ tt.loi }}</div>
+  {% else %}
+  <div class="cards">
+    <div class="card"><div class="lbl">Lần đồng bộ gần nhất</div>
+      <div class="val" style="font-size:15px">{% if tt.last_run %}{{ tt.last_run|date:"d/m/Y H:i" }}{% else %}—{% endif %}</div></div>
+    <div class="card"><div class="lbl">Số bảng</div><div class="val">{{ tt.n }}</div></div>
+    <div class="card"><div class="lbl">Dòng ở KK</div><div class="val">{{ tt.rows_kk }}</div></div>
+    <div class="card"><div class="lbl">Dòng ở kho</div><div class="val">{{ tt.rows_hist }}</div></div>
+    <div class="card"><div class="lbl">Bảng THIẾU (kho &lt; KK)</div>
+      <div class="val {% if tt.thieu %}bad{% else %}ok{% endif %}">{{ tt.thieu|length }}</div></div>
+    <div class="card"><div class="lbl">Bảng LỖI</div>
+      <div class="val {% if tt.loi_bang %}bad{% else %}ok{% endif %}">{{ tt.loi_bang|length }}</div></div>
+    <div class="card"><div class="lbl">Đơn đã void (KK xóa)</div><div class="val">{{ tt.void }}</div></div>
+  </div>
+  {% endif %}
+
+  {% if log %}<pre class="log">{{ log }}</pre>{% endif %}
+
+  <table>
+    <thead><tr>
+      <th>Bảng</th><th>Cách sync</th><th class="r">KK</th><th class="r">Kho</th><th class="r">Chênh</th>
+      <th>Tình trạng</th><th>Lần chạy</th><th class="r">ms</th><th>Ghi chú</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="mono">{{ r.table_name }}</td>
+        <td class="strat">{{ r.strategy|default:"—" }}</td>
+        <td class="r">{{ r.rows_kk|default_if_none:"—" }}</td>
+        <td class="r">{{ r.rows_hist|default_if_none:"—" }}</td>
+        <td class="r {% if r.chenh < 0 %}tag-LOI{% endif %}">{% if r.chenh > 0 %}+{% endif %}{{ r.chenh }}</td>
+        <td><span class="tag tag-{% if r.tinh_trang == 'THIẾU' %}THIEU{% elif r.tinh_trang == 'LỖI' %}LOI{% else %}OK{% endif %}">{{ r.tinh_trang }}</span></td>
+        <td class="dim">{% if r.last_run %}{{ r.last_run|date:"d/m H:i" }}{% else %}—{% endif %}</td>
+        <td class="r dim">{{ r.last_ms|default_if_none:"" }}</td>
+        <td class="dim">{{ r.note|default:"" }}</td>
+        <td>
+          <form method="post" action="{% url 'pmv:hist_action' %}" style="margin:0"
+                onsubmit="return confirm('Chép lại TRỌN bảng {{ r.table_name }} từ KK (DROP + CREATE + copy)?\nDòng KK đã dọn sẽ MẤT khỏi kho cho bảng này.')">
+            {% csrf_token %}<input type="hidden" name="mode" value="backfill"><input type="hidden" name="table" value="{{ r.table_name }}">
+            <button class="btn btn--sm btn--out" {% if dang_chay %}disabled{% endif %} title="Chép lại trọn bảng từ KK">chép lại</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="10" class="dim">Chưa có dữ liệu — bấm “Đồng bộ ngay” hoặc chạy <span class="mono">manage.py sync_hist --backfill</span>.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

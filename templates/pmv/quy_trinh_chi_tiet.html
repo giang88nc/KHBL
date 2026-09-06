@@ -71,6 +71,7 @@
     <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
     <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
     <a href="{% url 'pmv:quy_trinh' %}" class="active">Quy trình</a>
+    <a href="{% url 'pmv:hist' %}">Kho lịch sử</a>
   </div>
   {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
 

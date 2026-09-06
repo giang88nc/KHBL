@@ -356,8 +356,113 @@ def status():
     ensure_database()
     ensure_control()
     return G.hist_query(
-        f"SELECT table_name, strategy, rows_kk, rows_hist, is_match, last_run, last_ms, note "
+        f"SELECT table_name, strategy, rows_kk, rows_hist, is_match, last_run, last_full_at, last_ms, note "
         f"FROM [{CONTROL}] ORDER BY table_name")
+
+
+# ─────────────────────────── BÁO CÁO + CHẠY NỀN (Phase 3) ───────────────────────────
+import datetime as _dt          # noqa: E402
+import threading as _th         # noqa: E402
+
+_LOCK = _th.Lock()
+RUN_KEY, LOG_KEY, START_KEY = "hist_sync_running", "hist_sync_log", "hist_sync_started"
+STALE_SEC = 2 * 3600   # cờ "đang chạy" quá 2 giờ = tiến trình cũ chết giữa chừng → coi như rảnh
+
+
+def dang_chay():
+    """Cờ LIÊN TIẾN TRÌNH (PmvState): job scheduler + nút web + lệnh tay không chạy chồng.
+    Cờ quá STALE_SEC (tiến trình chết không kịp xóa) → tự coi là rảnh."""
+    from .models import PmvState
+    if PmvState.get(RUN_KEY) != "1":
+        return False
+    try:
+        bd = _dt.datetime.fromisoformat(PmvState.get(START_KEY) or "")
+        if (_dt.datetime.now() - bd).total_seconds() > STALE_SEC:
+            PmvState.set(RUN_KEY, "")
+            return False
+    except ValueError:
+        pass
+    return True
+
+
+def _bat_co():
+    from .models import PmvState
+    PmvState.set(RUN_KEY, "1")
+    PmvState.set(START_KEY, _dt.datetime.now().isoformat(timespec="seconds"))
+
+
+def _tat_co():
+    from .models import PmvState
+    PmvState.set(RUN_KEY, "")
+
+
+def chay_nen(mode="sync", tables=None):
+    """Chạy sync / reconcile / backfill trong THREAD nền (nút trên trang Kho lịch sử).
+    Trả False nếu đang có lượt chạy khác (cùng hoặc khác tiến trình). Log 60 dòng cuối ở PmvState."""
+    from django.db import connection
+    from .models import PmvState
+
+    if dang_chay() or not _LOCK.acquire(blocking=False):
+        return False
+    _bat_co()
+    PmvState.set(LOG_KEY, "")
+    lines = []
+
+    def log(s):
+        lines.append(s)
+        PmvState.set(LOG_KEY, "\n".join(lines[-60:]))
+
+    def _run():
+        try:
+            log(f"▶ {mode} bắt đầu {_dt.datetime.now():%H:%M:%S}")
+            if mode == "backfill":
+                run(tables, do_backfill=True, do_reconcile=True, log=log)
+            elif mode == "reconcile":
+                run(tables, do_backfill=False, do_reconcile=True, log=log)
+            else:
+                run_sync(tables, log=log)
+            log(f"✔ xong {_dt.datetime.now():%H:%M:%S}")
+        except Exception as exc:
+            log(f"✗ LỖI: {exc}")
+        finally:
+            PmvState.set(RUN_KEY, "")
+            try:
+                connection.close()
+            except Exception:
+                pass
+            _LOCK.release()
+
+    _th.Thread(target=_run, daemon=True, name="hist_sync").start()
+    return True
+
+
+def tom_tat(rows):
+    """Tóm tắt cho trang báo cáo + gắn `tinh_trang` từng dòng (OK / THIẾU / LỖI).
+    Kho là SUPERSET → HIST ≥ KK là lành; HIST < KK = thiếu dữ liệu (xấu)."""
+    thieu, loi = [], []
+    for r in rows:
+        note = r.get("note") or ""
+        if note.startswith("LỖI"):
+            r["tinh_trang"] = "LỖI"; loi.append(r)
+        elif (r.get("rows_hist") or 0) < (r.get("rows_kk") or 0):
+            r["tinh_trang"] = "THIẾU"; thieu.append(r)
+        else:
+            r["tinh_trang"] = "OK"
+        r["chenh"] = (r.get("rows_hist") or 0) - (r.get("rows_kk") or 0)
+    void = 0
+    for t in VOID_TABLES:
+        try:
+            v = G.hist_query(f"SELECT COUNT(*) AS n FROM [{t}] WHERE [_sync_deleted]=1")
+            void += int(v[0]["n"] or 0) if v else 0
+        except Exception:
+            pass
+    return {
+        "n": len(rows),
+        "last_run": max((r["last_run"] for r in rows if r.get("last_run")), default=None),
+        "rows_kk": sum((r.get("rows_kk") or 0) for r in rows),
+        "rows_hist": sum((r.get("rows_hist") or 0) for r in rows),
+        "thieu": thieu, "loi_bang": loi, "void": void,
+    }
 
 
 def _safe(name):

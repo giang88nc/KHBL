@@ -14,10 +14,15 @@ Phase 1 chỉ dùng cột/PK để DỰNG SCHEMA + BACKFILL + RECONCILE. strateg
 from apps.pmv import gateway as G
 
 # Điều kiện bảng thuộc phạm vi đồng bộ (khớp câu dò ở dưới)
+# Bảng THAM CHIẾU nhỏ (Phase 4, 06/09/2026): các màn đọc quá khứ JOIN tới đây (tên NV, quầy, nhóm vàng,
+# tồn kho, bảng giá, két, user) — có ở HIST thì đọc quá khứ + failover tự đủ, không phải hỏi KK.
+_EXTRA_REF = ("T_EMPLOYEE", "T_SECTION", "T_MAINSECTION", "I_GOLD", "I_GOLD_BAL", "T_SHOP",
+              "I_XRATE", "T_TILL", "SYS_USERS", "I_DIEMTICHLUY")
 _INCLUDE = (
     "TABLE_NAME='I_CUSTOMER' OR TABLE_NAME LIKE 'TRN_RT_BUYSELL%' "
     "OR TABLE_NAME LIKE 'TRN_RT_BUYGOLD%' OR TABLE_NAME LIKE 'T_PRODUCT%' "
-    "OR TABLE_NAME LIKE '%[_]LOG'"
+    "OR TABLE_NAME LIKE '%[_]LOG' "
+    "OR TABLE_NAME IN (" + ", ".join(f"'{t}'" for t in _EXTRA_REF) + ")"
 )
 _SNAPSHOT = {"I_CUSTOMER", "T_PRODUCT"}
 # Cha của các bảng con (để Phase 2 làm mới con theo cha); key nối luôn là TrnID.

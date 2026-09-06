@@ -67,6 +67,7 @@
     <a href="{% url 'pmv:diff' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">So sánh SQL</a>
     <a href="{% url 'pmv:behavior' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Hành vi PMV</a>
     <a href="{% url 'pmv:quy_trinh' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Quy trình</a>
+    <a href="{% url 'pmv:hist' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Kho lịch sử</a>
     <a href="{% url 'pos:dashboard' %}" style="color:var(--gold-700);text-decoration:none;font-weight:600" title="Về màn hình bán lẻ">← Về Tổng quan</a>
     <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
   </div>

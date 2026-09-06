@@ -326,8 +326,28 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   server → Properties → Security → "SQL Server and Windows Authentication mode") + **khởi động lại service
   `MSSQL$SQL2014`** thì SQL-auth mới dùng được. App HIST hiện chạy **Trusted** (chạy tốt); muốn app dùng SQL-auth
   thì sau khi bật Mixed Mode đặt `.env PMV_HIST_USER=kimhanh2 / PMV_HIST_PASSWORD=KimHanh2`.
-- **CHƯA làm (Phase 3–4)**: trang báo cáo sync trong Hệ thống + định tuyến đọc quá khứ→HIST/failover khi KK tắt.
-- ⚠ Kích hoạt job 09:00/21:00 cần **khởi động lại tiến trình scheduler** (RESET_KHBL) — làm khi code toàn hệ ổn.
+- **Phase 3 XONG 06/09/2026 — TRANG BÁO CÁO** `/he-thong/kho-lich-su/` (view `pmv.hist_view`, template
+  standalone `pmv/hist.html` + mảnh `_hist_bang.html`, link "Kho lịch sử" trên subnav 5 trang Hệ thống): thẻ tóm
+  tắt (lần sync gần nhất · số bảng · dòng KK/kho · bảng THIẾU (kho<KK) · bảng LỖI · đơn đã void) + bảng từng bảng
+  (cách sync, KK, kho, chênh, tình trạng OK/THIẾU/LỖI, ghi chú) + nút **⟳ Đồng bộ ngay / ✓ Đối soát / chép lại
+  từng bảng** chạy **THREAD NỀN** (`hist_sync.chay_nen`), trang tự poll 4s khi đang chạy, log 60 dòng cuối ở
+  `PmvState.hist_sync_log`. **Cờ LIÊN TIẾN TRÌNH** `hist_sync_running`+`hist_sync_started` (PmvState): job
+  09:00/21:00, nút web và lệnh tay KHÔNG chạy chồng; cờ quá 2h (tiến trình chết) tự coi là rảnh. `sync_hist`
+  lệnh tay cũng bật/tắt cờ này.
+- **Phase 4 XONG 06/09/2026 — ĐỊNH TUYẾN ĐỌC QUÁ KHỨ + FAILOVER** (`apps/pmv/hist_read.py`): gateway/PmvClient
+  nhận đích **`"hist"`** (chỉ SELECT — `pmv_call` trên hist bị CHẶN), cùng câu SQL chạy được cả 2 kho.
+  `HR.doc(fn, ngay_iso=…)`: ngày **QUÁ KHỨ** → kho lịch sử trước (lỗi → lùi live); **hôm nay/không ngày** → live
+  trước, **KK chết → lùi về kho + cờ `failover`** (ghi cảnh báo vàng). Đã nối: `services.hoa_don_ngay`,
+  `services.tong_quan` (tách `_tong_quan(c,…)`), `services.lich_su_khach`, `bill.trong_ngay` (view KHÔNG đổi).
+  Cờ nguồn thread-local → context processor `hist_read.nguon` (đọc rồi XÓA, consume-once) → nhãn
+  **"📚 Kho lịch sử · dữ liệu tới HH:mm (· máy KK không đọc được)"** trên Hóa đơn, Tổng quan (đặt ở ĐẦU `block
+  content` — vì `base.html` bản đang sửa của phiên Bảng giá đã bỏ `page_sub`), popup DANH SÁCH hóa đơn.
+  Để kho tự đủ cho các JOIN: thêm **10 bảng tham chiếu** (`hist_config._EXTRA_REF`: T_EMPLOYEE · T_SECTION ·
+  T_MAINSECTION · I_GOLD · I_GOLD_BAL · T_SHOP · I_XRATE · T_TILL · SYS_USERS · I_DIEMTICHLUY, đều snapshot)
+  → **56 bảng**. ⚠ Bẫy: `fast_executemany` nổ với chuỗi RỖNG `''` (HY090 buffer length 0) và Decimal lệch
+  scale ("loses precision") → `hist_bulk_merge`/`hist_executemany` **tự thử lại đường CHẬM** khi fast lỗi.
+  `smoke_hist` 33/33; sync steady-state 56 bảng +0 mới 0 lệch 0 lỗi.
+- ⚠ Kích hoạt job 09:00/21:00 + code Phase 3–4 cần **RESET_KHBL** — chưa làm vì phiên Bảng giá còn code dở.
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 

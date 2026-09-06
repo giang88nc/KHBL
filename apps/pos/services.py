@@ -267,15 +267,16 @@ def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50):
 
 
 def lich_su_khach(cust_id, limit=15):
-    """Giao dịch gần nhất của khách: gộp cả BÁN và THÂU."""
-    return client("ls_khach").query(
+    """Giao dịch gần nhất của khách: gộp cả BÁN và THÂU. Live trước, KK chết → kho lịch sử."""
+    from apps.pmv import hist_read as HR
+    return HR.doc(lambda c: c.query(
         f"SELECT TOP {int(limit)} * FROM ("
         "SELECT 'BAN' AS loai, TrnID, BillCode, TrnDate, TrnTime, PayAmount AS SoTien "
         "FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE CustID = ? AND IsDel = '0' "
         "UNION ALL "
         "SELECT 'THAU', TrnID, BillCode, TrnDate, TrnTime, TotalAmount "
         "FROM TRN_RT_BUYGOLD WITH (NOLOCK) WHERE CustID = ? AND IsDel = '0'"
-        ") t ORDER BY TrnDate DESC, TrnTime DESC", (cust_id, cust_id))
+        ") t ORDER BY TrnDate DESC, TrnTime DESC", (cust_id, cust_id)), tag="ls_khach")
 
 
 def danh_sach_khach(q="", limit=60):
@@ -347,8 +348,10 @@ def loai_vang_thau():
 # ─────────────────────────── HÓA ĐƠN TRONG NGÀY ───────────────────────────
 
 def hoa_don_ngay(ngay_iso, limit=200):
-    """Bán + thâu trong 1 ngày. CAST tham số cho ăn chỉ mục (SQL 2005)."""
-    return client("hd_ngay").query(
+    """Bán + thâu trong 1 ngày. CAST tham số cho ăn chỉ mục (SQL 2005).
+    Ngày QUÁ KHỨ → kho lịch sử; hôm nay → live (KK chết → lùi về kho)."""
+    from apps.pmv import hist_read as HR
+    return HR.doc(lambda c: c.query(
         f"SELECT TOP {int(limit)} * FROM ("
         "SELECT 'BAN' AS loai, b.TrnID, b.BillCode, b.TrnTime, b.Status, b.IsDel, "
         "b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, b.PayAmount AS SoTien, "
@@ -364,14 +367,19 @@ def hoa_don_ngay(ngay_iso, limit=200):
         "LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = t.CustID "
         "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID "
         "WHERE t.TrnDate = CAST(? AS datetime)"
-        ") x ORDER BY x.TrnTime DESC", (ngay_iso, ngay_iso))
+        ") x ORDER BY x.TrnTime DESC", (ngay_iso, ngay_iso)), ngay_iso=ngay_iso, tag="hd_ngay")
 
 
 def tong_quan(ngay_iso, so_ngay=7):
-    """Số liệu trang Tổng quan — gộp trong ÍT truy vấn nhất có thể (nguồn là máy KK qua LAN)."""
+    """Số liệu trang Tổng quan. Ngày QUÁ KHỨ → kho lịch sử; hôm nay → live (KK chết → lùi về kho)."""
+    from apps.pmv import hist_read as HR
+    return HR.doc(lambda c: _tong_quan(c, ngay_iso, so_ngay), ngay_iso=ngay_iso, tag="tong_quan")
+
+
+def _tong_quan(c, ngay_iso, so_ngay=7):
+    """Gộp trong ÍT truy vấn nhất có thể (nguồn qua LAN). c = client đã chọn kho."""
     import datetime as _dt
 
-    c = client("tong_quan")
     d0 = _dt.date.fromisoformat(ngay_iso)
     tu = (d0 - _dt.timedelta(days=so_ngay - 1)).isoformat()
 

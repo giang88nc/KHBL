@@ -135,11 +135,16 @@ def duoc_ghi_kk():
 def mo_ta_dich(target=None):
     """Chuỗi ngắn cho băng cảnh báo + nhật ký."""
     t = target or dich_hien_tai()
+    if t == "hist":
+        return "kho lịch sử (PMV_KH2_HIST)"
     return "máy KK (DỮ LIỆU THẬT)" if t == "kk" else "máy Mr Giang (bản thử)"
 
 
 def _connect_dich(target, database=None, autocommit=False, timeout=15):
-    """Mở kết nối tới ĐÍCH chỉ định. KK: tài khoản SQL. Sandbox: tài khoản Windows."""
+    """Mở kết nối tới ĐÍCH chỉ định. KK: tài khoản SQL. Sandbox/HIST: tài khoản Windows.
+    "hist" = kho lịch sử PMV_KH2_HIST (Phase 4: đọc quá khứ + failover) — CHỈ ĐỌC qua đường này."""
+    if target == "hist":
+        return _hist_connect(database=database, autocommit=autocommit, timeout=timeout)
     if target == "sandbox":
         if not settings.PMV_LOCAL_MSSQL:
             raise PmvBlocked("PMV_TARGET=sandbox nhưng PMV_LOCAL_MSSQL đang trống trong .env")
@@ -293,6 +298,9 @@ def pmv_call(proc, params=None, *, tag, write=False, timeout=120, target=None):
     target: None = theo settings.PMV_TARGET. Ghi vào KK còn phải qua CHỐT AN TOÀN."""
     params = dict(params or {})
     target = target or dich_hien_tai()
+    if target == "hist":   # kho lịch sử không có proc vendor và không bao giờ nhận lệnh ghi nghiệp vụ
+        _audit("BLOCKED", tag, f"VƯỢT QUYỀN (gọi proc trên kho lịch sử): {proc}", ok=False)
+        raise PmvBlocked("Kho lịch sử chỉ đọc bằng SELECT — không gọi proc")
     if not _PROC_NAME_RE.match(proc or ""):
         _audit("BLOCKED", tag, f"VƯỢT QUYỀN (tên proc lạ): {proc!r}", ok=False)
         raise PmvBlocked(f"Tên proc không hợp lệ: {proc!r}")
@@ -510,16 +518,27 @@ def hist_executemany(sql, seq_rows, *, tag="hist", database=None, timeout=1800, 
     if not seq_rows:
         return 0
     t0 = time.monotonic()
-    try:
+
+    def _do(fast_mode):
         with _hist_connect(database=database, autocommit=False, timeout=timeout) as cn:
             cur = cn.cursor()
-            if fast:
+            if fast_mode:
                 try:
                     cur.fast_executemany = True
                 except Exception:
                     pass
             cur.executemany(sql, seq_rows)
             cn.commit()
+
+    try:
+        try:
+            _do(fast)
+        except Exception as exc:
+            # fast_executemany hỏng với '' (HY090) / Decimal lệch scale → thử lại đường chậm
+            if not fast:
+                raise
+            _audit("HIST", tag, f"{sql[:80]} fast lỗi ({str(exc)[:60]}) → thử lại chậm", ok=False)
+            _do(False)
         _audit("HIST", tag, f"{sql[:120]} × {len(seq_rows)} dòng", ms=int((time.monotonic() - t0) * 1000))
         return len(seq_rows)
     except Exception as exc:
@@ -568,22 +587,35 @@ def hist_bulk_merge(target, data_cols, pk_cols, rows, *, fast=True, reset_delete
              f"WHEN NOT MATCHED BY TARGET THEN INSERT ({inscols}) VALUES ({insvals}) "
              f"OUTPUT $action;")
     t0 = time.monotonic()
-    try:
+
+    def _do(fast_mode):
         with _hist_connect(autocommit=False, timeout=1800) as cn:
             cur = cn.cursor()
             cur.execute(f"SELECT TOP 0 {', '.join(q(c) for c in data_cols)} INTO #stg FROM [{target}]")
-            if fast:
+            if fast_mode:
                 try:
                     cur.fast_executemany = True
                 except Exception:
                     pass
-            step = 5000 if fast else 500
+            step = 5000 if fast_mode else 500
             for i in range(0, len(rows), step):
                 cur.executemany(ins_stg, rows[i:i + step])
             cur.execute(merge)
             acts = [r[0] for r in cur.fetchall()]
             cur.execute("DROP TABLE #stg")
             cn.commit()
+        return acts
+
+    try:
+        try:
+            acts = _do(fast)
+        except Exception as exc:
+            # ⚠ fast_executemany hỏng với chuỗi RỖNG '' (HY090 buffer length 0) và Decimal lệch scale
+            # ("loses precision") — thử lại đường CHẬM (bind từng giá trị), luôn đúng.
+            if not fast:
+                raise
+            _audit("HIST", tag, f"MERGE [{target}] fast lỗi ({str(exc)[:60]}) → thử lại chậm", ok=False)
+            acts = _do(False)
         _audit("HIST", tag, f"MERGE [{target}] × {len(rows)}", ms=int((time.monotonic() - t0) * 1000))
         return (acts.count("INSERT"), acts.count("UPDATE"))
     except Exception as exc:

@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Tổng quan{% endblock %}
 {% block page_title %}Tổng quan bán lẻ{% endblock %}
-{% block page_sub %}Số liệu đọc thẳng từ máy KK · ngày {{ ngay|slice:"8:10" }}/{{ ngay|slice:"5:7" }}/{{ ngay|slice:":4" }}{% endblock %}
+{% block page_sub %}{% if nguon_hist %}<span style="display:inline-block;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 10px;font-weight:600">📚 Kho lịch sử · dữ liệu tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · máy KK không đọc được{% endif %}</span>{% else %}Số liệu đọc thẳng từ máy KK{% endif %} · ngày {{ ngay|slice:"8:10" }}/{{ ngay|slice:"5:7" }}/{{ ngay|slice:":4" }}{% endblock %}
 {% block page_tools %}
   <form method="get" style="display:flex;gap:8px;align-items:center">
     <input class="khbl-input" type="date" name="ngay" value="{{ ngay }}">
@@ -11,6 +11,11 @@
 {% endblock %}
 
 {% block content %}
+{% if nguon_hist %}
+<div class="khbl-alert" style="margin-bottom:10px;background:var(--gold-100);border:1px solid var(--gold-300);color:var(--gold-700);font-weight:600">
+  📚 Đang xem <b>KHO LỊCH SỬ</b> — dữ liệu tới {{ hist_asof|date:"d/m/Y H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · <b>máy KK không đọc được</b>, tạm dùng bản sao{% else %} · ngày quá khứ đọc từ bản sao đầy đủ (KK có thể đã dọn){% endif %}
+</div>
+{% endif %}
 {% if loi_kk %}
   <div class="khbl-alert khbl-alert--do">{% icon "hethong" 18 %}
     <div><b>Không đọc được số liệu từ máy KK</b><br><span class="dim">{{ loi_kk }}</span></div></div>

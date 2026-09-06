@@ -7,6 +7,10 @@ app_name = "pmv"
 urlpatterns = [
     path("", views.status, name="status"),
     path("doi-dich/", views.doi_dich, name="doi_dich"),
+    # Kho lịch sử PMV_KH2_HIST (Phase 3, 06/09/2026)
+    path("kho-lich-su/", views.hist_view, name="hist"),
+    path("kho-lich-su/bang/", views.hist_bang, name="hist_bang"),
+    path("kho-lich-su/chay/", views.hist_action, name="hist_action"),
     path("so-sanh/", views.diff_view, name="diff"),
     path("so-sanh/chup/", views.snapshot_create, name="snapshot_create"),
     path("so-sanh/sync/", views.sync_now, name="sync_now"),
