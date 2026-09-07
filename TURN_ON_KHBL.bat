@@ -27,7 +27,14 @@ goto wait_mysql
 :mysql_ok
 
 REM --- 1) WEB: port 8100 chua co ai nghe thi moi bat (waitress) ---
-netstat -ano | findstr "LISTENING" | findstr ":8100 " >nul 2>&1
+REM     08/09/2026: waitress LA bind 127.0.0.1:8100 (chay tay) tung chiem cong -> guard tuong web da chay,
+REM     LAN bi tu choi. Nay: listener CHI loopback thi kill truoc; chi coi la "da chay" khi nghe 0.0.0.0/[::].
+REM     findstr mac dinh hieu [ ] la regex -> phai /L (literal) + /C: cho tung chuoi.
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr "LISTENING" ^| findstr /L /C:"127.0.0.1:8100 "') do (
+    echo [KHBL] Cong 8100 dang bi tien trinh loopback PID %%p chiem - kill de bat dung *:8100
+    taskkill /PID %%p /F >nul 2>&1
+)
+netstat -ano | findstr "LISTENING" | findstr /L /C:"0.0.0.0:8100 " /C:"[::]:8100 " >nul 2>&1
 if %errorlevel%==0 (
     echo [KHBL] Web DA CHAY san tren port 8100. Bo qua.
 ) else (

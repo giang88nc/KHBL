@@ -582,6 +582,11 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 | `WATCHDOG_KHBL.bat` | Vòng canh gác — KHÔNG chạy tay |
 | `run_hidden_khbl.vbs` | Chạy lệnh ẩn hoàn toàn — KHÔNG chạy tay |
 
+- ⚠ **BẪY 08/09/2026 — LAN "refused to connect" dù web đang chạy**: một waitress LẠ (chạy tay/phiên khác) bind
+  `--listen=127.0.0.1:8100` chiếm cổng → guard `findstr ":8100 " LISTENING` của TURN_ON tưởng web đã chạy và BỎ QUA,
+  hệ chỉ còn nghe loopback, PC quầy `192.168.1.6:8100` bị từ chối. Chẩn đoán: `netstat -ano | findstr :8100` phải ra
+  `0.0.0.0:8100` (không phải `127.0.0.1:8100`). Xử lý: kill PID đó → RESET. TURN_ON nay tự kill listener chỉ-loopback
+  trước khi bật. Firewall Windows máy này đang TẮT cả 3 profile nên không phải nguyên nhân.
 - Mặc định **PROD** (`config.settings.prod` trong manage.py + wsgi.py, DEBUG=False).
   Dev tạm: `set DJANGO_SETTINGS_MODULE=config.settings.dev`.
 - Job nền: **02:00 backup_pmv** (KHJ HR backup 01:30 cùng máy — né giờ nhau) ·
