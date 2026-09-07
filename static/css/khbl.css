@@ -897,3 +897,5 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── v5: badge đơn chờ treo >30' trên nút DANH SÁCH ── */
 .pg-treo{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#B3402A;background:#FDF2F0;border:1px solid #E3B9AC;border-radius:99px;padding:0 8px;vertical-align:middle}
+/* IN GĐB (GĐ chốt 08/09/2026): KHÔNG in nền ảnh tờ mẫu — giấy đã in sẵn, chỉ in nội dung; A5 đứng, lề 0, canh giữa */
+@media print{.gdb-a5{background:none!important;box-shadow:none!important;color:#000}.gdb-a5 th,.gdb-a5 td{border-color:#555!important}}

@@ -307,7 +307,13 @@ bán khách kế; THANH TOÁN & IN → chốt + mở luôn popup GĐB. **IN HÓA
 `hoa_don_chi_tiet` (`?trn_id&loai=BAN|BAN_DOI&nguon=live&in=1` — `nguon=live` đi theo công tắc đích; `in=1` → popup
 96vw + chân có nút **🖨 IN** = `ban_in_dem` POST đếm lần in vào bill_audit rồi `window.print()`; @page A5 portrait
 margin 0 đã có ở CSS gdb-a5, trình duyệt tự nhớ máy in). Nút HỦY THANH TOÁN đã BỎ khỏi chân (view `huy_tt` còn
-sống). Smoke 86 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ) + smoke_ui 136 (trang trắng 4 nút tắt).
+sống). **IN — chốt thêm 08/09 trưa**: (a) khi in KHÔNG in nền ảnh tờ mẫu (`@media print .gdb-a5{background:none}` —
+giấy GĐB đã in sẵn, chỉ in nội dung, chữ đen viền xám); (b) **THANH TOÁN & IN không mở popup**: OOB gọi
+`khblInThang(url, trn, demUrl)` (khbl.js) → iframe ẩn nạp `hoa_don_chi_tiet?…&raw=1&auto=1` (template standalone
+**`gdb_in.html`**, tờ GĐB tách thành partial **`_gdb_a5.html`** dùng chung với popup) → trang tự `window.print()`,
+postMessage ready/done về trang mẹ để đếm lần in (`ban_in_dem`) và gỡ iframe. ⚠ Hộp thoại in của trình duyệt KHÔNG
+bỏ được bằng JS — muốn in thẳng ra máy in mặc định, chạy Chrome với cờ **`--kiosk-printing`** (shortcut máy quầy).
+Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
 (Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.) 3 hành động trên
 đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
 `_xac_nhan_modal.html` (`ban_xac_nhan/<sua|huy_tt|huy_hd>` GET → `ban_thuc_hien/<…>` POST; bảng `HANH_DONG` trong

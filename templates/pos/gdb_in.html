@@ -1,0 +1,32 @@
+{% load static pos_extras %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>In GĐB {{ r.BillCode|default:r.TrnID }}</title>
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.gdbin1">
+<style>
+  /* Trang IN THẲNG (GĐ chốt 08/09/2026): dùng trong iframe ẩn sau THANH TOÁN & IN — không popup, không nền ảnh.
+     Hộp thoại in của trình duyệt chỉ bỏ được khi Chrome chạy --kiosk-printing (in thẳng ra máy in mặc định). */
+  html,body{margin:0;padding:0;background:#fff}
+  .gdb-a5{margin:0 auto}
+  @page{size:A5 portrait;margin:0}
+  @media print{.gdb-a5{width:148mm!important;height:210mm!important;aspect-ratio:auto!important;margin:0!important;background:none!important}}
+</style>
+</head>
+<body class="gdb-in">
+{% include "pos/_gdb_a5.html" %}
+<script>
+  // Báo cho trang mẹ (nếu có) là đã sẵn sàng, rồi in. afterprint → trang mẹ gỡ iframe.
+  window.addEventListener("load", function () {
+    setTimeout(function () {
+      try { window.parent && window.parent.postMessage({khblGdb: "ready", trn: "{{ r.TrnID|escapejs }}"}, "*"); } catch (_) {}
+      {% if auto %}window.print();{% endif %}
+    }, 150);
+  });
+  window.addEventListener("afterprint", function () {
+    try { window.parent && window.parent.postMessage({khblGdb: "done", trn: "{{ r.TrnID|escapejs }}"}, "*"); } catch (_) {}
+  });
+</script>
+</body>
+</html>

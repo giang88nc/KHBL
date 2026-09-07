@@ -1369,9 +1369,11 @@ def hoa_don_chi_tiet(request):
     co_vang_doi_thau = any(x.get("loai_dong") in ("Đổi", "Thâu") for x in store_lines)
     so_tien = M.dec(r.get("SoTien"))
     gdb_status = ("Đổi bù" if so_tien > 0 else "Đổi dư" if so_tien < 0 else "") if co_vang_doi_thau else ""
-    return render(request, "pos/_hoa_don_chi_tiet.html", {
+    # raw=1 (08/09/2026): trang IN THẲNG standalone cho iframe ẩn (THANH TOÁN & IN) — auto=1 tự window.print()
+    tpl = "pos/gdb_in.html" if request.GET.get("raw") == "1" else "pos/_hoa_don_chi_tiet.html"
+    return render(request, tpl, {
         # in_mode (08/09/2026): mở từ nút IN HÓA ĐƠN màn bán → popup rộng + nút 🖨 IN (đếm lần in qua ban_in_dem)
-        "in_mode": request.GET.get("in") == "1",
+        "in_mode": request.GET.get("in") == "1", "auto": request.GET.get("auto") == "1",
         "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
         "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),

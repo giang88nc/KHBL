@@ -117,6 +117,34 @@
     hanToast(item);
   }
 
+  /* IN THẲNG Giấy đảm bảo (THANH TOÁN & IN, 08/09/2026): iframe ẩn nạp trang raw=1&auto=1 → trang tự window.print()
+     → afterprint báo về → gỡ iframe. Đếm lần in (ban_in_dem) ngay khi iframe sẵn sàng. Không popup. */
+  window.khblInThang = function (url, trn, demUrl) {
+    var old = document.getElementById("khbl-in-thang");
+    if (old) old.remove();
+    var f = document.createElement("iframe");
+    f.id = "khbl-in-thang";
+    f.setAttribute("aria-hidden", "true");
+    f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    f.src = url;
+    document.body.appendChild(f);
+    var daDem = false;
+    function dem() {
+      if (daDem || !demUrl || !window.htmx) return;
+      daDem = true;
+      window.htmx.ajax("POST", demUrl, { values: { trn_id: trn }, swap: "none",
+        headers: { "X-CSRFToken": (window.KHBL_CSRF || "") } });
+    }
+    function onMsg(e) {
+      var d = e.data || {};
+      if (!d.khblGdb || d.trn !== trn) return;
+      if (d.khblGdb === "ready") dem();
+      if (d.khblGdb === "done") { window.removeEventListener("message", onMsg); setTimeout(function () { f.remove(); }, 500); }
+    }
+    window.addEventListener("message", onMsg);
+    setTimeout(function () { if (f.parentNode) { window.removeEventListener("message", onMsg); f.remove(); } }, 120000);
+  };
+
   /* FOCUS ô đang thiếu/lỗi + hiệu ứng rung & viền đỏ 3s (server gửi selector qua _ban_oob loi_o) */
   window.khblFocusLoi = function (sel, _lan2) {
     // ⚠ htmx SETTLE (20ms sau swap) chép lại attribute class từ HTML server → class thêm sớm bị xóa.
