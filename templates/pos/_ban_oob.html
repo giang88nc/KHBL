@@ -13,7 +13,8 @@
   {% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
   {# lỗi thiếu dữ liệu (08/09/2026): FOCUS + rung ô đang thiếu — selector do view gửi (loi_o) #}
   {% if loi_o %}<script>window.khblFocusLoi && window.khblFocusLoi("{{ loi_o|escapejs }}");</script>{% endif %}
-  {# THANH TOÁN & IN (GĐ chốt 08/09/2026): KHÔNG mở popup — nạp trang in thẳng vào iframe ẩn, tự print + đếm lần in.
-     Hộp thoại in chỉ bỏ được khi Chrome chạy --kiosk-printing (in ngay ra máy in mặc định). #}
-  {% if in_luon %}<script>window.khblInThang && window.khblInThang("{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&raw=1&auto=1", "{{ vua_chot|escapejs }}", "{% url 'pos:ban_in_dem' %}");</script>{% endif %}
+  {% comment %}THANH TOÁN & IN (GĐ chốt 08/09/2026): KHÔNG mở popup — nạp trang in thẳng vào iframe ẩn, tự print +
+  đếm lần in IM LẶNG (im=1, không toast). Hộp thoại in chỉ bỏ được khi Chrome/Edge chạy --kiosk-printing.
+  ⚠ chú thích nhiều dòng PHẢI dùng comment-block — {# #} 2 dòng từng bị in nguyên văn ra toast.{% endcomment %}
+  {% if in_luon %}<script>window.khblInThang && window.khblInThang("{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&raw=1&auto=1", "{{ vua_chot|escapejs }}", "{% url 'pos:ban_in_dem' %}?im=1");</script>{% endif %}
 </div>

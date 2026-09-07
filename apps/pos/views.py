@@ -803,6 +803,8 @@ def ban_in_dem(request):
     lan = BillAudit.objects.filter(trn_id=trn, action="IN").count() + 1
     snap = g if trn == g.get("trn_id") else {"trn_id": trn}
     _audit(request, snap, "IN", version=lan)
+    if request.GET.get("im") == "1":          # THANH TOÁN & IN: đếm im lặng, không toast (GĐ 08/09)
+        return HttpResponse(status=204)
     return _pos_oob(request, {"tin": f"Đã ghi nhận IN lần {lan} · {datetime.datetime.now():%H:%M} — "
                                      f"{g.get('bill_code') or trn}"})
 

@@ -366,7 +366,8 @@ class Command(BaseCommand):
                 bf = body(cl.post("/banle/ban-hang/thanh-toan/", {"in": "1"}))
                 self.ok("C12f THANH TOÁN & IN → CHỐT + lệnh in thẳng iframe ẩn (khblInThang, raw=1&auto=1), KHÔNG popup",
                         self._trang_thai(hd["TrnID"]) == B.CHOT_ROI and "khblInThang(" in bf
-                        and "raw=1&auto=1" in bf and 'htmx.ajax("GET"' not in bf)
+                        and "raw=1&auto=1" in bf and 'htmx.ajax("GET"' not in bf and "{#" not in bf
+                        and cl.post("/banle/ban-hang/in/dem/?im=1", {"trn_id": hd["TrnID"]}).status_code == 204)
                 braw = body(cl.get(f"/banle/hoa-don/xem/?trn_id={hd['TrnID']}&loai=BAN&nguon=live&raw=1&auto=1"))
                 self.ok("C12f2 trang in thẳng raw=1: standalone (không modal), có tờ GĐB, tự window.print()",
                         'class="gdb-a5"' in braw and "khbl-modal" not in braw and "window.print()" in braw
