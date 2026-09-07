@@ -526,7 +526,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-ban__body{display:grid;grid-template-columns:minmax(0,1fr) 340px;
   grid-template-rows:minmax(0,1fr);gap:10px;padding:10px 12px;min-height:0}
 /* Cột TRÁI: thông tin (cao tự nhiên) + vàng bán + vàng đổi (chia phần còn lại, cuộn trong bảng) */
-.pg-ban__col-l{display:grid;grid-template-rows:auto minmax(0,1.35fr) minmax(0,1fr);gap:10px;min-height:0}
+.pg-ban__col-l{display:grid;grid-template-rows:auto minmax(0,1.35fr) minmax(0,1fr);gap:10px;min-height:0;min-width:0}
+/* 07/09/2026 — BẪY: grid item mặc định min-width:auto → cột trái RỘNG BẰNG NỘI DUNG (thanh THÔNG TIN nowrap) và
+   tràn XUỐNG DƯỚI cột TÍNH TỔNG → nút DANH SÁCH bị đè, bấm không ăn. min-width:0 ở cột + #pos-info để flex co lại đúng. */
+#pos-info,#pos-ban,#pos-doi{min-width:0}
+.pg-ban__c2{position:relative;z-index:2}
 .pg-ban__col-l > #pos-info{min-height:0}
 .pg-ban__col-l > #pos-ban,.pg-ban__col-l > #pos-doi{min-height:0;display:flex}
 .pg-ban__col-l > #pos-ban > .pg-box,.pg-ban__col-l > #pos-doi > .pg-box{flex:1;min-height:0;width:100%}

@@ -155,7 +155,11 @@ cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92p
   **07/09/2026 — LUÔN 1 DÒNG theo bề rộng trang**: `flex-wrap:nowrap`, ô NV `flex:1 1 160px` / Khách
   `flex:2 1 240px` co giãn, ngày `clamp(134px,10vw,150px)`, nút `flex:none`; ≤1180px chữ nút ẨN chỉ còn icon
   (`＋` · `☰` · `＋` — text bọc `<span class="pg-btn-noi__t">`), SĐT khách ẩn; cột TÍNH TỔNG 340→300→260px
-  theo 1180/900px. Chữ nút mới PHẢI bọc span đó để không phá 1 dòng.
+  theo 1180/900px. Chữ nút mới PHẢI bọc span đó để không phá 1 dòng. ⚠ **BẪY ĐÃ DÍNH (07/09 chiều, GĐ báo
+  "bấm DANH SÁCH không được")**: `.pg-ban__col-l` là grid item, mặc định `min-width:auto` → cột trái rộng
+  BẰNG NỘI DUNG (thanh nowrap ~937px) chứ không bằng track (918px @1280) → tràn XUỐNG DƯỚI cột TÍNH TỔNG, nút
+  DANH SÁCH bị đè nên click không ăn (dù `.click()` giả lập vẫn chạy). Fix: `min-width:0` cho `.pg-ban__col-l`
+  + `#pos-info/#pos-ban/#pos-doi`, `.pg-ban__c2{z-index:2}`. Kiểm bằng `elementFromPoint` tại 3 điểm trên nút.
 - **GIÁ BÁN/MUA = MySQL `gold_prices`** (07/09/2026 — GĐ chốt, MySQL là nguồn giá chính): `services.gia_mysql()`
   đọc `prices.current_rows()` → quy về nghìn/đơn vị KK bằng ĐÚNG `price_sync.mssql_rate` (cùng hàm nút ĐỒNG BỘ
   dùng) → map `GOLD_CODES` ra cả mã vàng + mã dẻ (610→18K/D18K…). `bang_gia()` giữ KHUNG dòng từ I_XRATE/I_GOLD
