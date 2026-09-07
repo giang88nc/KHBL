@@ -120,7 +120,7 @@ class Command(BaseCommand):
         # ── 4b. khối THÔNG TIN + TÍNH TỔNG ──
         b = body(c.get("/banle/ban-hang/"))
         for nhan in ("VÀNG BÁN", "VÀNG ĐỔI", "TÍNH TỔNG", "TIỀN KHÁCH TRẢ",
-                     "DANH SÁCH", "ĐƠN MỚI", "THANH TOÁN", "IN HÓA ĐƠN"):
+                     "DANH SÁCH", "ĐƠN MỚI", "THANH TOÁN", "THANH TOÁN &amp; IN"):
             check(f"  màn bán hàng có '{nhan}'", nhan in b)
         # Số hóa đơn + nút CLEAR đã BỎ (05/09/2026); mã đơn nay là badge bên VÀNG BÁN
         check("mã đơn hiện dạng badge trên VÀNG BÁN", "pg-hd-badge" in b)
@@ -144,7 +144,8 @@ class Command(BaseCommand):
         check("6 khoản tiền đủ trong cột TÍNH TỔNG",
               all(x in b for x in ("Tiền vàng mới", "Tiền vàng cũ", "CÒN LẠI", "Tiền vàng thêm",
                                    "Tiền công thêm", "Tiền bớt", "Tiền cọc", "Ghi chú")))
-        check("giấy đảm bảo in được", "GIẤY ĐẢM BẢO" in body(c.get("/banle/ban-hang/in/")))
+        check("giấy đảm bảo: phiếu ĐANG SỬA (nháp) bị chặn in 403 (GĐ 07/09: chốt mới in)",
+              c.get("/banle/ban-hang/in/").status_code == 403)
         # v5: giỏ = đơn W THẬT trên sandbox → dọn bằng XÓA ĐƠN (hàng về kho), không để đơn treo
         c.post("/banle/ban-hang/huy/")
         c.post("/banle/ban-hang/moi/")

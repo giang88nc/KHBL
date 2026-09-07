@@ -15,6 +15,8 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
     <div class="pg-tong__r pg-tong__r--conlai">
       <span>CÒN LẠI</span><b class="mono">{{ t.con_lai|tien_tran }}</b></div>
 
+    {# đơn ĐÃ CHỐT (khóa): toàn bộ ô tiền/ghi chú/hình thức thanh toán disable (07/09/2026, quy tắc 4) #}
+    {% if phieu_chot %}<fieldset disabled class="pg-khoa-fs" title="Đơn đang KHÓA — SỬA ĐƠN (passcode) mới đổi được">{% endif %}
     <form class="pg-tong__form" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
       {% csrf_token %}
       <label class="pg-tong__r pg-tong__r--nhap">
@@ -90,6 +92,7 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
                 hx-vals='js:{amount: (document.getElementById("o-tienck")||{}).value || ""}'>🔳 Tạo QR</button>
       </div>
     </form>
+    {% if phieu_chot %}</fieldset>{% endif %}
 
     <div class="pg-tong__tra{% if t.khach_tra < 0 %} pg-tong__tra--am{% elif t.khach_tra > 0 %} pg-tong__tra--duong{% endif %}">
       <span>TIỀN KHÁCH TRẢ</span>

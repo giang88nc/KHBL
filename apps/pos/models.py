@@ -40,6 +40,43 @@ class UnlockPasscode(models.Model):
         self.save()
 
 
+class BillAudit(models.Model):
+    """NHẬT KÝ hóa đơn — APPEND-ONLY (GĐ chốt 07/09/2026): mọi hành động lên đơn ĐÃ CHỐT (sửa đơn /
+    hủy thanh toán / hủy hóa đơn) + chốt + in đều ghi 1 dòng kèm ẢNH CHỤP đơn TRƯỚC khi đổi.
+    Model TỪ CHỐI update/delete (save chỉ khi chưa có pk; delete raise) — sửa chỉ được bằng tay trong DB,
+    không có đường nào từ web."""
+
+    CHOT, SUA, HUY_TT, HUY_HD, IN = "CHOT", "SUA", "HUY_TT", "HUY_HD", "IN"
+    TEN = {CHOT: "Thanh toán & chốt", SUA: "Sửa đơn (về nháp)", HUY_TT: "Hủy thanh toán",
+           HUY_HD: "Hủy hóa đơn", IN: "In giấy đảm bảo"}
+
+    trn_id = models.CharField(max_length=20, db_index=True)
+    bill_code = models.CharField(max_length=30, blank=True, default="")
+    action = models.CharField(max_length=10)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    username = models.CharField(max_length=150, blank=True, default="")   # giữ tên dù user bị xóa
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    before = models.JSONField(default=dict, blank=True)     # ảnh chụp đơn TRƯỚC hành động
+    note = models.CharField(max_length=300, blank=True, default="")
+    version = models.PositiveIntegerField(default=0)        # lần in thứ mấy (action=IN)
+
+    class Meta:
+        db_table = "bill_audit"
+        ordering = ["-created_at", "-id"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise PermissionError("bill_audit là nhật ký chỉ ghi thêm — không sửa được")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("bill_audit là nhật ký chỉ ghi thêm — không xóa được")
+
+    @property
+    def ten(self):
+        return self.TEN.get(self.action, self.action)
+
+
 class PriceBatch(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)

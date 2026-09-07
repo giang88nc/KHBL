@@ -27,7 +27,7 @@ def _rong(emp=""):
     return {"trn_id": "", "bill_code": "", "status": "", "ngay": "", "cust": None, "emp": emp,
             "ban": [], "doi": [], "bot": "0", "cong_them": "0", "vang_them": "0",
             "coc": "0", "ghi_chu": "", "pay_method": "cash", "tien_mat": "",
-            "bank_id": ""}
+            "bank_id": "", "upd": ""}
 
 
 def get(request):
@@ -112,6 +112,7 @@ def tu_phieu(phieu, emp=""):
     """Dựng dict phiếu (dạng _rong) từ hóa đơn bill.doc — KHÔNG đụng session."""
     g = _rong(emp)
     g.update(trn_id=phieu["trn_id"], bill_code=phieu["bill_code"], status=phieu["status"],
+             upd=phieu.get("upd") or "",
              ngay=_ngay_iso(phieu.get("ngay")), emp=phieu.get("emp_id") or "",
              ghi_chu=phieu.get("ghi_chu") or "",
              bot=_chuoi(phieu["tong"]["bot"]), cong_them=_chuoi(phieu["tong"]["cong_them"]),

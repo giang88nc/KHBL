@@ -39,6 +39,7 @@
       <div class="dim">Số phiếu:
         {% if g.bill_code %}<b class="mono">{{ g.bill_code }}</b>{% else %}— cấp khi lưu —{% endif %}</div>
       {% if ten_nv %}<div class="dim">Nhân viên: {{ ten_nv }}</div>{% endif %}
+      {% if ban_in_lan %}<div class="dim" style="font-size:10.5px">Bản in lần {{ ban_in_lan }} · {{ ban_in_luc|date:"H:i d/m/Y" }}</div>{% endif %}
     </div>
   </div>
 

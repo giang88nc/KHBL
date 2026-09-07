@@ -630,31 +630,109 @@ def ban_mo(request):
     return _pos_oob(request, {"tin": tin})
 
 
+# ─────── đơn ĐÃ CHỐT: 3 hành động cần PASSCODE (GĐ chốt 07/09/2026 theo sơ đồ trạng thái) ───────
+# sua    = Sửa đơn: hoàn két → nháp, Ở LẠI form để sửa rồi thanh toán lại
+# huy_tt = Hủy thanh toán: hoàn két → nháp, đơn nằm DS CHỜ, form về trắng
+# huy_hd = Hủy hóa đơn: hoàn két + xóa đơn (1 bước, 1 passcode), hàng về kho, form về trắng
+HANH_DONG = {
+    "sua":    {"ten": "SỬA ĐƠN", "icon": "🔓", "audit": "SUA",
+               "hau_qua": ["Sổ quỹ (két) của hóa đơn bị HOÀN, hóa đơn về trạng thái NHÁP.",
+                           "Đơn ở lại màn hình để sửa món, dẻ, khách, nhân viên, tiền — xong phải THANH TOÁN lại.",
+                           "Giấy đảm bảo đã in của hóa đơn này KHÔNG CÒN HIỆU LỰC — in lại sau khi thanh toán."]},
+    "huy_tt": {"ten": "HỦY THANH TOÁN", "icon": "↩", "audit": "HUY_TT",
+               "hau_qua": ["Sổ quỹ (két) của hóa đơn bị HOÀN, hóa đơn về trạng thái NHÁP.",
+                           "Đơn nằm ở DANH SÁCH CHỜ (đơn treo) — món hàng vẫn bị giữ cho đến khi thanh toán lại hoặc xóa.",
+                           "Màn hình về phiếu trắng. Giấy đảm bảo đã in KHÔNG CÒN HIỆU LỰC."]},
+    "huy_hd": {"ten": "HỦY HÓA ĐƠN", "icon": "🗑", "audit": "HUY_HD", "nguy": True,
+               "hau_qua": ["Sổ quỹ (két) bị HOÀN, rồi hóa đơn bị XÓA khỏi phần mềm (chỉ còn trong nhật ký).",
+                           "Toàn bộ món hàng + dẻ trả về kho. KHÔNG khôi phục được.",
+                           "Giấy đảm bảo đã in KHÔNG CÒN HIỆU LỰC."]},
+}
+
+
+def _audit(request, g, action, note="", version=0):
+    """Ghi 1 dòng nhật ký append-only kèm ẢNH CHỤP đơn hiện tại (trước hành động)."""
+    from .models import BillAudit
+    try:
+        snap = {k: g.get(k) for k in ("trn_id", "bill_code", "status", "ngay", "emp", "cust", "ban", "doi",
+                                      "bot", "cong_them", "vang_them", "coc", "ghi_chu", "pay_method",
+                                      "tien_mat", "bank_id", "upd")}
+        BillAudit.objects.create(trn_id=g.get("trn_id") or "", bill_code=g.get("bill_code") or "",
+                                 action=action, user=request.user if request.user.is_authenticated else None,
+                                 username=getattr(request.user, "username", ""), before=snap,
+                                 note=note[:300], version=version)
+    except Exception:
+        logger.exception("Không ghi được bill_audit %s %s", action, g.get("trn_id"))
+
+
+def _xac_nhan_ctx(request, hanh_dong, loi=""):
+    g = cart.get(request)
+    hd = HANH_DONG.get(hanh_dong)
+    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi,
+            "khoa": g.get("status") == B.CHOT_ROI and bool(hd),
+            "nguoi": request.user.first_name or request.user.username, "username": request.user.username,
+            "luc": datetime.datetime.now()}
+
+
+@require_GET
+def ban_xac_nhan(request, hanh_dong):
+    """Popup XÁC NHẬN CHUNG cho đơn đã chốt: hành động · mã hóa đơn · người thao tác · hậu quả · passcode."""
+    if hanh_dong not in HANH_DONG:
+        return HttpResponse("Hành động không hợp lệ", status=400)
+    return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(request, hanh_dong))
+
+
+@require_POST
+def ban_thuc_hien(request, hanh_dong):
+    """Thực hiện hành động trên đơn ĐÃ CHỐT sau khi passcode đúng + mốc khóa còn khớp.
+    Mọi thứ ghi audit TRƯỚC khi gọi PMV; passcode sai / mốc lệch → không đụng gì trên KK."""
+    hd = HANH_DONG.get(hanh_dong)
+    if not hd:
+        return HttpResponse("Hành động không hợp lệ", status=400)
+    g = cart.get(request)
+    ph = _phien(request)
+    trn = g.get("trn_id")
+    if not trn:
+        return _loi(request, "Chưa mở hóa đơn nào", {"dong_modal": True})
+    if g.get("status") != B.CHOT_ROI:
+        return _loi(request, "Hóa đơn đang là NHÁP — không cần thao tác này.", {"dong_modal": True})
+    if not _passcode_dung(request, request.POST.get("passcode")):
+        return render(request, "pos/_xac_nhan_modal.html",
+                      _xac_nhan_ctx(request, hanh_dong, loi="Passcode không đúng — thử lại."))
+    try:
+        B.kiem_moc(trn, g.get("upd"))                       # chống 2 người cùng sửa
+    except Exception as exc:
+        return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(request, hanh_dong, loi=_loi_goi(exc)))
+    ma = g.get("bill_code") or trn
+    _audit(request, g, hd["audit"])
+    try:
+        B.mo_lai(trn, user_id=ph["user_id"])
+        if hanh_dong == "huy_hd":
+            B.huy(trn, user_id=ph["user_id"])
+    except Exception as exc:
+        return _loi(request, f"{hd['ten']} không được: {_loi_goi(exc)}", {"dong_modal": True})
+    if hanh_dong == "sua":
+        cart.nap(request, B.doc(trn))
+        tin = f"Đã mở {ma} về NHÁP để sửa — sửa xong bấm THANH TOÁN lại."
+    elif hanh_dong == "huy_tt":
+        cart.clear(request, giu_nv=False)
+        tin = f"Đã HỦY THANH TOÁN {ma} — đơn về DANH SÁCH CHỜ."
+    else:
+        cart.clear(request, giu_nv=False)
+        tin = f"Đã HỦY HÓA ĐƠN {ma} — hàng trả về kho."
+    return _pos_oob(request, {"tin": tin, "dong_modal": True})
+
+
 @require_GET
 def ban_mo_khoa(request):
-    """Popup XÁC NHẬN mở khóa: nhập PASSCODE (GĐ chốt 07/09/2026)."""
-    g = cart.get(request)
-    return render(request, "pos/_khoa_modal.html", {"g": g, "khoa": g.get("status") == B.CHOT_ROI})
+    """URL cũ (07/09 sáng) → popup xác nhận SỬA ĐƠN."""
+    return ban_xac_nhan(request, "sua")
 
 
 @require_POST
 def ban_mo_lai(request):
-    """MỞ KHÓA hóa đơn ĐÃ CHỐT → nháp để sửa (hủy phần sổ quỹ). BẮT BUỘC passcode đúng
-    (GĐ chốt 07/09/2026) — sai thì trả lại popup kèm lỗi, không đụng gì trên PMV."""
-    g = cart.get(request)
-    ph = _phien(request)
-    if not g.get("trn_id"):
-        return _loi(request, "Chưa mở hóa đơn nào")
-    if not _passcode_dung(request, request.POST.get("passcode")):
-        return render(request, "pos/_khoa_modal.html",
-                      {"g": g, "khoa": True, "loi": "Passcode không đúng — thử lại."}, status=200)
-    try:
-        B.mo_lai(g["trn_id"], user_id=ph["user_id"])
-        cart.nap(request, B.doc(g["trn_id"]))
-    except Exception as exc:
-        return _loi(request, f"Mở lại không được: {exc}", {"dong_modal": True})
-    return _pos_oob(request, {"tin": "Đã MỞ KHÓA — hóa đơn về nháp, sửa được rồi (sổ quỹ đã hoàn).",
-                              "dong_modal": True})
+    """URL cũ (07/09 sáng) → thực hiện SỬA ĐƠN (passcode)."""
+    return ban_thuc_hien(request, "sua")
 
 
 def _kiem_truoc_khi_luu(request, g, ph):
@@ -690,6 +768,8 @@ def ban_thanh_toan(request):
         B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
     except Exception as exc:
         return _loi(request, _loi_goi(exc))
+    g["trn_id"], g["bill_code"] = kq["trn_id"], kq["bill_code"]
+    _audit(request, g, "CHOT", note=f"khách trả {M.money_vn(kq['tong']['khach_tra'])}")
     # GĐ chốt 07/09/2026: thanh toán xong → XÓA TRẮNG form (cả NV) sẵn cho khách kế; bản in
     # (THANH TOÁN & IN) mở theo trn_id nên không cần giữ đơn trên form. Xem lại → DANH SÁCH → MỞ.
     cart.clear(request, giu_nv=False)
@@ -742,6 +822,16 @@ def ban_in(request):
         ctx["t"] = cart.tong_cua(ctx["g"])
         ctx["ten_nv"] = phieu.get("nhan_vien") or next(
             (e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == phieu.get("emp_id")), "")
+    # GĐ chốt 07/09/2026 (quy tắc 5 + 7): CHỈ đơn ĐÃ CHỐT mới in; nháp/đang sửa → chặn.
+    # Mỗi lần in ghi audit IN kèm SỐ LẦN IN; sau Sửa/Hủy đơn chốt, bản in cũ hết hiệu lực (hậu quả trong popup).
+    if ctx["g"].get("status") != B.CHOT_ROI:
+        return HttpResponse("<h3 style='font-family:sans-serif;padding:24px'>Hóa đơn đang SỬA / chưa thanh toán — "
+                            "THANH TOÁN xong mới in được Giấy đảm bảo.</h3>", status=403)
+    from .models import BillAudit
+    lan = BillAudit.objects.filter(trn_id=ctx["g"]["trn_id"], action="IN").count() + 1
+    _audit(request, ctx["g"], "IN", version=lan)
+    ctx["ban_in_lan"] = lan
+    ctx["ban_in_luc"] = datetime.datetime.now()
     ctx["hom_nay"] = datetime.date.today()
     ctx["tiem"] = S.thong_tin_tiem()
     return render(request, "pos/in_phieu.html", ctx)

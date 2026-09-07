@@ -160,6 +160,9 @@ def doc(trn_id, c=None):
         "cust_id": h.get("CustID") or "", "khach": h.get("CustName") or "",
         "emp_id": h.get("EmpID") or "", "nhan_vien": h.get("EmpName") or "",
         "ghi_chu": h.get("Description") or "",
+        # mốc khóa lạc quan lúc ĐỌC — views so lại trước Sửa/Hủy đơn chốt (chống 2 người cùng sửa, 07/09).
+        # Đọc bằng CÙNG hàm moc_khoa (SELECT → datetime) để so chuỗi với kiem_moc khớp kiểu (proc _Get trả khác dạng).
+        "upd": str(c.moc_khoa("TRN_RT_BUYSELL", "TrnID", h["TrnID"]) or ""),
         "ban": ban, "doi": doi,
         "tong": tinh_tong(sum((x[0] for x in ban), Decimal(0)),
                           sum((x[0] for x in doi), Decimal(0)),
@@ -322,6 +325,20 @@ def chot(trn_id, *, till_id, user_id, c=None):
     if not quy:
         raise PmvProcError("T_TILL_TXN_Proc", -2, [{"loi": "Đã chốt nhưng sổ quỹ chưa vào KÉT (Status≠P) cho hóa đơn."}])
     return True
+
+
+def kiem_moc(trn_id, upd_da_doc, c=None):
+    """Chống 2 người cùng sửa 1 đơn (GĐ chốt 07/09/2026): so mốc TrnDateTime_Upd lúc MỞ đơn với mốc
+    HIỆN TẠI trên KK. Lệch → raise kèm mốc mới; upd_da_doc trống (đơn nạp trước bản này) → bỏ qua."""
+    if not upd_da_doc:
+        return
+    c = c or S.client("kiem_moc")
+    hien = c.moc_khoa("TRN_RT_BUYSELL", "TrnID", trn_id)
+    if hien is None:
+        raise PmvProcError("kiem_moc", -1, [{"loi": f"Hóa đơn {trn_id} không còn trên máy KK"}])
+    if str(hien) != str(upd_da_doc):
+        raise PmvProcError("kiem_moc", -1, [{
+            "loi": f"Hóa đơn vừa bị người khác sửa ({hien:%H:%M:%S %d/%m}) — mở lại từ DANH SÁCH rồi thao tác tiếp."}])
 
 
 def mo_lai(trn_id, *, user_id, c=None):

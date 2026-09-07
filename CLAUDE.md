@@ -291,9 +291,22 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
 | XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho). Đơn ĐÃ CHỐT → nút disable, phải 🔒 mở khóa (bước 1) rồi mới XÓA (bước 2/2) |
 
 **Chân trang** (07/09/2026, tách thành mảnh OOB **`_ban_foot.html` `#pos-foot`** — trước nằm cứng trong ban.html
-nên mở đơn qua HTMX chân trang KHÔNG đổi trạng thái): TRÁI = 🗑 XÓA ĐƠN + badge 🔒 ĐÃ CHỐT / ✎ ĐANG SỬA · giữa
-KHÁCH TRẢ · PHẢI = 💰 THANH TOÁN · 🖨 IN HÓA ĐƠN · 💰 THANH TOÁN & IN. Đơn khóa → mọi nút `disabled`, **RIÊNG IN
-HÓA ĐƠN luôn bật**. Nút ＋ THÊM MỚI ở chân đã BỎ (trùng ＋ ĐƠN MỚI). Smoke C10–C12 (69 kịch bản).
+nên mở đơn qua HTMX chân trang KHÔNG đổi trạng thái). **NÚT THEO TRẠNG THÁI (GĐ chốt 07/09/2026 chiều, sơ đồ
+DRAFT/COMPLETED/DELETED)**: NHÁP = 🗑 XÓA ĐƠN · ✎ ĐANG SỬA · KHÁCH TRẢ · 💰 THANH TOÁN · 💰 THANH TOÁN & IN (**KHÔNG
+in khi đang sửa** — `ban_in` trả 403 nếu status ≠ C); ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔒 ĐÃ CHỐT ·
+KHÁCH TRẢ · 🔓 SỬA ĐƠN · 🖨 IN HÓA ĐƠN (`?trn_id=`). 3 hành động trên đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
+`_xac_nhan_modal.html` (`ban_xac_nhan/<sua|huy_tt|huy_hd>` GET → `ban_thuc_hien/<…>` POST; bảng `HANH_DONG` trong
+views): hiện HÀNH ĐỘNG · mã HĐ · khách · NGƯỜI THAO TÁC + giờ · HẬU QUẢ từng loại · passcode. Ngữ nghĩa: **sua** =
+hoàn két → nháp, Ở LẠI form sửa rồi thanh toán lại · **huy_tt** = hoàn két → nháp, form trắng, đơn nằm DS CHỜ ·
+**huy_hd** = hoàn két + xóa đơn trong 1 bước (hàng về kho). Không nhập lý do (GĐ chốt). URL cũ `/mo-khoa/`,
+`/mo-lai/` = alias của `sua`. Thứ tự server: passcode → **`bill.kiem_moc`** (chống 2 người cùng sửa: so
+`TrnDateTime_Upd` lúc MỞ đơn — `bill.doc` lưu `upd` qua `moc_khoa` SELECT, KHÔNG lấy từ proc _Get vì khác định
+dạng — với mốc hiện tại; lệch → "vừa bị người khác sửa", không đụng KK) → **audit** → gọi PMV.
+**NHẬT KÝ `bill_audit`** (model `BillAudit`, migration pos-0004, **append-only**: `save()` dòng cũ / `delete()` raise
+PermissionError; Django admin chỉ xem): ghi CHOT (thanh toán) · SUA · HUY_TT · HUY_HD · IN (kèm `version` = lần in
+thứ mấy) + `before` = ảnh chụp giỏ trước hành động + username. Giấy đảm bảo in dòng "Bản in lần N · giờ"; sau
+Sửa/Hủy, bản in cũ hết hiệu lực (ghi rõ trong hậu quả popup). Khối TÍNH TỔNG bọc `<fieldset disabled>` khi chốt.
+Smoke C8c, C10–C13 (83 kịch bản: popup chung, alias, mốc lệch, audit append-only, 403 in nháp, huy_tt, huy_hd).
 
 ⚠ **Hóa đơn đã chốt thì proc `_Upd` TỪ CHỐI (rc=-1)** — muốn sửa phải MỞ LẠI trước.
 `bill.luu` tự kiểm và ném lỗi kèm hướng dẫn, không im lặng bỏ qua.

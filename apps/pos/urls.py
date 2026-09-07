@@ -26,8 +26,11 @@ urlpatterns = [
     # hóa đơn đã lưu
     path("banle/ban-hang/danh-sach/", views.ban_ds, name="ban_ds"),
     path("banle/ban-hang/mo/", views.ban_mo, name="ban_mo"),
-    path("banle/ban-hang/mo-lai/", views.ban_mo_lai, name="ban_mo_lai"),
-    path("banle/ban-hang/mo-khoa/", views.ban_mo_khoa, name="ban_mo_khoa"),
+    # đơn ĐÃ CHỐT: popup xác nhận chung + passcode (sua | huy_tt | huy_hd) — 07/09/2026
+    path("banle/ban-hang/xac-nhan/<str:hanh_dong>/", views.ban_xac_nhan, name="ban_xac_nhan"),
+    path("banle/ban-hang/thuc-hien/<str:hanh_dong>/", views.ban_thuc_hien, name="ban_thuc_hien"),
+    path("banle/ban-hang/mo-lai/", views.ban_mo_lai, name="ban_mo_lai"),        # = thuc-hien/sua (giữ URL cũ)
+    path("banle/ban-hang/mo-khoa/", views.ban_mo_khoa, name="ban_mo_khoa"),     # = xac-nhan/sua (giữ URL cũ)
     path("tai-khoan/passcode/", views.passcode_form, name="passcode_form"),
     path("tai-khoan/passcode/luu/", views.passcode_save, name="passcode_save"),
     path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
