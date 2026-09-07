@@ -87,39 +87,68 @@ document.addEventListener("keydown", function (e) {
   if (el) { e.preventDefault(); el.focus(); if (el.tagName === "BUTTON") el.click(); }
 });
 
-/* form VÀNG ĐỔI: chọn loại dẻ thì điền giá; gõ TL thì tính ngay TL vàng + thành tiền */
+/* form VÀNG ĐỔI (GĐ chốt 07/09/2026): tick Đổi ngang → ô GIÁ = GIÁ BÁN RA (MySQL sell), bỏ tick → GIÁ THÂU
+   VÀO (MySQL buy); sửa tay được. Xem trước THÀNH TIỀN đúng thuật toán server: a = TL vàng khách − TL vàng bán
+   cùng loại (hạn mức data-hm trên form); a ≤ 0 → toàn bộ × giá bán ra; a > 0 → hạn mức × giá bán ra + a × giá
+   thâu MySQL; không có hàng bán cùng loại → toàn bộ × giá thâu. Hột không tính tiền. */
 (function () {
   function so(v) { return parseFloat(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
   function tienVN(n) { return Math.round(n).toLocaleString("vi-VN"); }
+  function hanMuc(base) {
+    var f = document.querySelector(".pg-doi-nhap");
+    try { var m = JSON.parse((f && f.dataset.hm) || "{}"); return parseFloat(m[base] || 0) || 0; }
+    catch (e) { return 0; }
+  }
   function tinh() {
     var de = document.getElementById("o-de");
     if (!de) return;
     var op = de.options[de.selectedIndex] || {};
+    var ds = op.dataset || {};
     var dv = document.getElementById("o-dv");
-    if (dv) dv.textContent = op.dataset ? (op.dataset.dv || "") : "";
+    if (dv) dv.textContent = ds.dv || "";
     var giaO = document.getElementById("o-giadoi");
     var tong = so(document.getElementById("o-tongtl").value);
     var hot  = so(document.getElementById("o-tlhot").value);
     var vang = Math.max(0, tong - hot);
     document.getElementById("o-tlvang").textContent = vang ? vang.toLocaleString("vi-VN") : "0";
-    /* ô giá nhập theo ĐỒNG (8.750.000 ₫/chỉ) — khớp cách người bán đọc số */
-    var gia = so(giaO.value);
-    if (!gia && op.dataset && op.dataset.gia) gia = (parseFloat(op.dataset.gia) || 0) * 1000;
-    var theoGam = op.dataset && op.dataset.dv === "₫/g";
+    var theoGam = ds.dv === "₫/g";
     var hs = theoGam ? 1 : 100;                 /* L/M tính trên CHỈ = 100 ly */
     document.querySelectorAll("[data-dvtl]").forEach(function (e) { e.textContent = theoGam ? "g" : "ly"; });
-    document.getElementById("o-tiendoi").textContent = tienVN(vang / hs * gia);
+    /* ô giá nhập theo ĐỒNG (8.750.000 ₫/chỉ) — khớp cách người bán đọc số */
+    var ngang = document.getElementById("o-doingang");
+    var checked = !!(ngang && ngang.checked);
+    var giaO_v = so(giaO.value);
+    var thau = (parseFloat(ds.gia) || 0) * 1000;
+    var sell = (parseFloat(ds.sell) || 0) * 1000;
+    var lbT = document.getElementById("lb-tien-t"), outT = document.getElementById("o-tiendoi");
+    var tien, chiTiet = "";
+    if (!checked) {
+      tien = vang / hs * (giaO_v || thau);
+      if (lbT) lbT.textContent = "THÀNH TIỀN";
+    } else {
+      var hm = op.value ? hanMuc(ds.base || "") : 0;
+      var ws = Math.min(vang, hm), wb = vang - ws;          /* a = wb: phần dư tính giá thâu */
+      var gBan = giaO_v || sell;
+      tien = ws / hs * gBan + wb / hs * thau;
+      if (lbT) lbT.textContent = (ws > 0 && wb > 0) ? "THÀNH TIỀN ⇄+thâu" : (ws > 0 ? "THÀNH TIỀN ⇄" : (vang > 0 ? "THÀNH TIỀN (thâu)" : "THÀNH TIỀN"));
+      if (vang > 0) chiTiet = "Đổi ngang " + ws.toLocaleString("vi-VN") + (theoGam ? "g" : " ly") + " × " + tienVN(gBan)
+        + (wb > 0 ? "  +  thâu dư " + wb.toLocaleString("vi-VN") + (theoGam ? "g" : " ly") + " × " + tienVN(thau) : "")
+        + (hm <= 0 ? "  (không có hàng bán cùng loại → toàn bộ giá thâu)" : "");
+    }
+    if (outT) { outT.textContent = tienVN(tien); outT.title = chiTiet; }
+    if (giaO) giaO.title = checked ? ("Giá BÁN RA phần đổi ngang (sửa tay được). Phần dư luôn tính giá thâu MySQL " + tienVN(thau))
+                                   : "Giá THÂU VÀO (sửa tay được)";
   }
-  /* Điền giá theo LOẠI DẺ: đổi ngang → giá BÁN RA (data-sell), thường → giá THÂU (data-gia) */
+  /* Điền giá theo LOẠI DẺ + trạng thái tick: tick → giá BÁN RA (data-sell), bỏ tick → giá THÂU (data-gia) */
   function dienGia() {
     var de = document.getElementById("o-de");
     var g = document.getElementById("o-giadoi");
     if (!de || !g) return;
     var op = de.options[de.selectedIndex];
-    if (!op || !op.value) return;
+    if (!op || !op.value) { g.value = ""; return; }
     var ngang = document.getElementById("o-doingang");
     var key = (ngang && ngang.checked) ? "sell" : "gia";
-    var v = parseFloat(op.dataset[key] || op.dataset.gia || 0) || 0;
+    var v = parseFloat(op.dataset[key] || 0) || 0;
     g.value = v ? (v * 1000).toLocaleString("vi-VN") : "";
   }
   /* Đồng bộ checkbox 'Đổi ngang': set hidden, đổi nhãn giá, tô màu khối, điền lại giá */
@@ -131,7 +160,7 @@ document.addEventListener("keydown", function (e) {
     if (!ngang || !hidden) return;
     hidden.value = ngang.checked ? "1" : "";
     if (box) box.classList.toggle("pg-doi--ngang-on", ngang.checked);
-    if (lbl) lbl.textContent = ngang.checked ? "GIÁ BÁN RA" : "GIÁ ĐỔI";
+    if (lbl) lbl.textContent = ngang.checked ? "GIÁ BÁN RA" : "GIÁ THÂU VÀO";
     dienGia(); tinh();
   };
   function gan() {

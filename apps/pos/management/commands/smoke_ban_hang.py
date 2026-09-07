@@ -320,7 +320,88 @@ class Command(BaseCommand):
                     n_sau == 1, f"{n_sau} dòng")
             self.ok("D3 dòng gộp mang badge thâu", "thâu" in b)
             cl.post("/banle/ban-hang/moi/")  # dọn phiếu thử (đổi chỉ nằm trong session)
+        self._phan_ngang()
         self._phan_botle()
+
+    def _phan_ngang(self):
+        """F. ĐỔI NGANG theo a = TL vàng khách − TL vàng bán cùng loại (GĐ chốt 07/09/2026):
+        a>0 → 2 dòng (hạn mức×bán ra + a×THÂU MySQL, dù ô GIÁ đang là giá bán ra) · a≤0 → 1 dòng bán ra ·
+        TÍNH LẠI theo trạng thái tick. Quét món thật trên sandbox → tạo đơn W → dọn bằng XÓA ĐƠN."""
+        self.stdout.write(self.style.MIGRATE_HEADING("\nF. ĐỔI NGANG: a = vàng khách − vàng bán cùng loại"))
+        from django.contrib.auth import get_user_model
+        from django.test import Client, override_settings
+        u = get_user_model().objects.filter(username="kimhanh2").first()
+        if not u:
+            return
+        cl = Client(); cl.force_login(u)
+        body = lambda r: r.content.decode("utf-8", "replace")
+        de_map = {M.de_base(x["GoldCode"]): x for x in S.loai_de()
+                  if M.dec(x["BuyRate"]) > 0 and M.dec(x["SellRate"]) > 0}
+        # món có dẻ cùng loại trong bảng giá
+        # ưu tiên loại có giá MUA ≠ BÁN (18K/24K/9999) để F3 thật sự bắt được lỗi "dư ăn giá bán ra"
+        cands = [(code, r) for code, r in self._kho(40) if (r.get("GoldCode") or "").strip() in de_map]
+        khac = [(c, r) for c, r in cands
+                if M.dec(de_map[r["GoldCode"].strip()]["SellRate"]) != M.dec(de_map[r["GoldCode"].strip()]["BuyRate"])]
+        mon = (khac or cands or [None])[0]
+        if not mon:
+            self.ok("F0 có món bán mà bảng giá có dẻ cùng loại (giá mua & bán > 0)", False)
+            return
+        code, r = mon
+        de = de_map[(r.get("GoldCode") or "").strip()]
+        w_ban = M.dec(r.get("TotalWeight")) - M.dec(r.get("DiamondWeight"))
+        sell, buy = M.dec(de["SellRate"]), M.dec(de["BuyRate"])
+        doi = lambda: [x["row"] for x in cl.session["phieu"]["doi"]]
+        with override_settings(ALLOWED_HOSTS=["testserver"]):
+            cl.post("/banle/ban-hang/moi/")
+            cl.post("/banle/ban-hang/quet/", {"ma": code})
+            self.ok("F0 quét món cùng loại dẻ", len(cl.session["phieu"]["ban"]) == 1,
+                    f"{code} {r.get('GoldCode')} TL vàng {w_ban} · dẻ {de['GoldCode']} bán {sell} / thâu {buy}")
+            try:
+                # a > 0: khách đưa nhiều hơn 50 đơn vị; ô GIÁ gửi đúng GIÁ BÁN RA như UI đang điền khi tick
+                gia_ui = str(int(sell * M.RATE_SCALE))
+                cl.post("/banle/ban-hang/vang-doi/", {"gold": de["GoldCode"], "tong_tl": str(w_ban + 50),
+                                                       "tl_hot": "0", "gia": gia_ui, "doi_ngang": "1"})
+                d = doi()
+                ng = [x for x in d if x["DoiNgang"] == "1"]; th = [x for x in d if x["DoiNgang"] != "1"]
+                self.ok("F1 a>0 → 2 dòng: 1 ngang + 1 thâu", len(ng) == 1 and len(th) == 1, f"{len(d)} dòng")
+                self.ok("F2 dòng ngang = hạn mức (TL vàng bán) × giá BÁN RA",
+                        ng and M.dec(ng[0]["GoldWeight"]) == w_ban and M.dec(ng[0]["BuyRate"]) == sell)
+                self.ok("F3 dòng dư a=50 tính giá THÂU MySQL (không bị ăn giá bán ra từ ô GIÁ — lỗi cũ)",
+                        th and M.dec(th[0]["GoldWeight"]) == 50 and M.dec(th[0]["BuyRate"]) == buy,
+                        f"rate dư = {th[0]['BuyRate'] if th else '?'}")
+                # bỏ tick + TÍNH LẠI → mỗi loại 1 dòng giá thâu
+                b = body(cl.post("/banle/ban-hang/vang-doi/tinh-lai/", {"doi_ngang": ""}))
+                d = doi()
+                self.ok("F4 bỏ tick + TÍNH LẠI → 1 dòng toàn bộ giá thâu",
+                        len(d) == 1 and d[0]["DoiNgang"] != "1" and M.dec(d[0]["BuyRate"]) == buy
+                        and M.dec(d[0]["GoldWeight"]) == w_ban + 50)
+                self.ok("F4b checkbox trả về trạng thái BỎ TICK", 'id="o-doingang" name="doi_ngang_ui" value="1" >' in b
+                        or ('id="o-doingang"' in b and "checked" not in b.split('id="o-doingang"')[1][:60]))
+                # tick lại + TÍNH LẠI → 2 dòng như F1
+                cl.post("/banle/ban-hang/vang-doi/tinh-lai/", {"doi_ngang": "1"})
+                d = doi()
+                self.ok("F5 tick + TÍNH LẠI → lại 2 dòng ngang/thâu theo bảng giá",
+                        len(d) == 2 and sum(1 for x in d if x["DoiNgang"] == "1") == 1)
+                # a ≤ 0: khách đưa ÍT hơn hàng bán → 1 dòng toàn bộ giá bán ra (ô GIÁ để trống → MySQL sell)
+                cl.post("/banle/ban-hang/vang-doi/tinh-lai/", {"doi_ngang": ""})  # gom về 1 dòng
+                for i in range(len(doi())):
+                    cl.post("/banle/ban-hang/vang-doi/xoa/", {"i": "0"})
+                it = max(w_ban - 10, M.dec(1))
+                cl.post("/banle/ban-hang/vang-doi/", {"gold": de["GoldCode"], "tong_tl": str(it),
+                                                       "tl_hot": "0", "gia": "", "doi_ngang": "1"})
+                d = doi()
+                self.ok("F6 a≤0 → 1 dòng ngang, toàn bộ × giá bán ra",
+                        len(d) == 1 and d[0]["DoiNgang"] == "1" and M.dec(d[0]["BuyRate"]) == sell)
+                # hột không tính tiền: tổng 60 hột 10 (đơn vị nhập) → TL vàng 50
+                cl.post("/banle/ban-hang/vang-doi/xoa/", {"i": "0"})
+                cl.post("/banle/ban-hang/vang-doi/", {"gold": de["GoldCode"], "tong_tl": str(w_ban + 60),
+                                                       "tl_hot": "60", "gia": "", "doi_ngang": "1"})
+                d = doi()
+                self.ok("F7 hột không tính tiền: tổng = bán+60, hột 60 → TL vàng = hạn mức → 1 dòng ngang",
+                        len(d) == 1 and d[0]["DoiNgang"] == "1" and M.dec(d[0]["GoldWeight"]) == w_ban)
+            finally:
+                cl.post("/banle/ban-hang/huy/")   # xóa đơn W sandbox, hàng về kho
+                cl.post("/banle/ban-hang/moi/")
 
     def _phan_botle(self):
         """Gợi ý BỚT LẺ phải là dict {tien, val} — val = số nguyên cho hx-vals (đừng để rỗng → bot=0)."""

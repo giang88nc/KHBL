@@ -5,7 +5,9 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
 {% endcomment %}
 <section class="pg-box pg-box--doi">
   <header class="pg-box__head pg-doi-head">
+    {# data-hm = hạn mức đổi ngang CÒN LẠI theo loại vàng bán (TL vàng = tổng − hột, cùng đơn vị nhập) — JS xem trước tách ngang/thâu #}
     <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
+          data-hm='{ {% for h in hm_ngang %}"{{ h.base }}": "{{ h.con }}"{% if not forloop.last %}, {% endif %}{% endfor %} }'
           hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=true;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
     {% csrf_token %}
     <input type="hidden" name="doi_ngang" id="o-doingang-hidden" value="">
@@ -26,18 +28,19 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
       <i class="pg-doi-nhap__dv" data-dvtl>ly</i></label>
     <label><span>TL VÀNG</span>
       <output id="o-tlvang" class="khbl-input r pg-ro">0</output></label>
-    <label id="lb-giadoi"><span id="lb-giadoi-t">GIÁ ĐỔI</span>
+    {# Ô GIÁ theo tick (GĐ chốt 07/09/2026): tick → GIÁ BÁN RA (MySQL sell) · bỏ tick → GIÁ THÂU VÀO (MySQL buy); sửa tay được #}
+    <label id="lb-giadoi"><span id="lb-giadoi-t">GIÁ THÂU VÀO</span>
       <input name="gia" id="o-giadoi" class="khbl-input r khbl-money" inputmode="numeric" placeholder="0">
       <i id="o-dv" class="pg-doi-nhap__dv"></i></label>
-    <label><span>THÀNH TIỀN</span>
+    <label><span id="lb-tien-t">THÀNH TIỀN</span>
       <output id="o-tiendoi" class="khbl-input r pg-ro pg-ro--tien">0</output></label>
     <button class="khbl-btn khbl-btn--gold khbl-btn--sm" type="submit">＋ THÊM</button>
     <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
-            hx-post="{% url 'pos:ban_doi_tinh_lai' %}" hx-swap="none"
-            title="Gộp các dòng cùng loại vàng & tính lại theo từng loại (đổi ngang trong hạn mức bán ra, phần dư tính thâu)">↻ TÍNH LẠI</button>
+            hx-post="{% url 'pos:ban_doi_tinh_lai' %}" hx-swap="none" hx-include="#o-doingang-hidden"
+            title="Gộp các dòng cùng loại vàng & tính lại theo BẢNG GIÁ MySQL: đang tick → đổi ngang trong hạn mức bán ra + phần dư giá thâu; bỏ tick → toàn bộ giá thâu">↻ TÍNH LẠI</button>
     </form>
     <label class="pg-ngang pg-ngang--right" title="Đổi dẻ cùng tuổi vàng lấy hàng mới: phần trong hạn mức tính GIÁ BÁN RA (ngang giá), phần dư tính giá thâu">
-      <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1" checked>
+      <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1" {% if doi_ngang_ui %}checked{% endif %}>
       <span>⇄ Đổi ngang vàng</span>
     </label>
   </header>

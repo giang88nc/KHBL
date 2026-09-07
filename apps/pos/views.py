@@ -190,6 +190,7 @@ def _ctx_pos(request, extra=None):
         "dang_sua": bool(g.get("trn_id")),
         # hóa đơn đã chốt thì proc vendor TỪ CHỐI sửa — phải MỞ LẠI trước (bill.py luật 1)
         "phieu_chot": g.get("status") == B.CHOT_ROI,
+        "doi_ngang_ui": True,   # checkbox ⇄ Đổi ngang mặc định TICK; TÍNH LẠI trả lại trạng thái người bán chọn
     }
     ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
     ctx.update(extra or {})
@@ -306,31 +307,33 @@ def ban_doi_them(request):
         return _loi(request, "Chưa nhập tổng trọng lượng vàng đổi")
     if tl_hot > tong_tl:
         return _loi(request, "Trọng lượng hột không được lớn hơn tổng trọng lượng")
-    gia_thau = gia if gia > 0 else M.dec(de["BuyRate"])
     pu = de["PriceUnit"]
 
+    # Ô GIÁ theo trạng thái tick (GĐ chốt 07/09/2026): BỎ TICK → ô = GIÁ THÂU VÀO (sửa tay được);
+    # TICK → ô = GIÁ BÁN RA cho phần đổi ngang (sửa tay được), phần DƯ luôn giá thâu bảng giá MySQL.
     if not doi_ngang:
+        gia_thau = gia if gia > 0 else M.dec(de["BuyRate"])
         if gia_thau <= 0:
-            return _loi(request, f"Bảng giá chưa có giá đổi cho {de['GoldDesc']} — nhập tay giá đổi")
+            return _loi(request, f"Bảng giá chưa có giá thâu cho {de['GoldDesc']} — nhập tay giá thâu")
         tien, dong = B.dong_doi(ma, de["GoldDesc"], tong_tl, tl_hot, gia_thau, pu)
         cart.them_doi(request, tien, dong)
         return _pos_oob(request)
 
     # ── ĐỔI NGANG ──
-    # Hạn mức = TL vàng bán ra cùng loại còn lại. Không có hàng bán loại đó (hạn mức ≤ 0)
-    # thì KHÔNG chặn (GĐ chốt 05/09/2026): coi như hạn mức 0 → toàn bộ TL vàng đổi tính
-    # GIÁ THÂU như thường ((tổng − hột) × giá thâu). Có hàng bán thì phần trong hạn mức mới
-    # tính giá BÁN RA.
+    # a = TL vàng khách − TL vàng bán CÙNG LOẠI (cả hai = tổng − hột; hột không tính tiền).
+    # a ≤ 0 → toàn bộ giá BÁN RA. a > 0 → 2 dòng: hạn mức × giá bán ra + a × giá thâu.
+    # Không cùng loại / không có hàng bán loại đó → hạn mức 0 → toàn bộ giá THÂU (không chặn, GĐ 05/09).
     g = cart.get(request)
     base = de.get("base") or M.de_base(ma)
     han_muc = max(_han_muc_doi_ngang(g, base), M.D0)
-    sell = M.dec(de.get("SellRate"))
+    sell = gia if gia > 0 else M.dec(de.get("SellRate"))
+    gia_thau = M.dec(de["BuyRate"])
     if han_muc > 0 and sell <= 0:
         return _loi(request, f"Bảng giá chưa có giá BÁN RA cho {de['GoldDesc']} — không đổi ngang được")
     tl_vang = tong_tl - tl_hot
     phan = M.chia_doi_ngang(tl_vang, tl_hot, han_muc, sell, gia_thau, pu)
     if any(not p["ngang"] and p["w"] > 0 for p in phan) and gia_thau <= 0:
-        return _loi(request, f"Phần tính GIÁ THÂU của {de['GoldDesc']} chưa có giá — nhập tay giá đổi")
+        return _loi(request, f"Phần DƯ của {de['GoldDesc']} cần giá THÂU nhưng bảng giá chưa có — bỏ tick Đổi ngang và nhập tay giá thâu")
     for p in phan:
         tien, dong = B.dong_doi(ma, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu, doi_ngang=p["ngang"])
         cart.them_doi(request, tien, dong)
@@ -350,10 +353,12 @@ def ban_doi_xoa(request):
 def ban_doi_tinh_lai(request):
     """GÔM & TÍNH LẠI vàng đổi theo TỪNG LOẠI VÀNG (GĐ chốt 05/09/2026): mỗi loại tối đa
     2 dòng — 1 NGANG (phần TL vàng trong hạn mức bán ra cùng loại, giá BÁN RA) + 1 THÂU
-    (phần dư, giá thâu). Dùng ĐƠN GIÁ CHUẨN từ bảng giá, giống lúc THÊM có tick đổi ngang."""
+    (phần dư, giá thâu). LUÔN về ĐƠN GIÁ BẢNG GIÁ MySQL (giá sửa tay bị thay — GĐ chốt 07/09/2026),
+    và theo TRẠNG THÁI TICK gửi kèm: tick → chia ngang/thâu · bỏ tick → mỗi loại 1 dòng giá thâu."""
     g = cart.get(request)
     if not g["doi"]:
         return _pos_oob(request)
+    doi_ngang = request.POST.get("doi_ngang") == "1"
     loai_map = {d["GoldCode"]: d for d in S.loai_de()}
     # gộp TL vàng + hột theo GoldCode, giữ thứ tự xuất hiện
     groups, orig = OrderedDict(), OrderedDict()
@@ -382,7 +387,7 @@ def ban_doi_tinh_lai(request):
         pu = de["PriceUnit"]
         buy = M.dec(de.get("BuyRate"))
         sell = M.dec(de.get("SellRate"))
-        hm = _budget(base) if sell > 0 else M.D0
+        hm = _budget(base) if (doi_ngang and sell > 0) else M.D0
         phan = M.chia_doi_ngang(grp["vang"], grp["hot"], hm, sell, buy, pu)
         if base in budget:  # trừ phần đã đổi ngang để dẻ cùng base sau không lấn hạn mức
             budget[base] = max(budget[base] - sum((p["w"] for p in phan if p["ngang"]), M.D0), M.D0)
@@ -390,7 +395,9 @@ def ban_doi_tinh_lai(request):
             rows.append(B.dong_doi(code, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu,
                                    doi_ngang=p["ngang"]))
     cart.dat_doi(request, rows)
-    return _pos_oob(request, {"tin": "Đã gộp & tính lại vàng đổi theo từng loại."})
+    return _pos_oob(request, {"tin": "Đã gộp & tính lại vàng đổi theo từng loại"
+                                     + (" (đổi ngang trong hạn mức bán ra)." if doi_ngang else " (toàn bộ giá thâu)."),
+                              "doi_ngang_ui": doi_ngang})
 
 
 @require_POST
@@ -1019,10 +1026,14 @@ def hoa_don_chi_tiet(request):
             })
     bill_code = r.get("BillCode") or r.get("TrnID") or trn_id
     barcode_code = _ma_gdb(bill_code)
+    # Phiếu có vàng khách (đổi/thâu) chỉ in số tiền cuối cùng; nhãn đổi bù/dư
+    # không cần lặp lại ở phần giao khách.
+    co_vang_doi_thau = any(x.get("loai_dong") in ("Đổi", "Thâu") for x in store_lines)
     return render(request, "pos/_hoa_don_chi_tiet.html", {
         "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
         "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
+        "co_vang_doi_thau": co_vang_doi_thau,
     })
 
 

@@ -227,7 +227,18 @@ không phải quy đổi. Đơn vị: `PriceUnit='L'` → ₫/chỉ (trọng lư
   hiện gợi ý "Hạn mức đổi ngang còn: 18K …" trên khối khi giỏ có hàng. Kiểm chứng đúng ví dụ GĐ: mua 2,5 chỉ 18K,
   dẻ 3,1 chỉ → dòng 1 = 2,5 chỉ × giá bán, dòng 2 = 0,6 chỉ × giá thâu; hột dồn dòng cuối (không đổi tiền).
 - Hiệu ứng phân biệt: dòng đổi ngang nền xanh + badge "⇄ đổi ngang" (xanh), dòng thâu badge "giá thâu";
-  khối viền vàng khi đang tick; JS đổi nhãn "GIÁ ĐỔI"→"GIÁ BÁN RA" và tự điền SellRate.
+  khối viền vàng khi đang tick.
+- **Ô GIÁ theo tick (GĐ chốt 07/09/2026)**: tick → nhãn **GIÁ BÁN RA** + tự điền MySQL sell (sửa tay được — áp
+  cho phần đổi ngang); bỏ tick → **GIÁ THÂU VÀO** + MySQL buy (sửa tay được). ⚠ Lỗi cũ đã sửa: trước đây ô giá
+  (đang là giá bán ra khi tick) bị server dùng làm giá THÂU cho phần dư → **phần dư a nay LUÔN giá thâu MySQL**
+  (`gia_thau = BuyRate`), không lấy từ ô. Thuật toán: a = TL vàng khách − TL vàng bán cùng loại (cả 2 = tổng −
+  hột, hột không tính tiền); a ≤ 0 → 1 dòng toàn bộ × bán ra; a > 0 → hạn mức × bán ra + a × thâu; không cùng
+  loại / không có hàng bán → toàn bộ × thâu. **TÍNH LẠI** gửi kèm trạng thái tick (`hx-include` hidden
+  `doi_ngang`): tick → chia ngang/thâu, bỏ tick → mỗi loại 1 dòng thâu; LUÔN về bảng giá MySQL (giá sửa tay bị
+  thay); checkbox render theo `doi_ngang_ui` (mặc định True trong `_ctx_pos`, TÍNH LẠI trả lại trạng thái đã
+  chọn). **JS xem trước** THÀNH TIỀN tính đúng thuật toán này: form mang `data-hm` = hạn mức còn lại từng loại
+  (`hm_ngang`), nhãn đổi "THÀNH TIỀN ⇄+thâu" khi tách, title ô ghi phép tính. Smoke section **F** (9 kịch bản,
+  quét N9999 thật trên sandbox: a>0 dư ăn 13.750 chứ không 14.250, a≤0, TÍNH LẠI 2 chiều, hột) → smoke_ban_hang 66.
 - ⚠ Trọng lượng vàng đổi có thể LẺ (GoldReal 258,2 ly) → dùng `_so_tl` (phẩy=thập phân, chấm=nghìn), KHÔNG
   dùng `_so` (parser tiền, bỏ hết dấu → hỏng số lẻ). Đổi ngang chỉ ảnh hưởng BuyRate từng dòng dẻ; vẫn là
   các dòng `TRN_RT_BUYSELL_BUYGOLD` bình thường khi GHI (GĐ3).
