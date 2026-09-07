@@ -230,9 +230,32 @@ def ban(request):
     return render(request, "pos/ban.html", _ctx_pos(request))
 
 
+KHOA_MSG = "Hóa đơn đang KHÓA 🔒 (đã chốt) — bấm biểu tượng khóa cạnh mã đơn, nhập passcode để mở sửa"
+
+
+def _dang_khoa(request):
+    """Đơn ĐÃ CHỐT = KHÓA (GĐ chốt 07/09/2026): mọi thao tác lên giỏ (thêm/xóa món, dẻ, NV, khách,
+    tiền) bị chặn ở server, không chỉ ẩn nút — mở bằng passcode (ban_mo_lai)."""
+    return cart.get(request).get("status") == B.CHOT_ROI
+
+
+def _passcode_dung(request, ma):
+    """Passcode = KHBL_UNLOCK_PASSCODE (.env); trống → mật khẩu web của chính người đang đăng nhập."""
+    from django.conf import settings as st
+    ma = (ma or "").strip()
+    if not ma:
+        return False
+    cau_hinh = (getattr(st, "KHBL_UNLOCK_PASSCODE", "") or "").strip()
+    if cau_hinh:
+        return secrets.compare_digest(ma, cau_hinh)
+    return request.user.is_authenticated and request.user.check_password(ma)
+
+
 @require_POST
 def ban_quet(request):
     """Quét tem hoặc gõ mã hàng → thêm 1 dòng VÀNG BÁN, ô nhập tự trống để quét tiếp."""
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     ma = (request.POST.get("ma") or "").strip()
     ph = _phien(request)
     kq = S.quet_ma(ma, till_id=ph["till_id"])
@@ -263,6 +286,8 @@ def ban_quet(request):
 
 @require_POST
 def ban_xoa(request):
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     cart.xoa_ban(request, (request.POST.get("code") or "").strip())
     return _pos_oob(request)
 
@@ -293,6 +318,8 @@ def _han_muc_doi_ngang(g, base):
 def ban_doi_them(request):
     """Thêm dòng VÀNG ĐỔI (dẻ khách đưa). Không đổi ngang → 1 dòng giá thâu (như cũ).
     Đổi ngang → chia theo HẠN MỨC vàng bán cùng loại: phần trong hạn mức giá BÁN RA, phần dư giá thâu."""
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     ma = (request.POST.get("gold") or "").strip()
     tong_tl = _so_tl(request.POST.get("tong_tl"))
     tl_hot = _so_tl(request.POST.get("tl_hot"))
@@ -342,6 +369,8 @@ def ban_doi_them(request):
 
 @require_POST
 def ban_doi_xoa(request):
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     try:
         cart.xoa_doi(request, int(request.POST.get("i", -1)))
     except (TypeError, ValueError):
@@ -355,6 +384,8 @@ def ban_doi_tinh_lai(request):
     2 dòng — 1 NGANG (phần TL vàng trong hạn mức bán ra cùng loại, giá BÁN RA) + 1 THÂU
     (phần dư, giá thâu). LUÔN về ĐƠN GIÁ BẢNG GIÁ MySQL (giá sửa tay bị thay — GĐ chốt 07/09/2026),
     và theo TRẠNG THÁI TICK gửi kèm: tick → chia ngang/thâu · bỏ tick → mỗi loại 1 dòng giá thâu."""
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     g = cart.get(request)
     if not g["doi"]:
         return _pos_oob(request)
@@ -403,6 +434,8 @@ def ban_doi_tinh_lai(request):
 @require_POST
 def ban_dat(request):
     """Đặt khách · nhân viên · ngày · các khoản tiền · ghi chú."""
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     g = cart.get(request)
     if "cust_id" in request.POST:
         cid = (request.POST.get("cust_id") or "").strip()
@@ -460,6 +493,8 @@ def ban_qr(request):
 
 @require_POST
 def ban_bot_le(request):
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
     g = cart.get(request)
     t = cart.tong(request)
     g["bot"] = str(M.dec(g.get("bot") or 0) + M.bot_le(t["khach_tra"]))
@@ -532,19 +567,31 @@ def ban_mo(request):
     return _pos_oob(request, {"tin": tin})
 
 
+@require_GET
+def ban_mo_khoa(request):
+    """Popup XÁC NHẬN mở khóa: nhập PASSCODE (GĐ chốt 07/09/2026)."""
+    g = cart.get(request)
+    return render(request, "pos/_khoa_modal.html", {"g": g, "khoa": g.get("status") == B.CHOT_ROI})
+
+
 @require_POST
 def ban_mo_lai(request):
-    """Đưa hóa đơn ĐÃ CHỐT về nháp để sửa (hủy phần sổ quỹ)."""
+    """MỞ KHÓA hóa đơn ĐÃ CHỐT → nháp để sửa (hủy phần sổ quỹ). BẮT BUỘC passcode đúng
+    (GĐ chốt 07/09/2026) — sai thì trả lại popup kèm lỗi, không đụng gì trên PMV."""
     g = cart.get(request)
     ph = _phien(request)
     if not g.get("trn_id"):
         return _loi(request, "Chưa mở hóa đơn nào")
+    if not _passcode_dung(request, request.POST.get("passcode")):
+        return render(request, "pos/_khoa_modal.html",
+                      {"g": g, "khoa": True, "loi": "Passcode không đúng — thử lại."}, status=200)
     try:
         B.mo_lai(g["trn_id"], user_id=ph["user_id"])
         cart.nap(request, B.doc(g["trn_id"]))
     except Exception as exc:
-        return _loi(request, f"Mở lại không được: {exc}")
-    return _pos_oob(request, {"tin": "Đã mở lại — hóa đơn về trạng thái nháp, sửa được rồi."})
+        return _loi(request, f"Mở lại không được: {exc}", {"dong_modal": True})
+    return _pos_oob(request, {"tin": "Đã MỞ KHÓA — hóa đơn về nháp, sửa được rồi (sổ quỹ đã hoàn).",
+                              "dong_modal": True})
 
 
 def _kiem_truoc_khi_luu(request, g, ph):
@@ -679,6 +726,89 @@ def gia_dong_bo_lai(request, batch_id):
     except (prices.PriceError, prices.PriceBatch.DoesNotExist) as exc:
         messages.error(request, str(exc) if isinstance(exc, prices.PriceError) else "Không tìm thấy lô giá.")
     return redirect("pos:bang_gia")
+
+
+@require_GET
+def gia_sync_kk_xem(request):
+    from . import prices
+    try:
+        preview = prices.kk_sync_preview()
+        preview['token'] = prices.kk_sync_token(preview, request.user.pk)
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_sync_kk.html", {"loi": str(exc)})
+    except Exception:
+        logger.exception("Không thể kiểm tra giá KK trước SYNC")
+        return render(request, "pos/_gia_sync_kk.html", {"loi": "Không đọc được bảng giá KK. Hãy kiểm tra kết nối rồi thử lại."})
+    return render(request, "pos/_gia_sync_kk.html", preview)
+
+
+@require_GET
+def gia_sync_pmv_report_xem(request):
+    """Xem chênh lệch nguồn UPSERT chính → MySQL KHBL, chưa ghi dữ liệu."""
+    from . import prices
+    try:
+        preview = prices.pmv_report_sync_preview()
+        preview['token'] = prices.pmv_report_sync_token(preview, request.user.pk)
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_sync_pmv_report.html", {"loi": str(exc)})
+    except Exception:
+        logger.exception("Không thể kiểm tra giá PMV Report trước SYNC")
+        return render(request, "pos/_gia_sync_pmv_report.html", {"loi": "Không đọc được bảng giá PMV Report. Hãy kiểm tra trang UPSERT chính rồi thử lại."})
+    return render(request, "pos/_gia_sync_pmv_report.html", preview)
+
+
+@require_POST
+def gia_sync_pmv_report_ap_dung(request):
+    from . import prices
+    from django.http import HttpResponse
+    try:
+        count = prices.apply_pmv_report_sync(request.POST.get("sync_token", ""), request.user)
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_sync_pmv_report.html", {"loi": str(exc)}, status=409)
+    messages.success(request, "PMV Report → MySQL đã đồng bộ %s loại giá." % count)
+    response = HttpResponse(status=204)
+    response["HX-Redirect"] = request.build_absolute_uri("/banle/bang-gia/")
+    return response
+
+
+@require_GET
+def gia_pmv_report_trang_thai(request):
+    from . import prices
+    try:
+        preview = prices.pmv_report_sync_preview()
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_pmv_report_status.html", {"loi": str(exc)})
+    except Exception:
+        logger.exception("Không thể kiểm tra giá PMV Report")
+        return render(request, "pos/_gia_pmv_report_status.html", {"loi": "Không đọc được bảng giá PMV Report."})
+    return render(request, "pos/_gia_pmv_report_status.html", preview)
+
+
+@require_POST
+def gia_sync_kk_ap_dung(request):
+    from . import prices
+    from django.http import HttpResponse
+    try:
+        count = prices.apply_kk_sync(request.POST.get("sync_token", ""), request.user)
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_sync_kk.html", {"loi": str(exc)}, status=409)
+    messages.success(request, "KK → MySQL đã đồng bộ %s loại giá." % count)
+    response = HttpResponse(status=204)
+    response["HX-Redirect"] = request.build_absolute_uri("/banle/bang-gia/")
+    return response
+
+
+@require_GET
+def gia_kk_trang_thai(request):
+    from . import prices
+    try:
+        preview = prices.kk_sync_preview()
+        return render(request, "pos/_gia_kk_status.html", preview)
+    except prices.PriceError as exc:
+        return render(request, "pos/_gia_kk_status.html", {"loi": str(exc)}, status=503)
+    except Exception:
+        logger.exception("Không thể kiểm tra chênh lệch giá KK")
+        return render(request, "pos/_gia_kk_status.html", {"loi": "Không đọc được giá KK."}, status=503)
 
 
 @require_GET
@@ -1026,14 +1156,17 @@ def hoa_don_chi_tiet(request):
             })
     bill_code = r.get("BillCode") or r.get("TrnID") or trn_id
     barcode_code = _ma_gdb(bill_code)
-    # Phiếu có vàng khách (đổi/thâu) chỉ in số tiền cuối cùng; nhãn đổi bù/dư
-    # không cần lặp lại ở phần giao khách.
+    # Chỉ phiếu có vàng khách (đổi/thâu) mới hiện trạng thái đổi bù/dư.
+    # Phiếu bán thuần không có dòng này thì để trống nhãn trạng thái.
     co_vang_doi_thau = any(x.get("loai_dong") in ("Đổi", "Thâu") for x in store_lines)
+    so_tien = M.dec(r.get("SoTien"))
+    gdb_status = ("Đổi bù" if so_tien > 0 else "Đổi dư" if so_tien < 0 else "") if co_vang_doi_thau else ""
     return render(request, "pos/_hoa_don_chi_tiet.html", {
         "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
         "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
         "co_vang_doi_thau": co_vang_doi_thau,
+        "gdb_status": gdb_status,
     })
 
 

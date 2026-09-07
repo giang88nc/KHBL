@@ -109,6 +109,15 @@ PMV_MSSQL_USER = env("PMV_MSSQL_USER")
 PMV_MSSQL_PASSWORD = env("PMV_MSSQL_PASSWORD")
 PMV_MSSQL_ODBC_DRIVER = env("PMV_MSSQL_ODBC_DRIVER", default="ODBC Driver 18 for SQL Server")
 
+# Bảng giá công khai của ứng dụng UPSERT chính. Ứng dụng đó đọc MySQL:3306
+# (pmv_report.gold_prices); KHBL chỉ đọc API này rồi ghi vào MySQL:3308 của mình.
+# Không đặt user/password MySQL:3306 trong KHBL.
+PMV_REPORT_GOLD_PRICES_URL = env(
+    "PMV_REPORT_GOLD_PRICES_URL",
+    default="http://127.0.0.1:1276/bang-gia-v%C3%A0ng-kim-hanh-2/api/prices",
+)
+PMV_REPORT_GOLD_PRICES_TIMEOUT = env.int("PMV_REPORT_GOLD_PRICES_TIMEOUT", default=8)
+
 # Backup PMV (job đêm 02:00 — config/scheduler.py, lệnh manage.py backup_pmv)
 PMV_BACKUP_DIR_KK = env("PMV_BACKUP_DIR_KK", default=r"D:\KHJ_PMV_BACKUP")       # thư mục trên Ổ ĐĨA PC KK
 PMV_BACKUP_RETENTION_KK = env("PMV_BACKUP_RETENTION_KK")                          # giữ bao nhiêu NGÀY trên PC KK
@@ -117,6 +126,10 @@ PMV_BACKUP_DIR_LOCAL = env("PMV_BACKUP_DIR_LOCAL", default=r"D:\KHBL_BACKUP\pmv"
 PMV_BACKUP_RETENTION_LOCAL = env("PMV_BACKUP_RETENTION_LOCAL")                    # giữ bao nhiêu BẢN ở máy Mr Giang
 PMV_LOCAL_MSSQL = env("PMV_LOCAL_MSSQL", default="")                              # vd "localhost\\SQL2014" — trống = chưa restore sandbox
 PMV_SANDBOX_DB = env("PMV_SANDBOX_DB", default="PMV_SANDBOX")
+
+# PASSCODE mở khóa hóa đơn ĐÃ CHỐT trên màn bán (GĐ chốt 07/09/2026): bấm 🔒 → nhập đúng mới cho
+# UPDATE (thêm món/dẻ, đổi NV/khách). TRỐNG = dùng MẬT KHẨU WEB của chính người đang đăng nhập.
+KHBL_UNLOCK_PASSCODE = env("KHBL_UNLOCK_PASSCODE", default="")
 
 # ─────────── KHO LỊCH SỬ (GIANG MSSQL) — bản sao đầy đủ, giữ mãi (Phase 1, 06/09/2026) ───────────
 # DB riêng CỦA MÌNH trên chính instance chứa sandbox (localhost\SQL2014). KK chỉ ĐỌC; kho này

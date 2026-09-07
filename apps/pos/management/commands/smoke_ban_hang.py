@@ -271,14 +271,27 @@ class Command(BaseCommand):
             self.ok("C9 hóa đơn hiện trong popup DANH SÁCH", hd["BillCode"] in b)
 
             b = body(cl.post("/banle/ban-hang/mo/", {"trn_id": hd["TrnID"]}))
-            self.ok("C10 mở lại hóa đơn từ danh sách", "Đã mở" in b and "MỞ LẠI" in b)
+            self.ok("C10 mở hóa đơn đã chốt từ danh sách → icon 🔒 + footer khóa (chỉ IN bật)",
+                    "Đã mở" in b and "pg-khoa--dong" in b and "pg-ban__foot--khoa" in b
+                    and b.count("disabled") >= 3 and "IN HÓA ĐƠN" in b)
 
-            self.ok("C11 hóa đơn đã chốt: web chặn sửa, hướng dẫn mở lại",
-                    "MỞ LẠI" in body(cl.post("/banle/ban-hang/quet/", {"ma": ma1})) or True)
-
-            b = body(cl.post("/banle/ban-hang/mo-lai/"))
-            self.ok("C12 bấm MỞ LẠI → hóa đơn về nháp",
-                    self._trang_thai(hd["TrnID"]) == B.NHAP)
+            # 07/09/2026: đơn KHÓA → server chặn mọi thao tác giỏ, không chỉ ẩn nút
+            b = body(cl.post("/banle/ban-hang/quet/", {"ma": ma1}))
+            self.ok("C11 đơn khóa: quét món bị CHẶN kèm hướng dẫn passcode", "đang KHÓA" in b)
+            self.ok("C11b đơn khóa: đổi NV / dẻ / bớt lẻ đều bị CHẶN",
+                    all("đang KHÓA" in body(cl.post(u, d)) for u, d in (
+                        ("/banle/ban-hang/dat/", {"emp": ""}),
+                        ("/banle/ban-hang/vang-doi/", {"gold": de["GoldCode"], "tong_tl": "10", "tl_hot": "0", "gia": ""}),
+                        ("/banle/ban-hang/bot-le/", {}))))
+            self.ok("C11c popup mở khóa render ô passcode",
+                    'name="passcode"' in body(cl.get("/banle/ban-hang/mo-khoa/")))
+            with override_settings(KHBL_UNLOCK_PASSCODE="smoke-1276"):
+                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "sai"}))
+                self.ok("C11d passcode SAI → báo lỗi, đơn vẫn ĐÃ CHỐT",
+                        "không đúng" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
+                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "smoke-1276"}))
+            self.ok("C12 passcode ĐÚNG → MỞ KHÓA, hóa đơn về nháp, icon 🔓",
+                    self._trang_thai(hd["TrnID"]) == B.NHAP and "pg-khoa--mo" in b)
 
             b = body(cl.post("/banle/ban-hang/huy/"))
             self.ok("C13 bấm XÓA → hủy hóa đơn thật", "Đã hủy" in b, self._trich(b))

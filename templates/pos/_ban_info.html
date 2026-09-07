@@ -21,11 +21,12 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
     {% if g.emp %}
       <div class="pg-chon">
         <b>{{ ten_nv|default:g.emp }}</b>
-        <button class="pg-chon__x" type="button" title="Bỏ chọn"
-                hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": ""}' hx-swap="none">×</button>
+        {% if not phieu_chot %}<button class="pg-chon__x" type="button" title="Bỏ chọn"
+                hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": ""}' hx-swap="none">×</button>{% endif %}
       </div>
     {% else %}
       <input id="o-nv" class="khbl-input" autocomplete="off" placeholder="gõ tên nhân viên"
+             {% if phieu_chot %}disabled title="Đơn đang khóa"{% endif %}
              hx-get="{% url 'pos:ban_tim_nv' %}" hx-trigger="focus, keyup changed delay:200ms"
              hx-target="#nv-goiy" name="q">
       <div id="nv-goiy" class="pg-goiy"></div>
@@ -39,16 +40,18 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
       <div class="pg-chon">
         <b>{{ g.cust.name }}</b>
         <i class="mono">{{ g.cust.phone }}{% if g.cust.code %} · {{ g.cust.code }}{% endif %}</i>
+        {% if not phieu_chot %}
         <button class="pg-chon__x" type="button" title="Bỏ chọn khách"
                 hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": ""}' hx-swap="none">×</button>
         <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-chon__sua" type="button"
                 title="Sửa thông tin khách hàng này"
                 hx-get="{% url 'pos:khach_sua' g.cust.id %}" hx-target="#modal-root">✎ SỬA</button>
+        {% endif %}
       </div>
     {% else %}
       <div class="pg-inb">
         <input id="o-khach" class="khbl-input" autocomplete="off"
-               placeholder="tên · số điện thoại · CCCD"
+               placeholder="tên · số điện thoại · CCCD" {% if phieu_chot %}disabled title="Đơn đang khóa"{% endif %}
                hx-get="{% url 'pos:ban_tim_khach' %}" hx-trigger="keyup changed delay:220ms"
                hx-target="#khach-goiy" name="q">
         <button class="khbl-btn khbl-btn--outline pg-inb__btn" type="button"
@@ -61,18 +64,7 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
 
   <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
           hx-get="{% url 'pos:ban_ds' %}" hx-target="#modal-root" title="Danh sách hóa đơn">
-    ☰<span class="pg-btn-noi__t"> DANH SÁCH</span>{% if treo %} <span class="pg-treo" title="Đơn chờ tạo quá 30 phút chưa duyệt: {% for t in treo %}{{ t.BillCode|default:t.TrnID }} ({{ t.CreatedDate|date:'H:i d/m' }}){% if not forloop.last %}, {% endif %}{% endfor %} — mở tiếp hoặc XÓA ĐƠN">⚠ {{ treo|length }} treo</span>{% endif %}</button>
+    ☰<span class="pg-btn-noi__t"> DANH SÁCH</span>{% if treo %} <span class="pg-treo" title="Đơn chờ tạo quá 30 phút chưa duyệt: {% for t in treo %}{{ t.BillCode|default:t.TrnID }} ({{ t.CreatedDate|date:'H:i d/m' }}){% if not forloop.last %}, {% endif %}{% endfor %} — mở tiếp hoặc XÓA ĐƠN">⚠ {{ treo|length }}</span>{% endif %}</button>
 
-  {% if dang_sua %}
-    <span class="pg-info__tt{% if phieu_chot %} pg-info__tt--chot{% endif %}">
-      {% if phieu_chot %}🔒 ĐÃ CHỐT{% else %}✎ ĐANG SỬA{% endif %}
-      <b class="mono">{{ g.bill_code|default:g.trn_id }}</b>
-    </span>
-    {% if phieu_chot %}
-      <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
-              hx-post="{% url 'pos:ban_mo_lai' %}" hx-swap="none"
-              hx-confirm="Mở lại hóa đơn đã chốt để sửa?&#10;&#10;Phần sổ quỹ của phiếu này sẽ bị hủy, hóa đơn quay về trạng thái nháp.">
-        🔓 MỞ LẠI ĐỂ SỬA</button>
-    {% endif %}
-  {% endif %}
+  {# 07/09/2026: badge trạng thái chuyển xuống chân trang; nút MỞ LẠI thành icon 🔒 cạnh mã đơn (VÀNG BÁN) #}
 </div>

@@ -27,6 +27,7 @@ urlpatterns = [
     path("banle/ban-hang/danh-sach/", views.ban_ds, name="ban_ds"),
     path("banle/ban-hang/mo/", views.ban_mo, name="ban_mo"),
     path("banle/ban-hang/mo-lai/", views.ban_mo_lai, name="ban_mo_lai"),
+    path("banle/ban-hang/mo-khoa/", views.ban_mo_khoa, name="ban_mo_khoa"),
     path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
     path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
     path("banle/ban-hang/in/", views.ban_in, name="ban_in"),
@@ -42,6 +43,12 @@ urlpatterns = [
     path("banle/bang-gia/luu-png/", views.gia_luu_png, name="gia_luu_png"),
     path("banle/bang-gia/anh/<uuid:export_id>/", views.gia_tai_png, name="gia_tai_png"),
     path("banle/bang-gia/dong-bo/<uuid:batch_id>/", views.gia_dong_bo_lai, name="gia_dong_bo_lai"),
+    path("banle/bang-gia/sync-pmv-report/", views.gia_sync_pmv_report_xem, name="gia_sync_pmv_report_xem"),
+    path("banle/bang-gia/sync-pmv-report/ap-dung/", views.gia_sync_pmv_report_ap_dung, name="gia_sync_pmv_report_ap_dung"),
+    path("banle/bang-gia/pmv-report-trang-thai/", views.gia_pmv_report_trang_thai, name="gia_pmv_report_trang_thai"),
+    path("banle/bang-gia/sync-kk/", views.gia_sync_kk_xem, name="gia_sync_kk_xem"),
+    path("banle/bang-gia/sync-kk/ap-dung/", views.gia_sync_kk_ap_dung, name="gia_sync_kk_ap_dung"),
+    path("banle/bang-gia/kk-trang-thai/", views.gia_kk_trang_thai, name="gia_kk_trang_thai"),
     path("banle/bang-gia/nhip/", views.gia_nhip, name="gia_nhip"),
 
     # Khách hàng

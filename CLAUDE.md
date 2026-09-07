@@ -287,8 +287,13 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
 | ĐƠN MỚI / THÊM MỚI | **xóa trắng CẢ nhân viên bán** (GĐ chốt 07/09 — `cart.clear(giu_nv=False)`) |
 | THANH TOÁN / & IN | `bill.luu` (Ins hoặc Upd) rồi `bill.chot` → **form XÓA TRẮNG** (kể cả NV) sẵn cho khách kế; bản in mở `ban_in?trn_id=` (đọc lại từ PMV qua `cart.tu_phieu`/`tong_cua`, không đụng session). Muốn xem lại đơn vừa chốt → DANH SÁCH → MỞ |
 | IN HÓA ĐƠN | in phiếu ĐANG LẬP trên form, không xóa gì |
-| MỞ LẠI ĐỂ SỬA | chỉ hiện khi phiếu ĐÃ CHỐT — `bill.mo_lai` đưa về nháp |
-| XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho) |
+| **🔒 KHÓA / 🔓 MỞ** (07/09/2026 — GĐ chốt, thay nút "MỞ LẠI ĐỂ SỬA") | icon cạnh mã đơn trên khối VÀNG BÁN (`.pg-khoa`, chỉ hiện khi có `trn_id`): đơn ĐÃ CHỐT = **🔒 nút** → popup `_khoa_modal.html` (`ban_mo_khoa` GET) nhập **PASSCODE** → POST `ban_mo_lai` kiểm `_passcode_dung` (= `KHBL_UNLOCK_PASSCODE` .env; TRỐNG → mật khẩu web của chính người đăng nhập) → đúng mới `bill.mo_lai` (hoàn két, về nháp) + OOB + đóng popup (`dong_modal`); sai → popup render lại kèm lỗi, không đụng KK. Đơn nháp = 🔓 icon tĩnh. **Đơn KHÓA = không thao tác gì được**: server chặn ở `_dang_khoa()` cho quét/xóa món/dẻ/TÍNH LẠI/đổi NV-khách/tiền/bớt lẻ (thông điệp `KHOA_MSG`), UI: ô quét disabled, nút × ẩn, khối VÀNG ĐỔI bọc `<fieldset disabled>`, ô NV/khách disabled, `.pg-box--khoa` mờ |
+| XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho). Đơn ĐÃ CHỐT → nút disable, phải 🔒 mở khóa (bước 1) rồi mới XÓA (bước 2/2) |
+
+**Chân trang** (07/09/2026, tách thành mảnh OOB **`_ban_foot.html` `#pos-foot`** — trước nằm cứng trong ban.html
+nên mở đơn qua HTMX chân trang KHÔNG đổi trạng thái): TRÁI = 🗑 XÓA ĐƠN + badge 🔒 ĐÃ CHỐT / ✎ ĐANG SỬA · giữa
+KHÁCH TRẢ · PHẢI = 💰 THANH TOÁN · 🖨 IN HÓA ĐƠN · 💰 THANH TOÁN & IN. Đơn khóa → mọi nút `disabled`, **RIÊNG IN
+HÓA ĐƠN luôn bật**. Nút ＋ THÊM MỚI ở chân đã BỎ (trùng ＋ ĐƠN MỚI). Smoke C10–C12 (69 kịch bản).
 
 ⚠ **Hóa đơn đã chốt thì proc `_Upd` TỪ CHỐI (rc=-1)** — muốn sửa phải MỞ LẠI trước.
 `bill.luu` tự kiểm và ném lỗi kèm hướng dẫn, không im lặng bỏ qua.
@@ -423,7 +428,8 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
   mà đang có đơn W → `huy` đơn (đơn W không món vô nghĩa). Đơn đã C → không tự Upd (luật 1, chờ MỞ LẠI).
   ĐƠN MỚI chỉ dọn session — đơn W cũ **vẫn nằm trên KK** = "đơn treo".
 - **GĐ chốt 2 — xóa đơn ĐÃ THANH TOÁN = 2 bước, 2 xác nhận**: `bill.huy` **từ chối đơn C** (không tự chuỗi
-  như app); chân màn: đơn C hiện nút **↩ HỦY THANH TOÁN (1/2)** (`ban_mo_lai`) → về W → nút **🗑 XÓA ĐƠN (2/2)**.
+  như app); bước 1 = **🔒 mở khóa bằng passcode** cạnh mã đơn (`ban_mo_lai`, 07/09 thay nút ↩ HỦY THANH TOÁN) →
+  về W → bước 2 = nút **🗑 XÓA ĐƠN (2/2)** ở chân trang (disable khi còn khóa).
 - **GĐ chốt 5 — `bill.mo_lai` dùng `p_Type='0'`** (hoàn cả két, đo thật đơn 606) khi đơn đã vào két
   (`T_TILL_TXN Status='P'`, TillID có); đơn C mà chưa vào két (chốt dở) → `'1'` (không có két để hoàn — '0' nổ
   NULL TillID, đã dính trên sandbox).

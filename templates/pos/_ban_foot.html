@@ -1,0 +1,29 @@
+{% load pos_extras %}{% comment %}
+Chân trang màn bán (GĐ chốt 07/09/2026) — TÁCH thành mảnh OOB `#pos-foot` để trạng thái khóa/nút đổi
+theo từng thao tác (trước đây nằm cứng trong ban.html nên mở đơn đã chốt qua HTMX chân trang không cập nhật).
+TRÁI = Xóa + badge trạng thái · PHẢI = Thanh toán · In · Thanh toán & In.
+Đơn ĐÃ CHỐT (khóa) → mọi nút disable, RIÊNG IN HÓA ĐƠN luôn bật; mở khóa = 🔒 cạnh mã đơn (passcode).
+{% endcomment %}
+<footer class="pg-ban__foot{% if phieu_chot %} pg-ban__foot--khoa{% endif %}">
+  <button class="khbl-btn khbl-btn--nguy" type="button" {% if phieu_chot %}disabled title="Đơn đang khóa — mở khóa 🔒 rồi mới xóa được"{% endif %}
+          hx-post="{% url 'pos:ban_huy' %}" hx-swap="none"
+          hx-confirm="{% if dang_sua %}{% if g.bill_code %}BƯỚC 2/2 — {% endif %}XÓA HẲN đơn chờ {{ g.bill_code|default:g.trn_id }}?&#10;&#10;Đơn bị xóa khỏi phần mềm (chỉ còn trong nhật ký), toàn bộ món hàng + dẻ trả về kho.{% else %}Xóa trắng phiếu đang nhập?{% endif %}">
+    🗑 XÓA ĐƠN</button>
+  {% if dang_sua %}
+    <span class="pg-info__tt{% if phieu_chot %} pg-info__tt--chot{% endif %}">
+      {% if phieu_chot %}🔒 ĐÃ CHỐT{% else %}✎ ĐANG SỬA{% endif %}
+      <b class="mono">{{ g.bill_code|default:g.trn_id }}</b>
+    </span>
+  {% endif %}
+
+  <span class="pg-ban__foot-tra">
+    KHÁCH TRẢ <b class="mono">{{ t.khach_tra|tien }}</b>
+  </span>
+
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot %}disabled title="Đơn đã thanh toán"{% endif %}
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none">💰 THANH TOÁN</button>
+  <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:ban_in' %}" target="_blank">🖨 IN HÓA ĐƠN</a>
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot %}disabled title="Đơn đã thanh toán"{% endif %}
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none">
+    💰 THANH TOÁN &amp; IN</button>
+</footer>

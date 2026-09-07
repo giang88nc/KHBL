@@ -3,9 +3,11 @@
 <div id="pos-ban" hx-swap-oob="true">{% include "pos/_ban_ban.html" %}</div>
 <div id="pos-doi" hx-swap-oob="true">{% include "pos/_ban_doi.html" %}</div>
 <div id="pos-tong" hx-swap-oob="true" class="pg-ban__c2">{% include "pos/_ban_tong.html" %}</div>
+<div id="pos-foot" hx-swap-oob="true">{% include "pos/_ban_foot.html" %}</div>
 <div id="toast-root" class="khbl-toast" hx-swap-oob="true">
   {% if loi_phieu %}<div class="error">{{ loi_phieu }}</div>{% endif %}
   {% if tin %}<div class="success">{{ tin }}</div>{% endif %}
   {% include "partials/messages.html" %}
 </div>
+{% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
 {% if in_luon %}<script>window.open("{% url 'pos:ban_in' %}?trn_id={{ vua_chot|urlencode }}", "_blank");</script>{% endif %}

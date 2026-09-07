@@ -3,8 +3,10 @@ Form VÀNG ĐỔI — dẻ khách đưa, nằm CHUNG hóa đơn bán (bảng TRN
 Checkbox "Đổi ngang vàng" (GĐ chốt 05/09/2026): TICK → phần dẻ trong hạn mức (= TL vàng bán ra
 cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách 1–2 dòng, đánh dấu DoiNgang.
 {% endcomment %}
-<section class="pg-box pg-box--doi">
+<section class="pg-box pg-box--doi{% if phieu_chot %} pg-box--khoa{% endif %}">
   <header class="pg-box__head pg-doi-head">
+    {# đơn ĐÃ CHỐT (khóa): toàn bộ form + nút trong khối bị disable qua fieldset (07/09/2026) #}
+    {% if phieu_chot %}<fieldset disabled class="pg-khoa-fs" title="Đơn đang KHÓA — bấm 🔒 để mở sửa">{% endif %}
     {# data-hm = hạn mức đổi ngang CÒN LẠI theo loại vàng bán (TL vàng = tổng − hột, cùng đơn vị nhập) — JS xem trước tách ngang/thâu #}
     <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
           data-hm='{ {% for h in hm_ngang %}"{{ h.base }}": "{{ h.con }}"{% if not forloop.last %}, {% endif %}{% endfor %} }'
@@ -43,6 +45,7 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
       <input type="checkbox" id="o-doingang" name="doi_ngang_ui" value="1" {% if doi_ngang_ui %}checked{% endif %}>
       <span>⇄ Đổi ngang vàng</span>
     </label>
+    {% if phieu_chot %}</fieldset>{% endif %}
   </header>
 
   <div class="pg-box__body pg-box__body--doi pg-box__body--cuon">
@@ -64,9 +67,9 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
           <td class="r mono">{{ x.row.BuyRate|don_gia }}</td>
           <td class="r mono b">{{ x.tien|tien_tran }}</td>
           <td class="w-x">
-            <button class="pg-x" type="button" title="Bỏ dòng này"
+            {% if not phieu_chot %}<button class="pg-x" type="button" title="Bỏ dòng này"
                     hx-post="{% url 'pos:ban_doi_xoa' %}" hx-vals='{"i": "{{ forloop.counter0 }}"}'
-                    hx-swap="none">×</button>
+                    hx-swap="none">×</button>{% endif %}
           </td>
         </tr>
         {% empty %}

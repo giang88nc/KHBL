@@ -521,7 +521,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ═══════════════ MÀN BÁN HÀNG (thiết kế lại 03/09/2026) ═══════════════
    Khung: THÔNG TIN (full) · thân 2 cột (trái: vàng bán + vàng đổi · phải: tính tổng)
    · chân nút. Cả khung cao đúng màn hình, chỉ thân bảng cuộn.                     */
-.pg-ban{display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0;height:100%}
+.pg-ban{display:grid;grid-template-rows:minmax(0,1fr) auto auto;min-height:0;height:100%}
+#pos-foot{display:contents}
 .pg-ban__body{display:grid;grid-template-columns:minmax(0,1fr) 340px;
   grid-template-rows:minmax(0,1fr);gap:10px;padding:10px 12px;min-height:0}
 /* Cột TRÁI: thông tin (cao tự nhiên) + vàng bán + vàng đổi (chia phần còn lại, cuộn trong bảng) */
@@ -598,6 +599,18 @@ button,input,select,textarea{font:inherit;color:inherit}
   border-radius:6px;padding:3px 10px;letter-spacing:.02em;white-space:nowrap}
 .pg-hd-badge--trong{color:var(--ink-400);background:var(--surface);border-style:dashed;
   font-family:inherit;font-weight:600;letter-spacing:0}
+/* 🔒/🔓 trạng thái khóa đơn cạnh mã đơn (07/09/2026) */
+.pg-khoa{margin-left:auto;display:inline-grid;place-items:center;width:30px;height:28px;border-radius:6px;font-size:15px;line-height:1;border:1px solid var(--line);background:var(--white)}
+.pg-khoa + .pg-hd-badge{margin-left:0}
+.pg-khoa--dong{cursor:pointer;border-color:#E3B9AC;background:#FDF2F0;box-shadow:0 0 0 3px rgba(179,64,42,.08)}
+.pg-khoa--dong:hover{background:#F7E2DC;transform:translateY(-1px)}
+.pg-khoa--mo{color:var(--jade-500);border-color:#BFDCC7;background:#E3EFE6}
+.pg-box--khoa .pg-box__body{opacity:.72;pointer-events:none}
+.pg-box--khoa .khbl-scan__in[disabled]{background:#FDF2F0;color:#8A2E1B;border-color:#E3B9AC;font-weight:600}
+.pg-khoa-fs{display:contents;border:0;padding:0;margin:0;min-width:0}
+.pg-khoa-fs[disabled] .khbl-input,.pg-khoa-fs[disabled] .khbl-select{background:var(--surface);color:var(--ink-400)}
+.pg-ban__foot .pg-info__tt{align-self:center}
+.pg-ban__foot--khoa{background:#FBF7F6}
 
 /* ── khung chung của 3 khối ── */
 .pg-box{display:flex;flex-direction:column;min-height:0;background:var(--white);

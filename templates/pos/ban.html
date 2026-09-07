@@ -17,35 +17,8 @@
     <div class="pg-ban__c2" id="pos-tong">{% include "pos/_ban_tong.html" %}</div>
   </div>
 
-  <footer class="pg-ban__foot">
-    <button class="khbl-btn khbl-btn--ghost" type="button"
-            hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
-            hx-confirm="Bỏ phiếu đang lập và mở phiếu mới?">＋ THÊM MỚI</button>
-
-    {% if phieu_chot %}
-    {# GĐ chốt 2: đơn ĐÃ THANH TOÁN xóa qua 2 BƯỚC, 2 XÁC NHẬN — bước 1 hủy thanh toán (về đơn chờ) #}
-    <button class="khbl-btn khbl-btn--nguy" type="button"
-            hx-post="{% url 'pos:ban_mo_lai' %}" hx-swap="none"
-            hx-confirm="BƯỚC 1/2 — HỦY THANH TOÁN hóa đơn {{ g.bill_code|default:g.trn_id }}?&#10;&#10;Sổ quỹ (két) bị hoàn, hàng về trạng thái chờ, đơn quay về DANH SÁCH CHỜ. Sau đó mới xóa được (bước 2).">
-      ↩ HỦY THANH TOÁN (1/2)</button>
-    {% else %}
-    <button class="khbl-btn khbl-btn--nguy" type="button"
-            hx-post="{% url 'pos:ban_huy' %}" hx-swap="none"
-            hx-confirm="{% if dang_sua %}{% if g.bill_code %}BƯỚC 2/2 — {% endif %}XÓA HẲN đơn chờ {{ g.bill_code|default:g.trn_id }}?&#10;&#10;Đơn bị xóa khỏi phần mềm (chỉ còn trong nhật ký), toàn bộ món hàng + dẻ trả về kho.{% else %}Xóa trắng phiếu đang nhập?{% endif %}">
-      🗑 XÓA ĐƠN</button>
-    {% endif %}
-
-    <span class="pg-ban__foot-tra">
-      KHÁCH TRẢ <b class="mono">{{ t.khach_tra|tien }}</b>
-    </span>
-
-    <button class="khbl-btn khbl-btn--gold" type="button"
-            hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none">💰 THANH TOÁN</button>
-    <button class="khbl-btn khbl-btn--gold" type="button"
-            hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none">
-      💰 THANH TOÁN &amp; IN</button>
-    <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:ban_in' %}" target="_blank">🖨 IN HÓA ĐƠN</a>
-  </footer>
+  {# Chân trang = mảnh OOB #pos-foot (xem _ban_foot.html) — đổi trạng thái khóa/nút theo từng thao tác #}
+  <div id="pos-foot">{% include "pos/_ban_foot.html" %}</div>
 
   <div class="khbl-keys">
     <span><kbd>Enter</kbd>Thêm món</span>
