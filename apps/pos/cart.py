@@ -126,9 +126,16 @@ def tu_phieu(phieu, emp=""):
 
 
 def _ngay_iso(v):
+    """Về ISO yyyy-mm-dd. Proc _Get của vendor trả TrnDate dạng CHUỖI 'dd/mm/yyyy' (đo 07/09/2026) —
+    trước đây giữ nguyên nên ô Ngày (input type=date) trống và popup cắt chuỗi sai."""
     if not v:
         return ""
-    return v.strftime("%Y-%m-%d") if hasattr(v, "strftime") else str(v)[:10]
+    if hasattr(v, "strftime"):
+        return v.strftime("%Y-%m-%d")
+    s = str(v).strip()
+    if len(s) >= 10 and s[2] == "/" and s[5] == "/":          # dd/mm/yyyy
+        return f"{s[6:10]}-{s[3:5]}-{s[0:2]}"
+    return s[:10]
 
 
 # ─────────────── dựng lại để lưu / để hiện ───────────────

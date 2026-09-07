@@ -290,6 +290,9 @@ class Command(BaseCommand):
                     all(x in bx for x in ("HỦY HÓA ĐƠN", hd["BillCode"], "Người thao tác", u.username,
                                           "Hậu quả", 'name="passcode"')))
             self.ok("C11c2 URL cũ /mo-khoa/ = popup SỬA ĐƠN", "SỬA ĐƠN" in body(cl.get("/banle/ban-hang/mo-khoa/")))
+            ng = cl.session["phieu"].get("ngay") or ""
+            self.ok("C11c4 ngày đơn mở lên là ISO (proc trả dd/mm/yyyy → cart đổi)",
+                    len(ng) == 10 and ng[4] == "-" and ng[7] == "-" and ng[:4].isdigit(), ng)
             self.ok("C11c3 đơn CHỐT không có nút THANH TOÁN; IN đi kèm trn_id",
                     f"in/?trn_id={hd['TrnID']}" in b)
             # passcode RIÊNG từng user (bảng unlock_passcodes) — đặt tạm cho user smoke rồi trả lại như cũ
