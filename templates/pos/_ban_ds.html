@@ -5,16 +5,16 @@ bảng thêm cột TIỀN BỚT, TIỀN CỌC sau VÀNG CŨ. Lọc = hx-get chí
 popup trong #modal-root (form đổi là lọc ngay, không cần nút).
 {% endcomment %}
 {% block modal_style %}width:80vw;max-width:80vw{% endblock %}
-{% block modal_title %}Hóa đơn bán{% if nguon_hist %} <span class="pg-ds__nguon">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>{% endif %}{% endblock %}
+{% block modal_title %}<span class="pg-ds__ttl"><em>Hóa đơn bán</em><small>{% if nhieu_ngay %}{{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }} → {{ d2|slice:"8:10" }}/{{ d2|slice:"5:7" }}/{{ d2|slice:":4" }}{% else %}ngày {{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }}{% endif %}{% if loc.emp_id or loc.khach or loc.trang_thai %} · đang lọc{% endif %}{% if nguon_hist %} <span class="pg-ds__nguon">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>{% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}</small></span>{% endblock %}
 
 {% block modal_head_extra %}
 <div class="pg-ds__tk" title="Thống kê theo bộ lọc đang chọn">
-  <span><i>ĐƠN</i><b class="mono">{{ tk.so }}</b><small>{{ tk.chot }} chốt · {{ tk.nhap }} nháp</small></span>
-  <span><i>VÀNG MỚI</i><b class="mono">{{ tk.vang_moi|tien_tran }}</b></span>
-  <span><i>VÀNG CŨ</i><b class="mono dim">{{ tk.vang_cu|tien_tran }}</b></span>
-  <span><i>TIỀN BỚT</i><b class="mono dim">{{ tk.bot|tien_tran }}</b></span>
-  <span><i>TIỀN CỌC</i><b class="mono dim">{{ tk.coc|tien_tran }}</b></span>
-  <span class="pg-ds__tk--tra"><i>KHÁCH TRẢ</i><b class="mono">{{ tk.khach_tra|tien_tran }}</b></span>
+  <div class="pg-ds__kpi pg-ds__kpi--so"><i>SỐ ĐƠN</i><b class="mono">{{ tk.so }}</b><small><span class="pg-ds__dot pg-ds__dot--xanh"></span>{{ tk.chot }} chốt <span class="pg-ds__dot"></span>{{ tk.nhap }} nháp</small></div>
+  <div class="pg-ds__kpi"><i>VÀNG MỚI</i><b class="mono">{{ tk.vang_moi|tien_tran }}</b><small>bán ra</small></div>
+  <div class="pg-ds__kpi"><i>VÀNG CŨ</i><b class="mono">{{ tk.vang_cu|tien_tran }}</b><small>khách đổi</small></div>
+  <div class="pg-ds__kpi pg-ds__kpi--tru"><i>TIỀN BỚT</i><b class="mono">{{ tk.bot|tien_tran }}</b><small>đã bớt</small></div>
+  <div class="pg-ds__kpi pg-ds__kpi--tru"><i>TIỀN CỌC</i><b class="mono">{{ tk.coc|tien_tran }}</b><small>đã cọc</small></div>
+  <div class="pg-ds__kpi pg-ds__kpi--tra"><i>KHÁCH TRẢ</i><b class="mono">{{ tk.khach_tra|tien_tran }}</b><small>thực thu</small></div>
 </div>
 {% endblock %}
 
@@ -54,7 +54,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
     <thead><tr>
       <th>{% if nhieu_ngay %}NGÀY · {% endif %}GIỜ</th><th>SỐ HÓA ĐƠN</th><th>KHÁCH</th><th>NHÂN VIÊN</th>
       <th class="r">VÀNG MỚI</th><th class="r">VÀNG CŨ</th><th class="r">TIỀN BỚT</th><th class="r">TIỀN CỌC</th>
-      <th class="r">KHÁCH TRẢ</th><th>TRẠNG THÁI</th><th></th>
+      <th class="r pg-ds__th-tra">KHÁCH TRẢ</th><th>TRẠNG THÁI</th><th></th>
     </tr></thead>
     <tbody>
       {% for b in ds %}
@@ -67,7 +67,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
         <td class="r mono dim">{{ b.BuyTotalAmount|tien_tran }}</td>
         <td class="r mono dim">{{ b.Discount|tien_tran }}</td>
         <td class="r mono dim">{{ b.TienCoc|tien_tran }}</td>
-        <td class="r mono b">{{ b.PayAmount|tien_tran }}</td>
+        <td class="r mono b pg-ds__td-tra">{{ b.PayAmount|tien_tran }}</td>
         <td>{% if b.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>
             {% else %}<span class="khbl-badge">Còn nháp</span>{% endif %}</td>
         <td class="r">

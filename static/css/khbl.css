@@ -641,14 +641,34 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tb__trong span{display:block;font-size:12px;margin-top:2px}
 .pg-tb__trong--nho td{padding:10px}
 .pg-tb--ds td{font-size:13px}
-/* popup DANH SÁCH (07/09/2026): thống kê ở đầu popup + bộ lọc */
-.pg-ds__nguon{font-size:12px;font-weight:600;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:1px 9px;vertical-align:middle}
-.pg-ds__tk{display:flex;gap:18px;margin-left:18px;flex-wrap:wrap}
-.pg-ds__tk span{display:flex;flex-direction:column;line-height:1.15}
-.pg-ds__tk i{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-400)}
-.pg-ds__tk b{font-size:14px;color:var(--ink-900)}
-.pg-ds__tk small{font-size:10.5px;color:var(--ink-400)}
-.pg-ds__tk--tra b{color:var(--gold-700);font-size:16px}
+/* popup DANH SÁCH (07/09/2026): đầu popup = tiêu đề + dải thẻ thống kê · thead nổi màu thương hiệu */
+.pg-ds__nguon{font-size:10.5px;font-weight:600;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300);border-radius:99px;padding:0 8px;vertical-align:middle;letter-spacing:0}
+.pg-ds__nguon--live{background:#E3EFE6;color:var(--jade-500);border-color:#BFDCC7}
+.khbl-modal__head:has(.pg-ds__tk){padding:12px 18px;background:linear-gradient(180deg,#FFFDF8,#FAF6EC);border-bottom:1px solid var(--gold-300);flex-wrap:wrap;row-gap:10px}
+.pg-ds__ttl{display:flex;flex-direction:column;line-height:1.1;min-width:150px}
+.pg-ds__ttl em{font-style:normal;font-family:var(--f-head);font-size:24px;color:var(--gold-700);font-weight:600}
+.pg-ds__ttl small{font-family:var(--f-body);font-size:11.5px;color:var(--ink-600);font-weight:500;margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pg-ds__tk{display:flex;gap:8px;margin-left:auto;margin-right:10px;flex-wrap:wrap}
+.pg-ds__kpi{display:flex;flex-direction:column;line-height:1.15;min-width:118px;padding:6px 12px;background:var(--white);border:1px solid var(--line);border-radius:8px;box-shadow:0 1px 2px rgba(28,25,23,.05);position:relative;overflow:hidden}
+.pg-ds__kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold-300)}
+.pg-ds__kpi i{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.08em;color:var(--ink-400)}
+.pg-ds__kpi b{font-size:15px;color:var(--ink-900);margin-top:1px;font-variant-numeric:tabular-nums}
+.pg-ds__kpi small{font-size:10px;color:var(--ink-400);margin-top:1px;display:flex;align-items:center;gap:4px}
+.pg-ds__kpi--so::before{background:var(--ink-600)}
+.pg-ds__kpi--tru::before{background:#D9B3A8}
+.pg-ds__kpi--tru b{color:var(--ink-600)}
+.pg-ds__kpi--tra{background:linear-gradient(135deg,var(--gold-100),#FBF3DC);border-color:var(--gold-300)}
+.pg-ds__kpi--tra::before{background:var(--gold-500)}
+.pg-ds__kpi--tra b{color:var(--gold-700);font-size:17px}
+.pg-ds__dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ink-400);margin-left:6px}
+.pg-ds__dot--xanh{background:var(--jade-500);margin-left:0}
+.pg-tb--ds thead th{background:var(--gold-100);color:var(--gold-700);font-size:10.5px;letter-spacing:.08em;padding:9px 10px;border-bottom:2px solid var(--gold-300);border-top:1px solid var(--gold-300)}
+.pg-tb--ds thead th:first-child{border-top-left-radius:6px}
+.pg-tb--ds thead th:last-child{border-top-right-radius:6px}
+.pg-tb--ds thead th.pg-ds__th-tra{background:var(--gold-300);color:var(--ink-900)}
+.pg-tb--ds td.pg-ds__td-tra{background:#FDFAF0}
+.pg-tb--ds tbody tr:nth-child(even) td{background:#FCFBF8}
+.pg-tb--ds tbody tr:hover td{background:var(--gold-100)}
 .pg-ds__loc{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
 .pg-ds__loc .khbl-field span{font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-600)}
 .pg-ds__loc .khbl-input,.pg-ds__loc .khbl-select{padding:5px 8px;font-size:13px}
@@ -803,12 +823,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 .gdb-a5{position:relative;width:min(100%,510px);aspect-ratio:148/210;margin:0 auto;overflow:hidden;background:#fffceb url("../img/gdb-a5-blank.jpg") center/100% 100% no-repeat;color:#4a3821;font-family:"Times New Roman",serif;line-height:1.08;box-shadow:0 8px 24px rgba(50,37,17,.18)}
 .gdb-a5__front,.gdb-a5__store{position:absolute;inset:0;font-size:clamp(6px,.72vw,9px)}
 .gdb-codebar{display:flex;align-items:stretch;height:100%;background:rgba(255,253,235,.48);padding:0 1px;overflow:hidden}
-.gdb-codebar i{display:block;flex:var(--w) 0 0;height:100%}.gdb-codebar__bar{background:#30261e}.gdb-codebar__text{position:absolute;display:block;text-align:center;letter-spacing:2px;font:600 clamp(4.5px,.54vw,7px)/1 Arial,sans-serif;color:#3a2e23;white-space:nowrap}
+.gdb-codebar i{display:block;flex:var(--w) 0 0;height:100%}.gdb-codebar__bar{background:#30261e}.gdb-codebar__text{position:absolute;display:block;text-align:center;letter-spacing:9px;font:600 clamp(4.5px,1vw,10px)/1 Arial,sans-serif;color:#3a2e23;white-space:nowrap}
 .gdb-a5__front-code{position:absolute;left:53.5%;top:19.6%;width:20.4%;height:5.1%}.gdb-a5__front-code-text{left:53.5%;top:24.85%;width:20.4%}
 .gdb-a5__front-info{position:absolute;top:20.7%;left:1.7%;width:73%;display:grid;grid-template-columns:32% 48%;grid-template-areas:"type bill" "customer customer" "phone address";gap:2px 0;font-size:1em}.gdb-a5__front-info b,.gdb-a5__store-meta b{font-weight:bold}.gdb-a5__type{grid-area:type}.gdb-a5__bill{grid-area:bill}.gdb-a5__customer{grid-area:customer}.gdb-a5__phone{grid-area:phone}.gdb-a5__address{grid-area:address}
 .gdb-a5 table{width:100%;border-collapse:collapse;table-layout:fixed; font-size: 9px;}.gdb-a5 th,.gdb-a5 td{border:1px solid rgba(71,52,28,.72);padding:1px 2px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gdb-a5 th{text-align:center;font-weight:bold;background:rgba(255,255,235,.2)}.gdb-a5 .num{text-align:right}.gdb-a5 .mono{font-family:"Courier New",monospace}.gdb-a5__empty{text-align:center;color:#806e4d}
 .gdb-a5__front-items{position:absolute;left:2%;top:26.45%;width:96%;height:12.25%;overflow:hidden;font-size:clamp(4.4px,.58vw,7.2px)}.gdb-a5__front-items th:nth-child(1){width:5%}.gdb-a5__front-items th:nth-child(2){width:15%}.gdb-a5__front-items th:nth-child(3){width:20%}.gdb-a5__front-items th:nth-child(4){width:9%}.gdb-a5__front-items th:nth-child(5),.gdb-a5__front-items th:nth-child(6){width:9%}.gdb-a5__front-items th:nth-child(7){width:11%}.gdb-a5__front-items th:nth-child(8){width:10%}.gdb-a5__front-items th:nth-child(9){width:15%}.gdb-a5__front-items tfoot td{font-size:1.05em}
-.gdb-a5__front-total{position:absolute;top:56.3%;left:28%;width:68%;text-align:center;font-size:clamp(7px,.88vw,11px)}.gdb-a5__front-total>div{display:flex;justify-content:space-between;align-items:baseline;gap:4px}.gdb-a5__front-total strong{font-size:1.45em}.gdb-a5__front-total em{display:block;font-weight:bold;font-size:1em}.gdb-a5__front-date{position:absolute;top:62.1%;right:3%;font-size:clamp(6px,.72vw,9px);font-style:italic}.gdb-a5__front-emp{position:absolute;top:66.7%;right:4.4%;width:28%;text-align:center;display:flex;flex-direction:column;gap:3px;font-size:clamp(6px,.72vw,9px);color:#765524;text-transform:uppercase}.gdb-a5__front-emp span{font-size:1.08em;text-transform:none;font-weight:bold;color:#4a3821}
+.gdb-a5__front-total{position:absolute;top:56.3%;left:28%;width:68%;text-align:center;font-size:clamp(7px,.88vw,11px)}.gdb-a5__front-total>div{gap:4px}.gdb-a5__front-total strong{font-size:1.45em}.gdb-a5__front-total em{display:block;font-weight:bold;font-size:1em}.gdb-a5__front-date{position:absolute;top:62.1%;right:3%;font-size:clamp(6px,.72vw,9px);font-style:italic}.gdb-a5__front-emp{position:absolute;top:66.7%;right:4.4%;width:28%;text-align:center;display:flex;flex-direction:column;gap:3px;font-size:clamp(6px,.72vw,9px);color:#765524;text-transform:uppercase}.gdb-a5__front-emp span{font-size:1.08em;text-transform:none;font-weight:bold;color:#4a3821}
 .gdb-a5__store-old{position:absolute;top:77.15%;left:2.8%;width:63.5%;height:6.2%;overflow:hidden;font-size:clamp(3.8px,.48vw,6px)}.gdb-a5__store-old th:nth-child(1){width:13%}.gdb-a5__store-old th:nth-child(2){width:19%}.gdb-a5__store-old th:nth-child(3){width:12%}.gdb-a5__store-old th:nth-child(4),.gdb-a5__store-old th:nth-child(5){width:8%}.gdb-a5__store-old th:nth-child(6){width:12%}.gdb-a5__store-old th:nth-child(7){width:8%}.gdb-a5__store-old th:nth-child(8){width:20%}
 .gdb-a5__store-meta{position:absolute;top:76.95%;left:68.3%;width:27.5%;display:flex;flex-direction:column;gap:1px;font-size:clamp(4.8px,.55vw,6.8px);line-height:1.12}.gdb-a5__store-code{position:absolute;top:84.3%;left:72.8%;width:21%;height:2.6%}.gdb-a5__store-code-text{top:87.05%;left:72.8%;width:21%;font-size:clamp(3.6px,.43vw,5.3px);letter-spacing:1.2px}
 .gdb-a5__store-payment{position:absolute;top:89%;left:66.3%;width:31%;border:1px solid rgba(71,52,28,.72);font-size:clamp(4.5px,.54vw,6.7px);background:rgba(255,253,235,.18)}.gdb-a5__store-payment>div{display:flex;justify-content:space-between;gap:3px;padding:1px 3px;border-top:1px solid rgba(71,52,28,.55)}.gdb-a5__store-payment>div:first-child{border-top:0}.gdb-a5__store-final{font-size:1.08em;font-weight:bold}.gdb-a5__store-date{position:absolute;top:94.95%;left:11%;font-size:clamp(4.8px,.56vw,7px);font-style:italic}.gdb-a5__store-emp{position:absolute;top:97.05%;left:9%;font-size:clamp(4.8px,.56vw,7px)}
@@ -819,21 +839,21 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* Form thông tin GĐB: giữ đúng thứ tự cột của phiếu giao khách. */
 .gdb-codebar{display:block;padding:0;background:#fff;object-fit:fill;image-rendering:pixelated}
-.gdb-a5__front-code{left:50.25%;top:18.1%;width:27.5%;height:5.55%}.gdb-a5__front-code-text{left:50.25%;top:23.78%;width:27.5%}
+.gdb-a5__front-code{left:50.25%;top:18.1%;width:27.5%;height:5.55%}.gdb-a5__front-code-text{left:51%;top:23.78%;width:27.5%}
 .gdb-a5__front-info{position:absolute;top:19.25%;left:2%;width:96%;table-layout:fixed;font-size:clamp(5.7px,.66vw,9.2px)}
 .gdb-a5__front-info th,.gdb-a5__front-info td{border:0!important;padding:1px 1.5px;text-align:left;background:transparent!important}.gdb-a5__front-info tr+tr{border-top:1px dotted rgba(102,76,34,.36)}.gdb-a5__front-info th:nth-child(1){width:14%}.gdb-a5__front-info td:nth-child(2){width:36%}.gdb-a5__front-info th:nth-child(3){width:15%}.gdb-a5__front-info td:nth-child(4){width:35%}
 
 /* Cột phải của phần tiệm giữ: QR nhận diện hóa đơn, sau đó là thống kê thanh toán. */
 .gdb-a5__store-side{position:absolute;top:76.8%;right:2.6%;width:31%;height:20.6%;font-size:clamp(4.6px,.53vw,6.4px)}
 .gdb-a5__store-qr{position:absolute;top:0;left:0;width:30%;aspect-ratio:1;object-fit:contain;image-rendering:pixelated;background:#fff;padding:1px}
-.gdb-a5__store-info{width:61%;margin-left:31%;table-layout:fixed;border-collapse:collapse}.gdb-a5__store-info th,.gdb-a5__store-info td{border:0!important;padding:1px 0;text-align:left;background:transparent!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gdb-a5__store-info th{width:20%}
+.gdb-a5__store-info{width:61%;margin-left:31%;table-layout:fixed;border-collapse:collapse}.gdb-a5__store-info th,.gdb-a5__store-info td{border:0!important;padding:1px 0;text-align:left;background:transparent!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gdb-a5__store-info th{width:25%}
 .gdb-a5__store-payment{position:absolute;top:39%;left:0;width:100%;border-collapse:collapse;table-layout:fixed;font-size:1em;background:rgba(255,253,235,.24)}.gdb-a5__store-payment th,.gdb-a5__store-payment td{border:1px solid rgba(71,52,28,.65)!important;padding:1px 2px;text-align:left;background:transparent!important;white-space:nowrap}.gdb-a5__store-payment th{width:50%;font-weight:normal}.gdb-a5__store-payment td{text-align:right;font-weight:bold}.gdb-a5__store-payment .gdb-a5__store-final th,.gdb-a5__store-payment .gdb-a5__store-final td{font-weight:bold;border-top:2px solid rgba(71,52,28,.82)!important}
 
 /* Bảng lưu tiệm: vàng mới, phần đổi ngang và phần thâu đều quy về chỉ. */
 .gdb-a5__store-old{top:76.65%;left:2.2%;width:64.3%;height:16.15%;font-size:clamp(3.65px,.46vw,5.8px)}
-.gdb-a5__store-old th:nth-child(1){width:16%}.gdb-a5__store-old th:nth-child(2){width:14%}.gdb-a5__store-old th:nth-child(3){width:8%}.gdb-a5__store-old th:nth-child(4){width:10%}.gdb-a5__store-old th:nth-child(5){width:7%}.gdb-a5__store-old th:nth-child(6){width:11%}.gdb-a5__store-old th:nth-child(7){width:7%}.gdb-a5__store-old th:nth-child(8){width:20%}
+.gdb-a5__store-old th:nth-child(1){width:16%}.gdb-a5__store-old th:nth-child(2){width:14%}.gdb-a5__store-old th:nth-child(3){width:8%}.gdb-a5__store-old th:nth-child(4){width:10%}.gdb-a5__store-old th:nth-child(5){width:7%}.gdb-a5__store-old th:nth-child(6){width:11%}.gdb-a5__store-old th:nth-child(7){width:12%}.gdb-a5__store-old th:nth-child(8){width:14%}
 .gdb-a5__store-old td{padding:1px!important;overflow:visible;text-overflow:clip;white-space:nowrap;font-size:.92em}.gdb-a5__store-old td:nth-child(2){overflow:hidden;text-overflow:ellipsis}.gdb-a5__store-old tfoot td{font-size:1.06em;background:rgba(255,250,225,.34)!important}
-.gdb-a5__store-footer{position:absolute;top:97.25%;left:4%;width:92%;text-align:center;font-size:clamp(4.7px,.55vw,6.8px);font-style:italic;white-space:nowrap}.gdb-a5__store-footer i{padding:0 4px;font-style:normal}.gdb-a5__store-footer b{font-style:normal}
+.gdb-a5__store-footer{position:absolute;top:97.25%;left:4%;width:92%;font-size:clamp(4.7px,.55vw,6.8px);font-style:italic;white-space:nowrap}.gdb-a5__store-footer i{padding:0 4px;font-style:normal}.gdb-a5__store-footer b{font-style:normal}
 
 /* ── v5: badge đơn chờ treo >30' trên nút DANH SÁCH ── */
 .pg-treo{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#B3402A;background:#FDF2F0;border:1px solid #E3B9AC;border-radius:99px;padding:0 8px;vertical-align:middle}
