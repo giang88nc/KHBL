@@ -33,7 +33,7 @@
 
     <section class="gdb-a5__front-items" aria-label="Danh sách món khách mua">
       <table>
-        <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>Loại vàng</th><th>TL vàng</th><th>TL hột</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
+        <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>L.Vàng</th><th>TL vàng</th><th>TL hột</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
         <tbody>
           {% for x in lines %}
           <tr><td>{{ forloop.counter }}</td><td class="mono">{{ x.ProductCode|default:"—" }}</td><td>{{ x.ProductDesc }}</td><td>{{ x.GoldLabel|default:x.GoldCode|default:"—" }}</td><td>{{ x.tl_text|default:"—" }}</td><td>0</td><td class="num">{{ x.rate|don_gia }}</td><td class="num">{% if x.task %}{{ x.task|don_gia }}{% else %}0{% endif %}</td><td class="num"><b>{{ x.amount|tien_tran }}</b></td></tr>

@@ -1,1 +1,26 @@
-{% load static %}<div class="khbl-modal khbl-confirm" role="dialog" aria-modal="true"><div class="khbl-modal__veil"></div><div class="khbl-modal__box"><div class="khbl-confirm__brand"><img src="{% static 'img/logo_full.png' %}" alt="Kim Hạnh"><span>KH · BẢO MẬT GIAO DỊCH</span></div><div class="khbl-modal__head"><h2>{{ action_name|default:"Xác nhận thao tác" }}</h2><button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button></div><form class="khbl-confirm__form" hx-post="{% url 'pos:hoa_don_huy' %}" hx-target="#modal-root">{% csrf_token %}<input type="hidden" name="trn_id" value="{{ trn_id }}"><input type="hidden" name="loai" value="{{ loai }}"><input type="hidden" name="action" value="{{ action }}"><div class="khbl-modal__body"><div class="khbl-confirm__seal">!</div><p class="khbl-confirm__lead">{{ action_name|default:"Xác nhận" }} <b>{{ bill_code|default:trn_id }}</b>?</p><p class="dim">Nhập mật mã tài khoản đang đăng nhập để xác nhận. Hệ thống sẽ kiểm tra lại phiếu trên MSSQL KK ngay trước khi thực hiện.</p>{% if loi %}<div class="khbl-alert khbl-alert--do"><div>{{ loi }}</div></div>{% endif %}<label class="khbl-field"><span>Mật mã xác nhận</span><input class="khbl-input" type="password" name="passcode" autocomplete="current-password" required autofocus placeholder="••••••••"></label></div><div class="khbl-modal__foot"><button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Quay lại</button><button class="khbl-btn khbl-confirm__submit" type="submit"><span class="khbl-confirm__label">{{ action_name|default:"Xác nhận" }}</span><span class="khbl-confirm__loading">Đang xác nhận…</span></button></div></form></div></div>
+<div class="khbl-modal khbl-confirm khbl-confirm--compact" role="dialog" aria-modal="true" aria-labelledby="hd-confirm-title">
+  <div class="khbl-modal__veil"></div>
+  <div class="khbl-modal__box">
+    <form class="khbl-confirm__form" hx-post="{% url 'pos:hoa_don_huy' %}" hx-target="#modal-root" hx-swap="innerHTML" hx-sync="this:drop" autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="trn_id" value="{{ trn_id }}">
+      <input type="hidden" name="loai" value="{{ loai }}">
+      <input type="hidden" name="action" value="{{ action }}">
+      <input type="hidden" name="bill_code" value="{{ bill_code|default:trn_id }}">
+      <div class="khbl-confirm__top">
+        <span class="khbl-confirm__mark" aria-hidden="true">!</span>
+        <div><small>XÁC NHẬN THAO TÁC</small><h2 id="hd-confirm-title">{{ action_name|default:"Xác nhận" }}</h2></div>
+        <button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button>
+      </div>
+      <div class="khbl-confirm__body">
+        <p class="khbl-confirm__lead">Bạn sắp <b>{{ action_name|lower }}</b> phiếu</p>
+        <p class="khbl-confirm__bill mono">{{ bill_code|default:trn_id }}</p>
+        <div class="khbl-confirm__warning">{% if action == "thanh_toan" %}HÓA ĐƠN sẽ vào danh sach chờ DUYỆT.{% else %}Xóa HÓA ĐƠN này khỏi danh sách.{% endif %}</div>
+        {% if loi %}<div class="khbl-confirm__error" role="alert" aria-live="assertive"><b>Không xác nhận được</b><span>{{ loi }}</span></div>{% endif %}
+        <label class="khbl-field khbl-confirm__pass"><span>NHẬP PASSCODE</span><input class="khbl-input mono" type="password" name="passcode" autocomplete="current-password" required autofocus inputmode="numeric" placeholder="••••" aria-describedby="hd-confirm-hint"></label>
+        
+      </div>
+      <div class="khbl-confirm__foot"><button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Quay lại</button><button class="khbl-btn khbl-confirm__submit" type="submit"><span class="khbl-confirm__label">Xác nhận</span><span class="khbl-confirm__loading">Đang xử lý…</span></button></div>
+    </form>
+  </div>
+</div>
