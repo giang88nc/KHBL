@@ -38,7 +38,7 @@ def dashboard(request):
     except Exception as exc:
         tq, loi = None, str(exc)
     return render(request, "pos/dashboard.html", {
-        "nav_active": "tong", "ngay": ngay, "tq": tq, "loi_kk": loi, "hide_dich": True,
+        "nav_active": "tong", "ngay": ngay, "tq": tq, "loi_kk": loi,
     })
 
 
@@ -56,15 +56,55 @@ _CODE39 = {
 
 
 def _codebar(code):
-    """Các vạch Code 39 cho bản in GĐB (mã phiếu chỉ chứa số và dấu gạch ngang)."""
-    chars = "*" + re.sub(r"[^0-9-]", "-", str(code or "").upper()) + "*"
-    bars = []
+    """PNG Code 39 chuẩn, có start/stop và quiet-zone cho máy quét mã vạch.
+
+    Không dùng các ``div`` CSS để browser không co vạch lẻ thành pixel mờ khi in.
+    """
+    import base64
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+
+    value = re.sub(r"[^0-9]", "", str(code or "")) or "0"
+    chars = "*" + value + "*"
+    narrow, wide, quiet, height = 4, 12, 40, 96
+    widths = []
     for pos, char in enumerate(chars):
-        for index, width in enumerate(_CODE39.get(char, _CODE39["-"])):
-            bars.append({"bar": index % 2 == 0, "w": 3 if width == "w" else 1})
+        widths.extend(wide if unit == "w" else narrow for unit in _CODE39[char])
         if pos < len(chars) - 1:
-            bars.append({"bar": False, "w": 1})
-    return bars
+            widths.append(narrow)  # khoảng cách chuẩn giữa hai ký tự Code 39
+    image = Image.new("1", (quiet * 2 + sum(widths), height), 1)
+    draw, cursor = ImageDraw.Draw(image), quiet
+    for pos, char in enumerate(chars):
+        for index, unit in enumerate(_CODE39[char]):
+            width = wide if unit == "w" else narrow
+            if index % 2 == 0:
+                draw.rectangle((cursor, 0, cursor + width - 1, height - 1), fill=0)
+            cursor += width
+        if pos < len(chars) - 1:
+            cursor += narrow
+    buffer = BytesIO()
+    image.save(buffer, format="PNG", optimize=False)
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _ma_gdb(code):
+    """Mã 9 số dùng cho barcode/QR của Giấy đảm bảo.
+
+    Ví dụ: 26-09-07-000006 -> 260907006.
+    """
+    digits = re.sub(r"\D", "", str(code or ""))
+    return f"{digits[:6]}{digits[-3:]}" if len(digits) >= 9 else digits
+
+
+def _qr_hoa_don(code):
+    """QR 9 số của hóa đơn trên phần tiệm giữ của GĐB."""
+    import base64
+    from io import BytesIO
+    import segno
+
+    buf = BytesIO()
+    segno.make(str(code), error="m").save(buf, kind="png", scale=4, border=1)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def _tien_bang_chu(value):
@@ -930,33 +970,59 @@ def hoa_don_chi_tiet(request):
     if not row:
         return HttpResponse("Không tìm thấy phiếu.", status=404)
     r = row[0]
+
+    def _tl_chi(value, unit="L", co_don_vi=True):
+        """GĐB luôn ghi trọng lượng theo chỉ: MSSQL lưu vàng theo ly."""
+        weight = M.dec(value)
+        chi = weight / M.dec("3.75") if (unit or "L").upper() in ("G", "K") else weight / M.dec("100")
+        number = M._vn(chi, 3)
+        return f"{number} chỉ" if co_don_vi else number
+
     if loai == "THAU":
         lines = [{"ProductCode": "—", "ProductDesc": "Vàng khách bán", "GoldCode": r.get("GoldCode") or "",
                   "GoldLabel": M.tuoi(r.get("GoldCode") or ""),
-                  "tl_text": M.weight_bill(r.get("GoldWeight"), r.get("WeightUnit") or "L"),
+                  "tl_text": _tl_chi(r.get("GoldWeight"), r.get("WeightUnit") or "L"),
                   "rate": r.get("BuyRate"), "task": 0, "amount": r.get("TienMua")}]
-        old_lines = [{"ProductCode": "—", "ProductDesc": "Vàng khách bán", "GoldLabel": M.tuoi(r.get("GoldCode") or ""),
-                      "tl_vang": M._vn(r.get("GoldWeight") or 0, 2), "tl_hot": "0", "rate": r.get("BuyRate"),
-                      "task": 0, "amount": r.get("TienMua")}]
+        store_lines = [{"loai_dong": "Thâu", "ProductDesc": "Vàng khách", "GoldLabel": M.tuoi(r.get("GoldCode") or ""),
+                        "tl_vang": _tl_chi(r.get("GoldWeight"), r.get("WeightUnit") or "L", False), "tl_hot": "0",
+                        "rate": r.get("BuyRate"), "task": 0, "amount": r.get("TienMua")}]
     else:
         raw_lines = c.query(
-            "SELECT s.ProductCode, s.ProductDesc, s.GoldCode, s.GoldReal, s.PriceUnit, s.SellRate, "
+            "SELECT s.ProductCode, s.ProductDesc, s.GoldCode, s.GoldReal, s.DiamondWeight, s.PriceUnit, s.SellRate, "
             "s.TaskPrice, s.SellAmount FROM TRN_RT_BUYSELL_SELL s WITH (NOLOCK) WHERE s.TrnID=? ORDER BY s.OrderBy, s.ProductCode", (trn_id,))
         lines = [{"ProductCode": x.get("ProductCode") or "", "ProductDesc": x.get("ProductDesc") or "",
                   "GoldCode": x.get("GoldCode") or "", "GoldLabel": M.tuoi(x.get("GoldCode") or ""),
-                  "tl_text": M.weight_bill(x.get("GoldReal"), x.get("PriceUnit") or "L"),
+                  "tl_text": _tl_chi(x.get("GoldReal"), x.get("PriceUnit") or "L"),
                   "rate": x.get("SellRate"), "task": x.get("TaskPrice"), "amount": x.get("SellAmount")} for x in raw_lines]
         old_raw = c.query(
             "SELECT GoldCode, GoldWeight, DiamondWeight, TotalGoldWeight, BuyRate, BuyAmount, ProductCode, GhiChu "
             "FROM TRN_RT_BUYSELL_BUYGOLD WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
-        old_lines = [{"ProductCode": x.get("ProductCode") or "—", "ProductDesc": x.get("GhiChu") or "Vàng khách bán",
-                      "GoldLabel": M.tuoi(x.get("GoldCode") or ""), "tl_vang": M._vn(x.get("GoldWeight") or 0, 2),
-                      "tl_hot": M._vn(x.get("DiamondWeight") or 0, 2), "rate": x.get("BuyRate"),
-                      "task": 0, "amount": x.get("BuyAmount")} for x in old_raw]
+
+        # Bảng tiệm giữ đọc nguyên trạng các dòng đã chốt từ MSSQL. Không chia
+        # trọng lượng hay tính lại tiền; KK không lưu cờ DoiNgang trên dòng đổi.
+        store_lines = [{"loai_dong": x.get("ProductCode") or "—", "ProductDesc": x.get("ProductDesc") or "",
+                        "GoldLabel": M.tuoi(x.get("GoldCode") or ""),
+                        "tl_vang": _tl_chi(x.get("GoldReal"), x.get("PriceUnit") or "L", False),
+                        "tl_hot": _tl_chi(x.get("DiamondWeight"), x.get("PriceUnit") or "L", False),
+                        "rate": x.get("SellRate"), "task": x.get("TaskPrice"), "amount": x.get("SellAmount")} for x in raw_lines]
+        gia_ban_da_luu = {M.dec(x.get("SellRate")) for x in raw_lines if x.get("SellRate") is not None}
+        for x in old_raw:
+            buy_rate = M.dec(x.get("BuyRate"))
+            la_doi = loai == "BAN_DOI" and buy_rate in gia_ban_da_luu
+            store_lines.append({
+                "loai_dong": "Đổi" if la_doi else "Thâu",
+                "ProductDesc": x.get("GhiChu") or "Vàng khách",
+                "GoldLabel": M.tuoi(x.get("GoldCode") or ""),
+                "tl_vang": _tl_chi(x.get("GoldWeight"), "L", False),
+                "tl_hot": _tl_chi(x.get("DiamondWeight"), "L", False),
+                "rate": x.get("BuyRate"), "task": 0, "amount": x.get("BuyAmount"),
+            })
     bill_code = r.get("BillCode") or r.get("TrnID") or trn_id
+    barcode_code = _ma_gdb(bill_code)
     return render(request, "pos/_hoa_don_chi_tiet.html", {
-        "r": r, "loai": loai, "nguon": nguon, "lines": lines, "old_lines": old_lines,
-        "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "codebar": _codebar(bill_code),
+        "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
+        "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
+        "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
     })
 
 

@@ -171,7 +171,23 @@ class Command(BaseCommand):
               'hx-sync="this:drop"' in b and 'name="save_token"' in b)
         check("thiếu họ tên → báo lỗi", "Chưa nhập họ tên" in body(c.post("/banle/khach-hang/luu/", {"CustName": ""})))
 
-        # ── 7. thâu: đối chiếu với money.py ──
+        # ── 7. GIÁ = MySQL gold_prices (07/09/2026): bảng giá web phủ sell/buy MySQL lên khung KK ──
+        from apps.pos import prices as P
+        from apps.pos.price_sync import mssql_rate
+        my = {p["gold_type"]: p for p in P.decorate(P.current_rows())}
+        gm_all = S.gia_map()
+        if "9999" in my and "N9999" in gm_all:
+            check("giá N9999/D9999 trên web = MySQL 9999 (sell & buy, quy về nghìn/đơn vị KK)",
+                  M.dec(gm_all["N9999"]["SellRate"]) == mssql_rate(my["9999"], "sell") and
+                  M.dec(gm_all["D9999"]["BuyRate"]) == mssql_rate(my["9999"], "buy") and
+                  gm_all["N9999"].get("gia_mysql") is True)
+            check("giá 18K web = MySQL 610 sell (không còn giá KK)",
+                  M.dec(gm_all["18K"]["SellRate"]) == mssql_rate(my["610"], "sell"))
+        else:
+            check("MySQL gold_prices có dòng 9999 để đối chiếu", False)
+        check("mã không có trong MySQL (VND) vẫn giữ giá KK", "VND" in gm_all and not gm_all["VND"].get("gia_mysql"))
+
+        # ── 7b. thâu: đối chiếu với money.py ──
         gm = S.gia_map()["D9999"]
         mong = M.money_vn(M.buy_amount_standalone(1000, gm["BuyRate"], 100, 0, gm["PriceUnit"]))
         b = body(c.post("/banle/thau-vao/tinh/", {"gold": "D9999", "gw": "1000", "pct": "100",

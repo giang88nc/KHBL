@@ -101,6 +101,12 @@ class Command(BaseCommand):
         self.ok("B0 lấy được 3 món trong kho", len(kho) == 3, " · ".join(k[0] for k in kho))
         if len(kho) < 3:
             return
+        # 07/09/2026: giá bán món quét = giá MySQL gold_prices theo tuổi vàng (nguồn chính)
+        r0 = kho[0][1]
+        gmy = S.gia_mysql().get((r0.get("GoldCode") or "").strip())
+        self.ok("B0b SellRate món quét = MySQL sell theo tuổi vàng",
+                bool(gmy) and M.dec(r0.get("SellRate")) == gmy["SellRate"] and r0.get("gia_mysql") is True,
+                f"{r0.get('GoldCode')} → {r0.get('SellRate')}")
         A = B.dong_ban_tu_quet(kho[0][1], 1)
         Bb = B.dong_ban_tu_quet(kho[1][1], 2)
         C3 = B.dong_ban_tu_quet(kho[2][1], 1)
@@ -345,11 +351,8 @@ class Command(BaseCommand):
                               "WHERE Status='I' AND SellTrnID IS NULL ORDER BY ProductCode DESC"):
             kq = S.quet_ma(r["ProductCode"], till_id=KET)
             if kq["ok"] and M.dec(kq["item"]["rate"]) > 0:
-                _, s = self.c.call("T_PRODUCT_GetByCodeForSell", raise_on_rc=False,
-                                   p_ProductCode=r["ProductCode"], p_TaskPrice=0, p_ShopID="",
-                                   p_CheckRealSL=1, p_TillID=KET, p_CustID=S.WALK_IN,
-                                   p_ShopID_XRate="", p_RutGon="0")
-                ra.append((r["ProductCode"], s[0][0]))
+                # dòng thô đi qua đúng đường web (services._quet → phủ giá MySQL 07/09/2026)
+                ra.append((r["ProductCode"], S.quet_ma_row(r["ProductCode"], till_id=KET)))
             if len(ra) >= n:
                 break
         return ra

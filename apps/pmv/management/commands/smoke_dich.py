@@ -331,8 +331,8 @@ class Command(BaseCommand):
                     'class="dich dich--kk"' in h and "CỔNG ĐANG CẤM GHI" in h)
 
             hb = cl.get("/banle/khach-hang/").content.decode("utf-8", "replace")
-            self.ok("C7 băng trên màn bán lẻ cũng chuyển ĐỎ",
-                    "khbl-dich--kk" in hb and "DỮ LIỆU THẬT" in hb)
+            self.ok("C7 đích ở chân trang màn bán lẻ cũng chuyển ĐỎ",
+                    "khbl-foot__dich--kk" in hb and "DỮ LIỆU THẬT" in hb)
 
             # đang ở đích KK: ghi vẫn phải bị chặn
             try:

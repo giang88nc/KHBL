@@ -5,12 +5,15 @@ Lớp ĐỌC dữ liệu bán lẻ từ PMV (chỉ đọc, qua gateway). Mọi c
 Số liệu/cột đã kiểm chứng bằng khảo sát 03/09/2026 (xem docs/PHAN_TICH_HOAT_DONG_PMVGOLDRT.md).
 """
 import hashlib
+import logging
 
 from django.core.cache import cache
 
 from apps.pmv import money as M
 from apps.pmv.client import PmvClient
 from .vn_text import chuan_hoa
+
+logger = logging.getLogger(__name__)
 
 # Bảng giá dùng ShopID = CHUỖI RỖNG (khác ShopID hóa đơn 'TSP141100000001')
 XRATE_SHOP = ""
@@ -36,8 +39,40 @@ def age_class(gold_code):
 
 # ─────────────────────────── BẢNG GIÁ ───────────────────────────
 
+def gia_mysql():
+    """GIÁ BÁN/MUA từ MySQL `gold_prices` (nguồn chính — GĐ chốt 07/09/2026), quy về ĐƠN VỊ + THANG
+    của I_XRATE (nghìn đồng / PriceUnit KK) qua đúng hàm `price_sync.mssql_rate` mà nút ĐỒNG BỘ dùng
+    → web và KK (sau đồng bộ) luôn ra cùng một số. Trả {mã KK: {"SellRate","BuyRate","luc"}} cho cả mã
+    vàng (18K, N9999…) lẫn mã dẻ (D18K, D9999…). MySQL lỗi → {} (rơi về giá KK, có log)."""
+    def _lay():
+        from . import prices as P
+        from .price_sync import GOLD_CODES, mssql_rate
+        out = {}
+        for p in P.decorate(P.current_rows()):
+            for code in GOLD_CODES.get(p["gold_type"], ()):
+                out[code] = {"SellRate": mssql_rate(p, "sell"), "BuyRate": mssql_rate(p, "buy"),
+                             "luc": p.get("effective_at")}
+        return out
+    try:
+        return cache.get_or_set("khbl:gia_mysql", _lay, 5)
+    except Exception:
+        logger.exception("Không đọc được giá MySQL gold_prices — tạm dùng giá KK")
+        return {}
+
+
+def ap_gia_mysql(row, code_key="GoldCode"):
+    """Ghi đè SellRate/BuyRate của 1 dòng (hàng quét / dòng bảng giá) bằng giá MySQL nếu có mã."""
+    g = gia_mysql().get((row.get(code_key) or "").strip())
+    if g:
+        row["SellRate"], row["BuyRate"] = g["SellRate"], g["BuyRate"]
+        row["gia_mysql"] = True
+    return row
+
+
 def bang_gia(force=False):
-    """15 dòng bảng giá + tên tiếng Việt + đơn vị. Cache 5 giây (N tab chỉ tốn 1 truy vấn/5s)."""
+    """15 dòng bảng giá + tên tiếng Việt + đơn vị. Cache 5 giây (N tab chỉ tốn 1 truy vấn/5s).
+    07/09/2026: khung dòng (mã, tên, đơn vị, nhóm) vẫn từ I_XRATE/I_GOLD, nhưng SELL/BUY được PHỦ bằng
+    giá MySQL `gold_prices` (mốc giờ = effective_at) — mã không có trong MySQL (USD, VND, VBK…) giữ giá KK."""
     key = "khbl:xrate"
     rows = None if force else cache.get(key)
     if rows is None:
@@ -47,7 +82,14 @@ def bang_gia(force=False):
             "ISNULL(g.PriceUnit,'L') AS PriceUnit, ISNULL(g.Active,'1') AS Active "
             "FROM I_XRATE x WITH (NOLOCK) LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = x.GoldCcy "
             "WHERE x.ShopID = ? ORDER BY x.Type DESC, x.GoldCcy", (XRATE_SHOP,))
+        my = gia_mysql()
         for r in rows:
+            g = my.get(r["GoldCcy"])
+            if g:
+                r["SellRate"], r["BuyRate"], r["gia_mysql"] = g["SellRate"], g["BuyRate"], True
+                if g.get("luc"):
+                    r["RateDate"] = g["luc"].strftime("%Y-%m-%d")
+                    r["RateTime"] = g["luc"].strftime("%H:%M:%S")
             r["don_vi"] = "₫/gram" if (r["PriceUnit"] or "L").upper() == "G" else "₫/chỉ"
             r["ban_dong"] = M.dec(r["SellRate"]) * M.RATE_SCALE
             r["mua_dong"] = M.dec(r["BuyRate"]) * M.RATE_SCALE
@@ -113,7 +155,8 @@ def _quet(ma, till_id="", cust_id=WALK_IN):
         if code == "P-002" and ma not in desc:
             desc = f"{desc}: {ma}"
         return None, {"code": code, "desc": desc, "style": SCAN_ERR_STYLE.get(code, "do")}
-    return row, None
+    # Giá bán của món = giá MySQL theo tuổi vàng (nguồn chính); proc chỉ cấp khung món + công.
+    return ap_gia_mysql(row), None
 
 
 def quet_ma(ma, till_id="", cust_id=WALK_IN):

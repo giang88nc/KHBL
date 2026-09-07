@@ -91,8 +91,10 @@ Kiểm chứng 03/09: đích `kk` đọc ra 56.320 khách (số sống), `sandbo
 **Chốt an toàn nằm TRONG `gateway.pmv_call`**, trước cả bước mở kết nối — không phải ở
 người gọi, để không ai quên được. `PMV_TARGET=kk` + `PMV_GHI_KK=False` = đọc thật, ghi chặn.
 
-**Băng đích trên mọi trang** (`templates/partials/dich.html`, hàng 2 của `.khbl-shell`):
-xanh "BẢN THỬ" / đỏ "DỮ LIỆU THẬT" + chấm nhấp nháy. Đừng bỏ — nhầm đích là hỏng sổ tiệm.
+**Đích dữ liệu hiện ở CHÂN TRANG mọi trang** (07/09/2026 — GĐ chốt bỏ băng riêng `dich.html` để
+tiết kiệm chiều cao; `.khbl-shell` còn 3 hàng): huy hiệu `.khbl-foot__dich--kk|sandbox` trong
+`partials/footer.html` — đỏ "DỮ LIỆU THẬT — máy KK · kênh ghi đang mở / cấm ghi / KHÓA" chấm nhấp nháy,
+xanh "BẢN THỬ — máy Mr Giang". Đừng bỏ — nhầm đích là hỏng sổ tiệm. (`hide_dich` không còn tác dụng.)
 
 **Tập dượt đi ĐÚNG đường chạy thật**: sandbox cũng qua gateway (allowlist + nhật ký +
 khóa ghi). `sandbox_call` đi tắt đã XÓA; `sandbox_query` chỉ còn cho hạ tầng.
@@ -150,6 +152,19 @@ cao. Đã dọn CSS chết `.pg-ban__body.has-mua` + biến thể cột `1fr 92p
 - **`#pos-info` gộp 1 DÒNG** (`.pg-info--1d`): ＋ ĐƠN MỚI · Ngày (**chỉ xem** — hóa đơn luôn mang hôm nay) ·
   Nhân viên · Khách hàng (nút **＋ THÊM gắn liền input** qua `.pg-inb`; đã chọn khách → `.pg-chon` + ✎ SỬA) ·
   ☰ DANH SÁCH. **BỎ nút CLEAR + ô Số hóa đơn** (mã đơn chuyển sang badge bên VÀNG BÁN).
+  **07/09/2026 — LUÔN 1 DÒNG theo bề rộng trang**: `flex-wrap:nowrap`, ô NV `flex:1 1 160px` / Khách
+  `flex:2 1 240px` co giãn, ngày `clamp(134px,10vw,150px)`, nút `flex:none`; ≤1180px chữ nút ẨN chỉ còn icon
+  (`＋` · `☰` · `＋` — text bọc `<span class="pg-btn-noi__t">`), SĐT khách ẩn; cột TÍNH TỔNG 340→300→260px
+  theo 1180/900px. Chữ nút mới PHẢI bọc span đó để không phá 1 dòng.
+- **GIÁ BÁN/MUA = MySQL `gold_prices`** (07/09/2026 — GĐ chốt, MySQL là nguồn giá chính): `services.gia_mysql()`
+  đọc `prices.current_rows()` → quy về nghìn/đơn vị KK bằng ĐÚNG `price_sync.mssql_rate` (cùng hàm nút ĐỒNG BỘ
+  dùng) → map `GOLD_CODES` ra cả mã vàng + mã dẻ (610→18K/D18K…). `bang_gia()` giữ KHUNG dòng từ I_XRATE/I_GOLD
+  (tên, PriceUnit, nhóm) nhưng **PHỦ SellRate/BuyRate + RateDate/Time = effective_at** (cờ `gia_mysql=True`);
+  mã ngoài MySQL (USD/VND/VBK) giữ giá KK; MySQL lỗi → log + rơi về KK. **Món quét** cũng phủ trong
+  `services._quet` → `ap_gia_mysql(row)` nên tiền vàng/thành tiền/dòng gửi proc hóa đơn mang giá MySQL
+  (proc chỉ cấp khung món + công). Hệ quả: web có thể lệch KK nếu chưa bấm ĐỒNG BỘ (thực tế 07/09: KK 18K
+  8.800/8.800 vs MySQL 8.850/8.350 — KK bị set tay, MySQL đúng). Smoke: smoke_ui 133 (3 kịch bản giá),
+  smoke_ban_hang 57 (B0b), smoke_price_sync PASS.
 - **VÀNG BÁN**: bỏ nút "Tìm hàng · F3" (không tìm hàng ở màn này) → thay bằng **badge mã đơn**
   `.pg-hd-badge` = `bill_code | trn_id | ma_du_kien`; chưa quét món đầu / chưa có đơn → badge **"bỏ trống"**
   (`.pg-hd-badge--trong`). Gỡ F3 khỏi keymap + gợi ý phím.

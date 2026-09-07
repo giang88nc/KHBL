@@ -6,7 +6,7 @@
 <title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260907.ds1">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260907.ds3">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/vn_text.js' %}?v=20260905.qr5"></script>
   <script defer src="{% static 'js/cccd.js' %}?v=20260905.qr5"></script>
@@ -17,7 +17,7 @@
 {# KHUNG CHUNG TOÀN HỆ: topbar (logo + menu ngang + tài khoản) · nội dung · chân trang #}
 <div class="khbl-shell">
   {% include "partials/topbar.html" %}
-  {% if not hide_dich %}{% include "partials/dich.html" %}{% endif %}
+  {# băng ĐÍCH DỮ LIỆU riêng đã BỎ (07/09/2026) — trạng thái đích nay nằm ở chân trang (footer.html) #}
 
   <main class="khbl-main{% block main_mod %}{% endblock %}">
     {% block chrome %}{% endblock %}

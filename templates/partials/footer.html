@@ -7,11 +7,21 @@
     </div>
   </div>
 
+  {# ĐÍCH DỮ LIỆU (07/09/2026: chuyển từ băng riêng xuống đây) — đỏ = máy KK thật · xanh = bản thử #}
+  <div class="khbl-foot__dich khbl-foot__dich--{{ pmv_dich }}" title="{{ pmv_dich_mo_ta }}">
+    <i class="khbl-foot__cham{% if pmv_dich == 'kk' %} khbl-foot__cham--do{% endif %}"></i>
+    {% if pmv_dich == "kk" %}
+      <b>DỮ LIỆU THẬT — máy KK</b>
+      <span>{% if write_lock %}kênh ghi đang KHÓA{% elif pmv_ghi_kk %}kênh ghi đang mở{% else %}chỉ tra cứu — cấm ghi{% endif %}</span>
+    {% else %}
+      <b>BẢN THỬ — máy Mr Giang</b>
+      <span>ghi thoải mái, không đụng tiệm</span>
+    {% endif %}
+  </div>
+
   <div class="khbl-foot__pm">
     <b>KHBL · Webapp bán lẻ {{ khbl_ver }}</b>
-    <span>Chạy song song phần mềm PMVGoldRT · dữ liệu đọc từ máy KK
-      {% if write_lock %}<i class="khbl-foot__cham khbl-foot__cham--do"></i> kênh ghi đang khóa
-      {% else %}<i class="khbl-foot__cham"></i> kết nối máy KK{% endif %}</span>
+    <span>Chạy song song phần mềm PMVGoldRT</span>
   </div>
 
   <div class="khbl-foot__gio" id="khbl-dongho" aria-live="off">

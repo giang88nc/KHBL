@@ -76,17 +76,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 
 /* ─────────────────────────── ③ LAYOUT ─────────────────────────── */
-.khbl-shell{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;overflow:hidden}
+.khbl-shell{display:grid;grid-template-rows:auto 1fr auto;height:100vh;overflow:hidden}
 
-/* Băng ĐÍCH DỮ LIỆU — hàng 2 của khung, luôn có mặt nên chiều cao không nhảy */
-.khbl-dich{display:flex;align-items:center;gap:8px;padding:0 16px;height:24px;
-  font-size:11.5px;letter-spacing:.02em;border-bottom:1px solid var(--line)}
-.khbl-dich b{font-weight:700}
-.khbl-dich__cham{width:7px;height:7px;border-radius:50%;flex:none;background:currentColor;
-  box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}
-.khbl-dich--sandbox{background:color-mix(in srgb,var(--jade-500) 9%,#fff);color:var(--jade-600,#146c43)}
-.khbl-dich--kk{background:color-mix(in srgb,var(--flame-500) 12%,#fff);color:var(--flame-600,#a3341f)}
-.khbl-dich--kk .khbl-dich__cham{animation:khbl-nhay 1.4s ease-in-out infinite}
+/* Băng ĐÍCH DỮ LIỆU riêng đã BỎ 07/09/2026 → xem .khbl-foot__dich ở chân trang; giữ keyframe nhấp nháy */
 @keyframes khbl-nhay{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* TOPBAR — logo + menu ngang + tài khoản. Dùng cho MỌI trang (đã bỏ rail dọc).
@@ -496,7 +488,16 @@ button,input,select,textarea{font:inherit;color:inherit}
 .khbl-foot__co img{opacity:.9;flex:none}
 .khbl-foot__co b,.khbl-foot__pm b{display:block;color:#EDE7DA;font-size:12.5px;font-weight:600}
 .khbl-foot__co span,.khbl-foot__pm span{display:block;color:var(--ash-500);font-size:11.5px}
-.khbl-foot__pm{margin-left:auto;text-align:right;min-width:0}
+.khbl-foot__pm{text-align:right;min-width:0}
+/* đích dữ liệu trong chân trang (07/09/2026 — thay băng .khbl-dich cũ) */
+.khbl-foot__dich{margin-left:auto;display:flex;align-items:center;gap:8px;padding:3px 12px;border-radius:99px;
+  font-size:11.5px;white-space:nowrap;border:1px solid transparent}
+.khbl-foot__dich b{font-weight:700;letter-spacing:.02em}
+.khbl-foot__dich span{color:var(--ash-500)}
+.khbl-foot__dich .khbl-foot__cham{margin:0}
+.khbl-foot__dich--sandbox{color:#B9E4C6;border-color:rgba(46,125,70,.55);background:rgba(46,125,70,.16)}
+.khbl-foot__dich--kk{color:#F4C7BD;border-color:rgba(179,64,42,.6);background:rgba(179,64,42,.18)}
+.khbl-foot__dich--kk .khbl-foot__cham{animation:khbl-nhay 1.4s ease-in-out infinite}
 .khbl-foot__cham{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--jade-glow);
   margin:0 3px 0 6px;animation:khbl-pulse 2.4s var(--ease) infinite}
 .khbl-foot__cham--do{background:var(--flame-glow)}
@@ -532,6 +533,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-ban__c2{min-height:0;display:flex}
 .pg-ban__c2 > .pg-box{flex:1;min-height:0;width:100%}
 @media (max-width:1180px){.pg-ban__body{grid-template-columns:minmax(0,1fr) 300px}}
+@media (max-width:900px){.pg-ban__body{grid-template-columns:minmax(0,1fr) 260px}}
 
 /* ── khối THÔNG TIN ── */
 .pg-info{background:var(--white);border-bottom:1px solid var(--line);padding:8px 12px;
@@ -567,9 +569,25 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-goiy__i:hover{background:var(--gold-100)}
 .pg-goiy__i i{font-size:10.5px;color:var(--ink-400);font-style:normal}
 /* ── THÔNG TIN 1 dòng (05/09/2026): các ô nằm ngang, khách hàng có nút +THÊM gắn liền ── */
-.pg-info--1d{flex-direction:row;align-items:flex-end;flex-wrap:wrap;gap:10px}
-.pg-info--1d .pg-f--khach{flex:1 1 300px;min-width:240px;flex-direction:column;align-items:stretch}
+.pg-info--1d{flex-direction:row;align-items:flex-end;flex-wrap:nowrap;gap:clamp(6px,.6vw,10px)}
+/* 07/09/2026: LUÔN 1 DÒNG theo bề rộng trang — ô co giãn theo tỉ lệ, nút không co, chữ nút ẩn khi hẹp */
+.pg-info--1d > *{min-width:0}
+.pg-info--1d .pg-btn-noi,.pg-info--1d .pg-info__tt,.pg-info--1d .khbl-btn--sm{flex:none;white-space:nowrap}
+.pg-info--1d .pg-f--ngay{flex:0 0 auto}
+.pg-info--1d .pg-f--ngay .khbl-input{width:clamp(134px,10vw,150px)}
+.pg-info--1d .pg-f--tim{flex:1 1 160px;min-width:110px}
+.pg-info--1d .pg-f--tim .khbl-input{width:100%}
+.pg-info--1d .pg-f--khach{flex:2 1 240px;min-width:150px;flex-direction:column;align-items:stretch}
 .pg-info--1d .pg-f--khach > span{position:static}
+.pg-info--1d .pg-chon{min-width:0;overflow:hidden}
+.pg-info--1d .pg-chon b,.pg-info--1d .pg-chon i{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pg-info--1d .pg-chon b{flex:1}
+@media (max-width:1180px){
+  .pg-info--1d .pg-btn-noi{padding-left:11px;padding-right:11px}
+  .pg-info--1d .pg-btn-noi .pg-btn-noi__t,.pg-info--1d .pg-inb__btn .pg-btn-noi__t{display:none}
+  .pg-info--1d .pg-chon i{display:none}
+}
+@media (max-width:900px){.pg-info--1d .pg-info__tt .mono{display:none}}
 .pg-inb{display:flex;align-items:stretch}
 .pg-inb .khbl-input{flex:1;min-width:0;border-top-right-radius:0;border-bottom-right-radius:0}
 .pg-inb__btn{flex:none;white-space:nowrap;border-top-left-radius:0;border-bottom-left-radius:0;border-left:0}
@@ -782,14 +800,14 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ── GIẤY ĐẢM BẢO A5: tờ trống quét thật làm nền, dữ liệu đè theo đúng khuôn ── */
 .gdb-a5-toolbar{display:flex;align-items:center;gap:10px;margin:0 auto 10px;max-width:590px;font-size:12px;color:var(--ink-600)}
-.gdb-a5{position:relative;width:min(100%,510px);aspect-ratio:170/210;margin:0 auto;overflow:hidden;background:#fffceb url("../img/gdb-a5-blank.jpg") center/100% 100% no-repeat;color:#4a3821;font-family:"Times New Roman",serif;line-height:1.08;box-shadow:0 8px 24px rgba(50,37,17,.18)}
+.gdb-a5{position:relative;width:min(100%,510px);aspect-ratio:148/210;margin:0 auto;overflow:hidden;background:#fffceb url("../img/gdb-a5-blank.jpg") center/100% 100% no-repeat;color:#4a3821;font-family:"Times New Roman",serif;line-height:1.08;box-shadow:0 8px 24px rgba(50,37,17,.18)}
 .gdb-a5__front,.gdb-a5__store{position:absolute;inset:0;font-size:clamp(6px,.72vw,9px)}
 .gdb-codebar{display:flex;align-items:stretch;height:100%;background:rgba(255,253,235,.48);padding:0 1px;overflow:hidden}
 .gdb-codebar i{display:block;flex:var(--w) 0 0;height:100%}.gdb-codebar__bar{background:#30261e}.gdb-codebar__text{position:absolute;display:block;text-align:center;letter-spacing:2px;font:600 clamp(4.5px,.54vw,7px)/1 Arial,sans-serif;color:#3a2e23;white-space:nowrap}
 .gdb-a5__front-code{position:absolute;left:53.5%;top:19.6%;width:20.4%;height:5.1%}.gdb-a5__front-code-text{left:53.5%;top:24.85%;width:20.4%}
 .gdb-a5__front-info{position:absolute;top:20.7%;left:1.7%;width:73%;display:grid;grid-template-columns:32% 48%;grid-template-areas:"type bill" "customer customer" "phone address";gap:2px 0;font-size:1em}.gdb-a5__front-info b,.gdb-a5__store-meta b{font-weight:bold}.gdb-a5__type{grid-area:type}.gdb-a5__bill{grid-area:bill}.gdb-a5__customer{grid-area:customer}.gdb-a5__phone{grid-area:phone}.gdb-a5__address{grid-area:address}
-.gdb-a5 table{width:100%;border-collapse:collapse;table-layout:fixed}.gdb-a5 th,.gdb-a5 td{border:1px solid rgba(71,52,28,.72);padding:1px 2px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gdb-a5 th{text-align:center;font-weight:bold;background:rgba(255,255,235,.2)}.gdb-a5 .num{text-align:right}.gdb-a5 .mono{font-family:"Courier New",monospace}.gdb-a5__empty{text-align:center;color:#806e4d}
-.gdb-a5__front-items{position:absolute;left:2%;top:26.45%;width:96%;height:12.25%;overflow:hidden;font-size:clamp(4.4px,.58vw,7.2px)}.gdb-a5__front-items th:nth-child(1){width:5%}.gdb-a5__front-items th:nth-child(2){width:15%}.gdb-a5__front-items th:nth-child(3){width:20%}.gdb-a5__front-items th:nth-child(4){width:9%}.gdb-a5__front-items th:nth-child(5),.gdb-a5__front-items th:nth-child(6){width:9%}.gdb-a5__front-items th:nth-child(7){width:11%}.gdb-a5__front-items th:nth-child(8){width:7%}.gdb-a5__front-items th:nth-child(9){width:15%}.gdb-a5__front-items tfoot td{font-size:1.05em}
+.gdb-a5 table{width:100%;border-collapse:collapse;table-layout:fixed; font-size: 9px;}.gdb-a5 th,.gdb-a5 td{border:1px solid rgba(71,52,28,.72);padding:1px 2px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gdb-a5 th{text-align:center;font-weight:bold;background:rgba(255,255,235,.2)}.gdb-a5 .num{text-align:right}.gdb-a5 .mono{font-family:"Courier New",monospace}.gdb-a5__empty{text-align:center;color:#806e4d}
+.gdb-a5__front-items{position:absolute;left:2%;top:26.45%;width:96%;height:12.25%;overflow:hidden;font-size:clamp(4.4px,.58vw,7.2px)}.gdb-a5__front-items th:nth-child(1){width:5%}.gdb-a5__front-items th:nth-child(2){width:15%}.gdb-a5__front-items th:nth-child(3){width:20%}.gdb-a5__front-items th:nth-child(4){width:9%}.gdb-a5__front-items th:nth-child(5),.gdb-a5__front-items th:nth-child(6){width:9%}.gdb-a5__front-items th:nth-child(7){width:11%}.gdb-a5__front-items th:nth-child(8){width:10%}.gdb-a5__front-items th:nth-child(9){width:15%}.gdb-a5__front-items tfoot td{font-size:1.05em}
 .gdb-a5__front-total{position:absolute;top:56.3%;left:28%;width:68%;text-align:center;font-size:clamp(7px,.88vw,11px)}.gdb-a5__front-total>div{display:flex;justify-content:space-between;align-items:baseline;gap:4px}.gdb-a5__front-total strong{font-size:1.45em}.gdb-a5__front-total em{display:block;font-weight:bold;font-size:1em}.gdb-a5__front-date{position:absolute;top:62.1%;right:3%;font-size:clamp(6px,.72vw,9px);font-style:italic}.gdb-a5__front-emp{position:absolute;top:66.7%;right:4.4%;width:28%;text-align:center;display:flex;flex-direction:column;gap:3px;font-size:clamp(6px,.72vw,9px);color:#765524;text-transform:uppercase}.gdb-a5__front-emp span{font-size:1.08em;text-transform:none;font-weight:bold;color:#4a3821}
 .gdb-a5__store-old{position:absolute;top:77.15%;left:2.8%;width:63.5%;height:6.2%;overflow:hidden;font-size:clamp(3.8px,.48vw,6px)}.gdb-a5__store-old th:nth-child(1){width:13%}.gdb-a5__store-old th:nth-child(2){width:19%}.gdb-a5__store-old th:nth-child(3){width:12%}.gdb-a5__store-old th:nth-child(4),.gdb-a5__store-old th:nth-child(5){width:8%}.gdb-a5__store-old th:nth-child(6){width:12%}.gdb-a5__store-old th:nth-child(7){width:8%}.gdb-a5__store-old th:nth-child(8){width:20%}
 .gdb-a5__store-meta{position:absolute;top:76.95%;left:68.3%;width:27.5%;display:flex;flex-direction:column;gap:1px;font-size:clamp(4.8px,.55vw,6.8px);line-height:1.12}.gdb-a5__store-code{position:absolute;top:84.3%;left:72.8%;width:21%;height:2.6%}.gdb-a5__store-code-text{top:87.05%;left:72.8%;width:21%;font-size:clamp(3.6px,.43vw,5.3px);letter-spacing:1.2px}
@@ -798,6 +816,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 @media print{@page{size:A5 portrait;margin:0}.gdb-toolbar,.gdb-a5-toolbar{display:none!important}.gdb-a5{width:148mm!important;height:210mm!important;aspect-ratio:auto!important;margin:0!important;box-shadow:none!important}.gdb-a5__front,.gdb-a5__store{font-size:9px!important}}
 
 .gdb-a5__front-emp span{margin-top:1.3em}
+
+/* Form thông tin GĐB: giữ đúng thứ tự cột của phiếu giao khách. */
+.gdb-codebar{display:block;padding:0;background:#fff;object-fit:fill;image-rendering:pixelated}
+.gdb-a5__front-code{left:50.25%;top:18.1%;width:27.5%;height:5.55%}.gdb-a5__front-code-text{left:50.25%;top:23.78%;width:27.5%}
+.gdb-a5__front-info{position:absolute;top:19.25%;left:2%;width:96%;table-layout:fixed;font-size:clamp(5.7px,.66vw,9.2px)}
+.gdb-a5__front-info th,.gdb-a5__front-info td{border:0!important;padding:1px 1.5px;text-align:left;background:transparent!important}.gdb-a5__front-info tr+tr{border-top:1px dotted rgba(102,76,34,.36)}.gdb-a5__front-info th:nth-child(1){width:14%}.gdb-a5__front-info td:nth-child(2){width:36%}.gdb-a5__front-info th:nth-child(3){width:15%}.gdb-a5__front-info td:nth-child(4){width:35%}
+
+/* Cột phải của phần tiệm giữ: QR nhận diện hóa đơn, sau đó là thống kê thanh toán. */
+.gdb-a5__store-side{position:absolute;top:76.8%;right:2.6%;width:31%;height:20.6%;font-size:clamp(4.6px,.53vw,6.4px)}
+.gdb-a5__store-qr{position:absolute;top:0;left:0;width:30%;aspect-ratio:1;object-fit:contain;image-rendering:pixelated;background:#fff;padding:1px}
+.gdb-a5__store-info{width:61%;margin-left:31%;table-layout:fixed;border-collapse:collapse}.gdb-a5__store-info th,.gdb-a5__store-info td{border:0!important;padding:1px 0;text-align:left;background:transparent!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gdb-a5__store-info th{width:20%}
+.gdb-a5__store-payment{position:absolute;top:39%;left:0;width:100%;border-collapse:collapse;table-layout:fixed;font-size:1em;background:rgba(255,253,235,.24)}.gdb-a5__store-payment th,.gdb-a5__store-payment td{border:1px solid rgba(71,52,28,.65)!important;padding:1px 2px;text-align:left;background:transparent!important;white-space:nowrap}.gdb-a5__store-payment th{width:50%;font-weight:normal}.gdb-a5__store-payment td{text-align:right;font-weight:bold}.gdb-a5__store-payment .gdb-a5__store-final th,.gdb-a5__store-payment .gdb-a5__store-final td{font-weight:bold;border-top:2px solid rgba(71,52,28,.82)!important}
+
+/* Bảng lưu tiệm: vàng mới, phần đổi ngang và phần thâu đều quy về chỉ. */
+.gdb-a5__store-old{top:76.65%;left:2.2%;width:64.3%;height:16.15%;font-size:clamp(3.65px,.46vw,5.8px)}
+.gdb-a5__store-old th:nth-child(1){width:16%}.gdb-a5__store-old th:nth-child(2){width:14%}.gdb-a5__store-old th:nth-child(3){width:8%}.gdb-a5__store-old th:nth-child(4){width:10%}.gdb-a5__store-old th:nth-child(5){width:7%}.gdb-a5__store-old th:nth-child(6){width:11%}.gdb-a5__store-old th:nth-child(7){width:7%}.gdb-a5__store-old th:nth-child(8){width:20%}
+.gdb-a5__store-old td{padding:1px!important;overflow:visible;text-overflow:clip;white-space:nowrap;font-size:.92em}.gdb-a5__store-old td:nth-child(2){overflow:hidden;text-overflow:ellipsis}.gdb-a5__store-old tfoot td{font-size:1.06em;background:rgba(255,250,225,.34)!important}
+.gdb-a5__store-footer{position:absolute;top:97.25%;left:4%;width:92%;text-align:center;font-size:clamp(4.7px,.55vw,6.8px);font-style:italic;white-space:nowrap}.gdb-a5__store-footer i{padding:0 4px;font-style:normal}.gdb-a5__store-footer b{font-style:normal}
 
 /* ── v5: badge đơn chờ treo >30' trên nút DANH SÁCH ── */
 .pg-treo{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#B3402A;background:#FDF2F0;border:1px solid #E3B9AC;border-radius:99px;padding:0 8px;vertical-align:middle}
