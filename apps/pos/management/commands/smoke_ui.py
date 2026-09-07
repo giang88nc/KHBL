@@ -95,6 +95,9 @@ class Command(BaseCommand):
 
         # ── 4. bán hàng: quét mã thật + vàng cũ + tổng ──
         c.post("/banle/ban-hang/moi/")
+        b0 = body(c.get("/banle/ban-hang/"))
+        check("trang trắng: 4 nút chân trang hiện nhưng đều TẮT (08/09)",
+              b0.count('disabled title="Chưa có đơn"') == 3 and "Thanh toán xong mới in" in b0)
         ma = S.client("smoke").query(
             "SELECT TOP 1 ProductCode FROM T_PRODUCT WITH (NOLOCK) "
             "WHERE Status='I' AND TaskPrice>0 AND ISNULL(DiamondWeight,0)>0 ORDER BY InDate DESC")[0]["ProductCode"]
@@ -120,7 +123,7 @@ class Command(BaseCommand):
         # ── 4b. khối THÔNG TIN + TÍNH TỔNG ──
         b = body(c.get("/banle/ban-hang/"))
         for nhan in ("VÀNG BÁN", "VÀNG ĐỔI", "TÍNH TỔNG", "TIỀN KHÁCH TRẢ",
-                     "DANH SÁCH", "ĐƠN MỚI", "THANH TOÁN", "THANH TOÁN &amp; IN"):
+                     "DANH SÁCH", "ĐƠN MỚI", "THANH TOÁN", "THANH TOÁN &amp; IN", "IN HÓA ĐƠN"):
             check(f"  màn bán hàng có '{nhan}'", nhan in b)
         # Số hóa đơn + nút CLEAR đã BỎ (05/09/2026); mã đơn nay là badge bên VÀNG BÁN
         check("mã đơn hiện dạng badge trên VÀNG BÁN", "pg-hd-badge" in b)

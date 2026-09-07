@@ -36,6 +36,7 @@ urlpatterns = [
     path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
     path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
     path("banle/ban-hang/in/", views.ban_in, name="ban_in"),
+    path("banle/ban-hang/in/dem/", views.ban_in_dem, name="ban_in_dem"),
 
     # Thâu vào
     path("banle/thau-vao/", views.thau, name="thau"),

@@ -259,12 +259,12 @@ class Command(BaseCommand):
             self.ok("C7 hóa đơn vào CSDL ở trạng thái ĐÃ CHỐT", hd["Status"] == B.CHOT_ROI,
                     f"{hd['BillCode']} · {hd['TrnID']}")
             self.ok("C8 ghi chú lưu theo", (hd["Description"] or "").strip() == "kiểm thử web")
-            # 07/09/2026: thanh toán xong → form XÓA TRẮNG kể cả NV; bản in mở theo trn_id
-            self.ok("C8b thanh toán xong form trắng (không còn ĐÃ CHỐT, ô NV trống lại)",
-                    "ĐÃ CHỐT" not in b and 'id="o-nv"' in b)
-            bi = body(cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}"))
-            self.ok("C8c in hóa đơn ĐÃ CHỐT theo trn_id ra đúng số phiếu + 'Bản in lần 1'",
-                    hd["BillCode"] in bi and ma1 in bi and "Bản in lần 1" in bi)
+            # 08/09/2026: thanh toán xong GIỮ ĐƠN CHỐT trên form (chế độ xem): chỉ IN bật, TT/TT&IN/… tắt
+            self.ok("C8b thanh toán xong giữ đơn chốt trên form: badge ĐÃ CHỐT + IN bật + TT tắt",
+                    "ĐÃ CHỐT" in b and f"hoa-don/xem/?trn_id={hd['TrnID']}" in b and "in=1" in b
+                    and b.count('disabled title="Đơn đã thanh toán"') == 2 and 'pg-khoa-fs" title' in b)
+            b3 = body(cl.post("/banle/ban-hang/in/dem/", {"trn_id": hd["TrnID"]}))
+            self.ok("C8c nút 🖨 IN trong popup → đếm 'IN lần 1' vào bill_audit", "IN lần 1" in b3)
             self.ok("C8d ĐƠN MỚI xóa cả nhân viên bán",
                     'id="o-nv"' in body(cl.post("/banle/ban-hang/moi/")))
 
@@ -272,10 +272,11 @@ class Command(BaseCommand):
             self.ok("C9 hóa đơn hiện trong popup DANH SÁCH", hd["BillCode"] in b)
 
             b = body(cl.post("/banle/ban-hang/mo/", {"trn_id": hd["TrnID"]}))
-            self.ok("C10 mở hóa đơn đã chốt → icon 🔒 + footer theo trạng thái CHỐT (Hủy HĐ · Hủy TT · Sửa đơn · In)",
+            self.ok("C10 mở hóa đơn đã chốt HÔM NAY → 🔒 + chân trang: XÓA · SỬA · IN bật, TT & TT&IN tắt",
                     "Đã mở" in b and "pg-khoa--dong" in b and "pg-ban__foot--khoa" in b
-                    and all(x in b for x in ("HỦY HÓA ĐƠN", "HỦY THANH TOÁN", "SỬA ĐƠN", "IN HÓA ĐƠN"))
-                    and "THANH TOÁN &amp; IN" not in b and 'pg-khoa-fs" title' in b)
+                    and all(x in b for x in ("🗑 XÓA", "🔓 SỬA", "IN HÓA ĐƠN", "xac-nhan/huy_hd", "xac-nhan/sua"))
+                    and b.count('disabled title="Đơn đã thanh toán"') == 2 and 'pg-khoa-fs" title' in b
+                    and "pg-ban__foot-tra" not in b)
 
             # 07/09/2026: đơn KHÓA → server chặn mọi thao tác giỏ, không chỉ ẩn nút
             b = body(cl.post("/banle/ban-hang/quet/", {"ma": ma1}))
@@ -293,8 +294,19 @@ class Command(BaseCommand):
             ng = cl.session["phieu"].get("ngay") or ""
             self.ok("C11c4 ngày đơn mở lên là ISO (proc trả dd/mm/yyyy → cart đổi)",
                     len(ng) == 10 and ng[4] == "-" and ng[7] == "-" and ng[:4].isdigit(), ng)
-            self.ok("C11c3 đơn CHỐT không có nút THANH TOÁN; IN đi kèm trn_id",
-                    f"in/?trn_id={hd['TrnID']}" in b)
+            self.ok("C11c3 badge 🔒 ĐÃ CHỐT ghi dd/mm/yyyy HH:MM; IN mở popup GĐB theo trn_id + nguon=live",
+                    f"hoa-don/xem/?trn_id={hd['TrnID']}" in b and ("nguon=live&in=1" in b or "nguon=live&amp;in=1" in b)
+                    and cl.session["phieu"].get("gio", "")[:2].isdigit(),
+                    f"gio={cl.session['phieu'].get('gio')}")
+            # đơn ngày cũ → chỉ xem: giả lập bằng cách lùi ngày trong session
+            s0 = cl.session; ng0 = s0["phieu"]["ngay"]; s0["phieu"]["ngay"] = "2020-01-01"; s0.save()
+            bc = body(cl.get("/banle/ban-hang/"))
+            self.ok("C11c5 đơn chốt NGÀY CŨ → cả 5 nút (kể cả IN) đều tắt, 🔒 không bấm được",
+                    bc.count('disabled title="Hóa đơn ngày khác') == 3 and "pg-khoa--cu" in bc and "xac-nhan/" not in bc
+                    and "hoa-don/xem/" not in bc)
+            self.ok("C11c6 server cũng chặn sửa/hủy đơn ngày cũ",
+                    "NGÀY KHÁC" in body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "x"})))
+            s0 = cl.session; s0["phieu"]["ngay"] = ng0; s0.save()
             # passcode RIÊNG từng user (bảng unlock_passcodes) — đặt tạm cho user smoke rồi trả lại như cũ
             from apps.pos.models import UnlockPasscode
             cu = UnlockPasscode.objects.filter(user=u).first()
@@ -340,8 +352,9 @@ class Command(BaseCommand):
                 except PermissionError:
                     sua_duoc = False
                 self.ok("C12c bill_audit append-only: save() sửa dòng cũ bị từ chối", not sua_duoc)
-                self.ok("C12d đơn đang SỬA → KHÔNG in được (403)",
-                        cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}").status_code == 403)
+                self.ok("C12d đơn đang SỬA → KHÔNG in được (403 trang in cũ + in/dem từ chối)",
+                        cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}").status_code == 403
+                        and "chưa thanh toán" in body(cl.post("/banle/ban-hang/in/dem/", {})))
                 self.ok("C12e audit có dòng CHOT (lúc C6) + IN lần 1 (lúc C8c)",
                         BillAudit.objects.filter(trn_id=hd["TrnID"], action="CHOT").exists()
                         and BillAudit.objects.filter(trn_id=hd["TrnID"], action="IN", version=1).exists())

@@ -295,10 +295,21 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
 | XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho). Đơn ĐÃ CHỐT → nút disable, phải 🔒 mở khóa (bước 1) rồi mới XÓA (bước 2/2) |
 
 **Chân trang** (07/09/2026, tách thành mảnh OOB **`_ban_foot.html` `#pos-foot`** — trước nằm cứng trong ban.html
-nên mở đơn qua HTMX chân trang KHÔNG đổi trạng thái). **NÚT THEO TRẠNG THÁI (GĐ chốt 07/09/2026 chiều, sơ đồ
-DRAFT/COMPLETED/DELETED)**: NHÁP = 🗑 XÓA ĐƠN · ✎ ĐANG SỬA · KHÁCH TRẢ · 💰 THANH TOÁN · 💰 THANH TOÁN & IN (**KHÔNG
-in khi đang sửa** — `ban_in` trả 403 nếu status ≠ C); ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔒 ĐÃ CHỐT ·
-KHÁCH TRẢ · 🔓 SỬA ĐƠN · 🖨 IN HÓA ĐƠN (`?trn_id=`). 3 hành động trên đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
+nên mở đơn qua HTMX chân trang KHÔNG đổi trạng thái). **GĐ CHỐT LẦN CUỐI 08/09/2026 — LUÔN 4 NÚT CỐ ĐỊNH
+🗑 XÓA · 💰 THANH TOÁN · 💰 THANH TOÁN & IN · 🖨 IN HÓA ĐƠN (+ 🔓 SỬA khi đơn chốt), bật/tắt theo trạng thái
+(`co_don` / `phieu_chot` / `khoa_ngay_cu` trong `_ctx_pos`)**: trang trắng (chưa quét, chưa mã) → tất cả TẮT ·
+nháp có mã → XÓA/TT/TT&IN bật, IN tắt · **đã chốt HÔM NAY** (vừa thanh toán hoặc XEM từ DANH SÁCH) → XÓA (= hủy
+hóa đơn, popup passcode `huy_hd`) · SỬA (popup `sua`) · IN bật, TT/TT&IN tắt · **đã chốt NGÀY CŨ** → TẤT CẢ tắt
+(kể cả IN, icon 🔒 thành span `.pg-khoa--cu`), server `ban_thuc_hien` cũng từ chối — chỉ xem, MỌI user. Badge
+✎ ĐANG SỬA mã · **🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM** (`g.gio` lưu từ TrnTime khi nạp). BỎ KHÁCH TRẢ ở chân
+(`.pg-ban__foot-tra`). **THANH TOÁN → GIỮ đơn vừa chốt trên form** ở chế độ xem (`cart.nap(B.doc)`), ＋ ĐƠN MỚI để
+bán khách kế; THANH TOÁN & IN → chốt + mở luôn popup GĐB. **IN HÓA ĐƠN = popup Giấy đảm bảo A5** tái dùng
+`hoa_don_chi_tiet` (`?trn_id&loai=BAN|BAN_DOI&nguon=live&in=1` — `nguon=live` đi theo công tắc đích; `in=1` → popup
+96vw + chân có nút **🖨 IN** = `ban_in_dem` POST đếm lần in vào bill_audit rồi `window.print()`; @page A5 portrait
+margin 0 đã có ở CSS gdb-a5, trình duyệt tự nhớ máy in). Nút HỦY THANH TOÁN đã BỎ khỏi chân (view `huy_tt` còn
+sống). Smoke 86 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ) + smoke_ui 136 (trang trắng 4 nút tắt).
+(Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.) 3 hành động trên
+đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
 `_xac_nhan_modal.html` (`ban_xac_nhan/<sua|huy_tt|huy_hd>` GET → `ban_thuc_hien/<…>` POST; bảng `HANH_DONG` trong
 views): hiện HÀNH ĐỘNG · mã HĐ · khách · NGƯỜI THAO TÁC + giờ · HẬU QUẢ từng loại · passcode. Ngữ nghĩa: **sua** =
 hoàn két → nháp, Ở LẠI form sửa rồi thanh toán lại · **huy_tt** = hoàn két → nháp, form trắng, đơn nằm DS CHỜ ·

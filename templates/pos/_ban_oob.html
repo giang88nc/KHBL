@@ -10,4 +10,4 @@
   {% include "partials/messages.html" %}
 </div>
 {% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
-{% if in_luon %}<script>window.open("{% url 'pos:ban_in' %}?trn_id={{ vua_chot|urlencode }}", "_blank");</script>{% endif %}
+{% if in_luon %}<script>window.htmx && htmx.ajax("GET", "{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&in=1", {target: "#modal-root", swap: "innerHTML"});</script>{% endif %}

@@ -192,6 +192,11 @@ def _ctx_pos(request, extra=None):
         "phieu_chot": g.get("status") == B.CHOT_ROI,
         "doi_ngang_ui": True,   # checkbox ⇄ Đổi ngang mặc định TICK; TÍNH LẠI trả lại trạng thái người bán chọn
     }
+    # Trạng thái nút chân trang (GĐ chốt 08/09/2026): trang trắng → tất cả tắt · nháp có mã → XÓA/TT/TT&IN ·
+    # chốt HÔM NAY → XÓA(hủy HĐ)/SỬA/IN · chốt NGÀY CŨ → tất cả tắt, chỉ xem (mọi user)
+    ctx["co_don"] = bool(g.get("trn_id") or g["ban"] or g["doi"])
+    ctx["don_hom_nay"] = (g.get("ngay") or ctx["hom_nay"]) == ctx["hom_nay"]
+    ctx["khoa_ngay_cu"] = ctx["phieu_chot"] and not ctx["don_hom_nay"]
     ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
     ctx.update(extra or {})
     return ctx
@@ -696,6 +701,10 @@ def ban_thuc_hien(request, hanh_dong):
         return _loi(request, "Chưa mở hóa đơn nào", {"dong_modal": True})
     if g.get("status") != B.CHOT_ROI:
         return _loi(request, "Hóa đơn đang là NHÁP — không cần thao tác này.", {"dong_modal": True})
+    if (g.get("ngay") or "") != datetime.date.today().isoformat():
+        # GĐ chốt 08/09/2026: hóa đơn NGÀY CŨ chỉ XEM — không sửa/hủy từ màn bán, với MỌI user
+        return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(
+            request, hanh_dong, loi="Hóa đơn của NGÀY KHÁC chỉ được xem — không sửa/hủy từ màn bán hàng."))
     if not _passcode_dung(request, request.POST.get("passcode")):
         return render(request, "pos/_xac_nhan_modal.html",
                       _xac_nhan_ctx(request, hanh_dong, loi="Passcode không đúng — thử lại."))
@@ -770,12 +779,31 @@ def ban_thanh_toan(request):
         return _loi(request, _loi_goi(exc))
     g["trn_id"], g["bill_code"] = kq["trn_id"], kq["bill_code"]
     _audit(request, g, "CHOT", note=f"khách trả {M.money_vn(kq['tong']['khach_tra'])}")
-    # GĐ chốt 07/09/2026: thanh toán xong → XÓA TRẮNG form (cả NV) sẵn cho khách kế; bản in
-    # (THANH TOÁN & IN) mở theo trn_id nên không cần giữ đơn trên form. Xem lại → DANH SÁCH → MỞ.
-    cart.clear(request, giu_nv=False)
+    # GĐ chốt 08/09/2026 (đổi so với 07/09): thanh toán xong GIỮ ĐƠN VỪA CHỐT trên form ở chế độ xem
+    # (chỉ IN bật) — ＋ ĐƠN MỚI để bán khách kế. THANH TOÁN & IN → mở luôn popup Giấy đảm bảo.
+    cart.nap(request, B.doc(kq["trn_id"], c))
     tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
     return _pos_oob(request, {"tin": tin, "vua_chot": kq["trn_id"],
-                              "in_luon": request.POST.get("in") == "1"})
+                              "in_luon": request.POST.get("in") == "1",
+                              "in_loai": "BAN_DOI" if g["doi"] else "BAN"})
+
+
+@require_POST
+def ban_in_dem(request):
+    """Nút 🖨 IN trong popup Giấy đảm bảo: ĐẾM LẦN IN vào bill_audit (action=IN, version=lần thứ mấy)
+    rồi trả toast; popup tự gọi window.print() sau đó. Chỉ đơn ĐÃ CHỐT (GĐ 08/09: nháp không in)."""
+    from .models import BillAudit
+    g = cart.get(request)
+    trn = (request.POST.get("trn_id") or g.get("trn_id") or "").strip()
+    if not trn:
+        return _loi(request, "Chưa có hóa đơn để in")
+    if trn == g.get("trn_id") and g.get("status") != B.CHOT_ROI:
+        return _loi(request, "Hóa đơn đang SỬA / chưa thanh toán — THANH TOÁN xong mới in được Giấy đảm bảo.")
+    lan = BillAudit.objects.filter(trn_id=trn, action="IN").count() + 1
+    snap = g if trn == g.get("trn_id") else {"trn_id": trn}
+    _audit(request, snap, "IN", version=lan)
+    return _pos_oob(request, {"tin": f"Đã ghi nhận IN lần {lan} · {datetime.datetime.now():%H:%M} — "
+                                     f"{g.get('bill_code') or trn}"})
 
 
 @require_POST
@@ -1195,13 +1223,21 @@ def hoa_don(request):
     try:
         rows, la_hom_nay = S.hoa_don_loc(d1, d2, **loc)
         nvs = S.nhan_vien_hoa_don(la_hom_nay)
+        co_fullcontrol = bool(request.user.is_authenticated and request.user.is_superuser)
+        # Lọc có thể gồm nhiều ngày: quyền thao tác phải xét TỪNG phiếu, không
+        # dựa vào cả khoảng ngày. Nhân viên chỉ được đổi phiếu hôm nay; Admin
+        # (superuser được đồng bộ từ user `admin` PMV) có toàn quyền.
+        for row in rows:
+            row["la_hom_nay"] = _la_hd_hom_nay(row)
+            row["co_the_thao_tac"] = co_fullcontrol or row["la_hom_nay"]
         loi = ""
     except Exception as exc:
         logger.exception("Không đọc được danh sách hóa đơn")
-        rows, nvs, la_hom_nay, loi = [], [], False, S.error_message(exc)
+        rows, nvs, la_hom_nay, co_fullcontrol, loi = [], [], False, False, S.error_message(exc)
     return render(request, "pos/hoa_don.html", {
         "nav_active": "hoadon", "d1": d1, "d2": d2, "loc": loc, "nvs": nvs, "rows": rows,
-        "tong": S.tong_ngay(rows), "la_hom_nay": la_hom_nay, "nguon_kk": la_hom_nay, "loi_hd": loi,
+        "tong": S.tong_ngay(rows), "la_hom_nay": la_hom_nay, "nguon_kk": la_hom_nay,
+        "co_fullcontrol": co_fullcontrol, "loi_hd": loi,
     })
 
 
@@ -1221,6 +1257,19 @@ def _la_hd_hom_nay(hd):
     return str(hd.get("TrnDate") or "")[:10] == datetime.date.today().isoformat()
 
 
+def _co_fullcontrol_hoa_don(request):
+    """`admin` PMV được đồng bộ thành Django superuser: được thao tác cả đơn cũ.
+
+    Đây chỉ nới cửa sổ ngày. Passcode, trạng thái phiếu, chốt ghi KK và các
+    kiểm tra lại trên MSSQL vẫn bắt buộc như bình thường.
+    """
+    return bool(request.user.is_authenticated and request.user.is_superuser)
+
+
+def _duoc_thao_tac_hoa_don(request, hd):
+    return _co_fullcontrol_hoa_don(request) or _la_hd_hom_nay(hd)
+
+
 def hoa_don_xac_nhan(request):
     trn_id, loai = (request.GET.get("trn_id") or "").strip(), (request.GET.get("loai") or "").strip()
     action = (request.GET.get("action") or "").strip()
@@ -1230,12 +1279,15 @@ def hoa_don_xac_nhan(request):
         _, hd, _ = _doc_hd_kk(trn_id, loai)
     except Exception as exc:
         return HttpResponse("Không thể kiểm tra dữ liệu KK: " + S.error_message(exc), status=503)
-    hom_nay = datetime.date.today()
-    if not hd or str(hd.get("IsDel")) != "0" or not _la_hd_hom_nay(hd):
-        return HttpResponse("Phiếu không còn hiệu lực để hủy trong ngày hôm nay.", status=409)
+    if not hd or str(hd.get("IsDel")) != "0":
+        return HttpResponse("Phiếu không còn hiệu lực để thao tác.", status=409)
+    if not _duoc_thao_tac_hoa_don(request, hd):
+        return HttpResponse("Phiếu ngoài ngày hôm nay chỉ được xem. Tài khoản Admin mới có toàn quyền thao tác.", status=409)
     if action == "thanh_toan" and hd.get("Status") != B.CHOT_ROI:
         return HttpResponse("Chỉ hủy thanh toán khi phiếu đã hoàn tất.", status=409)
-    if action == "hoa_don" and hd.get("Status") != B.NHAP:
+    if action == "hoa_don" and hd.get("Status") != B.NHAP and not (
+        hd.get("Status") == B.CHOT_ROI and _co_fullcontrol_hoa_don(request)
+    ):
         return HttpResponse("Hãy hủy thanh toán trước khi hủy hóa đơn.", status=409)
     return render(request, "pos/_hoa_don_xac_nhan.html", {"trn_id": trn_id, "loai": loai,
         "action": action, "bill_code": hd.get("BillCode") or trn_id,
@@ -1246,12 +1298,14 @@ def hoa_don_xac_nhan(request):
 def hoa_don_chi_tiet(request):
     """Popup xem nhanh; nguồn luôn bám theo bảng người dùng đang xem."""
     trn_id, loai = (request.GET.get("trn_id") or "").strip(), (request.GET.get("loai") or "").strip()
-    nguon = "kk" if request.GET.get("nguon") == "kk" else "hist"
+    nguon = request.GET.get("nguon")
+    # "live" (08/09/2026, nút IN màn bán): đi theo CÔNG TẮC ĐÍCH (kk/sandbox) như mọi thao tác bán hàng
+    nguon = "live" if nguon == "live" else ("kk" if nguon == "kk" else "hist")
     if not trn_id or loai not in ("BAN", "BAN_DOI", "THAU"):
         return HttpResponse("Phiếu không hợp lệ.", status=400)
     bang = "TRN_RT_BUYGOLD" if loai == "THAU" else "TRN_RT_BUYSELL"
     try:
-        c = PmvClient(nguon, tag="hd_xem")
+        c = PmvClient(tag="hd_xem") if nguon == "live" else PmvClient(nguon, tag="hd_xem")
         extra = "t.TotalAmount AS TienMua, t.TotalAmount AS SoTien, 0 AS TienBan, 0 AS TienVangThem, 0 AS TienCongThem, 0 AS TienBot, 0 AS TienCoc, t.GoldCode, t.GoldWeight, t.WeightUnit, t.BuyRate" if loai == "THAU" else "b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, b.PayAmount AS SoTien, ISNULL(b.AddMoney,0) AS TienVangThem, ISNULL(b.TaskPriceAdd,0) AS TienCongThem, ISNULL(b.Discount,0) AS TienBot, ISNULL(b.TienCoc,0) AS TienCoc"
         alias = "t" if loai == "THAU" else "b"
         row = c.query(f"SELECT {alias}.TrnID, {alias}.BillCode, {alias}.TrnDate, {alias}.TrnTime, {alias}.Status, {alias}.IsDel, {extra}, ISNULL(k.CustName,'') AS CustName, ISNULL(k.Phone,'') AS Phone, ISNULL(k.Address,'') AS Address, ISNULL(e.EmpName,'') AS EmpName FROM {bang} {alias} WITH (NOLOCK) LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID={alias}.CustID LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID={alias}.EmpID WHERE {alias}.TrnID=?", (trn_id,))
@@ -1315,6 +1369,8 @@ def hoa_don_chi_tiet(request):
     so_tien = M.dec(r.get("SoTien"))
     gdb_status = ("Đổi bù" if so_tien > 0 else "Đổi dư" if so_tien < 0 else "") if co_vang_doi_thau else ""
     return render(request, "pos/_hoa_don_chi_tiet.html", {
+        # in_mode (08/09/2026): mở từ nút IN HÓA ĐƠN màn bán → popup rộng + nút 🖨 IN (đếm lần in qua ban_in_dem)
+        "in_mode": request.GET.get("in") == "1",
         "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
         "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
@@ -1328,23 +1384,37 @@ def hoa_don_huy(request):
     trn_id, loai = (request.POST.get("trn_id") or "").strip(), (request.POST.get("loai") or "").strip()
     action = (request.POST.get("action") or "").strip()
     passcode = request.POST.get("passcode") or ""
-    if not request.user.check_password(passcode):
+    if not _passcode_dung(request, passcode):
         return render(request, "pos/_hoa_don_xac_nhan.html", {"trn_id": trn_id, "loai": loai,
-            "action": action, "loi": "Mật mã không đúng. Hành động chưa được thực hiện."}, status=403)
+            "action": action, "loi": "Passcode không đúng. Hành động chưa được thực hiện."}, status=403)
     if action not in ("thanh_toan", "hoa_don") or loai not in ("BAN", "BAN_DOI", "THAU") or not trn_id:
         return HttpResponse("Yêu cầu hủy không hợp lệ.", status=400)
     try:
         c, hd, _ = _doc_hd_kk(trn_id, loai)
-        if not hd or str(hd.get("IsDel")) != "0" or not _la_hd_hom_nay(hd):
-            raise ValueError("Chỉ cho phép hủy phiếu của hôm nay còn hiệu lực.")
+        if not hd or str(hd.get("IsDel")) != "0":
+            raise ValueError("Phiếu không còn hiệu lực để thao tác.")
+        if not _duoc_thao_tac_hoa_don(request, hd):
+            raise ValueError("Phiếu ngoài ngày hôm nay chỉ được xem. Tài khoản Admin mới có toàn quyền thao tác.")
         if action == "thanh_toan":
             if hd.get("Status") != B.CHOT_ROI:
                 raise ValueError("Phiếu chưa ở trạng thái hoàn tất.")
             (B.mo_lai_thau if loai == "THAU" else B.mo_lai)(trn_id, user_id=_phien(request)["user_id"], c=c)
         else:
-            if hd.get("Status") != B.NHAP:
-                raise ValueError("Hãy hủy thanh toán trước khi hủy hóa đơn.")
-            (B.huy_thau if loai == "THAU" else B.huy)(trn_id, user_id=_phien(request)["user_id"], c=c)
+            if hd.get("Status") == B.CHOT_ROI:
+                if not _co_fullcontrol_hoa_don(request):
+                    raise ValueError("Hãy hủy thanh toán trước khi hủy hóa đơn.")
+                # Admin có toàn quyền: một lần xác nhận passcode sẽ hoàn két /
+                # mở khóa rồi xóa đơn. Proc thâu đã tự làm hai bước này; đơn
+                # bán/đổi dùng hai proc vendor để đảm bảo hàng và két được hoàn.
+                if loai == "THAU":
+                    B.huy_thau(trn_id, user_id=_phien(request)["user_id"], c=c)
+                else:
+                    B.mo_lai(trn_id, user_id=_phien(request)["user_id"], c=c)
+                    B.huy(trn_id, user_id=_phien(request)["user_id"], c=c)
+            elif hd.get("Status") == B.NHAP:
+                (B.huy_thau if loai == "THAU" else B.huy)(trn_id, user_id=_phien(request)["user_id"], c=c)
+            else:
+                raise ValueError("Phiếu không ở trạng thái có thể hủy.")
     except (ValueError, PmvProcError) as exc:
         return render(request, "pos/_hoa_don_xac_nhan.html", {"trn_id": trn_id, "loai": loai,
             "action": action, "loi": S.error_message(exc)}, status=409)

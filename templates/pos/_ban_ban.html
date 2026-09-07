@@ -15,7 +15,9 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
     </form>
     {# 🔒/🔓 (07/09/2026): đơn đã lưu → icon trạng thái khóa; ĐÃ CHỐT = nút mở popup passcode, nháp = icon tĩnh #}
     {% if g.trn_id %}
-      {% if phieu_chot %}
+      {% if khoa_ngay_cu %}
+        <span class="pg-khoa pg-khoa--dong pg-khoa--cu" title="Hóa đơn ngày khác — CHỈ XEM, không sửa/hủy từ màn bán">🔒</span>
+      {% elif phieu_chot %}
         <button class="pg-khoa pg-khoa--dong" type="button" title="Đơn ĐÃ CHỐT — đang khóa. Bấm = SỬA ĐƠN (passcode)"
                 hx-get="{% url 'pos:ban_xac_nhan' 'sua' %}" hx-target="#modal-root">🔒</button>
       {% else %}
