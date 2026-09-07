@@ -239,16 +239,79 @@ def _dang_khoa(request):
     return cart.get(request).get("status") == B.CHOT_ROI
 
 
+def _passcode_cua(user):
+    from .models import UnlockPasscode
+    return UnlockPasscode.objects.filter(user=user).first() if user and user.is_authenticated else None
+
+
 def _passcode_dung(request, ma):
-    """Passcode = KHBL_UNLOCK_PASSCODE (.env); trống → mật khẩu web của chính người đang đăng nhập."""
+    """Thứ tự kiểm (GĐ chốt 07/09/2026): passcode RIÊNG của user (bảng unlock_passcodes) → nếu chưa
+    đặt: KHBL_UNLOCK_PASSCODE (.env) → nếu trống: mật khẩu web của chính người đang đăng nhập."""
     from django.conf import settings as st
     ma = (ma or "").strip()
     if not ma:
         return False
+    rieng = _passcode_cua(request.user)
+    if rieng:
+        return rieng.kiem(ma)
     cau_hinh = (getattr(st, "KHBL_UNLOCK_PASSCODE", "") or "").strip()
     if cau_hinh:
         return secrets.compare_digest(ma, cau_hinh)
     return request.user.is_authenticated and request.user.check_password(ma)
+
+
+def _passcode_ctx(request, target=None, loi="", ok=""):
+    from django.contrib.auth import get_user_model
+    target = target or request.user
+    return {"target": target, "co_pc": bool(_passcode_cua(target)), "loi": loi, "ok": ok,
+            "la_admin": request.user.is_superuser, "tu_minh": target.pk == request.user.pk,
+            "users": get_user_model().objects.filter(is_active=True).order_by("username")
+            if request.user.is_superuser else []}
+
+
+@require_GET
+def passcode_form(request):
+    """Popup ĐẶT / ĐỔI passcode mở khóa: user tự đổi của mình; superuser chọn user bất kỳ."""
+    from django.contrib.auth import get_user_model
+    target = request.user
+    uid = request.GET.get("user")
+    if uid and request.user.is_superuser:
+        target = get_user_model().objects.filter(pk=uid, is_active=True).first() or request.user
+    return render(request, "pos/_passcode_modal.html", _passcode_ctx(request, target))
+
+
+@require_POST
+def passcode_save(request):
+    """Lưu passcode. Tự đổi của mình → phải nhập passcode HIỆN TẠI (chưa có → mật khẩu web).
+    Superuser đặt cho người khác → không cần hiện tại. 4–20 ký tự, nhập 2 lần khớp."""
+    from django.contrib.auth import get_user_model
+    from .models import UnlockPasscode
+    target = request.user
+    uid = (request.POST.get("user") or "").strip()
+    if uid and str(request.user.pk) != uid:
+        if not request.user.is_superuser:
+            return render(request, "pos/_passcode_modal.html",
+                          _passcode_ctx(request, loi="Chỉ tài khoản quản trị mới đặt passcode cho người khác."))
+        target = get_user_model().objects.filter(pk=uid, is_active=True).first()
+        if not target:
+            return render(request, "pos/_passcode_modal.html", _passcode_ctx(request, loi="Không thấy tài khoản."))
+    moi, moi2 = (request.POST.get("moi") or "").strip(), (request.POST.get("moi2") or "").strip()
+    if not (4 <= len(moi) <= 20):
+        return render(request, "pos/_passcode_modal.html", _passcode_ctx(request, target, loi="Passcode mới phải 4–20 ký tự."))
+    if moi != moi2:
+        return render(request, "pos/_passcode_modal.html", _passcode_ctx(request, target, loi="Hai lần nhập passcode mới không khớp."))
+    if target.pk == request.user.pk:
+        hien = (request.POST.get("hien_tai") or "").strip()
+        rieng = _passcode_cua(request.user)
+        dung = rieng.kiem(hien) if rieng else request.user.check_password(hien)
+        if not dung:
+            return render(request, "pos/_passcode_modal.html", _passcode_ctx(
+                request, target, loi="Passcode hiện tại không đúng." if rieng else "Mật khẩu web không đúng."))
+    pc, _ = UnlockPasscode.objects.get_or_create(user=target, defaults={"hash": "!"})
+    pc.dat(moi, boi=request.user)
+    logger.info("Passcode mở khóa: %s đặt cho %s", request.user.username, target.username)
+    return render(request, "pos/_passcode_modal.html", _passcode_ctx(
+        request, target, ok=f"Đã lưu passcode mở khóa cho {target.username}."))
 
 
 @require_POST

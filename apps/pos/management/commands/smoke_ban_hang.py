@@ -285,13 +285,37 @@ class Command(BaseCommand):
                         ("/banle/ban-hang/bot-le/", {}))))
             self.ok("C11c popup mở khóa render ô passcode",
                     'name="passcode"' in body(cl.get("/banle/ban-hang/mo-khoa/")))
-            with override_settings(KHBL_UNLOCK_PASSCODE="smoke-1276"):
+            # passcode RIÊNG từng user (bảng unlock_passcodes) — đặt tạm cho user smoke rồi trả lại như cũ
+            from apps.pos.models import UnlockPasscode
+            cu = UnlockPasscode.objects.filter(user=u).first()
+            hash_cu = cu.hash if cu else None
+            pc, _ = UnlockPasscode.objects.get_or_create(user=u, defaults={"hash": "!"})
+            pc.dat("smoke-1276")
+            try:
+                with override_settings(KHBL_UNLOCK_PASSCODE="env-khac"):
+                    b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "env-khac"}))
+                    self.ok("C11d có passcode RIÊNG thì .env KHÔNG còn tác dụng (ưu tiên bản ghi user)",
+                            "không đúng" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
                 b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "sai"}))
-                self.ok("C11d passcode SAI → báo lỗi, đơn vẫn ĐÃ CHỐT",
+                self.ok("C11e passcode SAI → báo lỗi, đơn vẫn ĐÃ CHỐT",
                         "không đúng" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
-                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "smoke-1276"}))
-            self.ok("C12 passcode ĐÚNG → MỞ KHÓA, hóa đơn về nháp, icon 🔓",
-                    self._trang_thai(hd["TrnID"]) == B.NHAP and "pg-khoa--mo" in b)
+                # popup 🔑 đổi passcode: sai hiện tại → chặn; đúng → đổi được; đổi xong mở khóa bằng mã mới
+                b = body(cl.post("/tai-khoan/passcode/luu/", {"user": u.pk, "hien_tai": "sai", "moi": "9999", "moi2": "9999"}))
+                self.ok("C11f đổi passcode: nhập hiện tại SAI → từ chối", "không đúng" in b)
+                b = body(cl.post("/tai-khoan/passcode/luu/", {"user": u.pk, "hien_tai": "smoke-1276", "moi": "9999", "moi2": "9998"}))
+                self.ok("C11g đổi passcode: 2 lần mới không khớp → từ chối", "không khớp" in b)
+                b = body(cl.post("/tai-khoan/passcode/luu/", {"user": u.pk, "hien_tai": "smoke-1276", "moi": "9999", "moi2": "9999"}))
+                self.ok("C11h đổi passcode đúng → lưu (băm, không plain)",
+                        "Đã lưu" in b and UnlockPasscode.objects.get(user=u).kiem("9999")
+                        and "9999" not in UnlockPasscode.objects.get(user=u).hash)
+                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "9999"}))
+                self.ok("C12 passcode MỚI đúng → MỞ KHÓA, hóa đơn về nháp, icon 🔓",
+                        self._trang_thai(hd["TrnID"]) == B.NHAP and "pg-khoa--mo" in b)
+            finally:
+                if hash_cu:
+                    UnlockPasscode.objects.filter(user=u).update(hash=hash_cu)
+                else:
+                    UnlockPasscode.objects.filter(user=u).delete()
 
             b = body(cl.post("/banle/ban-hang/huy/"))
             self.ok("C13 bấm XÓA → hủy hóa đơn thật", "Đã hủy" in b, self._trich(b))

@@ -686,6 +686,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tb--ds tbody tr:hover td{background:var(--gold-100)}
 .pg-ds__loc{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:5px;}
 .pg-ds__loc .khbl-field span{font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-600)}
+/* popup 🔑 passcode */
+.pc-form{display:flex;flex-direction:column;gap:9px}
+.pc-form .khbl-field>span{font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-600)}
+.pc-form .khbl-input{font-size:16px;letter-spacing:.15em}
 .pg-ds__loc .khbl-input,.pg-ds__loc .khbl-select{padding:5px 8px;font-size:13px}
 .pg-ds__loc-khach{flex:1;min-width:200px}
 .pg-ds__homnay{padding:6px 12px}

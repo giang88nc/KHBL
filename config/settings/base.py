@@ -128,7 +128,8 @@ PMV_LOCAL_MSSQL = env("PMV_LOCAL_MSSQL", default="")                            
 PMV_SANDBOX_DB = env("PMV_SANDBOX_DB", default="PMV_SANDBOX")
 
 # PASSCODE mở khóa hóa đơn ĐÃ CHỐT trên màn bán (GĐ chốt 07/09/2026): bấm 🔒 → nhập đúng mới cho
-# UPDATE (thêm món/dẻ, đổi NV/khách). TRỐNG = dùng MẬT KHẨU WEB của chính người đang đăng nhập.
+# UPDATE (thêm món/dẻ, đổi NV/khách). Thứ tự: passcode RIÊNG từng user (bảng unlock_passcodes, đặt
+# qua nút 🔑 topbar) > giá trị này > TRỐNG = MẬT KHẨU WEB của chính người đang đăng nhập.
 KHBL_UNLOCK_PASSCODE = env("KHBL_UNLOCK_PASSCODE", default="")
 
 # ─────────── KHO LỊCH SỬ (GIANG MSSQL) — bản sao đầy đủ, giữ mãi (Phase 1, 06/09/2026) ───────────

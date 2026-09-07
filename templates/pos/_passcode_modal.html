@@ -1,0 +1,45 @@
+{% extends "partials/modal_shell.html" %}{% comment %}
+Popup ĐẶT / ĐỔI PASSCODE mở khóa hóa đơn (GĐ chốt 07/09/2026): mỗi user 1 passcode (băm, bảng unlock_passcodes).
+- Tự đổi: nhập passcode hiện tại (chưa có → mật khẩu web) + passcode mới 2 lần.
+- Superuser: chọn user bất kỳ → đặt mới không cần passcode hiện tại của người đó.
+Form hx-target = #modal-root → popup render lại kèm lỗi / báo đã lưu.
+{% endcomment %}
+{% block modal_style %}width:min(440px,94vw){% endblock %}
+{% block modal_title %}🔑 Passcode mở khóa{% endblock %}
+{% block modal_body %}
+  {% if ok %}
+    <div class="khbl-alert" style="border-left-color:var(--jade-500);background:#E3EFE6;color:#1F5B32;font-weight:600">✓ {{ ok }}</div>
+    <p class="dim" style="margin:10px 0 0;font-size:12px">Passcode dùng khi bấm 🔒 để mở sửa hóa đơn đã thanh toán.</p>
+  {% else %}
+  <form id="pc-form" hx-post="{% url 'pos:passcode_save' %}" hx-target="#modal-root" hx-swap="innerHTML"
+        hx-sync="this:drop" autocomplete="off" class="pc-form">
+    {% csrf_token %}
+    {% if la_admin %}
+      <label class="khbl-field"><span>TÀI KHOẢN</span>
+        <select class="khbl-select" name="user" hx-get="{% url 'pos:passcode_form' %}" hx-target="#modal-root" hx-trigger="change">
+          {% for u in users %}<option value="{{ u.pk }}" {% if u.pk == target.pk %}selected{% endif %}>{{ u.username }}{% if u.first_name %} — {{ u.first_name }}{% endif %}{% if u.is_superuser %} ★{% endif %}</option>{% endfor %}
+        </select></label>
+    {% else %}
+      <input type="hidden" name="user" value="{{ target.pk }}">
+      <p style="margin:0 0 8px;font-size:13px">Tài khoản <b class="mono">{{ target.username }}</b></p>
+    {% endif %}
+    <p class="dim" style="margin:0 0 10px;font-size:12px">
+      {% if co_pc %}Đã có passcode riêng (đổi lần cuối {{ target.unlock_passcode.updated_at|date:"d/m/Y H:i" }}).
+      {% else %}<b>Chưa đặt passcode riêng</b> — hiện đang mở khóa bằng {% if tu_minh %}mật khẩu web{% else %}mật khẩu web của tài khoản này{% endif %}.{% endif %}
+    </p>
+    {% if loi %}<div class="khbl-alert khbl-alert--do" style="margin-bottom:10px">{{ loi }}</div>{% endif %}
+    {% if tu_minh %}
+      <label class="khbl-field"><span>{% if co_pc %}PASSCODE HIỆN TẠI{% else %}MẬT KHẨU WEB (xác nhận là bạn){% endif %}</span>
+        <input class="khbl-input mono" type="password" name="hien_tai" required autofocus></label>
+    {% endif %}
+    <label class="khbl-field"><span>PASSCODE MỚI <i class="dim">(4–20 ký tự)</i></span>
+      <input class="khbl-input mono" type="password" name="moi" minlength="4" maxlength="20" required {% if not tu_minh %}autofocus{% endif %}></label>
+    <label class="khbl-field"><span>NHẬP LẠI PASSCODE MỚI</span>
+      <input class="khbl-input mono" type="password" name="moi2" minlength="4" maxlength="20" required></label>
+  </form>
+  {% endif %}
+{% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  {% if not ok %}<button class="khbl-btn khbl-btn--gold" type="submit" form="pc-form">💾 LƯU PASSCODE</button>{% endif %}
+{% endblock %}

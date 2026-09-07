@@ -27,6 +27,8 @@
       <span><span class="mono">{{ request.user.username }}</span>{% if pmv_user.till_code %} · két <span class="mono">{{ pmv_user.till_code }}</span>{% endif %}</span>
     </div>
     <div class="khbl-top__me-anh" title="{{ request.user.first_name|default:request.user.username }}{% if pmv_user.emp_id %} · NV {{ pmv_user.emp_id }}{% endif %}">{{ request.user.username|slice:":2"|upper }}</div>
+    <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Đặt / đổi passcode mở khóa hóa đơn"
+            hx-get="{% url 'pos:passcode_form' %}" hx-target="#modal-root">🔑</button>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="submit">Đăng xuất</button>
     </form>

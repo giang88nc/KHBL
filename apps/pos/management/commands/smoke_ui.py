@@ -76,6 +76,8 @@ class Command(BaseCommand):
                                                if r.streaming else r.content) < 60_000)
         check("topbar: tên người đăng nhập + két", "khbl-top__me" in b and TK in b)
         check("topbar: nút Đăng xuất", "Đăng xuất" in b)
+        check("topbar: nút 🔑 passcode + popup đặt/đổi render",
+              "tai-khoan/passcode" in b and 'name="moi2"' in body(c.get("/tai-khoan/passcode/")))
         check("topbar: đánh dấu trang đang mở (Tổng quan)", 'khbl-top__i is-on' in b)
         check("topbar: trang Bán hàng tự đánh dấu đúng mục",
               'khbl-top__i khbl-top__i--chinh is-on' in body(c.get("/banle/ban-hang/")))
