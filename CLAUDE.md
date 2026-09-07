@@ -364,8 +364,13 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
   lệnh tay cũng bật/tắt cờ này.
 - **Phase 4 XONG 06/09/2026 — ĐỊNH TUYẾN ĐỌC QUÁ KHỨ + FAILOVER** (`apps/pmv/hist_read.py`): gateway/PmvClient
   nhận đích **`"hist"`** (chỉ SELECT — `pmv_call` trên hist bị CHẶN), cùng câu SQL chạy được cả 2 kho.
-  `HR.doc(fn, ngay_iso=…)`: ngày **QUÁ KHỨ** → kho lịch sử trước (lỗi → lùi live); **hôm nay/không ngày** → live
-  trước, **KK chết → lùi về kho + cờ `failover`** (ghi cảnh báo vàng). Đã nối: `services.hoa_don_ngay`,
+  `HR.doc(fn, ngay_iso=…, den_iso=…)`: ngày/khoảng **TRỌN QUÁ KHỨ** → kho lịch sử trước (lỗi → lùi live);
+  **hôm nay / khoảng CÓ CHỨA hôm nay / không ngày** → live trước, **KK chết → lùi về kho + cờ `failover`**
+  (ghi cảnh báo vàng). **GĐ chốt 07/09/2026 quy tắc KHOẢNG NGÀY toàn hệ**: `la_qua_khu(d1, d2)` chỉ xét NGÀY CUỐI
+  < hôm nay — 01→06/09 đọc HIST, 06→07/09 (có hôm nay) đọc KK; `services.hoa_don_loc` (trang Hóa đơn) và
+  `bill.danh_sach` (popup DANH SÁCH) đều dùng hàm này (trước đây trang Hóa đơn chỉ live khi d1=d2=hôm nay).
+  Popup DANH SÁCH: nhãn nguồn + khoảng ngày + số đơn nằm ở **CHÂN popup** (`block modal_foot`), header chỉ còn
+  tiêu đề + thẻ thống kê. smoke_hist thêm 3 kịch bản khoảng ngày. Đã nối: `services.hoa_don_ngay`,
   `services.tong_quan` (tách `_tong_quan(c,…)`), `services.lich_su_khach`, `bill.trong_ngay` (view KHÔNG đổi).
   Cờ nguồn thread-local → context processor `hist_read.nguon` (đọc rồi XÓA, consume-once) → nhãn
   **"📚 Kho lịch sử · dữ liệu tới HH:mm (· máy KK không đọc được)"** trên Hóa đơn, Tổng quan (đặt ở ĐẦU `block

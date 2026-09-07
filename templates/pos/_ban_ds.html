@@ -5,7 +5,19 @@ bảng thêm cột TIỀN BỚT, TIỀN CỌC sau VÀNG CŨ. Lọc = hx-get chí
 popup trong #modal-root (form đổi là lọc ngay, không cần nút).
 {% endcomment %}
 {% block modal_style %}width:80vw;max-width:80vw{% endblock %}
-{% block modal_title %}<span class="pg-ds__ttl"><em>Hóa đơn bán</em><small>{% if nhieu_ngay %}{{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }} → {{ d2|slice:"8:10" }}/{{ d2|slice:"5:7" }}/{{ d2|slice:":4" }}{% else %}ngày {{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }}{% endif %}{% if loc.emp_id or loc.khach or loc.trang_thai %} · đang lọc{% endif %}{% if nguon_hist %} <span class="pg-ds__nguon">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>{% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}</small></span>{% endblock %}
+{% block modal_title %}<span class="pg-ds__ttl"><em>Hóa đơn bán</em></span>{% endblock %}
+
+{# Khoảng ngày + nguồn dữ liệu chuyển xuống CHÂN popup (GĐ chốt 07/09/2026: header chỉ còn tiêu đề + thẻ thống kê) #}
+{% block modal_foot %}
+<span class="pg-ds__foot">
+  <b>{% if nhieu_ngay %}{{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }} → {{ d2|slice:"8:10" }}/{{ d2|slice:"5:7" }}/{{ d2|slice:":4" }}{% else %}Ngày {{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }}{% endif %}</b>
+  {% if loc.emp_id or loc.khach or loc.trang_thai %}<span class="pg-ds__nguon">đang lọc</span>{% endif %}
+  {% if nguon_hist %}<span class="pg-ds__nguon">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>
+  {% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}
+  <i>{{ tk.so }} hóa đơn</i>
+</span>
+<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+{% endblock %}
 
 {% block modal_head_extra %}
 <div class="pg-ds__tk" title="Thống kê theo bộ lọc đang chọn">

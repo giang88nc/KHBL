@@ -393,12 +393,13 @@ def loai_vang_thau():
 def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=500):
     """Danh sách hóa đơn có lọc.
 
-    Quy ước vận hành: *chỉ* đúng hôm nay đọc trực tiếp máy KK. Mọi ngày hoặc
-    khoảng ngày khác đọc kho HIST, để một báo cáo cũ không vô tình đụng dữ liệu
-    đang bán trên quầy.  ``loai`` là BAN / BAN_DOI / THAU.
+    Quy ước vận hành (GĐ chốt 07/09/2026, chung toàn hệ `hist_read.la_qua_khu(d1, d2)`):
+    khoảng CÓ CHỨA hôm nay → đọc trực tiếp máy KK (số hôm nay chỉ KK mới có); khoảng TRỌN
+    quá khứ → kho HIST, để báo cáo cũ không đụng dữ liệu đang bán trên quầy.
+    ``loai`` là BAN / BAN_DOI / THAU.
     """
-    hom_nay = __import__("datetime").date.today().isoformat()
-    live = d1 == hom_nay and d2 == hom_nay
+    from apps.pmv import hist_read as HR
+    live = not HR.la_qua_khu(d1, d2)
     c = PmvClient("kk" if live else "hist", tag="hd_kk" if live else "hd_hist")
     key = (khach or "").strip()
     loai, emp_id, trang_thai = (loai or "").strip(), (emp_id or "").strip(), (trang_thai or "").strip().upper()

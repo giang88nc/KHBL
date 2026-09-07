@@ -71,6 +71,9 @@ class Command(BaseCommand):
         hom = _d.date.today().isoformat()
         self.ok("la_qua_khu: hôm qua True / hôm nay False / rác False",
                 HR.la_qua_khu(qua) and not HR.la_qua_khu(hom) and not HR.la_qua_khu("x"))
+        tuan = (_d.date.today() - _d.timedelta(days=7)).isoformat()
+        self.ok("la_qua_khu KHOẢNG (07/09): [7 ngày trước→hôm qua] HIST · [7 ngày trước→hôm nay] LIVE",
+                HR.la_qua_khu(tuan, qua) and not HR.la_qua_khu(tuan, hom))
         HR.doc(lambda c: c.query("SELECT TOP 1 1 AS x FROM T_EMPLOYEE WITH (NOLOCK)"), ngay_iso=qua, tag="smoke")
         self.ok("doc(quá khứ) → cờ nguồn = hist/qua_khu", HR.co_hien_tai() == ("hist", "qua_khu"))
         ctx = HR.nguon(None)
@@ -99,6 +102,12 @@ class Command(BaseCommand):
             self.ok("DANH SÁCH hóa đơn ngày QUÁ KHỨ gắn nhãn kho lịch sử", "kho lịch sử" in d)
             d2 = cl.get(f"/banle/ban-hang/danh-sach/?ngay={hom}").content.decode("utf-8", "replace")
             self.ok("DANH SÁCH hóa đơn HÔM NAY đọc live (không nhãn)", "kho lịch sử" not in d2)
+            d3 = cl.get(f"/banle/ban-hang/danh-sach/?d1={qua}&d2={hom}").content.decode("utf-8", "replace")
+            self.ok("DANH SÁCH khoảng [hôm qua→hôm nay] chứa hôm nay → LIVE máy KK",
+                    "kho lịch sử" not in d3 and "trực tiếp máy KK" in d3)
+            d4 = cl.get(f"/banle/ban-hang/danh-sach/?d1={tuan}&d2={qua}").content.decode("utf-8", "replace")
+            self.ok("DANH SÁCH khoảng trọn quá khứ → kho lịch sử, nhãn ở CHÂN popup", "kho lịch sử" in d4
+                    and d4.index("kho lịch sử") > d4.index("khbl-modal__foot"))
 
         # KK tuyệt đối không bị đụng: kênh hist KHÔNG được trỏ 206
         from django.conf import settings

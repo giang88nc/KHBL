@@ -174,8 +174,9 @@ DS_TRAN = 2000   # trần dòng popup DANH SÁCH — chạm trần thì popup c�
 def danh_sach(d1, d2, *, emp_id="", khach="", trang_thai="", c=None, limit=DS_TRAN):
     """Danh sách hóa đơn BÁN theo KHOẢNG NGÀY [d1, d2] + lọc NV / khách / trạng thái — popup
     DANH SÁCH (thiết kế lại 07/09/2026). Trả (rows, thong_ke).
-    Nguồn: d1 quá khứ → kho lịch sử, d1 = hôm nay → live (KK chết → lùi về kho) — cùng quy ước
-    services.hoa_don_loc. Khoảng ngày chỉ dùng tham số, không ghép chuỗi vào SQL."""
+    Nguồn (GĐ chốt 07/09/2026): khoảng CÓ CHỨA hôm nay → KK live (KK chết → lùi về kho); khoảng
+    TRỌN quá khứ → kho lịch sử — quy tắc chung `hist_read.la_qua_khu(d1, d2)`.
+    Khoảng ngày chỉ dùng tham số, không ghép chuỗi vào SQL."""
     emp_id, key = (emp_id or "").strip(), (khach or "").strip()
     tt = (trang_thai or "").strip().upper()
     sql = (f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.PayAmount, "
@@ -194,7 +195,7 @@ def danh_sach(d1, d2, *, emp_id="", khach="", trang_thai="", c=None, limit=DS_TR
         rows = c.query(sql, args)
     else:
         from apps.pmv import hist_read as HR
-        rows = HR.doc(lambda cl: cl.query(sql, args), ngay_iso=d1, tag="ds_hoa_don")
+        rows = HR.doc(lambda cl: cl.query(sql, args), ngay_iso=d1, den_iso=d2, tag="ds_hoa_don")
     return rows, thong_ke_ds(rows)
 
 
