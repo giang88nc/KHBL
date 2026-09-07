@@ -455,6 +455,14 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
   KK** (`cart.nap(B.doc)`) hoặc rỗng (Ins hỏng) + toast lỗi — không bao giờ để giỏ lệch KK âm thầm. Giỏ trống
   mà đang có đơn W → `huy` đơn (đơn W không món vô nghĩa). Đơn đã C → không tự Upd (luật 1, chờ MỞ LẠI).
   ĐƠN MỚI chỉ dọn session — đơn W cũ **vẫn nằm trên KK** = "đơn treo".
+- **TOAST & Ô LỖI (GĐ chốt 08/09/2026)**: toast TỰ ẨN — lỗi **60s**, cảnh báo 8s, thành công 5s, bấm vào là đóng
+  (`hanToast` trong khbl.js, áp cho cả toast server render OOB `#toast-root` lẫn `showToast`). Lỗi thiếu dữ liệu →
+  server gửi selector `loi_o` (`_kiem_truoc_khi_luu` trả `(msg, "#o-nv" | ".khbl-scan__in")`) → `khblFocusLoi(sel)`
+  FOCUS + rung + viền đỏ nhấp nháy 3s (`.khbl-loi-nhay`), autofocus ô quét nhường chỗ khi đang báo lỗi. ⚠ 2 BẪY:
+  (1) **script trong `_ban_oob.html` PHẢI nằm TRONG một mảnh OOB** (đặt trong `#toast-root`) — nút bán hàng dùng
+  `hx-swap="none"` nên phần thân ngoài OOB không được swap → script ngoài không bao giờ chạy; (2) **htmx settle
+  (~20ms sau swap) chép lại attribute `class` từ HTML server** → class thêm bằng JS ngay sau swap bị xóa →
+  `khblFocusLoi` tự trễ 80ms. `escapejs` đổi `-` thành `-` (smoke phải so chuỗi đã escape).
 - **GĐ chốt 2 — xóa đơn ĐÃ THANH TOÁN = 2 bước, 2 xác nhận**: `bill.huy` **từ chối đơn C** (không tự chuỗi
   như app); bước 1 = **🔒 mở khóa bằng passcode** cạnh mã đơn (`ban_mo_lai`, 07/09 thay nút ↩ HỦY THANH TOÁN) →
   về W → bước 2 = nút **🗑 XÓA ĐƠN (2/2)** ở chân trang (disable khi còn khóa).

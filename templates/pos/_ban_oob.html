@@ -8,6 +8,10 @@
   {% if loi_phieu %}<div class="error">{{ loi_phieu }}</div>{% endif %}
   {% if tin %}<div class="success">{{ tin }}</div>{% endif %}
   {% include "partials/messages.html" %}
+  {% comment %}⚠ Script PHẢI nằm TRONG một mảnh OOB (đây: #toast-root) — hầu hết nút bán hàng dùng hx-swap="none"
+  nên phần thân ngoài OOB KHÔNG được swap → script đặt ngoài không bao giờ chạy (bẫy 08/09/2026).{% endcomment %}
+  {% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
+  {# lỗi thiếu dữ liệu (08/09/2026): FOCUS + rung ô đang thiếu — selector do view gửi (loi_o) #}
+  {% if loi_o %}<script>window.khblFocusLoi && window.khblFocusLoi("{{ loi_o|escapejs }}");</script>{% endif %}
+  {% if in_luon %}<script>window.htmx && htmx.ajax("GET", "{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&in=1", {target: "#modal-root", swap: "innerHTML"});</script>{% endif %}
 </div>
-{% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
-{% if in_luon %}<script>window.htmx && htmx.ajax("GET", "{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&in=1", {target: "#modal-root", swap: "innerHTML"});</script>{% endif %}

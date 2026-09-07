@@ -247,8 +247,11 @@ class Command(BaseCommand):
 
             # chưa chọn nhân viên thì phải chặn
             cl.post("/banle/ban-hang/dat/", {"emp": ""})
-            self.ok("C5 chưa chọn nhân viên thì KHÔNG cho thanh toán",
-                    "Chưa chọn nhân viên" in body(cl.post("/banle/ban-hang/thanh-toan/")))
+            b5 = body(cl.post("/banle/ban-hang/thanh-toan/"))
+            self.ok("C5 chưa chọn nhân viên thì KHÔNG cho thanh toán + lệnh FOCUS ô NV (08/09)",
+                    "Chưa chọn nhân viên" in b5 and 'khblFocusLoi("' in b5
+                    and "nv" in b5.split('khblFocusLoi("')[1][:24],   # "#o-nv" (escapejs đổi '-')
+                    self._trich(b5))
             cl.post("/banle/ban-hang/dat/", {"emp": NV})
 
             b = body(cl.post("/banle/ban-hang/thanh-toan/"))

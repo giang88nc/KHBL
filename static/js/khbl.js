@@ -91,6 +91,21 @@
     var label = document.querySelector("#kh-save-btn [data-save-label]");
     if (label) label.textContent = "LƯU KHÁCH";
   });
+  /* Toast TỰ ẨN (GĐ chốt 08/09/2026): lỗi 60s · cảnh báo 8s · thành công 5s. Áp cho CẢ toast do server
+     render qua OOB #toast-root (trước đây đứng mãi tới lần swap kế) lẫn toast JS tạo. Bấm vào toast = đóng ngay. */
+  function hanToast(item) {
+    if (!item || item.dataset.toast) return;
+    item.dataset.toast = "1";
+    var ms = item.classList.contains("error") ? 60000 : item.classList.contains("warning") ? 8000 : 5000;
+    item.title = "Bấm để đóng";
+    item.addEventListener("click", function () { item.remove(); });
+    setTimeout(function () { if (item.parentNode) { item.style.transition = "opacity .4s"; item.style.opacity = "0"; setTimeout(function () { item.remove(); }, 420); } }, ms);
+  }
+  function bindToast(root) {
+    var r = document.getElementById("toast-root");
+    if (!r) return;
+    Array.prototype.forEach.call(r.children, hanToast);
+  }
   function showToast(text, tone) {
     var root = document.getElementById("toast-root");
     if (!root || !text) return;
@@ -99,8 +114,26 @@
     item.setAttribute("role", "status");
     item.textContent = text;
     root.appendChild(item);
-    setTimeout(function () { if (item.parentNode) item.remove(); }, tone === "warning" ? 8000 : 5000);
+    hanToast(item);
   }
+
+  /* FOCUS ô đang thiếu/lỗi + hiệu ứng rung & viền đỏ 3s (server gửi selector qua _ban_oob loi_o) */
+  window.khblFocusLoi = function (sel, _lan2) {
+    // ⚠ htmx SETTLE (20ms sau swap) chép lại attribute class từ HTML server → class thêm sớm bị xóa.
+    // Chạy trễ 80ms để hiệu ứng sống sau settle.
+    if (!_lan2) { setTimeout(function () { window.khblFocusLoi(sel, true); }, 80); return; }
+    var el = null;
+    try { el = document.querySelector(sel); } catch (_) { return; }
+    if (!el) return;
+    var box = el.closest(".pg-f, .pg-scan, .pg-doi-nhap, label") || el;
+    [el, box].forEach(function (x) { x.classList.remove("khbl-loi-nhay"); });
+    // reflow để animation chạy lại khi lỗi lặp
+    void el.offsetWidth;
+    [el, box].forEach(function (x) { x.classList.add("khbl-loi-nhay"); });
+    try { el.focus({ preventScroll: false }); el.select && el.select(); } catch (_) {}
+    if (el.scrollIntoView) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setTimeout(function () { [el, box].forEach(function (x) { x.classList.remove("khbl-loi-nhay"); }); }, 3200);
+  };
   document.addEventListener("khachSaved", function (e) {
     var detail = e.detail || {};
     window.closeKhblModal();
@@ -390,8 +423,10 @@
     bindModal(root);
     bindQR(root);
     bindAnh(root);
+    bindToast(root);
+    // KHÔNG cướp focus khi vừa có lỗi cần chú ý (khblFocusLoi đã đặt focus vào ô thiếu)
     var f = root.querySelector("[data-autofocus]");
-    if (f) { try { f.focus(); f.select && f.select(); } catch (_) {} }
+    if (f && !document.querySelector(".khbl-loi-nhay")) { try { f.focus(); f.select && f.select(); } catch (_) {} }
   };
   document.addEventListener("DOMContentLoaded", function () { window.khblBind(document); batDongHo(); });
   document.addEventListener("htmx:afterSwap", function (e) { window.khblBind(e.target); });

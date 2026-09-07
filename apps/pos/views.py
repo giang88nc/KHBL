@@ -745,15 +745,16 @@ def ban_mo_lai(request):
 
 
 def _kiem_truoc_khi_luu(request, g, ph):
+    """Trả (thông điệp, selector ô đang thiếu) — selector để JS FOCUS + rung ô đó (GĐ 08/09/2026)."""
     if not g["ban"] and not g["doi"]:
-        return "Phiếu chưa có món nào"
+        return "Phiếu chưa có món nào — quét tem hoặc gõ mã hàng", ".khbl-scan__in"
     if not ph["user_id"]:
-        return "Tài khoản web chưa gắn với tài khoản PMV — vào trang Hệ thống đồng bộ lại"
+        return "Tài khoản web chưa gắn với tài khoản PMV — vào trang Hệ thống đồng bộ lại", ""
     if not ph["till_id"]:
-        return "Tài khoản chưa gắn KÉT — không ghi sổ quỹ được"
+        return "Tài khoản chưa gắn KÉT — không ghi sổ quỹ được", ""
     if not g.get("emp"):
-        return "Chưa chọn nhân viên bán"
-    return ""
+        return "Chưa chọn nhân viên bán", "#o-nv"
+    return "", ""
 
 
 @require_POST
@@ -761,9 +762,9 @@ def ban_thanh_toan(request):
     """Lưu phiếu rồi CHỐT. GĐ chốt 03/09/2026: hóa đơn mới luôn mang ngày HÔM NAY."""
     g = cart.get(request)
     ph = _phien(request)
-    loi = _kiem_truoc_khi_luu(request, g, ph)
+    loi, o_loi = _kiem_truoc_khi_luu(request, g, ph)
     if loi:
-        return _loi(request, loi)
+        return _loi(request, loi, {"loi_o": o_loi})
     c = S.client("thanh_toan")
     now = datetime.datetime.now()
     try:
@@ -1385,8 +1386,12 @@ def hoa_don_huy(request):
     action = (request.POST.get("action") or "").strip()
     passcode = request.POST.get("passcode") or ""
     if not _passcode_dung(request, passcode):
+        # Trả 200 để HTMX thay chính popup bằng cảnh báo; HTTP 403 bị HTMX xem là
+        # lỗi transport nên người dùng không nhìn thấy thông báo nhập sai.
         return render(request, "pos/_hoa_don_xac_nhan.html", {"trn_id": trn_id, "loai": loai,
-            "action": action, "loi": "Passcode không đúng. Hành động chưa được thực hiện."}, status=403)
+            "action": action, "bill_code": (request.POST.get("bill_code") or trn_id).strip(),
+            "action_name": "Hủy thanh toán" if action == "thanh_toan" else "Hủy hóa đơn",
+            "loi": "Passcode không đúng. Hành động chưa được thực hiện."})
     if action not in ("thanh_toan", "hoa_don") or loai not in ("BAN", "BAN_DOI", "THAU") or not trn_id:
         return HttpResponse("Yêu cầu hủy không hợp lệ.", status=400)
     try:
