@@ -1,13 +1,17 @@
 {% extends "base.html" %}{% load static pos_extras %}
 {% block title %}Bảng giá{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/bang_gia.css' %}?v=20260906.4">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/bang_gia.css' %}?v=20260907.pmv1">{% endblock %}
 {% block page_title %}Bảng giá vàng{% endblock %}
 {% block page_sub %}Sửa giá trực tiếp, ghim loại vàng và cập nhật cùng một lần.{% endblock %}
 {% block page_tools %}
+<button class="khbl-btn khbl-btn--gold pg-gia__sync" type="button" hx-get="{% url 'pos:gia_sync_pmv_report_xem' %}" hx-target="#modal-root">⇩ SYNC PMV REPORT</button>
+<button class="khbl-btn khbl-btn--outline pg-gia__sync" type="button" hx-get="{% url 'pos:gia_sync_kk_xem' %}" hx-target="#modal-root">⇩ SYNC KK → MySQL</button>
 <a class="khbl-btn" href="{% url 'pos:bang_gia' %}">↻ Tải lại</a>
 {% endblock %}
 {% block content %}
 <div class="pg-gia">
+  <div id="gia-pmv-report-status" class="pg-gia__kk-wrap" data-price-sync-status data-status-url="{% url 'pos:gia_pmv_report_trang_thai' %}" role="status">Đang kiểm tra nguồn PMV Report…</div>
+  <div id="gia-kk-status" class="pg-gia__kk-wrap" data-status-url="{% url 'pos:gia_kk_trang_thai' %}" role="status">Đang kiểm tra chênh lệch giá với KK…</div>
   {% if price_error %}<div class="pg-gia__error" role="alert">{{ price_error }}</div>{% endif %}
   {% if last_batch %}
   <div class="pg-gia__result {% if last_batch.status == 'synced' %}pg-gia__result--ok{% endif %}" role="status">
@@ -61,4 +65,4 @@
   <div class="pg-gia-preview__viewport"><div class="pg-gia-preview__stage"><iframe id="gia-preview-frame" title="Bảng giá vàng Kim Hạnh II" width="1280" height="520"></iframe></div></div>
 </dialog>
 {% endblock %}
-{% block extra_js %}<script defer src="{% static 'js/bang_gia.js' %}?v=20260906.4"></script>{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/bang_gia.js' %}?v=20260907.pmv1"></script>{% endblock %}

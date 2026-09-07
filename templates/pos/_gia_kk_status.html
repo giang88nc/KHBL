@@ -1,0 +1,7 @@
+{% if loi %}
+<div class="pg-gia__kk-status pg-gia__kk-status--error"><b>Không kiểm tra được KK</b><span>{{ loi }}</span></div>
+{% elif changes or issues %}
+<div class="pg-gia__kk-status pg-gia__kk-status--warn"><b>⚠ KK lệch {{ changes|length }} loại giá{% if issues %} · {{ issues|length }} dòng chưa thể SYNC{% endif %}</b><span>Đã kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }} · bấm SYNC để xem và duyệt từng thay đổi.</span></div>
+{% else %}
+<div class="pg-gia__kk-status pg-gia__kk-status--ok"><b>✓ Giá KK và MySQL đang khớp</b><span>{{ matched }} loại · kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }}</span></div>
+{% endif %}

@@ -1,0 +1,21 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_style %}width:min(960px,96vw){% endblock %}
+{% block modal_title %}SYNC PMV Report → MySQL{% endblock %}
+{% block modal_body %}
+  {% if loi %}
+    <div class="khbl-alert khbl-alert--do"><div><b>Không thể chuẩn bị SYNC</b>{{ loi }}</div></div>
+  {% else %}
+    <div class="pg-gia-sync__source"><b>Nguồn chính: PMV Report</b><span><code>log_product → pmv_report.gold_prices</code> · dữ liệu {{ source_updated_at|date:"H:i:s d/m/Y" }}</span></div>
+    {% if issues %}<div class="khbl-alert khbl-alert--do"><div><b>{{ issues|length }} vấn đề cần xử lý</b>{% for issue in issues %}{{ issue }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+    {% if changes %}
+    <p class="pg-gia-sync__lead">Duyệt để ghi <b>{{ changes|length }} loại giá</b> từ bảng giá UPSERT chính vào lịch sử <code>khj_bl.gold_prices</code>. Lần SYNC này không ghi lên PMV/KK.</p>
+    <div class="pg-gia__scroll"><table class="khbl-tbl pg-gia-sync__table"><thead><tr><th>Loại vàng</th><th>Nguồn / thời điểm</th><th class="right">MySQL local</th><th class="right">PMV Report</th></tr></thead><tbody>
+      {% for r in changes %}<tr><td><b>{{ r.gold_name }}</b><small>{{ r.gold_type }} · /{{ r.unit }}</small></td><td><span class="mono">{{ r.source }}</span><small>{{ r.effective_at|date:"H:i:s d/m/Y" }}</small></td><td class="right num">{% if r.old_id %}<span class="pg-gia__buy">{{ r.old_buy|tien_tran }}</span> / {{ r.old_sell|tien_tran }}{% else %}<span class="dim">Chưa có</span>{% endif %}</td><td class="right num"><span class="pg-gia__buy">{{ r.buy|tien_tran }}</span> / {{ r.sell|tien_tran }}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="pg-gia-sync__empty"><b>MySQL local đã khớp nguồn PMV Report.</b><span>{{ matched }} loại giá hiện hành · không có dữ liệu cần ghi.</span></div>{% endif %}
+  {% endif %}
+{% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  {% if changes and not issues %}<form method="post" action="{% url 'pos:gia_sync_pmv_report_ap_dung' %}" hx-post="{% url 'pos:gia_sync_pmv_report_ap_dung' %}" hx-target="#modal-root">{% csrf_token %}<input type="hidden" name="sync_token" value="{{ token }}"><button class="khbl-btn khbl-btn--gold" type="submit">DUYỆT SYNC {{ changes|length }} LOẠI</button></form>{% endif %}
+{% endblock %}

@@ -1,5 +1,6 @@
 """Kiểm tra dữ liệu giá, lịch sử, chống lặp/lạc hậu và đồng bộ lỗi trên DB riêng."""
 from contextlib import nullcontext
+from datetime import datetime
 from decimal import Decimal
 from unittest import TestCase as UnitTestCase
 from unittest.mock import patch
@@ -144,6 +145,24 @@ class PriceSaveTests(TransactionTestCase):
         with connection.cursor() as c:
             c.execute('SELECT COUNT(*) FROM gold_prices')
             self.assertEqual(c.fetchone()[0], 2)
+
+    def test_pmv_report_sync_creates_local_history_without_mssql_write(self):
+        source = [{
+            'gold_type': '610', 'gold_name': 'Vàng 610', 'buy': 8200000, 'sell': 8700000,
+            'effective_at': datetime(2026, 9, 7, 8, 49, 24), 'source': 'PUBLIC_GOLD:ketoan',
+        }]
+        with patch('apps.pos.prices._pmv_report_source_rows', return_value=source):
+            preview = prices.pmv_report_sync_preview()
+            self.assertEqual(len(preview['changes']), 1)
+            token = prices.pmv_report_sync_token(preview, self.user.pk)
+            self.assertEqual(prices.apply_pmv_report_sync(token, self.user), 1)
+        current = prices.current_rows()[0]
+        self.assertEqual(int(current['buy']), 8200000)
+        self.assertEqual(int(current['sell']), 8700000)
+        with connection.cursor() as c:
+            c.execute('SELECT source,is_current FROM gold_prices ORDER BY id')
+            self.assertEqual(c.fetchall(), [('fixture', 0), ('pmv_report:PUBLIC_GOLD:ketoan', 1)])
+        self.sync.assert_not_called()
 
     def test_stale_form_and_stale_retry_are_rejected(self):
         stale_form = self.form()

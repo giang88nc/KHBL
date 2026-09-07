@@ -1,6 +1,18 @@
 (() => {
   const form = document.getElementById('gia-form');
   if (!form) return;
+  document.querySelectorAll('[data-status-url]').forEach(syncStatus => {
+    const checkSource = async () => {
+      try {
+        const response = await fetch(syncStatus.dataset.statusUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+        syncStatus.innerHTML = await response.text();
+      } catch (_) {
+        syncStatus.innerHTML = '<div class="pg-gia__kk-status pg-gia__kk-status--error"><b>Không kiểm tra được nguồn giá</b><span>Hệ thống sẽ thử lại sau 10 phút.</span></div>';
+      }
+    };
+    checkSource();
+    window.setInterval(checkSource, 10 * 60 * 1000);
+  });
   const rows = [...form.querySelectorAll('[data-price-row]')];
   const format = value => new Intl.NumberFormat('vi-VN').format(value);
   const amount = value => /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(value.trim()) ? Number(value.replace(/\./g, '')) : NaN;
