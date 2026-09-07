@@ -67,6 +67,6 @@
         <tr class="gdb-a5__store-final"><th>TỔNG:</th><td class="{% if r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}</td></tr>
       </tbody></table>
     </aside>
-    <footer class="gdb-a5__store-footer">{{ r.TrnTime }}, ngày {{ r.TrnDate|date:"d" }} tháng {{ r.TrnDate|date:"m" }} năm {{ r.TrnDate|date:"Y" }} <i>|</i> NV: <b>{{ r.EmpName|default:"" }}</b></footer>
+    <footer class="gdb-a5__store-footer">{{ r.TrnTime }}, ngày {{ r.TrnDate|date:"d" }} tháng {{ r.TrnDate|date:"m" }} năm {{ r.TrnDate|date:"Y" }} <i>|</i> Bán: <b>{{ r.EmpName|default:"" }}</b>{% if emp_sup_name %} <i>|</i> Hỗ trợ: <b>{{ emp_sup_name }}</b>{% endif %}</footer>
   </section>
 </article>

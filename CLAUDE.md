@@ -314,8 +314,26 @@ giấy GĐB đã in sẵn, chỉ in nội dung, chữ đen viền xám); (b) **T
 postMessage ready/done về trang mẹ để đếm lần in (`ban_in_dem`) và gỡ iframe. ⚠ Hộp thoại in của trình duyệt KHÔNG
 bỏ được bằng JS — muốn in thẳng ra máy in mặc định, chạy Chrome với cờ **`--kiosk-printing`** (shortcut máy quầy).
 Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
-(Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.) 3 hành động trên
-đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
+(Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.)
+
+**BẢNG `gold_bill` + NV HỖ TRỢ (GĐ chốt 08/09/2026)** — model `GoldBill` (migration pos-0005), thuật toán
+**`apps/pos/gold_bill.py`**. 1 dòng = 1 đơn (unique `trn_id`). KHÔNG phải bản sao KK (HIST đã có) — vai trò: (1) dữ
+liệu KK không có chỗ: **`emp_sup_id` NV hỗ trợ**, tách **tiền mặt/CK/thẻ + bank_id**, `so_lan_in`, `user_web`; (2)
+tra cứu/thống kê nhanh; (3) `items`/`doi` JSON = ảnh chụp dòng hàng, `ma_sp` để LIKE. Cột tiền: vàng mới/cũ/thêm/công
+thêm/bớt/cọc/`tong`(=PayAmount); `status` W/C, `is_del` (KK xóa → đánh dấu, không xóa dòng), `kk_upd`, `synced_at`,
+`nguon` KHBL/PMV. **KK là sự thật, ghi SAU khi KK OK, MySQL lỗi → log không chặn bán.** Ghi xuyên tại: `don.dong_bo`
+(W, sau Ins/Upd — vân tay giỏ nay GỒM emp_sup + cách thanh toán; đổi riêng phần app-only → chỉ ghi gold_bill, không
+gọi KK: `van_tay_kk` vs `van_tay`, cờ `_fp_kk`) · `ban_thanh_toan` (C) · `ban_thuc_hien` sua/huy_tt (W) · huy_hd +
+`ban_huy` (is_del) · `ban_in_dem` (so_lan_in). Làm tươi: `ban_mo` (nạp lại emp_sup/pay/bank vào giỏ vì KK không giữ
++ `lam_tuoi_tu_kk`), `ban_ds` hôm nay (`lam_tuoi_ds`); **job 60' `sync_gold_bill`** (`doi_soat_hom_nay`: đơn PMV tạo
+→ dòng nguon=PMV, đổi status, xóa). Chỉ áp dụng từ ngày bật — KHÔNG backfill (GĐ chốt). **NV HỖ TRỢ**: ô `#o-nvsup`
+sau NV bán (gợi ý `ban_tim_nv?muc=sup`, `_nv_goiy` đổi hx-vals), **không được trùng NV bán** (ban_dat 2 chiều +
+`_kiem_truoc_khi_luu` → focus ô lỗi), không lên KK; giai đoạn GHI NHẬN: popup DANH SÁCH thêm cột HỖ TRỢ + chân popup
+"Hỗ trợ: Tên N đơn · tổng" (`thong_ke_ho_tro`, chỉ đơn C không xóa); **GĐB phần tiệm giữ**: "giờ, ngày … | Bán: X |
+Hỗ trợ: Y" (`emp_sup_name` ctx `hoa_don_chi_tiet`). Smoke 95 (C3b/c/d, C8g, C10b/c/d, C12i; tự dọn dòng gold_bill
+sinh trong lúc smoke). ⚠ Chạy `sync_gold_bill` tay khi đích=kk sẽ đánh is_del các dòng sandbow (bình thường).
+
+3 hành động trên đơn chốt đi qua **POPUP XÁC NHẬN CHUNG**
 `_xac_nhan_modal.html` (`ban_xac_nhan/<sua|huy_tt|huy_hd>` GET → `ban_thuc_hien/<…>` POST; bảng `HANH_DONG` trong
 views): hiện HÀNH ĐỘNG · mã HĐ · khách · NGƯỜI THAO TÁC + giờ · HẬU QUẢ từng loại · passcode. Ngữ nghĩa: **sua** =
 hoàn két → nháp, Ở LẠI form sửa rồi thanh toán lại · **huy_tt** = hoàn két → nháp, form trắng, đơn nằm DS CHỜ ·

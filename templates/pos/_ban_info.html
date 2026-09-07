@@ -33,6 +33,24 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
     {% endif %}
   </div>
 
+  {# ── NV HỖ TRỢ (GĐ chốt 08/09/2026): giống NV bán, chỉ lưu gold_bill (không lên KK), không được trùng NV bán ── #}
+  <div class="pg-f pg-f--tim pg-f--sup">
+    <span>NV hỗ trợ</span>
+    {% if g.emp_sup %}
+      <div class="pg-chon pg-chon--sup">
+        <b>{{ ten_nv_sup|default:g.emp_sup }}</b>
+        {% if not phieu_chot %}<button class="pg-chon__x" type="button" title="Bỏ NV hỗ trợ"
+                hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp_sup": ""}' hx-swap="none">×</button>{% endif %}
+      </div>
+    {% else %}
+      <input id="o-nvsup" class="khbl-input" autocomplete="off" placeholder="gõ tên (nếu có)"
+             {% if phieu_chot %}disabled title="Đơn đang khóa"{% endif %}
+             hx-get="{% url 'pos:ban_tim_nv' %}?muc=sup" hx-trigger="focus, keyup changed delay:200ms"
+             hx-target="#nvsup-goiy" name="q">
+      <div id="nvsup-goiy" class="pg-goiy"></div>
+    {% endif %}
+  </div>
+
   {# ── khách hàng: tên / SĐT / CCCD — nút +THÊM gắn liền input ── #}
   <div class="pg-f pg-f--tim pg-f--khach">
     <span>Khách hàng</span>

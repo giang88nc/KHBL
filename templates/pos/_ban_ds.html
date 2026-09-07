@@ -15,6 +15,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
   {% if nguon_hist %}<span class="pg-ds__nguon">📚 kho lịch sử · tới {{ hist_asof|date:"d/m H:i"|default:"—" }}{% if nguon_ly_do == 'failover' %} · KK không đọc được{% endif %}</span>
   {% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}
   <i>{{ tk.so }} hóa đơn</i>
+  {% if tk_ho_tro %}<i class="pg-ds__ht" title="NV hỗ trợ — giai đoạn ghi nhận: số đơn đã chốt · tổng khách trả (gold_bill)">Hỗ trợ: {% for k, v in tk_ho_tro.items %}<b>{{ v.ten }}</b> {{ v.so }} đơn · {{ v.tong|tien_tran }}{% if not forloop.last %} · {% endif %}{% endfor %}</i>{% endif %}
 </span>
 <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
 {% endblock %}
@@ -64,7 +65,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
   {% endif %}
   <table class="pg-tb pg-tb--ds">
     <thead><tr>
-      <th>{% if nhieu_ngay %}NGÀY · {% endif %}GIỜ</th><th>SỐ HÓA ĐƠN</th><th>KHÁCH</th><th>NHÂN VIÊN</th>
+      <th>{% if nhieu_ngay %}NGÀY · {% endif %}GIỜ</th><th>SỐ HÓA ĐƠN</th><th>KHÁCH</th><th>NHÂN VIÊN</th><th>HỖ TRỢ</th>
       <th class="r">VÀNG MỚI</th><th class="r">VÀNG CŨ</th><th class="r">TIỀN BỚT</th><th class="r">TIỀN CỌC</th>
       <th class="r pg-ds__th-tra">KHÁCH TRẢ</th><th>TRẠNG THÁI</th><th></th>
     </tr></thead>
@@ -75,6 +76,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
         <td class="mono b">{{ b.BillCode|default:b.TrnID }}</td>
         <td>{{ b.CustName|default:"—" }}{% if b.Phone %} <i class="pg-tb__phu">{{ b.Phone }}</i>{% endif %}</td>
         <td>{{ b.EmpName|default:"—" }}</td>
+        <td class="dim">{{ b.ho_tro|default:"—" }}</td>
         <td class="r mono">{{ b.SellTotalAmount|tien_tran }}</td>
         <td class="r mono dim">{{ b.BuyTotalAmount|tien_tran }}</td>
         <td class="r mono dim">{{ b.Discount|tien_tran }}</td>
@@ -89,7 +91,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="11" class="pg-tb__trong"><span>Không có hóa đơn nào khớp bộ lọc</span></td></tr>
+      <tr><td colspan="12" class="pg-tb__trong"><span>Không có hóa đơn nào khớp bộ lọc</span></td></tr>
       {% endfor %}
     </tbody>
   </table>

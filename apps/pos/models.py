@@ -77,6 +77,52 @@ class BillAudit(models.Model):
         return self.TEN.get(self.action, self.action)
 
 
+class GoldBill(models.Model):
+    """`gold_bill` — 1 dòng = 1 ĐƠN BÁN (khóa TrnID), GĐ chốt 08/09/2026. KHÔNG phải bản sao KK (HIST đã có):
+    vai trò = (1) dữ liệu KK KHÔNG có chỗ: NV HỖ TRỢ, tách tiền mặt/CK/thẻ, TK ngân hàng, số lần in, user web;
+    (2) tra cứu/thống kê nhanh không đụng KK; (3) `items`/`doi` = ẢNH CHỤP dòng hàng để hiển thị, không phải sự thật.
+    KK vẫn là sự thật: ghi SAU khi KK OK (write-through), MySQL lỗi → log, không chặn bán; làm tươi khi xem +
+    job đối soát 60'. Chỉ áp dụng từ ngày bật (không backfill). Đơn KK xóa → is_del=1 (không xóa dòng)."""
+
+    trn_id = models.CharField(max_length=20, unique=True)
+    bill_code = models.CharField(max_length=30, blank=True, default="", db_index=True)
+    trn_date = models.DateField(null=True, blank=True, db_index=True)
+    trn_time = models.CharField(max_length=8, blank=True, default="")
+    nguon = models.CharField(max_length=8, default="KHBL")           # KHBL (web) / PMV (đối soát thấy)
+    emp_id = models.CharField(max_length=20, blank=True, default="", db_index=True)
+    emp_sup_id = models.CharField("NV hỗ trợ", max_length=20, blank=True, default="", db_index=True)
+    cust_id = models.CharField(max_length=20, blank=True, default="")
+    cust_name = models.CharField(max_length=200, blank=True, default="")
+    cust_phone = models.CharField(max_length=30, blank=True, default="")
+    user_web = models.CharField(max_length=150, blank=True, default="")
+    tien_vang_moi = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_vang_cu = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_vang_them = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_cong_them = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_bot = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_coc = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tong = models.DecimalField("Khách trả (PayAmount)", max_digits=18, decimal_places=0, default=0)
+    pay_method = models.CharField(max_length=8, default="cash")     # cash / bank / card
+    tien_mat = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_ck = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    tien_the = models.DecimalField(max_digits=18, decimal_places=0, default=0)
+    bank_id = models.CharField(max_length=20, blank=True, default="")
+    items = models.JSONField(default=list, blank=True)               # ảnh chụp món bán
+    doi = models.JSONField(default=list, blank=True)                 # ảnh chụp dẻ (ngang/thâu)
+    ma_sp = models.TextField(blank=True, default="")                 # "MA1 MA2 …" để LIKE
+    status = models.CharField(max_length=2, default="W", db_index=True)   # W / C
+    is_del = models.BooleanField(default=False)
+    kk_upd = models.CharField("TrnDateTime_Upd lúc đồng bộ", max_length=40, blank=True, default="")
+    so_lan_in = models.PositiveIntegerField(default=0)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "gold_bill"
+        ordering = ["-trn_date", "-trn_time"]
+
+
 class PriceBatch(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)

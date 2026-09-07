@@ -27,7 +27,7 @@ def _rong(emp=""):
     return {"trn_id": "", "bill_code": "", "status": "", "ngay": "", "cust": None, "emp": emp,
             "ban": [], "doi": [], "bot": "0", "cong_them": "0", "vang_them": "0",
             "coc": "0", "ghi_chu": "", "pay_method": "cash", "tien_mat": "",
-            "bank_id": "", "upd": "", "gio": ""}
+            "bank_id": "", "upd": "", "gio": "", "emp_sup": ""}
 
 
 def get(request):

@@ -198,6 +198,7 @@ def _ctx_pos(request, extra=None):
     ctx["don_hom_nay"] = (g.get("ngay") or ctx["hom_nay"]) == ctx["hom_nay"]
     ctx["khoa_ngay_cu"] = ctx["phieu_chot"] and not ctx["don_hom_nay"]
     ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
+    ctx["ten_nv_sup"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp_sup")), "")
     ctx.update(extra or {})
     return ctx
 
@@ -511,7 +512,15 @@ def ban_dat(request):
         g["cust"] = {"id": k["CustID"], "code": k["CustCode"], "name": k["CustName"],
                      "phone": k["Phone"] or "", "diem": str(M.dec(k["Diem"]))} if k else None
     if "emp" in request.POST:
-        g["emp"] = (request.POST.get("emp") or "").strip()
+        moi = (request.POST.get("emp") or "").strip()
+        if moi and moi == (g.get("emp_sup") or ""):
+            return _loi(request, "NV bán không được trùng NV hỗ trợ — chọn người khác", {"loi_o": "#o-nv"})
+        g["emp"] = moi
+    if "emp_sup" in request.POST:                  # NV HỖ TRỢ (08/09/2026) — chỉ lưu gold_bill, không lên KK
+        moi = (request.POST.get("emp_sup") or "").strip()
+        if moi and moi == (g.get("emp") or ""):
+            return _loi(request, "NV hỗ trợ không được trùng NV bán — chọn người khác", {"loi_o": "#o-nvsup"})
+        g["emp_sup"] = moi
     if "ghi_chu" in request.POST:
         g["ghi_chu"] = (request.POST.get("ghi_chu") or "").strip()[:200]
     for o in ("bot", "cong_them", "vang_them", "coc"):
@@ -583,7 +592,12 @@ def ban_tim_khach(request):
 
 
 def ban_tim_nv(request):
-    return render(request, "pos/_nv_goiy.html", {"ds": S.tim_nhan_vien(request.GET.get("q", ""))})
+    """Gợi ý NV. ?muc=sup → chọn vào ô NV HỖ TRỢ (loại người đang là NV bán), mặc định → NV bán."""
+    muc = "emp_sup" if request.GET.get("muc") == "sup" else "emp"
+    g = cart.get(request)
+    loai = g.get("emp") if muc == "emp_sup" else g.get("emp_sup")
+    ds = [e for e in S.tim_nhan_vien(request.GET.get("q", "")) if e["EmpID"] != (loai or "")]
+    return render(request, "pos/_nv_goiy.html", {"ds": ds, "muc": muc})
 
 
 def ban_tim_hang(request):
@@ -607,14 +621,22 @@ def ban_ds(request):
     loc = {"emp_id": (request.GET.get("emp_id") or "").strip(),
            "khach": (request.GET.get("khach") or "").strip(),
            "trang_thai": (request.GET.get("trang_thai") or "").strip().upper()}
+    from . import gold_bill as GB
     try:
         ds, tk = B.danh_sach(d1, d2, **loc)
         loi = ""
+        if d2 == hom_nay:                        # đơn hôm nay: làm tươi gold_bill theo KK khi mở DS (08/09)
+            GB.lam_tuoi_ds(ds)
     except Exception as exc:
         ds, tk, loi = [], B.thong_ke_ds([]), str(exc)
+    ids = [r["TrnID"] for r in ds]
+    ho_tro = GB.map_ho_tro(ids)
+    for r in ds:
+        r["ho_tro"] = ho_tro.get(r["TrnID"], "")
+    tk_ho_tro = GB.thong_ke_ho_tro(ids)
     return render(request, "pos/_ban_ds.html", {
         "ds": ds, "tk": tk, "d1": d1, "d2": d2, "hom_nay": hom_nay, "loc": loc,
-        "nvs": S.nhan_vien_ban(), "nhieu_ngay": d1 != d2, "loi": loi,
+        "nvs": S.nhan_vien_ban(), "nhieu_ngay": d1 != d2, "loi": loi, "tk_ho_tro": tk_ho_tro,
         "cham_tran": len(ds) >= B.DS_TRAN, "tran": B.DS_TRAN})
 
 
@@ -628,7 +650,21 @@ def ban_mo(request):
         return _loi(request, f"Không mở được hóa đơn: {exc}")
     if not phieu:
         return _loi(request, f"Không thấy hóa đơn {trn}")
-    cart.nap(request, phieu)
+    g = cart.nap(request, phieu)
+    # gold_bill (08/09/2026): nạp lại NV HỖ TRỢ + cách thanh toán (KK không giữ) và làm tươi dòng theo KK
+    from . import gold_bill as GB
+    from .models import GoldBill
+    gb = GoldBill.objects.filter(trn_id=trn).first()
+    if gb:
+        g["emp_sup"], g["pay_method"], g["bank_id"] = gb.emp_sup_id, gb.pay_method, gb.bank_id
+        if gb.pay_method != "cash" or gb.tien_mat:
+            g["tien_mat"] = str(gb.tien_mat)
+        cart.save(request, g)
+    GB.lam_tuoi_tu_kk(trn, phieu=phieu)
+    g = cart.get(request)
+    g["_fp"], g["_fp_kk"] = __import__("apps.pos.don", fromlist=["van_tay"]).van_tay(g), \
+        __import__("apps.pos.don", fromlist=["van_tay_kk"]).van_tay_kk(g)
+    cart.save(request, g)
     tin = f"Đã mở {phieu['bill_code'] or trn} · {phieu['ten_trang_thai']}"
     if not phieu["sua_duoc"]:
         tin += " — muốn sửa phải bấm MỞ LẠI."
@@ -720,13 +756,20 @@ def ban_thuc_hien(request, hanh_dong):
             B.huy(trn, user_id=ph["user_id"])
     except Exception as exc:
         return _loi(request, f"{hd['ten']} không được: {_loi_goi(exc)}", {"dong_modal": True})
+    from . import gold_bill as GB
+    emp_sup, pm, bank = g.get("emp_sup") or "", g.get("pay_method") or "cash", g.get("bank_id") or ""
     if hanh_dong == "sua":
-        cart.nap(request, B.doc(trn))
+        g2 = cart.nap(request, B.doc(trn))
+        g2["emp_sup"], g2["pay_method"], g2["bank_id"] = emp_sup, pm, bank   # phần app-only giữ qua mở lại
+        cart.save(request, g2)
+        GB.upsert_tu_gio(g2, status=B.NHAP, is_del=False, user=request.user)
         tin = f"Đã mở {ma} về NHÁP để sửa — sửa xong bấm THANH TOÁN lại."
     elif hanh_dong == "huy_tt":
+        GB.upsert_tu_gio(g, status=B.NHAP, is_del=False, user=request.user)
         cart.clear(request, giu_nv=False)
         tin = f"Đã HỦY THANH TOÁN {ma} — đơn về DANH SÁCH CHỜ."
     else:
+        GB.upsert_tu_gio(g, status=g.get("status"), is_del=True, user=request.user)
         cart.clear(request, giu_nv=False)
         tin = f"Đã HỦY HÓA ĐƠN {ma} — hàng trả về kho."
     return _pos_oob(request, {"tin": tin, "dong_modal": True})
@@ -754,6 +797,8 @@ def _kiem_truoc_khi_luu(request, g, ph):
         return "Tài khoản chưa gắn KÉT — không ghi sổ quỹ được", ""
     if not g.get("emp"):
         return "Chưa chọn nhân viên bán", "#o-nv"
+    if g.get("emp_sup") and g["emp_sup"] == g["emp"]:
+        return "NV hỗ trợ trùng NV bán — bỏ hoặc chọn người khác", "#o-nvsup"
     return "", ""
 
 
@@ -782,7 +827,12 @@ def ban_thanh_toan(request):
     _audit(request, g, "CHOT", note=f"khách trả {M.money_vn(kq['tong']['khach_tra'])}")
     # GĐ chốt 08/09/2026 (đổi so với 07/09): thanh toán xong GIỮ ĐƠN VỪA CHỐT trên form ở chế độ xem
     # (chỉ IN bật) — ＋ ĐƠN MỚI để bán khách kế. THANH TOÁN & IN → mở luôn popup Giấy đảm bảo.
-    cart.nap(request, B.doc(kq["trn_id"], c))
+    emp_sup, pm, bank, tm = g.get("emp_sup") or "", g.get("pay_method") or "cash", g.get("bank_id") or "", g.get("tien_mat") or ""
+    g2 = cart.nap(request, B.doc(kq["trn_id"], c))
+    g2["emp_sup"], g2["pay_method"], g2["bank_id"], g2["tien_mat"] = emp_sup, pm, bank, tm   # app-only giữ qua nap
+    cart.save(request, g2)
+    from . import gold_bill as GB
+    GB.upsert_tu_gio(g2, status=B.CHOT_ROI, is_del=False, user=request.user)       # ghi xuyên gold_bill
     tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
     return _pos_oob(request, {"tin": tin, "vua_chot": kq["trn_id"],
                               "in_luon": request.POST.get("in") == "1",
@@ -803,6 +853,8 @@ def ban_in_dem(request):
     lan = BillAudit.objects.filter(trn_id=trn, action="IN").count() + 1
     snap = g if trn == g.get("trn_id") else {"trn_id": trn}
     _audit(request, snap, "IN", version=lan)
+    from .models import GoldBill
+    GoldBill.objects.filter(trn_id=trn).update(so_lan_in=lan)
     if request.GET.get("im") == "1":          # THANH TOÁN & IN: đếm im lặng, không toast (GĐ 08/09)
         return HttpResponse(status=204)
     return _pos_oob(request, {"tin": f"Đã ghi nhận IN lần {lan} · {datetime.datetime.now():%H:%M} — "
@@ -822,6 +874,8 @@ def ban_huy(request):
         B.huy(trn, user_id=ph["user_id"])
     except Exception as exc:
         return _loi(request, f"Hủy không được: {_loi_goi(exc)}")
+    from . import gold_bill as GB
+    GB.upsert_tu_gio(g, status=g.get("status") or B.NHAP, is_del=True, user=request.user)
     cart.clear(request)
     return _pos_oob(request, {"tin": f"Đã hủy hóa đơn {g.get('bill_code') or trn} — hàng trả về kho."})
 
@@ -1381,6 +1435,9 @@ def hoa_don_chi_tiet(request):
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
         "co_vang_doi_thau": co_vang_doi_thau,
         "gdb_status": gdb_status,
+        # NV HỖ TRỢ (gold_bill, 08/09/2026) in ở chân phần tiệm giữ: "Bán: … | Hỗ trợ: …"
+        "emp_sup_name": __import__("apps.pos.gold_bill", fromlist=["ten_nv"]).ten_nv(
+            __import__("apps.pos.gold_bill", fromlist=["emp_sup_cua"]).emp_sup_cua(trn_id)) if loai != "THAU" else "",
     })
 
 

@@ -30,6 +30,11 @@ def _job_collect_behavior():
     call_command("collect_pmv_behavior")
 
 
+def _job_sync_gold_bill():
+    # Đối soát bảng gold_bill (MySQL) với KK cho đơn HÔM NAY — GĐ chốt 08/09/2026 (bắt đơn tạo/sửa/xóa từ PMVGoldRT)
+    call_command("sync_gold_bill")
+
+
 def _job_sync_hist():
     # Đồng bộ KK → kho lịch sử PMV_KH2_HIST (incremental) — 09:00 & 21:00 (GĐ chốt 06/09/2026)
     call_command("sync_hist", sync=True)
@@ -42,6 +47,8 @@ def start():
                       max_instances=1, coalesce=True, misfire_grace_time=3600)
     # Check KK + vân tay version DB vendor: CẦU CHÌ chống ghi sai khi vendor nâng cấp — giữ, giãn 60'
     scheduler.add_job(_job_check_pmv, IntervalTrigger(minutes=60), name="Check PMV 60 phút")
+    scheduler.add_job(_job_sync_gold_bill, IntervalTrigger(minutes=60), name="Đối soát gold_bill 60 phút",
+                      max_instances=1, coalesce=True)
     # Job thu thập hành vi 2 phút ĐÃ TẮT (GĐ chốt 06/09/2026) — việc học đã xong. Giữ code + nút tay:
     # ĐÁNH DẤU TRƯỚC (tự bật trace) → thao tác PMV → ĐÁNH DẤU SAU (tự tắt trace) → HỌC → quy trình mới.
     # Bật lại định kỳ nếu cần: bỏ dấu # dòng dưới.

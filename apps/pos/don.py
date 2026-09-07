@@ -30,13 +30,28 @@ def phien(request):
             "shop_id": tiem.get("ShopID") or ""}
 
 
-def van_tay(g):
-    """Những gì làm đổi hóa đơn trên KK (KHÔNG gồm cách thanh toán/bank — chỉ ở app)."""
+def van_tay_kk(g):
+    """Vân tay phần ghi lên KK (không gồm emp_sup / cách thanh toán)."""
     goc = {
         "ban": [(x["row"].get("ProductCode"), x["tien"]) for x in g["ban"]],
         "doi": [(x["row"].get("GoldCode"), x["row"].get("TotalGoldWeight"), x["row"].get("DiamondWeight"),
                  x["row"].get("BuyRate"), x["tien"]) for x in g["doi"]],
         "cust": (g.get("cust") or {}).get("id") or "", "emp": g.get("emp") or "",
+        "bot": g.get("bot"), "cong_them": g.get("cong_them"), "vang_them": g.get("vang_them"),
+        "coc": g.get("coc"), "ghi_chu": g.get("ghi_chu") or "",
+    }
+    return hashlib.sha1(json.dumps(goc, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def van_tay(g):
+    """Vân tay TOÀN giỏ = phần KK + phần app-only (emp_sup, cách thanh toán) → đổi gì cũng ghi gold_bill."""
+    goc = {
+        "ban": [(x["row"].get("ProductCode"), x["tien"]) for x in g["ban"]],
+        "doi": [(x["row"].get("GoldCode"), x["row"].get("TotalGoldWeight"), x["row"].get("DiamondWeight"),
+                 x["row"].get("BuyRate"), x["tien"]) for x in g["doi"]],
+        "cust": (g.get("cust") or {}).get("id") or "", "emp": g.get("emp") or "",
+        # emp_sup / tiền mặt-CK KHÔNG lên KK nhưng vẫn vào vân tay để gold_bill được ghi lại khi đổi
+        "emp_sup": g.get("emp_sup") or "", "pay": (g.get("pay_method"), g.get("tien_mat"), g.get("bank_id")),
         "bot": g.get("bot"), "cong_them": g.get("cong_them"), "vang_them": g.get("vang_them"),
         "coc": g.get("coc"), "ghi_chu": g.get("ghi_chu") or "",
     }
@@ -50,6 +65,13 @@ def dong_bo(request):
     if fp == g.get("_fp"):
         return None
     if g.get("status") == B.CHOT_ROI:          # đơn đã chốt: luật 1 — không tự Upd, chờ MỞ LẠI
+        return None
+    # chỉ đổi phần "app-only" (NV hỗ trợ / cách thanh toán) → không gọi KK, chỉ cập nhật gold_bill
+    if g.get("trn_id") and g.get("_fp_kk") and g["_fp_kk"] == van_tay_kk(g):
+        g["_fp"] = fp
+        cart.save(request, g)
+        from . import gold_bill as GB
+        GB.upsert_tu_gio(g, user=getattr(request, "user", None))
         return None
     ph = phien(request)
     trn = g.get("trn_id") or ""
@@ -95,8 +117,17 @@ def dong_bo(request):
             g["_fp"] = van_tay(g)
             cart.save(request, g)
         return f"Không ghi được đơn lên PMV: {loi}"
-    g.update(trn_id=kq["trn_id"], bill_code=kq["bill_code"], status=B.NHAP, _fp=fp)
+    g.update(trn_id=kq["trn_id"], bill_code=kq["bill_code"], status=B.NHAP, _fp=fp, _fp_kk=van_tay_kk(g))
+    try:                                           # mốc khóa mới sau Ins/Upd (cho kiem_moc + gold_bill)
+        g["upd"] = str(c.moc_khoa("TRN_RT_BUYSELL", "TrnID", kq["trn_id"]) or "")
+    except Exception:
+        pass
+    if not g.get("gio"):
+        g["gio"] = now.strftime("%H:%M")
     cart.save(request, g)
+    # ghi xuyên gold_bill (KK đã OK) — lỗi MySQL không chặn bán (GĐ chốt 08/09/2026)
+    from . import gold_bill as GB
+    GB.upsert_tu_gio(g, status=B.NHAP, is_del=False, user=getattr(request, "user", None))
     return None
 
 

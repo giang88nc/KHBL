@@ -1,9 +1,11 @@
-{% comment %}Gợi ý nhân viên bán — bấm là chọn (gõ TÊN GỌI, xem services.tim_nhan_vien){% endcomment %}
+{% comment %}Gợi ý nhân viên — bấm là chọn (gõ TÊN GỌI, xem services.tim_nhan_vien).
+muc = "emp" (NV bán) | "emp_sup" (NV HỖ TRỢ, 08/09/2026 — chỉ lưu gold_bill). View đã loại người đang ở ô kia.{% endcomment %}
 {% if ds %}
 <div class="pg-goiy__hop">
   {% for e in ds %}
   <button type="button" class="pg-goiy__i"
-          hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"emp": "{{ e.EmpID }}"}' hx-swap="none">
+          hx-post="{% url 'pos:ban_dat' %}" hx-swap="none"
+          {% if muc == "emp_sup" %}hx-vals='{"emp_sup": "{{ e.EmpID }}"}'{% else %}hx-vals='{"emp": "{{ e.EmpID }}"}'{% endif %}>
     <b>{{ e.EmpName }}</b>
   </button>
   {% endfor %}

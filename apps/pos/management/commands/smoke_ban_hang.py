@@ -27,6 +27,8 @@ class Command(BaseCommand):
     def handle(self, *a, **o):
         self.dat, self.truot, self.rac = 0, [], []
         cong_tac_cu = self._cong_tac()
+        from django.utils import timezone as _tz
+        self._t0 = _tz.now()          # dọn gold_bill: xóa dòng sinh trong lúc smoke (đơn sandbox, KK không có)
         try:
             gateway.dat_dich("sandbox")
             self.c = S.client("smoke_ban")
@@ -37,6 +39,13 @@ class Command(BaseCommand):
         finally:
             self._don()
             self._tra_cong_tac(cong_tac_cu)
+            try:
+                # dọn gold_bill sinh trong lúc smoke (đơn sandbox — KK không có; bill_audit append-only nên GIỮ)
+                from apps.pos.models import GoldBill
+                n = GoldBill.objects.filter(created_at__gte=self._t0).delete()[0]
+                self.stdout.write(f"\n  -> đã dọn {n} dòng gold_bill sinh trong lúc smoke (sandbox)")
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"\n  ! không dọn được gold_bill: {e}"))
         self.stdout.write("")
         if self.truot:
             self.stdout.write(self.style.ERROR(f"TRƯỢT {len(self.truot)}/{self.dat + len(self.truot)}:"))
@@ -239,6 +248,20 @@ class Command(BaseCommand):
             self.ok("C3 thêm dòng vàng đổi, giá tự lấy bảng giá", de["GoldCode"] in b)
 
             cl.post("/banle/ban-hang/dat/", {"emp": NV})
+            # NV HỖ TRỢ (08/09/2026): không được trùng NV bán; chọn người khác → lưu gold_bill (đơn W)
+            b = body(cl.post("/banle/ban-hang/dat/", {"emp_sup": NV}))
+            self.ok("C3b NV hỗ trợ TRÙNG NV bán → từ chối + focus ô hỗ trợ",
+                    "không được trùng" in b and "nvsup" in b and not cl.session["phieu"].get("emp_sup"))
+            nv2 = next((e["EmpID"] for e in S.nhan_vien_ban() if e["EmpID"] != NV), "")
+            cl.post("/banle/ban-hang/dat/", {"emp_sup": nv2})
+            from apps.pos.models import GoldBill as _GB
+            gbw = _GB.objects.filter(trn_id=cl.session["phieu"]["trn_id"]).first()
+            self.ok("C3c chọn NV hỗ trợ khác → session + gold_bill (đơn W) ghi emp_sup, KK không đụng",
+                    cl.session["phieu"].get("emp_sup") == nv2 and gbw is not None and gbw.emp_sup_id == nv2
+                    and gbw.status == "W", nv2)
+            b = body(cl.get("/banle/ban-hang/tim-nv/?muc=sup&q="))
+            self.ok("C3d gợi ý NV hỗ trợ loại NV bán đang chọn + hx-vals emp_sup",
+                    f'"{NV}"' not in b and '"emp_sup"' in b)
             cl.post("/banle/ban-hang/dat/", {"bot": "5.000", "cong_them": "10.000",
                                              "vang_them": "20.000", "coc": "30.000",
                                              "ghi_chu": "kiểm thử web"})
@@ -262,6 +285,13 @@ class Command(BaseCommand):
             self.ok("C7 hóa đơn vào CSDL ở trạng thái ĐÃ CHỐT", hd["Status"] == B.CHOT_ROI,
                     f"{hd['BillCode']} · {hd['TrnID']}")
             self.ok("C8 ghi chú lưu theo", (hd["Description"] or "").strip() == "kiểm thử web")
+            # gold_bill (08/09/2026): ghi xuyên sau chốt + NV HỖ TRỢ
+            from apps.pos.models import GoldBill
+            gb = GoldBill.objects.filter(trn_id=hd["TrnID"]).first()
+            self.ok("C8g gold_bill có dòng đơn vừa chốt: status C, tổng = PayAmount, items JSON có mã SP",
+                    gb is not None and gb.status == "C" and not gb.is_del and gb.emp_id == NV
+                    and any(i.get("ma") == ma1 for i in gb.items) and gb.tong > 0 and gb.kk_upd,
+                    f"tong={gb.tong if gb else '?'} pay={gb.pay_method if gb else '?'}")
             # 08/09/2026: thanh toán xong GIỮ ĐƠN CHỐT trên form (chế độ xem): chỉ IN bật, TT/TT&IN/… tắt
             self.ok("C8b thanh toán xong giữ đơn chốt trên form: badge ĐÃ CHỐT + IN bật + TT tắt",
                     "ĐÃ CHỐT" in b and f"hoa-don/xem/?trn_id={hd['TrnID']}" in b and "in=1" in b
@@ -281,6 +311,14 @@ class Command(BaseCommand):
                     and b.count('disabled title="Đơn đã thanh toán"') == 2 and 'pg-khoa-fs" title' in b
                     and "pg-ban__foot-tra" not in b)
 
+            self.ok("C10b MỞ đơn → NV hỗ trợ nạp lại từ gold_bill (KK không giữ)",
+                    cl.session["phieu"].get("emp_sup") == nv2)
+            bg = body(cl.get(f"/banle/hoa-don/xem/?trn_id={hd['TrnID']}&loai=BAN&nguon=live&in=1"))
+            self.ok("C10c Giấy đảm bảo phần tiệm giữ: 'Bán: … | Hỗ trợ: …'",
+                    "Bán:" in bg and "Hỗ trợ:" in bg)
+            bds = body(cl.get("/banle/ban-hang/danh-sach/"))
+            self.ok("C10d DANH SÁCH: cột HỖ TRỢ + thống kê hỗ trợ ở chân popup",
+                    "HỖ TRỢ" in bds and "pg-ds__ht" in bds and "1 đơn" in bds)
             # 07/09/2026: đơn KHÓA → server chặn mọi thao tác giỏ, không chỉ ẩn nút
             b = body(cl.post("/banle/ban-hang/quet/", {"ma": ma1}))
             self.ok("C11 đơn khóa: quét món bị CHẶN kèm hướng dẫn passcode", "đang KHÓA" in b)
@@ -383,6 +421,8 @@ class Command(BaseCommand):
                 cl.post("/banle/ban-hang/mo/", {"trn_id": hd["TrnID"]})
                 self.ok("C12h nháp/chốt đúng trước khi hủy HĐ", self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
                 b = body(cl.post("/banle/ban-hang/thuc-hien/huy_hd/", {"passcode": "9999"}))
+                self.ok("C12i gold_bill: sau hủy HĐ dòng đánh is_del=1 (không xóa)",
+                        GoldBill.objects.filter(trn_id=hd["TrnID"], is_del=True).exists())
                 self.ok("C13 HỦY HÓA ĐƠN đã chốt 1 bước (passcode) → 'Đã HỦY', audit HUY_HD",
                         "Đã HỦY HÓA ĐƠN" in b and BillAudit.objects.filter(trn_id=hd["TrnID"], action="HUY_HD").exists(),
                         self._trich(b))
