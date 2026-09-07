@@ -44,10 +44,11 @@ document.body.addEventListener("khachSaved", function (e) {
 
 /* Ẩn dropdown gợi ý NV/Khách khi bấm RA NGOÀI vùng ô tìm (chọn 1 mục đã tự re-render) */
 document.addEventListener("mousedown", function (e) {
-  if (e.target.closest(".pg-f--tim")) return;   // đang bấm trong ô tìm / mục gợi ý
-  ["nv-goiy", "khach-goiy"].forEach(function (id) {
+  // bấm ra ngoài → ẩn MỌI hộp gợi ý; bấm vào ô tìm này → chỉ giữ hộp của ô đó (ẩn các ô khác) — 08/09: thêm NV hỗ trợ
+  var trong = e.target.closest(".pg-f--tim");
+  ["nv-goiy", "nvsup-goiy", "khach-goiy"].forEach(function (id) {
     var el = document.getElementById(id);
-    if (el) el.innerHTML = "";
+    if (el && !(trong && trong.contains(el))) el.innerHTML = "";
   });
 });
 
