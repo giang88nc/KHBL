@@ -1126,26 +1126,26 @@ def gia_kk_trang_thai(request):
 
 
 @require_GET
-def gia_kk_canh_bao(request):
-    """Tín hiệu nhẹ cho topbar: cache chung 10 phút, chỉ báo động khi có giá lệch thật."""
+def gia_pmv_report_canh_bao(request):
+    """Topbar so sánh MySQL local với PMV Report, cache chung 2 phút."""
     from django.core.cache import cache
     from . import prices
 
-    key = "khbl:gia_kk_canh_bao:v1"
+    key = "khbl:gia_pmv_report_canh_bao:v1"
     payload = cache.get(key)
     if payload is None:
         try:
-            preview = prices.kk_sync_preview()
+            preview = prices.pmv_report_sync_preview()
             payload = {
                 "ok": True,
                 "mismatch_count": len(preview["changes"]),
                 "issue_count": len(preview["issues"]),
                 "checked_at": preview["checked_at"].isoformat(),
             }
-            cache.set(key, payload, 10 * 60)
+            cache.set(key, payload, 2 * 60)
         except Exception:
             # Không báo động đỏ khi chưa so sánh được; tránh gây hoang mang vì lỗi mạng tạm thời.
-            logger.exception("Không thể kiểm tra cảnh báo chênh giá KK trên topbar")
+            logger.exception("Không thể kiểm tra cảnh báo chênh giá PMV Report trên topbar")
             payload = {"ok": False, "mismatch_count": 0, "issue_count": 0}
             cache.set(key, payload, 60)
     response = JsonResponse(payload)

@@ -436,7 +436,7 @@
     window.__khblDongHo = setInterval(nhipDongHo, 1000);
   }
 
-  /* ---------- cảnh báo giá MySQL khác KK: kiểm tra server cache mỗi 10 phút ---------- */
+  /* ---------- cảnh báo MySQL local khác PMV Report: server cache + nhịp 2 phút ---------- */
   function batCanhBaoGia() {
     var alert = document.getElementById("khbl-price-alert");
     if (!alert || alert.dataset.bound) return;
@@ -448,7 +448,7 @@
         .then(function (data) {
           var count = Number(data.mismatch_count || 0);
           if (data.ok && count > 0) {
-            if (message) message.textContent = count + " mã MySQL khác MSSQL";
+            if (message) message.textContent = "";
             alert.hidden = false;
             document.documentElement.classList.add("khbl-gia-lech");
           } else {
@@ -459,7 +459,7 @@
         .catch(function () { alert.hidden = true; document.documentElement.classList.remove("khbl-gia-lech"); });
     }
     check();
-    window.setInterval(check, 10 * 60 * 1000);
+    window.setInterval(check, 2 * 60 * 1000);
   }
 
   /* ---------- điểm vào ---------- */

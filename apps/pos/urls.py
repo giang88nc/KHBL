@@ -57,7 +57,7 @@ urlpatterns = [
     path("banle/bang-gia/sync-kk/", views.gia_sync_kk_xem, name="gia_sync_kk_xem"),
     path("banle/bang-gia/sync-kk/ap-dung/", views.gia_sync_kk_ap_dung, name="gia_sync_kk_ap_dung"),
     path("banle/bang-gia/kk-trang-thai/", views.gia_kk_trang_thai, name="gia_kk_trang_thai"),
-    path("banle/bang-gia/kk-canh-bao/", views.gia_kk_canh_bao, name="gia_kk_canh_bao"),
+    path("banle/bang-gia/pmv-report-canh-bao/", views.gia_pmv_report_canh_bao, name="gia_pmv_report_canh_bao"),
     path("banle/bang-gia/nhip/", views.gia_nhip, name="gia_nhip"),
 
     # Khách hàng
