@@ -29,7 +29,7 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
       <span class="pg-hd-badge" title="Mã hóa đơn {% if g.trn_id %}(số thật){% else %}(dự kiến — cấp thật lúc lưu){% endif %}">
         {{ g.bill_code|default:g.trn_id|default:ma_du_kien }}</span>
     {% else %}
-      <span class="pg-hd-badge pg-hd-badge--trong" title="Quét mã món đầu hoặc bấm ＋ ĐƠN MỚI để bắt đầu">bỏ trống</span>
+      <span class="pg-hd-badge pg-hd-badge--trong" title="Quét mã món đầu hoặc bấm ＋ ĐƠN MỚI để bắt đầu">Mã hóa đơn</span>
     {% endif %}
   </header>
 

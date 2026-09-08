@@ -562,7 +562,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   font-style:normal;background:var(--gold-100);border-radius:99px;padding:1px 7px}
 .pg-f--ngay .khbl-input{width:150px}
 .pg-f--sohd .khbl-input{width:236px;background:var(--surface);font-weight:700;color:var(--gold-700)}
-.pg-f--tim .khbl-input{width:250px}
+.pg-f--tim .khbl-input{width:250px; border-color: var(--gold-500);}
 .pg-f--khach{flex:1;flex-direction:row;align-items:flex-end;gap:7px}
 .pg-f--khach > span{position:absolute;top:-14px;left:0}
 .pg-f--khach .khbl-input{width:100%;min-width:250px}
@@ -706,7 +706,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tb--ds thead th:first-child{border-top-left-radius:6px}
 .pg-tb--ds thead th:last-child{border-top-right-radius:6px}
 .pg-tb--ds thead th.pg-ds__th-tra{background:var(--gold-300);color:var(--ink-900)}
-.pg-tb--ds td.pg-ds__td-tra{background:#FDFAF0}
+.pg-tb--ds td.pg-ds__td-tra{background:#FDFAF0;line-height:1.25}
+/* 08/09 chiều: dòng 2 cột KHÁCH TRẢ = ⚡ phần thẻ/CK (CardPay KK); 0 thì mờ */
+.pg-ds__the{display:block;font-size:10.5px;font-weight:600;white-space:nowrap}
+.pg-ds__the--du{color:#1E5B32}.pg-ds__the--lech{color:#B3402A}
 .pg-tb--ds tbody tr:nth-child(even) td{background:#FCFBF8}
 .pg-tb--ds tbody tr:hover td{background:var(--gold-100)}
 .pg-ds__loc{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:5px;}

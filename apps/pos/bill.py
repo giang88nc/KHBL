@@ -182,7 +182,9 @@ def danh_sach(d1, d2, *, emp_id="", khach="", trang_thai="", c=None, limit=DS_TR
     Khoảng ngày chỉ dùng tham số, không ghép chuỗi vào SQL."""
     emp_id, key = (emp_id or "").strip(), (khach or "").strip()
     tt = (trang_thai or "").strip().upper()
+    # CardPay (08/09/2026 chiều — GĐ chốt): cột KHÁCH TRẢ popup DS hiện 2 dòng PayAmount / ⚡ CardPay (tiền thẻ/CK)
     sql = (f"SELECT TOP {int(limit)} b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.PayAmount, "
+           "ISNULL(b.CardPay,0) AS CardPay, "
            "b.SellTotalAmount, b.BuyTotalAmount, ISNULL(b.Discount,0) AS Discount, "
            "ISNULL(b.TienCoc,0) AS TienCoc, k.CustName, k.Phone, e.EmpName "
            "FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
