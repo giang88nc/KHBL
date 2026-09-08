@@ -1,0 +1,48 @@
+{% load pos_extras %}{% comment %}
+THÔNG TIN CHUYỂN KHOẢN (GĐ chốt 08/09/2026 tối) — 5 ô ảnh: CCCD trước · CCCD sau · Hình 1 · Hình 2 · QR chuyển khoản.
+Mỗi ô 2 icon 📷 chụp / 📁 chọn; chọn xong tự tải lên (form hx-trigger change, multipart) → phiếu đang nhập: ThauAnhTam theo
+phiên · phiếu đã lưu: gold_bill.anh_*. Camera dùng lại dialog #kh-camera + bindAnh của khbl.js (cần .kh-anh trong CÙNG form).
+{% endcomment %}
+<section class="pg-box pg-box--ck{% if phieu_chot and not co_fullcontrol %} pg-box--khoa{% endif %}">
+  <header class="pg-box__head"><h3>THÔNG TIN CHUYỂN KHOẢN <i>· ảnh CCCD · hình vàng · QR — lưu kèm phiếu</i></h3>
+    <span class="pg-ck__note">{% if g.trn_ids %}gắn vào <b class="mono">{{ g.bill_codes.0 }}</b>{% else %}ảnh chờ, gắn vào phiếu khi THANH TOÁN{% endif %}</span></header>
+    
+  <form class="pg-ck" hx-post="{% url 'pos:thau_anh_len' %}" hx-encoding="multipart/form-data" hx-swap="none"
+        hx-trigger="khbl:anh" hx-sync="this:queue last" data-nen>
+    {% csrf_token %}
+    <div class="kh-anh pg-ck__anh">
+      {% for a in anh %}
+      <div class="kh-anh__item pg-ck__item" data-photo data-label="{{ a.label }}" data-facing="{{ a.facing }}">
+        <b>{{ a.label }}</b>
+        <div class="kh-anh__khung pg-ck__khung" data-xem>
+          {% if a.co %}<img src="{% url 'pos:thau_anh' %}?slot={{ a.slot }}{% if a.trn %}&trn_id={{ a.trn }}{% endif %}&v={% now 'His' %}" alt="{{ a.label }}" data-lb="{{ a.label }}" title="Bấm để phóng to">{% else %}<span>Chưa có</span>{% endif %}
+        </div>
+        <div class="kh-anh__actions pg-ck__actions">
+          <button class="pg-ck__ico" type="button" data-chup title="Chụp {{ a.label|lower }}">📷</button>
+          <label class="pg-ck__ico" title="Chọn tệp {{ a.label|lower }}">📁<input type="file" name="anh_{{ a.slot }}" accept="image/*" data-photo-input hidden></label>
+          {% if a.co %}<button class="pg-ck__ico pg-ck__ico--x" type="button" title="Bỏ ảnh" hx-post="{% url 'pos:thau_anh_xoa' %}" hx-vals='{"slot": "{{ a.slot }}"}' hx-swap="none">×</button>{% endif %}
+          {% if a.slot == "qr" %}<button class="pg-ck__ico pg-ck__ico--quet" type="button" {% if not a.co %}disabled{% endif %}
+                  title="Quét mã QR chuyển khoản (chuẩn NAPAS/VietQR) trong ảnh → điền ngân hàng · số TK · nội dung vào TÍNH TỔNG"
+                  hx-post="{% url 'pos:thau_qr_quet' %}" hx-swap="none" hx-disabled-elt="this">🔍</button>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <dialog class="kh-camera" id="kh-camera" aria-labelledby="kh-camera-title">
+      <div class="kh-camera__head"><b id="kh-camera-title">Chụp ảnh</b>
+        <button type="button" class="kh-camera__x" data-camera-close aria-label="Đóng camera">×</button></div>
+      <div class="kh-camera__stage">
+        <video data-camera-video autoplay muted playsinline></video>
+        <img data-camera-preview alt="Ảnh vừa chụp" hidden>
+        <canvas data-camera-canvas hidden></canvas>
+      </div>
+      <p class="kh-camera__msg" data-camera-msg role="status" aria-live="polite">Đang mở camera…</p>
+      <div class="kh-camera__actions">
+        <button class="khbl-btn khbl-btn--outline" type="button" data-camera-close>Đóng</button>
+        <button class="khbl-btn khbl-btn--outline" type="button" data-camera-retake hidden>Chụp lại</button>
+        <button class="khbl-btn" type="button" data-camera-capture disabled>Chụp</button>
+        <button class="khbl-btn" type="button" data-camera-use hidden>Lưu ảnh</button>
+      </div>
+    </dialog>
+  </form>
+</section>

@@ -107,6 +107,92 @@ def _crc16(s):
     return f"{crc:04X}"
 
 
+def bank_code_tu_bin(bin_):
+    """BIN napas → mã NH ('970416'→'ACB'); không có trong danh mục → trả lại BIN."""
+    for code, b, _ in BANKS:
+        if b == str(bin_ or "").strip():
+            return code
+    return str(bin_ or "").strip()
+
+
+def _tach_tlv(s):
+    """Chuỗi EMV TLV → list (id, giá trị). Sai độ dài → dừng."""
+    out, i = [], 0
+    while i + 4 <= len(s):
+        idx, ln = s[i:i + 2], s[i + 2:i + 4]
+        if not ln.isdigit():
+            break
+        n = int(ln)
+        out.append((idx, s[i + 4:i + 4 + n]))
+        i += 4 + n
+    return out
+
+
+def parse(chuoi):
+    """Phân tích chuỗi VietQR (EMVCo). Trả dict {bin, bank_code, bank_ten, account, amount, info, hop_le, loi}.
+    Chỉ nhận QR CHUYỂN KHOẢN chuẩn NAPAS: tag 38 chứa GUID A000000727 (QRIBFTTA) — QR khác → hop_le=False."""
+    s = str(chuoi or "").strip()
+    kq = {"bin": "", "bank_code": "", "bank_ten": "", "account": "", "amount": 0, "info": "", "hop_le": False, "loi": ""}
+    if not s.startswith("000201"):
+        kq["loi"] = "Không phải mã QR thanh toán EMVCo"
+        return kq
+    if len(s) >= 4 and _crc16(s[:-4]) != s[-4:].upper():
+        kq["loi"] = "Mã QR sai checksum (ảnh mờ / thiếu góc) — chụp lại rõ hơn"
+        return kq
+    for idx, val in _tach_tlv(s):
+        if idx == "38":
+            con = dict(_tach_tlv(val))
+            if con.get("00", "").upper() != "A000000727":
+                kq["loi"] = "QR không thuộc hệ VietQR/NAPAS (không phải chuyển khoản ngân hàng VN)"
+                return kq
+            ben = dict(_tach_tlv(con.get("01", "")))
+            kq["bin"], kq["account"] = ben.get("00", ""), ben.get("01", "")
+        elif idx == "54":
+            try:
+                kq["amount"] = int(float(val))
+            except ValueError:
+                pass
+        elif idx == "62":
+            kq["info"] = dict(_tach_tlv(val)).get("08", "")
+    if not kq["bin"] or not kq["account"]:
+        kq["loi"] = "QR thiếu BIN ngân hàng / số tài khoản"
+        return kq
+    kq["bank_code"] = bank_code_tu_bin(kq["bin"])
+    kq["bank_ten"] = bank_ten(kq["bank_code"]) if kq["bank_code"] != kq["bin"] else f"BIN {kq['bin']}"
+    kq["hop_le"] = True
+    return kq
+
+
+def doc_anh(data):
+    """Giải mã QR trong ảnh (bytes JPEG/PNG) bằng OpenCV QRCodeDetector — thử cả ảnh gốc, phóng to, xám cân bằng.
+    Trả chuỗi hoặc ''. Không có OpenCV → ném RuntimeError."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as exc:                       # pragma: no cover
+        raise RuntimeError("Chưa cài opencv-python-headless") from exc
+    arr = np.frombuffer(bytes(data), dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return ""
+    det = cv2.QRCodeDetector()
+    ung_vien = [img]
+    h, w = img.shape[:2]
+    if max(h, w) < 900:
+        ung_vien.append(cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC))
+    xam = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ung_vien.append(cv2.equalizeHist(xam))
+    ung_vien.append(cv2.threshold(xam, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1])
+    for uv in ung_vien:
+        try:
+            s, _, _ = det.detectAndDecode(uv)
+        except cv2.error:
+            s = ""
+        if s:
+            return s
+    return ""
+
+
 def payload(bank_code, account_no, amount=0, info=""):
     """Chuỗi VietQR chuyển khoản TỚI TÀI KHOẢN. amount ≤ 0 → QR không kèm số tiền
     (người chuyển tự nhập). Ném ValueError nếu thiếu BIN/số tài khoản."""
@@ -128,7 +214,7 @@ def payload(bank_code, account_no, amount=0, info=""):
     if amt:
         body += _tlv("54", str(amt))
     body += _tlv("58", "VN")
-    info = "".join(c for c in str(info or "") if c.isalnum() or c == " ").strip()[:25]
+    info = "".join(c for c in str(info or "") if c.isalnum() or c in " -").strip()[:25]   # 08/09: giữ '-' cho mã phiếu 26-09-08-000167
     if info:
         body += _tlv("62", _tlv("08", info))
     body += "6304"                                            # ID+len của CRC, rồi tính CRC

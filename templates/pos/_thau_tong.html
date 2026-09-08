@@ -28,17 +28,36 @@ gợi ý BỚT LẺ; phương thức tiền mặt / chuyển khoản / thẻ v�
       <button class="pg-botle__nut pg-botle__nut--bo" type="button" hx-post="{% url 'pos:thau_dat' %}" hx-vals='{"bot": "0"}' hx-swap="none" title="Không bớt">✕ bỏ</button>
     </div>
 
+    {# 08/09 tối (GĐ chốt): BỎ THẺ — chỉ Tiền mặt / Chuyển khoản; chọn CK mới hiện khối THÔNG TIN CHUYỂN KHOẢN (NH · số TK · nội dung) + Tạo QR #}
     <form class="pg-pay" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-trigger="change, submit" onsubmit="return false">
       {% csrf_token %}
       <div class="pg-pay__ways">
         <label class="pg-pay__way{% if t.pay_method == 'cash' %} on{% endif %}"><input type="radio" name="pay_method" value="cash" {% if t.pay_method == 'cash' %}checked{% endif %}><span>💵 Tiền mặt</span></label>
         <label class="pg-pay__way{% if t.pay_method == 'bank' %} on{% endif %}"><input type="radio" name="pay_method" value="bank" {% if t.pay_method == 'bank' %}checked{% endif %}><span>🏦 Chuyển khoản</span></label>
-        <label class="pg-pay__way{% if t.pay_method == 'card' %} on{% endif %}"><input type="radio" name="pay_method" value="card" {% if t.pay_method == 'card' %}checked{% endif %}><span>💳 Thẻ</span></label>
       </div>
+      {% if t.pay_method == 'bank' %}
       <label class="pg-tong__r pg-tong__r--nhap"><span>Tiền mặt tiệm trả</span>
         <input name="tien_mat" id="o-tienmat" class="khbl-input khbl-money r" inputmode="numeric" value="{{ t.tien_mat|tien_tran }}"></label>
-      <label class="pg-tong__r pg-tong__r--nhap"><span id="lb-tienck">{% if t.pay_method == 'card' %}Trả qua thẻ{% elif t.pay_method == 'bank' %}Chuyển khoản cho khách{% else %}Chuyển khoản / thẻ{% endif %}</span>
+      <label class="pg-tong__r pg-tong__r--nhap"><span id="lb-tienck">Chuyển khoản cho khách</span>
         <input id="o-tienck" class="khbl-input khbl-money r" inputmode="numeric" value="{{ t.tien_ck|tien_tran }}"></label>
+      <div class="pg-ckinfo">
+        <div class="pg-ckinfo__ttl">THÔNG TIN CHUYỂN KHOẢN <i>· tài khoản của khách — quét QR ở ô “QR chuyển khoản” để điền nhanh</i></div>
+        <label class="pg-tong__r pg-tong__r--nhap"><span>Ngân hàng</span>
+          <select name="ck_bank" class="khbl-select" id="o-ckbank">
+            <option value="">— chọn —</option>
+            {% for code, bin, ten in banks_vn %}<option value="{{ code }}" {% if g.ck_bank == code or g.ck_bank == bin %}selected{% endif %}>{{ ten }}</option>{% endfor %}
+          </select></label>
+        <label class="pg-tong__r pg-tong__r--nhap"><span>Số tài khoản</span>
+          <input name="ck_stk" id="o-ckstk" class="khbl-input mono r" inputmode="numeric" autocomplete="off" value="{{ g.ck_stk }}" placeholder="số TK khách nhận"></label>
+        <label class="pg-tong__r pg-tong__r--nhap"><span>Nội dung</span>
+          <input name="ck_nd" id="o-cknd" class="khbl-input mono r" maxlength="25" autocomplete="off" value="{{ g.ck_nd|default:ck_nd_mac_dinh }}" placeholder="mã phiếu"></label>
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-ckinfo__qr" type="button" title="Tạo mã QR chuyển khoản theo NH + số TK + nội dung, kèm số tiền CK"
+                hx-get="{% url 'pos:thau_qr_tao' %}" hx-target="#modal-root" hx-include="closest form"
+                hx-vals='js:{amount: (document.getElementById("o-tienck")||{}).value || ""}'>🔳 Tạo mã QR chuyển khoản</button>
+      </div>
+      {% else %}
+      <input type="hidden" name="tien_mat" value="">
+      {% endif %}
     </form>
     {% if phieu_chot %}</fieldset>{% endif %}
 

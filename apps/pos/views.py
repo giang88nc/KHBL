@@ -1437,12 +1437,16 @@ def hoa_don(request):
         for row in rows:
             row["la_hom_nay"] = _la_hd_hom_nay(row)
             row["co_the_thao_tac"] = co_fullcontrol or row["la_hom_nay"]
+        from .invoice_display import prepare
+        display_rows = prepare(rows, nvs)
         loi = ""
     except Exception as exc:
         logger.exception("Không đọc được danh sách hóa đơn")
         rows, nvs, la_hom_nay, co_fullcontrol, loi = [], [], False, False, S.error_message(exc)
+        display_rows = []
     return render(request, "pos/hoa_don.html", {
-        "nav_active": "hoadon", "d1": d1, "d2": d2, "loc": loc, "nvs": nvs, "rows": rows,
+        "nav_active": "hoadon", "d1": d1, "d2": d2, "loc": loc, "nvs": nvs, "rows": display_rows,
+        "so_giao_dich": len(rows),
         "tong": S.tong_ngay(rows), "la_hom_nay": la_hom_nay, "nguon_kk": la_hom_nay,
         "co_fullcontrol": co_fullcontrol, "loi_hd": loi,
     })
@@ -1478,6 +1482,9 @@ def _duoc_thao_tac_hoa_don(request, hd):
 
 
 def hoa_don_xac_nhan(request):
+    if request.GET.get('group') == '1' and request.GET.get('loai') == 'THAU':
+        from .invoice_group_actions import handle
+        return handle(request)
     trn_id, loai = (request.GET.get("trn_id") or "").strip(), (request.GET.get("loai") or "").strip()
     action = (request.GET.get("action") or "").strip()
     if action not in ("thanh_toan", "hoa_don") or loai not in ("BAN", "BAN_DOI", "THAU") or not trn_id:
@@ -1626,6 +1633,24 @@ def hoa_don_chi_tiet(request):
     nguon = request.GET.get("nguon")
     # "live" (08/09/2026, nút IN màn bán): đi theo CÔNG TẮC ĐÍCH (kk/sandbox) như mọi thao tác bán hàng
     nguon = "live" if nguon == "live" else ("kk" if nguon == "kk" else "hist")
+    if loai == 'THAU':
+        from .invoice_display import groups_for, membership_for
+        from .views_thau import _phieu_ctx
+        groups = groups_for([trn_id])
+        membership = membership_for(groups)
+        group = membership.get(trn_id)
+        ids = [t for t in group.trn_ids if membership[t].pk == group.pk] if group else [trn_id]
+        client = PmvClient(None if nguon == 'live' else nguon, tag='hd_thau_preview')
+        items = [B.phieu_thau(t, client) for t in ids]
+        items = [r for r in items if r]
+        if not items:
+            return HttpResponse('Không tìm thấy phiếu thâu', status=404)
+        ctx = {'p': _phieu_ctx(items, group), 'tiem': S.thong_tin_tiem(),
+               'in_luc': datetime.datetime.now(), 'trn_id': trn_id, 'nguon': nguon,
+               'has_cancelled': any(str(r.get('IsDel')) != '0' for r in items),
+               'has_draft': any(r.get('Status') != 'C' for r in items)}
+        return render(request, 'pos/thau_in.html' if request.GET.get('raw') == '1'
+                      else 'pos/_hoa_don_thau.html', ctx)
     ctx, err = _gdb_ctx(trn_id, loai, nguon)
     if err:
         return err
@@ -1678,6 +1703,9 @@ def gdb_mau(request):
 
 @require_POST
 def hoa_don_huy(request):
+    if request.POST.get('group') == '1' and request.POST.get('loai') == 'THAU':
+        from .invoice_group_actions import handle
+        return handle(request)
     trn_id, loai = (request.POST.get("trn_id") or "").strip(), (request.POST.get("loai") or "").strip()
     action = (request.POST.get("action") or "").strip()
     passcode = request.POST.get("passcode") or ""

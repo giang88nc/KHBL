@@ -4,6 +4,21 @@ from django.conf import settings
 from django.db import models
 
 
+class BankReconcileState(models.Model):
+    """Dấu vết đối soát và giữ chỗ TrnID qua các lần UPSERT ngân hàng."""
+    notification_id = models.BigIntegerField(primary_key=True)
+    trn_id = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    fingerprint = models.CharField(max_length=64, default="")
+    status = models.CharField(max_length=24, default="pending")
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt = models.DateTimeField(null=True, blank=True)
+    message = models.CharField(max_length=255, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bank_reconcile_state"
+
+
 class PriceDisplay(models.Model):
     gold_type = models.CharField(max_length=50, unique=True)
     pinned = models.BooleanField(default=False)
@@ -120,6 +135,12 @@ class GoldBill(models.Model):
     synced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # ẢNH CHUYỂN KHOẢN phiếu THÂU (08/09/2026 tối, GĐ chốt lưu ở gold_bill): JPEG đã nén, gắn vào dòng TrnID ĐẦU của nhóm
+    anh_cccd1 = models.BinaryField("CCCD mặt trước", null=True, blank=True, editable=False)
+    anh_cccd2 = models.BinaryField("CCCD mặt sau", null=True, blank=True, editable=False)
+    anh_hinh1 = models.BinaryField("Hình 1", null=True, blank=True, editable=False)
+    anh_hinh2 = models.BinaryField("Hình 2", null=True, blank=True, editable=False)
+    anh_qr = models.BinaryField("QR chuyển khoản", null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "gold_bill"
@@ -141,6 +162,20 @@ class PriceBatch(models.Model):
         ordering = ["-created_at"]
 
 
+class ThauAnhTam(models.Model):
+    """Ảnh phiếu thâu ĐANG NHẬP (chưa thanh toán) — giữ theo session, mỗi slot 1 dòng; THANH TOÁN xong chuyển sang
+    gold_bill.anh_* rồi xóa. Dọn dòng quá 2 ngày khi mở phiếu mới."""
+
+    session_key = models.CharField(max_length=40, db_index=True)
+    slot = models.CharField(max_length=10)                 # cccd1 · cccd2 · hinh1 · hinh2 · qr
+    data = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "thau_anh_tam"
+        unique_together = [("session_key", "slot")]
+
+
 class ThauNhom(models.Model):
     """NHÓM phiếu thâu web (08/09/2026 tối, GĐ chốt): PMVGoldRT chỉ Ins 1 dòng/1 phiếu → web cho nhiều dòng cùng 1 khách,
     mỗi dòng = 1 TRN_RT_BUYGOLD, cả nhóm chốt chung CompleteMore 'A@B@'. Bảng này giữ danh sách TrnID của nhóm để mở lại /
@@ -158,6 +193,10 @@ class ThauNhom(models.Model):
     bu = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     bot = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     ghi_chu = models.CharField(max_length=300, blank=True, default="")
+    # thông tin CHUYỂN KHOẢN cho khách (08/09 tối): ngân hàng (mã/BIN) · số TK · nội dung (mặc định = mã phiếu)
+    ck_bank = models.CharField(max_length=12, blank=True, default="")
+    ck_stk = models.CharField(max_length=40, blank=True, default="")
+    ck_nd = models.CharField(max_length=60, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

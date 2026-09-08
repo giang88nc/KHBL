@@ -92,7 +92,7 @@ def transfers(request):
         if name not in params:
             params[name] = timezone.localdate().isoformat()
     form = TransferFilter(params)
-    context = dict(nav_active="chuyenkhoan", form=form)
+    context = dict(nav_active="chuyenkhoan", form=form, today=timezone.localdate().isoformat())
     try:
         accounts = query("SELECT DISTINCT bank_number, bank_name FROM gold_bank WHERE Active = 1 AND bank_number IS NOT NULL AND bank_number <> '' ORDER BY bank_number")
         form.fields["account"].widget = forms.Select(choices=[("", "Tất cả tài khoản")] + [(r["bank_number"], f'{r["bank_name"] or "—"} - {r["bank_number"]}') for r in accounts])

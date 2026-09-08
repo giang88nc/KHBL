@@ -454,7 +454,8 @@ def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=50
         ISNULL(b.AddMoney,0) AS TienVangThem, ISNULL(b.TaskPriceAdd,0) AS TienCongThem,
         ISNULL(b.Discount,0) AS TienBot, ISNULL(b.TienCoc,0) AS TienCoc,
         ISNULL(c.CustName,'') AS CustName, ISNULL(c.Phone,'') AS Phone, ISNULL(c.CMND,'') AS CMND,
-        ISNULL(e.EmpID,'') AS EmpID, ISNULL(e.EmpName,'') AS EmpName, b.CreatedDate
+        ISNULL(e.EmpID,'') AS EmpID, ISNULL(e.EmpName,'') AS EmpName, b.CreatedDate,
+        ISNULL(b.CardPay,0) AS CardPay, '' AS GoldCode, '' AS GoldDesc
       FROM TRN_RT_BUYSELL b WITH (NOLOCK)
       LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID
       LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID
@@ -462,10 +463,12 @@ def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=50
       UNION ALL
       SELECT 'THAU', t.TrnID, t.BillCode, t.TrnDate, t.TrnTime, t.Status, t.IsDel,
         0, t.TotalAmount, t.TotalAmount, 0, 0, 0, 0, ISNULL(c.CustName,''), ISNULL(c.Phone,''), ISNULL(c.CMND,''),
-        ISNULL(e.EmpID,''), ISNULL(e.EmpName,''), t.CreatedDate
+        ISNULL(e.EmpID,''), ISNULL(e.EmpName,''), t.CreatedDate,
+        ISNULL(t.CardPay,0), t.GoldCode, ISNULL(g.GoldDesc,'')
       FROM TRN_RT_BUYGOLD t WITH (NOLOCK)
       LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = t.CustID
       LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID
+      LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = t.GoldCode
       WHERE t.TrnDate >= CAST(? AS datetime) AND t.TrnDate < DATEADD(day,1,CAST(? AS datetime))
     ) x
     WHERE (? = '' OR x.loai = ?) AND (? = '' OR x.EmpID = ?)

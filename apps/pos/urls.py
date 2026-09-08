@@ -1,11 +1,12 @@
 from django.urls import path
 
 from . import views
-from . import views_thau as VT, transfers, dashboard_alerts
+from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
 
 app_name = "pos"
 
 urlpatterns = [
+    path("banle/chuyen-khoan/doi-soat/", bank_reconcile.reconcile_view, name="chuyen_khoan_doi_soat"),
     path("banle/canh-bao/<str:key>/", dashboard_alerts.detail_view, name="dashboard_alert_detail"),
     path("banle/chuyen-khoan/", transfers.transfers, name="chuyen_khoan"),
     path("banle/ngan-hang/", transfers.bank_list, name="bank_list"),
@@ -59,6 +60,11 @@ urlpatterns = [
     path("banle/thau-vao/xac-nhan/<str:hanh_dong>/", VT.thau_xac_nhan, name="thau_xac_nhan"),
     path("banle/thau-vao/thuc-hien/<str:hanh_dong>/", VT.thau_thuc_hien, name="thau_thuc_hien"),
     path("banle/thau-vao/in/", VT.thau_in, name="thau_in"),
+    path("banle/thau-vao/anh/len/", VT.thau_anh_len, name="thau_anh_len"),
+    path("banle/thau-vao/anh/xoa/", VT.thau_anh_xoa, name="thau_anh_xoa"),
+    path("banle/thau-vao/anh/", VT.thau_anh, name="thau_anh"),
+    path("banle/thau-vao/qr/quet/", VT.thau_qr_quet, name="thau_qr_quet"),
+    path("banle/thau-vao/qr/tao/", VT.thau_qr_tao, name="thau_qr_tao"),
 
     # Bảng giá
     path("banle/bang-gia/", views.bang_gia, name="bang_gia"),

@@ -13,14 +13,14 @@ Dùng 2 nơi: nhét vào #pos-in in THẲNG (khblInThau) · trang standalone tha
   </header>
 
   <h1 class="th-phieu__title">PHIẾU THÂU VÀNG</h1>
-  <div class="th-phieu__so"><span>Số phiếu</span><b class="mono">{{ p.bill_codes|join:" · " }}</b></div>
+  <div class="th-phieu__so"><span>Số phiếu</span><b class="mono">{{ p.TrnID }}</b></div>
   <div class="th-phieu__meta">
     <span>Ngày <b>{{ p.TrnDate|date:"d/m/Y" }}</b> · {{ p.TrnTime|slice:":5" }}</span>
     <span>NV: <b>{{ p.EmpName|default:"—" }}</b></span>
   </div>
 
   <section class="th-phieu__kh">
-    <div><span>Khách bán vàng</span><b>{{ p.CustName|default:"Khách lẻ" }}</b></div>
+    <div><span>Khách hàng</span><b>{{ p.CustName|default:"Khách lẻ" }}</b></div>
     {% if p.Phone %}<div><span>Điện thoại</span><b class="mono">{{ p.Phone }}</b></div>{% endif %}
     {% if p.CMND %}<div><span>CCCD</span><b class="mono">{{ p.CMND }}</b></div>{% endif %}
     {% if p.Address %}<div><span>Địa chỉ</span><b>{{ p.Address }}</b></div>{% endif %}
@@ -42,11 +42,11 @@ Dùng 2 nơi: nhét vào #pos-in in THẲNG (khblInThau) · trang standalone tha
   </table>
 
   <section class="th-phieu__tien">
-    <div><span>Tiền vàng ({{ p.so_dong }} dòng)</span><b>{{ p.tien_vang|tien_tran }}</b></div>
+    <div><span>Tiền vàng</span><b>{{ p.tien_vang|tien_tran }}</b></div>
     {% if p.AddMoney %}<div><span>{% if p.AddMoney < 0 %}Bớt{% else %}Bù thêm{% endif %}</span><b>{% if p.AddMoney < 0 %}−{% endif %}{{ p.AddMoney|tien_tran }}</b></div>{% endif %}
     <div class="th-phieu__tong"><span>TIỆM TRẢ KHÁCH</span><b>{{ p.TotalAmount|tien }}</b></div>
     {% if p.tien_ck %}
-      <div><span>Chuyển khoản / thẻ</span><b>{{ p.tien_ck|tien_tran }}</b></div>
+      <div><span>Chuyển khoản</span><b>{{ p.tien_ck|tien_tran }}</b></div>
       <div><span>Tiền mặt</span><b>{{ p.tien_mat|tien_tran }}</b></div>
     {% else %}
       <div><span>Hình thức</span><b>Tiền mặt</b></div>
@@ -57,8 +57,8 @@ Dùng 2 nơi: nhét vào #pos-in in THẲNG (khblInThau) · trang standalone tha
   {% if p.Notes %}<p class="th-phieu__note">Ghi chú: {{ p.Notes }}</p>{% endif %}
 
   <section class="th-phieu__ky">
-    <div><b>Khách bán vàng</b><span>(ký, ghi rõ họ tên)</span></div>
-    <div><b>Nhân viên tiệm</b><span>(ký, ghi rõ họ tên)</span></div>
+    <div><b>Khách hàng</b><span>(ký, ghi rõ họ tên)</span></div>
+    <div><b>Nhân viên</b><span>(ký, ghi rõ họ tên)</span></div>
   </section>
 
   <footer class="th-phieu__foot">

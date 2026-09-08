@@ -1,3 +1,85 @@
 {% load pos_extras %}
-<div class="hd-kpi"><div class="hd-kpi__total"><span>TỔNG</span><b>{{ tong.so_tong }} <i>SL</i></b><em>{{ tong.tien_tong|tien }}</em></div><div class="hd-kpi__item"><span>BÁN</span><b>{{ tong.so_ban }} <i>SL</i></b><em>{{ tong.tien_ban|tien }}</em></div><div class="hd-kpi__item hd-kpi__item--exchange"><span>ĐỔI</span><b>{{ tong.so_doi }} <i>SL</i></b><em>{{ tong.tien_doi|tien }}</em></div><div class="hd-kpi__item hd-kpi__item--buy"><span>THÂU</span><b>{{ tong.so_thau }} <i>SL</i></b><em>{{ tong.tien_thau|tien }}</em></div><div class="hd-kpi__note"><b>{{ rows|length }} giao dịch</b><span>{% if co_fullcontrol %}Admin · toàn quyền theo trạng thái phiếu{% elif la_hom_nay %}Dữ liệu KK trực tiếp · hủy được trong ngày{% else %}Kho lịch sử · chỉ xem{% endif %}</span></div></div>
-<div class="khbl-wrap hd-table"><table class="khbl-tbl"><thead><tr><th>Thời gian</th><th>Loại</th><th>Số phiếu</th><th>Khách hàng</th><th>Nhân viên</th><th class="num">Mua bán</th><th class="num">Tiền thêm</th><th class="num">Tiền giảm</th><th class="num">Khách trả</th><th>Trạng thái</th><th class="hd-action-head">Thao tác</th></tr></thead><tbody>{% for r in rows %}<tr {% if r.IsDel != "0" %}class="hd-row--cancelled"{% endif %}><td><span class="mono">{{ r.TrnTime }}</span><small>{{ r.TrnDate|date:"d/m/Y" }}</small></td><td>{% if r.loai == "BAN" %}<span class="hd-type hd-type--sale">Bán hàng</span>{% elif r.loai == "BAN_DOI" %}<span class="hd-type hd-type--exchange">Bán đổi</span>{% else %}<span class="hd-type hd-type--buy">Thâu vàng</span>{% endif %}</td><td><b class="hd-bill">{{ r.BillCode|default:r.TrnID }}</b><small class="mono">{{ r.TrnID }}</small></td><td>{{ r.CustName|default:"Khách lẻ" }}{% if r.Phone %}<small>{{ r.Phone }}</small>{% endif %}</td><td class="dim">{{ r.EmpName|default:"—" }}</td><td class="num hd-double">{% if r.TienBan %}<span><i>Bán</i>{{ r.TienBan|tien_tran }}</span>{% endif %}{% if r.TienMua %}<span class="hd-money-buy"><i>{% if r.loai == 'THAU' %}Thâu{% else %}Đổi{% endif %}</i>{{ r.TienMua|tien_tran }}</span>{% endif %}</td><td class="num hd-double">{% if r.TienVangThem %}<span><i>Vàng</i>{{ r.TienVangThem|tien_tran }}</span>{% endif %}{% if r.TienCongThem %}<span><i>Công</i>{{ r.TienCongThem|tien_tran }}</span>{% endif %}</td><td class="num hd-double">{% if r.TienBot %}<span><i>Bớt</i>{{ r.TienBot|tien_tran }}</span>{% endif %}{% if r.TienCoc %}<span><i>Cọc</i>{{ r.TienCoc|tien_tran }}</span>{% endif %}</td><td class="num"><b class="{% if r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}</b></td><td>{% if r.IsDel != "0" %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>{% elif r.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Hoàn thành</span>{% else %}<span class="khbl-badge khbl-badge--cam">Treo / nháp</span>{% endif %}</td><td><div class="hd-actions"><button class="khbl-btn khbl-btn--sm hd-actions__view" hx-get="{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ r.TrnID }}&loai={{ r.loai }}&nguon={% if r.la_hom_nay %}kk{% else %}hist{% endif %}" hx-target="#modal-root">Xem</button>{% if r.co_the_thao_tac and r.IsDel == "0" %}{% if r.Status == "C" %}<button class="khbl-btn khbl-btn--sm hd-actions__pay" hx-get="{% url 'pos:hoa_don_xac_nhan' %}?trn_id={{ r.TrnID }}&loai={{ r.loai }}&action=thanh_toan" hx-target="#modal-root">Hủy thanh toán</button>{% if co_fullcontrol %}<button class="khbl-btn khbl-btn--sm hd-actions__cancel" hx-get="{% url 'pos:hoa_don_xac_nhan' %}?trn_id={{ r.TrnID }}&loai={{ r.loai }}&action=hoa_don" hx-target="#modal-root">Hủy hóa đơn</button>{% else %}<button class="khbl-btn khbl-btn--sm khbl-btn--cho" disabled title="Hủy thanh toán trước">Hủy hóa đơn</button>{% endif %}{% else %}<button class="khbl-btn khbl-btn--sm khbl-btn--cho" disabled>Đã hủy thanh toán</button><button class="khbl-btn khbl-btn--sm hd-actions__cancel" hx-get="{% url 'pos:hoa_don_xac_nhan' %}?trn_id={{ r.TrnID }}&loai={{ r.loai }}&action=hoa_don" hx-target="#modal-root">Hủy hóa đơn</button>{% endif %}{% elif r.IsDel == "0" %}<span class="hd-actions__readonly" title="Đơn ngoài ngày hôm nay">Chỉ xem</span>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="11"><div class="khbl-empty">{% icon "hoadon" 36 %}<b>Không tìm thấy hóa đơn phù hợp</b><span>Thử đổi khoảng ngày hoặc điều kiện lọc.</span></div></td></tr>{% endfor %}</tbody></table></div>
+<div class="hd-kpi">
+<div class="hd-kpi__total">
+<span>TỔNG</span>
+<b>{{ tong.so_tong }} <i>SL</i>
+</b>
+<em>{{ tong.tien_tong|tien }}</em>
+</div>
+<div class="hd-kpi__item">
+<span>BÁN</span>
+<b>{{ tong.so_ban }} <i>SL</i>
+</b>
+<em>{{ tong.tien_ban|tien }}</em>
+</div>
+<div class="hd-kpi__item hd-kpi__item--exchange">
+<span>ĐỔI</span>
+<b>{{ tong.so_doi }} <i>SL</i>
+</b>
+<em>{{ tong.tien_doi|tien }}</em>
+</div>
+<div class="hd-kpi__item hd-kpi__item--buy">
+<span>THÂU</span>
+<b>{{ tong.so_thau }} <i>SL</i>
+</b>
+<em>{{ tong.tien_thau|tien }}</em>
+</div>
+<div class="hd-kpi__note">
+<b>{{ so_giao_dich }} giao dịch</b>
+<span>{% if co_fullcontrol %}Admin · toàn quyền theo trạng thái phiếu{% elif la_hom_nay %}Dữ liệu KK trực tiếp · hủy được trong ngày{% else %}Kho lịch sử · chỉ xem{% endif %}</span>
+</div>
+</div>
+<div class="khbl-wrap hd-table">
+<table class="khbl-tbl">
+<thead>
+<tr>
+<th>Thời gian</th>
+<th>Loại</th>
+<th>Số phiếu</th>
+<th>Khách hàng</th>
+<th>Nhân viên</th>
+<th class="num">Mua bán</th>
+<th class="num">Tiền thêm</th>
+<th class="num">Tiền giảm</th>
+<th class="num">Khách trả</th>
+<th>Trạng thái</th>
+<th class="hd-action-head">Thao tác</th>
+</tr>
+</thead>
+<tbody>{% for r in rows %}<tr {% if r.IsDel != "0" and not r.mixed_status %}class="hd-row--cancelled"{% endif %}>
+<td>
+<span class="mono">{{ r.TrnTime }}</span>
+<small>{{ r.TrnDate|date:"d/m/Y" }}</small>
+</td>
+<td>{% if r.loai == "BAN" %}<span class="hd-type hd-type--sale">Bán hàng</span>{% elif r.loai == "BAN_DOI" %}<span class="hd-type hd-type--exchange">Bán đổi</span>{% else %}<span class="hd-type hd-type--buy">Thâu vàng</span>{% endif %}</td>
+<td>{% if r.members|length > 1 %}{% for member in r.members %}<b class="hd-bill" style="display:block">{{ member.BillCode|default:member.TrnID }}</b>{% endfor %}{% else %}<b class="hd-bill">{{ r.BillCode|default:r.TrnID }}</b>
+<small class="mono">{{ r.TrnID }}</small>{% endif %}{% if r.partial_group %}<small class="dim">{{ r.members|length }}/{{ r.group_size }} phiếu khớp bộ lọc · Xem toàn nhóm</small>{% endif %}</td>
+<td>{{ r.CustName|default:"Khách lẻ" }}{% if r.Phone %}<small>{{ r.Phone }}</small>{% endif %}</td>
+<td class="dim">
+<span>{{ r.EmpName|default:"—" }}</span>{% if r.EmpSupName %}<small class="hd-support" title="Nhân viên hỗ trợ">{{ r.EmpSupName }}</small>{% endif %}</td>
+<td class="num hd-double">{% if r.thau_lines %}{% for line in r.thau_lines %}<span class="hd-money-buy">
+<i>{{ line.label }}</i>{{ line.amount|tien_tran }}</span>{% endfor %}{% else %}{% if r.TienBan %}<span>
+<i>Bán</i>{{ r.TienBan|tien_tran }}</span>{% endif %}{% if r.TienMua %}<span class="hd-money-buy">
+<i>{% if r.loai == 'THAU' %}Thâu{% else %}Đổi{% endif %}</i>{{ r.TienMua|tien_tran }}</span>{% endif %}{% endif %}</td>
+<td class="num hd-double">{% if r.TienVangThem %}<span>
+<i>Vàng</i>{{ r.TienVangThem|tien_tran }}</span>{% endif %}{% if r.TienCongThem %}<span>
+<i>Công</i>{{ r.TienCongThem|tien_tran }}</span>{% endif %}</td>
+<td class="num hd-double">{% if r.TienBot %}<span>
+<i>Bớt</i>{{ r.TienBot|tien_tran }}</span>{% endif %}{% if r.TienCoc %}<span>
+<i>Cọc</i>{{ r.TienCoc|tien_tran }}</span>{% endif %}</td>
+<td class="num">
+<b class="{% if r.loai == "THAU" or r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}</b>{% if r.tien_ck %}<small class="hd-transfer" title="Thanh toán chuyển khoản / thẻ">⚡{{ r.tien_ck|tien_tran }}</small>{% endif %}</td>
+<td>{% if r.mixed_status %}<span class="khbl-badge khbl-badge--cam">Nhiều trạng thái</span>{% elif r.IsDel != "0" %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>{% elif r.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Hoàn thành</span>{% else %}<span class="khbl-badge khbl-badge--cam">Treo / nháp</span>{% endif %}</td>
+<td>
+<div class="hd-actions">
+<button class="khbl-btn khbl-btn--sm hd-actions__view" hx-get="{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ r.TrnID }}&loai={{ r.loai }}&nguon={% if nguon_kk %}kk{% else %}hist{% endif %}" hx-target="#modal-root">Xem</button>{% include "pos/_hoa_don_actions.html" %}</div>
+</td>
+</tr>{% empty %}<tr>
+<td colspan="11">
+<div class="khbl-empty">{% icon "hoadon" 36 %}<b>Không tìm thấy hóa đơn phù hợp</b>
+<span>Thử đổi khoảng ngày hoặc điều kiện lọc.</span>
+</div>
+</td>
+</tr>{% endfor %}</tbody>
+</table>
+</div>

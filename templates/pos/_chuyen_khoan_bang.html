@@ -1,5 +1,5 @@
 {% load pos_extras %}
-<div id="ck-results" data-signature="{{ signature }}" data-page="{{ page|default:1 }}">
+<div id="ck-results" data-signature="{{ signature }}" data-page="{{ page|default:1 }}" data-today="{{ today }}">
 {% if error %}<p class="khbl-alert khbl-alert--do" role="alert">{{ error }}</p>{% endif %}
 {% if form.errors %}<div class="khbl-alert khbl-alert--do" role="alert">{{ form.errors }}</div>{% endif %}
 {% if signature %}

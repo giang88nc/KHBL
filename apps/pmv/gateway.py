@@ -170,7 +170,7 @@ def _connect(database=None, autocommit=False, timeout=15):
     return pyodbc.connect(conn_str, timeout=timeout, autocommit=autocommit)
 
 
-def pmv_read(sql, params=(), *, tag, database=None, timeout=30, audit=True, target=None):
+def pmv_read(sql, params=(), *, tag, database=None, timeout=30, audit=True, target=None, query_timeout=None):
     """Chạy 1 câu SELECT, trả list[dict]. Lệnh khác SELECT → PmvBlocked.
     target: None = MÁY KK (mặc định — hạ tầng backup/kiểm tra/trace/đồng bộ luôn đọc KK);
             "sandbox"/"kk" = chỉ định rõ (PmvClient truyền theo PMV_TARGET).
@@ -183,6 +183,8 @@ def pmv_read(sql, params=(), *, tag, database=None, timeout=30, audit=True, targ
     t0 = time.monotonic()
     try:
         with _connect_dich(target, database=database, timeout=timeout) as cn:
+            if query_timeout is not None:
+                cn.timeout = query_timeout
             cur = cn.cursor()
             cur.execute(s, params)
             cols = [c[0] for c in cur.description] if cur.description else []

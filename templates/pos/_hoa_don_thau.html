@@ -1,0 +1,12 @@
+{% extends "partials/modal_shell.html" %}
+{% block modal_title %}Phiếu thâu · {{ p.so_dong }} dòng · Bill 110mm{% endblock %}
+{% block modal_style %}width:min(540px,96vw);max-height:94vh{% endblock %}
+{% block modal_body %}
+{% if has_cancelled %}<p class="hd-negative">Nhóm có phiếu đã hủy.</p>{% endif %}
+{% if has_draft %}<p class="dim">Có phiếu chưa hoàn thành thanh toán.</p>{% endif %}
+<div class="hd-thau-preview">{% include "pos/_thau_phieu.html" %}</div>
+{% endblock %}
+{% block modal_foot %}
+<a class="khbl-btn khbl-btn--outline" target="_blank" rel="noopener" href="{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ trn_id|urlencode }}&loai=THAU&nguon={{ nguon }}&raw=1">Mở bill 110mm</a>
+<button class="khbl-btn" onclick="closeKhblModal()">Đóng</button>
+{% endblock %}

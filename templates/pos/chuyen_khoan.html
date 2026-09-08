@@ -10,6 +10,7 @@
 <button class="khbl-btn khbl-btn--gold" type="submit">LỌC</button><a class="khbl-btn khbl-btn--outline" href="{% url 'pos:chuyen_khoan' %}">Hôm nay</a>
 </form>
 <div id="ck-status" role="status" aria-live="polite"></div>
+<div id="ck-reconcile-status" role="status" aria-live="polite" data-url="{% url 'pos:chuyen_khoan_doi_soat' %}" data-csrf="{{ csrf_token }}"></div>
 {% include "pos/_chuyen_khoan_bang.html" %}
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/chuyen_khoan.js' %}"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/chuyen_khoan.js' %}?v=20260908.match30"></script>{% endblock %}

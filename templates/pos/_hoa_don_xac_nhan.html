@@ -5,6 +5,7 @@
       {% csrf_token %}
       <input type="hidden" name="trn_id" value="{{ trn_id }}">
       <input type="hidden" name="loai" value="{{ loai }}">
+      {% if group_action %}<input type="hidden" name="group" value="1"><input type="hidden" name="group_token" value="{{ group_token }}">{% endif %}
       <input type="hidden" name="action" value="{{ action }}">
       <input type="hidden" name="bill_code" value="{{ bill_code|default:trn_id }}">
       <div class="khbl-confirm__top">
@@ -13,14 +14,14 @@
         <button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button>
       </div>
       <div class="khbl-confirm__body">
-        <p class="khbl-confirm__lead">Bạn sắp <b>{{ action_name|lower }}</b> phiếu</p>
+        <p class="khbl-confirm__lead">Bạn sắp <b>{{ action_name|lower }}</b> {% if group_action %}toàn bộ {{ group_count }} phiếu trong nhóm{% else %}phiếu{% endif %}</p>
         <p class="khbl-confirm__bill mono">{{ bill_code|default:trn_id }}</p>
         <div class="khbl-confirm__warning">{% if action == "thanh_toan" %}HÓA ĐƠN sẽ vào danh sach chờ DUYỆT.{% else %}Xóa HÓA ĐƠN này khỏi danh sách.{% endif %}</div>
         {% if loi %}<div class="khbl-confirm__error" role="alert" aria-live="assertive"><b>Không xác nhận được</b><span>{{ loi }}</span></div>{% endif %}
         <label class="khbl-field khbl-confirm__pass"><span>NHẬP PASSCODE</span><input class="khbl-input mono" type="password" name="passcode" autocomplete="current-password" required autofocus inputmode="numeric" placeholder="••••" aria-describedby="hd-confirm-hint"></label>
         
       </div>
-      <div class="khbl-confirm__foot"><button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Quay lại</button><button class="khbl-btn khbl-confirm__submit" type="submit"><span class="khbl-confirm__label">Xác nhận</span><span class="khbl-confirm__loading">Đang xử lý…</span></button></div>
+      <div class="khbl-confirm__foot"><button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Quay lại</button><button class="khbl-btn khbl-confirm__submit" type="submit" {% if blocked %}disabled{% endif %}><span class="khbl-confirm__label">Xác nhận</span><span class="khbl-confirm__loading">Đang xử lý…</span></button></div>
     </form>
   </div>
 </div>

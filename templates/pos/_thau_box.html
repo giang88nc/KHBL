@@ -4,7 +4,7 @@ công tắc GIÁ THÂU VÀO (mặc định) / GIÁ BÁN RA thay cho checkbox Đ�
 {% endcomment %}
 <section class="pg-box pg-box--doi pg-box--thau{% if phieu_chot %} pg-box--khoa{% endif %}">
   <header class="pg-box__head pg-doi-head">
-    <h3>VÀNG THÂU <i>{% if g.bill_codes %}· <b class="mono">{{ g.bill_codes|join:" · " }}</b>{% else %}· khách bán vàng cũ cho tiệm{% endif %}</i></h3>
+    
     {% if g.trn_ids %}
       {% if khoa_ngay_cu %}
         <span class="pg-khoa pg-khoa--dong pg-khoa--cu" title="Phiếu ngày khác — CHỈ XEM">🔒</span>

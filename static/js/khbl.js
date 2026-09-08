@@ -363,7 +363,7 @@
       inp.addEventListener("change", function () {
         var f = inp.files && inp.files[0];
         if (!f) return;
-        inp._capturedFile = null;
+        if (!inp._capturedFile || inp._capturedFile.name !== f.name) inp._capturedFile = null;
         showFile(inp, f);
       });
     });
@@ -445,6 +445,8 @@
         var transfer = new DataTransfer(); transfer.items.add(file); target.files = transfer.files;
       } catch (_) { /* sự kiện formdata phía trên sẽ bổ sung tệp */ }
       showFile(target, file); closeCamera();
+      // 08/09 tối (thâu): form ảnh tự tải lên theo 'change' — gán files bằng code không bắn sự kiện → bắn tay
+      try { target.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
     });
   }
 

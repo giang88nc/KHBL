@@ -23,7 +23,7 @@ def _chuoi(v):
 
 def _rong(emp=""):
     return {"lines": [], "cust": None, "emp": emp, "bu": "0", "bot": "0", "ghi_chu": "",
-            "pay_method": "cash", "tien_mat": "", "status": "", "trn_ids": [], "bill_codes": [],
+            "pay_method": "cash", "tien_mat": "", "ck_bank": "", "ck_stk": "", "ck_nd": "", "status": "", "trn_ids": [], "bill_codes": [],
             "nhom_id": "", "ngay": "", "gio": "", "kieu_ui": "thau", "sua_lai": False}
 
 
@@ -84,7 +84,7 @@ def tong_cua(g):
          "tl_vang": sum((M.dec(x["tl_vang"]) for x in g["lines"]), M.D0),
          "tl_hot": sum((M.dec(x["tl_hot"]) for x in g["lines"]), M.D0)}
     t["botle_goiy"] = [{"tien": v, "val": str(int(v))} for v in M.bot_le_goiy(tra + bot)] if tra > 0 else []
-    t["pay_method"] = g.get("pay_method") or "cash"
+    t["pay_method"] = "bank" if g.get("pay_method") in ("bank", "card") else "cash"   # 08/09 tối: BỎ THẺ, chỉ tiền mặt / CK
     raw = g.get("tien_mat")
     if raw in (None, ""):
         cash = tra if t["pay_method"] == "cash" else M.D0
@@ -146,6 +146,7 @@ def nap(request, rows, nhom=None, emp=""):
     if nhom is not None:
         g["nhom_id"] = str(nhom.pk)
         g["pay_method"] = nhom.pay_method or g["pay_method"]
+        g["ck_bank"], g["ck_stk"], g["ck_nd"] = nhom.ck_bank or "", nhom.ck_stk or "", nhom.ck_nd or g["bill_codes"][0]
         for i, kieu in enumerate(nhom.kieu or []):
             if i < len(g["lines"]):
                 g["lines"][i]["kieu"] = kieu
