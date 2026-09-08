@@ -348,12 +348,10 @@ class Command(BaseCommand):
             self.ok("C11c6 server cũng chặn sửa/hủy đơn ngày cũ",
                     "NGÀY KHÁC" in body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "x"})))
             s0 = cl.session; s0["phieu"]["ngay"] = ng0; s0.save()
-            # passcode RIÊNG từng user (bảng unlock_passcodes) — đặt tạm cho user smoke rồi trả lại như cũ
-            from apps.pos.models import UnlockPasscode
-            cu = UnlockPasscode.objects.filter(user=u).first()
-            hash_cu = cu.hash if cu else None
-            pc, _ = UnlockPasscode.objects.get_or_create(user=u, defaults={"hash": "!"})
-            pc.dat("smoke-1276")
+            # Passcode riêng của user nằm tại auth_user.passcode — đặt tạm rồi hoàn nguyên sau smoke.
+            from apps.pos import passcode as PC
+            hash_cu = PC.lay_hash(u)
+            PC.dat(u, "smoke-1276")
             try:
                 with override_settings(KHBL_UNLOCK_PASSCODE="env-khac"):
                     b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "env-khac"}))
@@ -369,8 +367,7 @@ class Command(BaseCommand):
                 self.ok("C11g đổi passcode: 2 lần mới không khớp → từ chối", "không khớp" in b)
                 b = body(cl.post("/tai-khoan/passcode/luu/", {"user": u.pk, "hien_tai": "smoke-1276", "moi": "9999", "moi2": "9999"}))
                 self.ok("C11h đổi passcode đúng → lưu (băm, không plain)",
-                        "Đã lưu" in b and UnlockPasscode.objects.get(user=u).kiem("9999")
-                        and "9999" not in UnlockPasscode.objects.get(user=u).hash)
+                        "Đã lưu" in b and PC.kiem(u, "9999") and "9999" not in PC.lay_hash(u))
                 # chống 2 người cùng sửa: mốc trong session lệch mốc KK → từ chối, không đụng KK
                 s = cl.session; upd_that = s["phieu"].get("upd"); s["phieu"]["upd"] = "1900-01-01 00:00:00"; s.save()
                 b = body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "9999"}))
@@ -427,10 +424,7 @@ class Command(BaseCommand):
                         "Đã HỦY HÓA ĐƠN" in b and BillAudit.objects.filter(trn_id=hd["TrnID"], action="HUY_HD").exists(),
                         self._trich(b))
             finally:
-                if hash_cu:
-                    UnlockPasscode.objects.filter(user=u).update(hash=hash_cu)
-                else:
-                    UnlockPasscode.objects.filter(user=u).delete()
+                PC.gan_hash(u, hash_cu)
             self.ok("C14 hóa đơn biến mất khỏi CSDL",
                     not self.c.query("SELECT TrnID FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
                                      (hd["TrnID"],)))

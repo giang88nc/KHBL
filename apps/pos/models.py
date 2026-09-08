@@ -16,9 +16,12 @@ class PriceDisplay(models.Model):
 
 
 class UnlockPasscode(models.Model):
-    """PASSCODE mở khóa hóa đơn đã chốt — MỖI USER 1 passcode (GĐ chốt 07/09/2026), lưu MÃ BĂM Django
-    (không plain text). User tự đổi (phải nhập passcode hiện tại / mật khẩu web nếu chưa có) hoặc
-    superuser đặt cho bất kỳ ai. Kiểm ở views._passcode_dung: bản ghi này > .env > mật khẩu web."""
+    """Kho passcode cũ, chỉ giữ để migration sang ``auth_user.passcode``.
+
+    Từ PMV 0008 passcode mặc định nằm ngay trên tài khoản web (auth_user), nên
+    runtime không còn đọc hoặc ghi bảng này. Bảng được giữ nguyên để không mất dữ
+    liệu cũ và để các bản sao DB có thể nâng cấp an toàn.
+    """
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="unlock_passcode")
     hash = models.CharField("Passcode (băm)", max_length=128)

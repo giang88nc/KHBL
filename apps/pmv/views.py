@@ -2,8 +2,11 @@ import datetime
 import json
 import time
 
+from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -13,9 +16,198 @@ from . import behavior_log as BL
 from . import diff as diffmod
 from . import gateway
 from . import quy_trinh as QT
-from .models import PmvAudit, PmvBehavior, PmvChange, PmvProcess, PmvProcessStep, PmvSnapshot, PmvState
+from apps.pos import passcode as PC
+from .models import (
+    PmvAudit, PmvBehavior, PmvChange, PmvProcess, PmvProcessStep, PmvSnapshot,
+    PmvState, PmvUser, PmvWebUser, UserModuleAccess,
+)
 
 DANH_DAU_KEY = "pmv_danh_dau"   # JSON {snap_id, luc, seq} khi đang ở giữa TRƯỚC và SAU
+
+
+def _require_user_administrator(request):
+    """Quản trị tài khoản là quyền kỹ thuật, chỉ Superuser mới được thực hiện."""
+    if not request.user.is_authenticated or not request.user.is_superuser:
+        raise PermissionDenied("Chỉ tài khoản Superuser được quản trị người dùng.")
+
+
+def _rights_for_user(user):
+    """Ma trận quyền sẵn để render form, một phần tử cho mỗi danh mục."""
+    current = {item.module: item for item in user.module_accesses.all()} if user else {}
+    return [
+        {
+            "code": code,
+            "label": label,
+            "can_view": user.is_superuser or bool(current.get(code) and current[code].can_view),
+            "can_edit": user.is_superuser or bool(current.get(code) and current[code].can_edit),
+            "can_delete": user.is_superuser or bool(current.get(code) and current[code].can_delete),
+            "can_approve": user.is_superuser or bool(current.get(code) and current[code].can_approve),
+        }
+        for code, label in UserModuleAccess.Module.choices
+    ]
+
+
+def _user_form_context(target, *, error="", form_data=None):
+    selected_pmv_id = PmvWebUser.objects.filter(web_user=target).values_list("pmv_user_id", flat=True).first() if target else ""
+    form_data = form_data or {}
+
+    def initial_value(name):
+        return form_data.get(name, "") if form_data else getattr(target, name, "") if target else ""
+
+    return {
+        "target_user": target,
+        "pmv_users": PmvUser.objects.order_by("full_name", "user_name"),
+        "rights": _rights_for_user(target) if target else [
+            {"code": code, "label": label, "can_view": False, "can_edit": False,
+             "can_delete": False, "can_approve": False}
+            for code, label in UserModuleAccess.Module.choices
+        ],
+        "error": error,
+        "form_data": form_data,
+        "username_value": initial_value("username"),
+        "email_value": initial_value("email"),
+        "first_name_value": initial_value("first_name"),
+        "last_name_value": initial_value("last_name"),
+        "selected_pmv_id": selected_pmv_id,
+        "target_user_id": target.pk if target else None,
+        "has_unlock_passcode": PC.da_dat(target),
+        "is_active_value": "is_active" in form_data if form_data else target.is_active if target else True,
+        "is_staff_value": "is_staff" in form_data if form_data else target.is_staff if target else False,
+        "is_superuser_value": "is_superuser" in form_data if form_data else target.is_superuser if target else False,
+        "nav_active": "hethong",
+    }
+
+
+def user_list(request):
+    """Danh sách tài khoản đăng nhập KHBL và trạng thái phân quyền từng người."""
+    _require_user_administrator(request)
+    User = get_user_model()
+    users = list(User.objects.prefetch_related("module_accesses", "pmv_mappings__pmv_user").order_by("username"))
+    for item in users:
+        item.right_count = sum(1 for access in item.module_accesses.all() if access.can_view)
+        mapping = next(iter(item.pmv_mappings.all()), None)
+        item.pmv_link = mapping.pmv_user if mapping else None
+    return render(request, "pmv/user_list.html", {"users": users, "nav_active": "hethong"})
+
+
+def user_form(request, user_id=None):
+    """Tạo hoặc sửa tài khoản; ma trận quyền luôn được UPSERT theo từng danh mục."""
+    _require_user_administrator(request)
+    User = get_user_model()
+    target = User.objects.filter(pk=user_id).prefetch_related("module_accesses").first() if user_id else None
+    if user_id and target is None:
+        raise PermissionDenied("Không tìm thấy tài khoản cần chỉnh sửa.")
+
+    if request.method != "POST":
+        return render(request, "pmv/user_form.html", _user_form_context(target))
+
+    username = request.POST.get("username", "").strip()
+    first_name = request.POST.get("first_name", "").strip()
+    last_name = request.POST.get("last_name", "").strip()
+    email = request.POST.get("email", "").strip()
+    password = request.POST.get("password", "")
+    password_confirm = request.POST.get("password_confirm", "")
+    unlock_passcode = request.POST.get("unlock_passcode", "").strip()
+    remove_unlock_passcode = request.POST.get("remove_unlock_passcode") == "on"
+    pmv_user_id = request.POST.get("pmv_user_id", "").strip()
+    form_data = request.POST
+
+    error = ""
+    if not username:
+        error = "Cần nhập tên đăng nhập."
+    elif len(username) > 150 or not all(char.isalnum() or char in "@.+-_" for char in username):
+        error = "Tên đăng nhập chỉ dùng chữ, số và các ký tự @ . + - _."
+    elif User.objects.exclude(pk=target.pk if target else None).filter(username__iexact=username).exists():
+        error = "Tên đăng nhập này đã tồn tại."
+    elif not target and not password:
+        error = "Tài khoản mới cần có mật khẩu."
+    elif password and len(password) < 6:
+        error = "Mật khẩu cần ít nhất 6 ký tự."
+    elif password != password_confirm:
+        error = "Nhập lại mật khẩu chưa khớp."
+    elif unlock_passcode and not 4 <= len(unlock_passcode) <= 20:
+        error = "Passcode mở khóa cần từ 4 đến 20 ký tự."
+    elif unlock_passcode and remove_unlock_passcode:
+        error = "Chọn một trong hai: đặt passcode mới hoặc xóa passcode riêng."
+
+    pmv_user = PmvUser.objects.filter(pk=pmv_user_id).first() if pmv_user_id else None
+    if not error and pmv_user_id and pmv_user is None:
+        error = "Không tìm thấy tài khoản PMV đã chọn."
+    requested_superuser = request.POST.get("is_superuser") == "on"
+    if not error and target == request.user and not requested_superuser:
+        error = "Không thể tự bỏ quyền Superuser của tài khoản đang đăng nhập."
+
+    if error:
+        return render(request, "pmv/user_form.html", _user_form_context(target, error=error, form_data=form_data))
+
+    with transaction.atomic():
+        created = target is None
+        if target is None:
+            target = User(username=username)
+        target.username = username
+        target.first_name = first_name
+        target.last_name = last_name
+        target.email = email
+        target.is_active = request.POST.get("is_active") == "on"
+        target.is_staff = request.POST.get("is_staff") == "on"
+        target.is_superuser = requested_superuser
+        if password:
+            target.set_password(password)
+        target.save()
+
+        # Một Web User chọn một hồ sơ PMV; nhiều Web User được phép dùng chung hồ sơ này.
+        if pmv_user:
+            PmvWebUser.objects.update_or_create(
+                web_user=target, defaults={"pmv_user": pmv_user, "updated_by": request.user},
+            )
+        else:
+            PmvWebUser.objects.filter(web_user=target).delete()
+
+        # Chỉ có mã băm được lưu. Ô text trên form là để nhập mã MỚI hoặc đổi mã.
+        if remove_unlock_passcode:
+            PC.xoa(target)
+        elif unlock_passcode:
+            PC.dat(target, unlock_passcode)
+
+        for code, _label in UserModuleAccess.Module.choices:
+            can_edit = request.POST.get(f"right_{code}_edit") == "on"
+            can_delete = request.POST.get(f"right_{code}_delete") == "on"
+            can_approve = request.POST.get(f"right_{code}_approve") == "on"
+            can_view = request.POST.get(f"right_{code}_view") == "on" or can_edit or can_delete or can_approve
+            if target.is_superuser:
+                can_view = can_edit = can_delete = can_approve = True
+            UserModuleAccess.objects.update_or_create(
+                user=target,
+                module=code,
+                defaults={
+                    "can_view": can_view,
+                    "can_edit": can_edit,
+                    "can_delete": can_delete,
+                    "can_approve": can_approve,
+                    "updated_by": request.user,
+                },
+            )
+
+    messages.success(request, f"Đã {'tạo' if created else 'cập nhật'} tài khoản {target.username} và quyền theo danh mục.")
+    return redirect("pmv:user_list")
+
+
+@require_POST
+def user_delete(request, user_id):
+    _require_user_administrator(request)
+    User = get_user_model()
+    target = User.objects.filter(pk=user_id).first()
+    if target is None:
+        messages.error(request, "Tài khoản không còn tồn tại.")
+    elif target == request.user:
+        messages.error(request, "Không thể xóa tài khoản đang đăng nhập.")
+    elif target.is_superuser and User.objects.filter(is_superuser=True, is_active=True).count() <= 1:
+        messages.error(request, "Cần giữ lại ít nhất một Superuser đang hoạt động.")
+    else:
+        username = target.username
+        target.delete()
+        messages.success(request, f"Đã xóa tài khoản {username}.")
+    return redirect("pmv:user_list")
 
 
 def status(request):

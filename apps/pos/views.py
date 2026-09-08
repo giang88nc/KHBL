@@ -19,9 +19,9 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.pmv import money as M
 from apps.pmv.client import PmvClient, PmvProcError
-from apps.pmv.models import PmvUser
+from apps.pmv.models import pmv_user_for_web_user
 
-from . import bill as B, cart, cccd, customer as C, services as S, vietqr as QR
+from . import bill as B, cart, cccd, customer as C, passcode as PC, services as S, vietqr as QR
 
 
 logger = logging.getLogger(__name__)
@@ -165,7 +165,7 @@ def _so_tl(x):
 
 def _phien(request):
     """Bối cảnh PMV của người đang đăng nhập: tài khoản · két · tiệm."""
-    pu = PmvUser.objects.filter(django_user=request.user).first()
+    pu = pmv_user_for_web_user(request.user)
     tiem = S.thong_tin_tiem() or {}
     return {
         "user_id": (pu.user_id if pu else ""),
@@ -246,20 +246,18 @@ def _dang_khoa(request):
 
 
 def _passcode_cua(user):
-    from .models import UnlockPasscode
-    return UnlockPasscode.objects.filter(user=user).first() if user and user.is_authenticated else None
+    return PC.lay_hash(user)
 
 
 def _passcode_dung(request, ma):
-    """Thứ tự kiểm (GĐ chốt 07/09/2026): passcode RIÊNG của user (bảng unlock_passcodes) → nếu chưa
-    đặt: KHBL_UNLOCK_PASSCODE (.env) → nếu trống: mật khẩu web của chính người đang đăng nhập."""
+    """Ưu tiên passcode băm tại auth_user, sau đó .env rồi mật khẩu web."""
     from django.conf import settings as st
     ma = (ma or "").strip()
     if not ma:
         return False
     rieng = _passcode_cua(request.user)
     if rieng:
-        return rieng.kiem(ma)
+        return PC.kiem(request.user, ma)
     cau_hinh = (getattr(st, "KHBL_UNLOCK_PASSCODE", "") or "").strip()
     if cau_hinh:
         return secrets.compare_digest(ma, cau_hinh)
@@ -269,7 +267,7 @@ def _passcode_dung(request, ma):
 def _passcode_ctx(request, target=None, loi="", ok=""):
     from django.contrib.auth import get_user_model
     target = target or request.user
-    return {"target": target, "co_pc": bool(_passcode_cua(target)), "loi": loi, "ok": ok,
+    return {"target": target, "co_pc": PC.da_dat(target), "loi": loi, "ok": ok,
             "la_admin": request.user.is_superuser, "tu_minh": target.pk == request.user.pk,
             "users": get_user_model().objects.filter(is_active=True).order_by("username")
             if request.user.is_superuser else []}
@@ -291,7 +289,6 @@ def passcode_save(request):
     """Lưu passcode. Tự đổi của mình → phải nhập passcode HIỆN TẠI (chưa có → mật khẩu web).
     Superuser đặt cho người khác → không cần hiện tại. 4–20 ký tự, nhập 2 lần khớp."""
     from django.contrib.auth import get_user_model
-    from .models import UnlockPasscode
     target = request.user
     uid = (request.POST.get("user") or "").strip()
     if uid and str(request.user.pk) != uid:
@@ -309,12 +306,11 @@ def passcode_save(request):
     if target.pk == request.user.pk:
         hien = (request.POST.get("hien_tai") or "").strip()
         rieng = _passcode_cua(request.user)
-        dung = rieng.kiem(hien) if rieng else request.user.check_password(hien)
+        dung = PC.kiem(request.user, hien) if rieng else request.user.check_password(hien)
         if not dung:
             return render(request, "pos/_passcode_modal.html", _passcode_ctx(
                 request, target, loi="Passcode hiện tại không đúng." if rieng else "Mật khẩu web không đúng."))
-    pc, _ = UnlockPasscode.objects.get_or_create(user=target, defaults={"hash": "!"})
-    pc.dat(moi, boi=request.user)
+    PC.dat(target, moi)
     logger.info("Passcode mở khóa: %s đặt cho %s", request.user.username, target.username)
     return render(request, "pos/_passcode_modal.html", _passcode_ctx(
         request, target, ok=f"Đã lưu passcode mở khóa cho {target.username}."))

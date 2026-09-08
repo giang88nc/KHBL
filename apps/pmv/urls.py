@@ -6,6 +6,10 @@ app_name = "pmv"
 
 urlpatterns = [
     path("", views.status, name="status"),
+    path("nguoi-dung/", views.user_list, name="user_list"),
+    path("nguoi-dung/them/", views.user_form, name="user_create"),
+    path("nguoi-dung/<int:user_id>/", views.user_form, name="user_edit"),
+    path("nguoi-dung/<int:user_id>/xoa/", views.user_delete, name="user_delete"),
     path("doi-dich/", views.doi_dich, name="doi_dich"),
     # Kho lịch sử PMV_KH2_HIST (Phase 3, 06/09/2026)
     path("kho-lich-su/", views.hist_view, name="hist"),

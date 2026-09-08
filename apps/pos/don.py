@@ -16,7 +16,7 @@ import json
 from django.core.cache import cache
 
 from apps.pmv import money as M
-from apps.pmv.models import PmvUser
+from apps.pmv.models import pmv_user_for_web_user
 
 from . import bill as B, cart, services as S
 
@@ -24,7 +24,7 @@ TREO_PHUT = 30      # GĐ chốt 05/09/2026: đơn W treo quá 30 phút thì nh�
 
 
 def phien(request):
-    pu = PmvUser.objects.filter(django_user=request.user).first()
+    pu = pmv_user_for_web_user(request.user)
     tiem = S.thong_tin_tiem() or {}
     return {"user_id": (pu.user_id if pu else "") or "", "till_id": (pu.till_id if pu else "") or "",
             "shop_id": tiem.get("ShopID") or ""}

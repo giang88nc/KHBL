@@ -1,5 +1,5 @@
 from apps.pmv import gateway
-from apps.pmv.models import PmvState, PmvUser
+from apps.pmv.models import PmvState, pmv_user_for_web_user
 
 from . import services as S
 
@@ -12,7 +12,7 @@ def khbl(request):
     thông tin tiệm cho chân trang."""
     pu = None
     if getattr(request, "user", None) and request.user.is_authenticated:
-        pu = PmvUser.objects.filter(django_user=request.user).first()
+        pu = pmv_user_for_web_user(request.user)
     try:
         tiem = S.thong_tin_tiem()
     except Exception:

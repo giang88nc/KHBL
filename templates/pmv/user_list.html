@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Người dùng & quyền{% endblock %}
+{% block page_title %}Người dùng & quyền{% endblock %}
+{% block page_sub %}Quản lý tài khoản đăng nhập KHBL và quyền thao tác theo từng danh mục.{% endblock %}
+{% block page_tools %}
+<a class="khbl-btn khbl-btn--outline" href="{% url 'pmv:status' %}">← Hệ thống</a>
+<a class="khbl-btn" href="{% url 'pmv:user_create' %}">+ Thêm người dùng</a>
+{% endblock %}
+
+{% block content %}
+<section class="usr-summary">
+  <div class="usr-summary__icon">👥</div>
+  <div><b>{{ users|length }} tài khoản</b><span>Chỉ Superuser có thể tạo, sửa, xóa và UPSERT quyền.</span></div>
+  <div class="usr-summary__rule">Quyền được lưu theo từng danh mục: xem · tạo/sửa · hủy/xóa · duyệt/chốt.</div>
+</section>
+
+<section class="usr-list" aria-label="Danh sách người dùng">
+  {% for account in users %}
+  <article class="usr-card{% if not account.is_active %} is-off{% endif %}">
+    <div class="usr-card__avatar">{{ account.username|slice:":2"|upper }}</div>
+    <div class="usr-card__main">
+      <div class="usr-card__name">
+        <b>{{ account.get_full_name|default:account.username }}</b>
+        {% if account.is_superuser %}<span class="usr-pill usr-pill--admin">SUPERUSER</span>
+        {% elif account.is_staff %}<span class="usr-pill">NHÂN VIÊN HỆ THỐNG</span>{% endif %}
+        {% if not account.is_active %}<span class="usr-pill usr-pill--off">TẠM KHÓA</span>{% endif %}
+      </div>
+      <div class="usr-card__login">{{ account.username }}{% if account.email %}<i>·</i>{{ account.email }}{% endif %}</div>
+      <div class="usr-card__meta">
+        {% if account.pmv_link %}<span>Mã PMV <b>{{ account.pmv_link.user_id }}</b></span><span>{{ account.pmv_link.full_name|default:account.pmv_link.user_name }}</span>{% else %}<span>Chưa liên kết tài khoản PMV</span>{% endif %}
+        <span>{{ account.right_count }} / 7 danh mục được xem</span>
+        {% if account.last_login %}<span>Vào gần nhất {{ account.last_login|date:"d/m/Y H:i" }}</span>{% else %}<span>Chưa từng đăng nhập</span>{% endif %}
+      </div>
+    </div>
+    <div class="usr-card__actions">
+      <a class="khbl-btn khbl-btn--outline khbl-btn--sm" href="{% url 'pmv:user_edit' account.pk %}">Chỉnh sửa</a>
+    </div>
+  </article>
+  {% empty %}
+  <div class="khbl-empty">Chưa có tài khoản nào.</div>
+  {% endfor %}
+</section>
+{% endblock %}

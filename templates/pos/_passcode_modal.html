@@ -1,5 +1,5 @@
 {% extends "partials/modal_shell.html" %}{% comment %}
-Popup ĐẶT / ĐỔI PASSCODE mở khóa hóa đơn (GĐ chốt 07/09/2026): mỗi user 1 passcode (băm, bảng unlock_passcodes).
+Popup ĐẶT / ĐỔI PASSCODE mở khóa hóa đơn: mỗi user 1 passcode (băm, cột auth_user.passcode).
 - Tự đổi: nhập passcode hiện tại (chưa có → mật khẩu web) + passcode mới 2 lần.
 - Superuser: chọn user bất kỳ → đặt mới không cần passcode hiện tại của người đó.
 Form hx-target = #modal-root → popup render lại kèm lỗi / báo đã lưu.

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{% if target_user %}Sửa {{ target_user.username }}{% else %}Thêm người dùng{% endif %}{% endblock %}
+{% block page_title %}{% if target_user %}Chỉnh sửa người dùng{% else %}Thêm người dùng{% endif %}{% endblock %}
+{% block page_sub %}Tài khoản đăng nhập, liên kết PMV và quyền vận hành được lưu theo từng danh mục.{% endblock %}
+{% block page_tools %}<a class="khbl-btn khbl-btn--outline" href="{% url 'pmv:user_list' %}">← Danh sách User</a>{% endblock %}
+
+{% block content %}
+{% if error %}<div class="khbl-alert khbl-alert--do"><b>Không thể lưu</b><div>{{ error }}</div></div>{% endif %}
+<form method="post" class="usr-form" id="user-form" novalidate>
+  {% csrf_token %}
+  <section class="usr-panel">
+    <div class="usr-panel__head"><div><b>Thông tin đăng nhập</b><span>Tài khoản dùng để vào hệ thống KHBL.</span></div>{% if target_user %}<code>#{{ target_user.pk }} · tạo {{ target_user.date_joined|date:"d/m/Y H:i" }}</code>{% endif %}</div>
+    <div class="usr-fields">
+      <label><span>Tên đăng nhập <em>*</em></span><input class="khbl-input" name="username" required maxlength="150" autocomplete="username" value="{{ username_value }}"></label>
+      <label><span>Email</span><input class="khbl-input" type="email" name="email" autocomplete="email" value="{{ email_value }}"></label>
+      <label><span>Họ</span><input class="khbl-input" name="last_name" autocomplete="family-name" value="{{ last_name_value }}"></label>
+      <label><span>Tên</span><input class="khbl-input" name="first_name" autocomplete="given-name" value="{{ first_name_value }}"></label>
+      <label><span>{% if target_user %}Mật khẩu mới{% else %}Mật khẩu <em>*</em>{% endif %}</span><input class="khbl-input" type="password" name="password" {% if not target_user %}required{% endif %} autocomplete="new-password" placeholder="{% if target_user %}Để trống nếu không đổi{% else %}Từ 6 ký tự{% endif %}"></label>
+      <label><span>Nhập lại mật khẩu</span><input class="khbl-input" type="password" name="password_confirm" {% if not target_user %}required{% endif %} autocomplete="new-password"></label>
+      <label><span>Passcode mở khóa hóa đơn</span><input class="khbl-input mono" type="text" name="unlock_passcode" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="{% if has_unlock_passcode %}Nhập mã mới để thay đổi{% else %}4–20 ký tự{% endif %}"><small class="usr-field-note">{% if has_unlock_passcode %}Đã cài passcode mặc định trong auth_user. Để trống để giữ nguyên.{% else %}Chưa cài mã riêng · hệ thống sẽ dùng mật khẩu web khi xác nhận.{% endif %}</small></label>
+      {% if target_user %}<label class="usr-passcode-clear"><span><input type="checkbox" name="remove_unlock_passcode"> Bỏ passcode riêng</span><small>Quay lại dùng mật khẩu web để xác nhận thao tác khóa.</small></label>{% endif %}
+      <label class="usr-fields__wide"><span>Tài khoản PMV / nhân viên</span>
+        <select class="khbl-select" name="pmv_user_id">
+          <option value="">— Chưa liên kết PMV —</option>
+          {% for pmv in pmv_users %}<option value="{{ pmv.pk }}" {% if form_data.pmv_user_id == pmv.pk or not form_data and selected_pmv_id == pmv.pk %}selected{% endif %}>{{ pmv.full_name|default:pmv.user_name }} · {{ pmv.user_name }} · {{ pmv.user_id }}{% if pmv.till_code %} · két {{ pmv.till_code }}{% endif %}</option>{% endfor %}
+        </select>
+        <small class="usr-field-note">Nhiều User Web có thể dùng chung một tài khoản PMV/KK. Hệ thống sẽ dùng UserID, nhân viên và két của hồ sơ này khi bán hoặc thâu.</small>
+      </label>
+    </div>
+    <div class="usr-toggles">
+      <label><input type="checkbox" name="is_active" {% if is_active_value %}checked{% endif %}> <b>Được đăng nhập</b><small>Tắt để khóa ngay tài khoản.</small></label>
+      <label><input type="checkbox" name="is_staff" {% if is_staff_value %}checked{% endif %}> <b>Nhân viên hệ thống</b><small>Cho phép vào Django Admin nếu được cấp.</small></label>
+      <label class="usr-toggles__admin"><input type="checkbox" name="is_superuser" {% if is_superuser_value %}checked{% endif %}> <b>Superuser · toàn quyền</b><small>Vượt toàn bộ giới hạn danh mục.</small></label>
+    </div>
+  </section>
+
+  <section class="usr-panel">
+    <div class="usr-panel__head"><div><b>Quyền theo danh mục</b><span>Chọn quyền thực tế cần dùng. Bật thao tác sẽ tự có quyền xem danh mục đó.</span></div><code>UPSERT</code></div>
+    <div class="usr-rights-wrap">
+      <table class="usr-rights">
+        <thead><tr><th>Danh mục</th><th><span>Xem</span></th><th><span>Tạo / sửa</span></th><th><span>Hủy / xóa</span></th><th><span>Duyệt / chốt</span></th></tr></thead>
+        <tbody>{% for right in rights %}<tr>
+          <th>{{ right.label }}</th>
+          <td><input aria-label="{{ right.label }} xem" type="checkbox" name="right_{{ right.code }}_view" {% if right.can_view %}checked{% endif %}></td>
+          <td><input aria-label="{{ right.label }} tạo sửa" type="checkbox" name="right_{{ right.code }}_edit" {% if right.can_edit %}checked{% endif %}></td>
+          <td><input aria-label="{{ right.label }} hủy xóa" type="checkbox" name="right_{{ right.code }}_delete" {% if right.can_delete %}checked{% endif %}></td>
+          <td><input aria-label="{{ right.label }} duyệt chốt" type="checkbox" name="right_{{ right.code }}_approve" {% if right.can_approve %}checked{% endif %}></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="usr-savebar">
+    <div>{% if target_user and target_user.is_superuser %}<b>Superuser luôn toàn quyền.</b> Ma trận vẫn được ghi đủ để thuận tiện khi đổi vai trò.{% else %}Quyền được UPSERT theo từng danh mục khi bấm Lưu.{% endif %}</div>
+    <button class="khbl-btn" type="submit">{% if target_user %}Lưu thay đổi{% else %}Tạo người dùng{% endif %}</button>
+  </div>
+</form>
+
+{% if target_user and target_user != request.user %}
+<section class="usr-danger">
+  <div><b>Xóa người dùng</b><span>Thao tác này xóa tài khoản web và toàn bộ quyền đã cấp. Liên kết PMV được tháo tự động.</span></div>
+  <form method="post" action="{% url 'pmv:user_delete' target_user.pk %}" onsubmit="return confirm('Xóa tài khoản {{ target_user.username }}?');">{% csrf_token %}<button class="khbl-btn khbl-btn--danger" type="submit">Xóa tài khoản</button></form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.usr-rights tbody tr').forEach(function(row){
+  var boxes = row.querySelectorAll('input[type="checkbox"]');
+  boxes.forEach(function(box, index){
+    if(index > 0) box.addEventListener('change', function(){ if(this.checked) boxes[0].checked = true; });
+  });
+});
+</script>
+{% endblock %}

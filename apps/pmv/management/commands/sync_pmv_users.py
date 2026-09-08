@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.pmv.gateway import pmv_read
-from apps.pmv.models import PmvUser
+from apps.pmv.models import PmvUser, PmvWebUser
 
 
 class Command(BaseCommand):
@@ -53,13 +53,14 @@ class Command(BaseCommand):
             dj.is_staff = True
             dj.is_superuser = dj.is_superuser or uname == "admin"
             dj.save()
-            PmvUser.objects.update_or_create(user_id=r["UserID"], defaults={
+            pmv_user, _ = PmvUser.objects.update_or_create(user_id=r["UserID"], defaults={
                 "user_name": uname, "password": dj.password,
                 "first_name": r["FirstName"] or "", "last_name": r["LastName"] or "",
                 "full_name": r["FullName"] or "", "is_admin": r["IsAdmin"] or "0",
                 "active": r["Active"] or "1", "shop_id": r["ShopID"] or "", "emp_id": r["EmpID"] or "",
                 "till_id": r["TillID"] or "", "till_code": r["TillCode"] or "", "django_user": dj,
             })
+            PmvWebUser.objects.update_or_create(web_user=dj, defaults={"pmv_user": pmv_user})
             self.stdout.write(
                 f"  {uname:<10} UserID={r['UserID']} EmpID={r['EmpID']} Till={r['TillID']} ({r['TillCode']}) "
                 f"→ web user {'TẠO MỚI' if created else 'cập nhật'}{' + đặt lại mật khẩu' if (created or opts['reset_password']) else ''}"

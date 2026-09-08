@@ -1,0 +1,72 @@
+{
+  "code": "HUY_THAU_VAO",
+  "name": "Hủy đơn thâu vàng",
+  "description": "",
+  "status": "approved",
+  "version": 2,
+  "source": "HỌC từ đánh dấu seq 2335072→2335879 (08/09/2026 07:24, admin)",
+  "updated_at": "2026-09-08T07:25:06.886367+07:00",
+  "phases": [
+    {
+      "title": "Đã học 08/09 07:24 — chưa phân nhóm",
+      "note": "Bảng đổi trong khung: ErrorLog, I_CUSTOMER, I_LICHSUTICHLUYDIEM, TRN_RT_BUYGOLD, TRN_RT_BUYGOLD_Log, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL, T_TILL_TXN_DETAIL_Log, T_TILL_TXN_Log",
+      "steps": [
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Del",
+          "proc_name": "T_TILL_TXN_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec [T_TILL_TXN_Del] @p_TrnRefID='TBG260900000371',@pType=N'BRT',@pCongNoBanLe=0,@p_UserUpd='US2410000000001',@p_TrnDateTime_Upd='Sep 8 2026 7:18:42:790AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_Type='1'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ thâu: TRN_RT_BUYGOLD_Del",
+          "proc_name": "TRN_RT_BUYGOLD_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYGOLD_Del @p_TrnID='TBG260900000371',@p_UserUpd='US2410000000001',@p_TrnDateTime_Upd='Sep 8 2026 7:23:12:657AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_TrnID_GDN=''",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Del",
+          "proc_name": "T_TILL_TXN_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec [T_TILL_TXN_Del] @p_TrnRefID='TBG260900000370',@pType=N'BRT',@pCongNoBanLe=0,@p_UserUpd='US2410000000001',@p_TrnDateTime_Upd='Sep 8 2026 7:18:42:883AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_Type='1'",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "HĐ thâu: TRN_RT_BUYGOLD_Del",
+          "proc_name": "TRN_RT_BUYGOLD_Del",
+          "action": "ghi",
+          "repeat": false,
+          "params": "exec TRN_RT_BUYGOLD_Del @p_TrnID='TBG260900000370',@p_UserUpd='US2410000000001',@p_TrnDateTime_Upd='Sep 8 2026 7:23:15:597AM',@p_TrnDateTime_Upd_GDN='Jan 1 1900 12:00:00:000AM',@p_TrnID_GDN=''",
+          "tables": "",
+          "khbl": "kiem",
+          "doi_chieu": "chua",
+          "note": ""
+        },
+        {
+          "title": "Sổ quỹ: T_TILL_TXN_Lst",
+          "proc_name": "T_TILL_TXN_Lst",
+          "action": "đọc",
+          "repeat": false,
+          "params": "exec T_TILL_TXN_Lst @p_TillTxnID='',@p_TillID='',@p_TrnRefID='',@p_TrnFromDate='08/09/2026',@p_TrnToDate='08/09/2026',@p_FromTime='07:21:41',@p_ToTime='07:21:41',@p_TrnType='',@p_TrnCode='',@p_CustID='',@p_GoldCcy='',@p_TrnAmount='',@p_Status='P',@p_TillUserID='',@p_Sort='',@p_ProcUserID='',@p_ShopID='',@p_BillCode=N'',@p_Description=N'',@p_RutGon='0'",
+          "tables": "",
+          "khbl": "lam",
+          "doi_chieu": "chua",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

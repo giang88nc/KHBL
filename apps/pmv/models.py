@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -212,6 +213,75 @@ class PmvUser(models.Model):
 
     def __str__(self):
         return f"{self.user_name} ({self.user_id})"
+
+
+class PmvWebUser(models.Model):
+    """Phân vai Web User → hồ sơ PMV/KK.
+
+    Mỗi tài khoản web chọn một hồ sơ PMV để lấy UserID, EmpID và TillID khi gọi
+    KK. Nhiều Web User có thể cùng chọn một PmvUser, phù hợp khi nhân viên cùng
+    thao tác trên một tài khoản/két KK. ``PmvUser.django_user`` được giữ như liên
+    kết cũ/canonical cho lệnh đồng bộ, còn runtime ưu tiên bảng này.
+    """
+    web_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pmv_mappings")
+    pmv_user = models.ForeignKey(PmvUser, on_delete=models.CASCADE, related_name="web_mappings")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        db_table = "pmv_web_users"
+        constraints = [models.UniqueConstraint(fields=("web_user",), name="uq_pmv_web_user")]
+        verbose_name = "Liên kết User web — PMV"
+        verbose_name_plural = "Liên kết User web — PMV"
+
+    def __str__(self):
+        return f"{self.web_user.username} → {self.pmv_user.user_name}"
+
+
+def pmv_user_for_web_user(web_user):
+    """Hồ sơ PMV hiệu lực của Web User, giữ fallback cho liên kết một-một cũ."""
+    if not web_user or not web_user.is_authenticated:
+        return None
+    mapping = PmvWebUser.objects.select_related("pmv_user").filter(web_user=web_user).first()
+    return mapping.pmv_user if mapping else PmvUser.objects.filter(django_user=web_user).first()
+
+
+class UserModuleAccess(models.Model):
+    """Quyền vận hành KHBL theo danh mục, tách khỏi quyền kỹ thuật của Django.
+
+    Mỗi user có tối đa một dòng cho mỗi danh mục. Trang quản trị dùng
+    ``update_or_create`` nên lưu ma trận luôn là UPSERT, không sinh bản ghi trùng.
+    Superuser luôn bỏ qua giới hạn của ma trận quyền.
+    """
+    class Module(models.TextChoices):
+        DASHBOARD = "DASHBOARD", "Tổng quan"
+        BAN_HANG = "BAN_HANG", "Bán hàng"
+        THAU_VAO = "THAU_VAO", "Thâu vào"
+        BANG_GIA = "BANG_GIA", "Bảng giá"
+        KHACH_HANG = "KHACH_HANG", "Khách hàng"
+        HOA_DON = "HOA_DON", "Hóa đơn"
+        HE_THONG = "HE_THONG", "Hệ thống"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="module_accesses")
+    module = models.CharField(max_length=20, choices=Module.choices)
+    can_view = models.BooleanField(default=False, verbose_name="Xem")
+    can_edit = models.BooleanField(default=False, verbose_name="Tạo / sửa")
+    can_delete = models.BooleanField(default=False, verbose_name="Hủy / xóa")
+    can_approve = models.BooleanField(default=False, verbose_name="Duyệt / chốt")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        db_table = "user_module_access"
+        verbose_name = "Quyền người dùng theo danh mục"
+        verbose_name_plural = "Quyền người dùng theo danh mục"
+        constraints = [models.UniqueConstraint(fields=("user", "module"), name="uq_user_module_access")]
+        ordering = ["module"]
+
+    def __str__(self):
+        return f"{self.user.username} · {self.get_module_display()}"
 
 
 class PmvSnapshot(models.Model):
