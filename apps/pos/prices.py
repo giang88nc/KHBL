@@ -179,6 +179,7 @@ def apply_kk_sync(token, user):
         from django.core.cache import cache
         cache.delete('khbl:gia_mysql')
         cache.delete('khbl:xrate')
+        cache.delete('khbl:gia_kk_canh_bao:v1')
         return len(actual)
 
 
@@ -316,6 +317,7 @@ def apply_pmv_report_sync(token, user):
         from django.core.cache import cache
         cache.delete('khbl:gia_mysql')
         cache.delete('khbl:xrate')
+        cache.delete('khbl:gia_kk_canh_bao:v1')
         return len(actual)
 
 
@@ -437,6 +439,8 @@ def sync_batch(batch):
         batch.error = ''
         batch.synced_at = timezone.now()
     batch.save(update_fields=['status', 'error', 'synced_at'])
+    from django.core.cache import cache
+    cache.delete('khbl:gia_kk_canh_bao:v1')
     return batch
 
 

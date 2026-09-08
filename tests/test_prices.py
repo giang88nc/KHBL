@@ -8,11 +8,31 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.http import QueryDict
-from django.test import TransactionTestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 
 from apps.pos import prices, price_sync
 from apps.pos.models import PriceBatch, PriceDisplay
 from apps.pmv import gateway
+
+
+class PriceKkAlertTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = get_user_model().objects.create_user("price-alert", password="123456")
+        self.client.force_login(self.user)
+
+    def test_topbar_alert_reports_cached_mssql_mismatch(self):
+        preview = {"changes": [{"gold_type": "9999"}, {"gold_type": "980"}], "issues": [],
+                   "checked_at": timezone.now()}
+        with patch("apps.pos.prices.kk_sync_preview", return_value=preview) as check:
+            response = self.client.get("/banle/bang-gia/kk-canh-bao/")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["mismatch_count"], 2)
+            self.assertTrue(response.json()["ok"])
+            self.client.get("/banle/bang-gia/kk-canh-bao/")
+            check.assert_called_once()
 
 
 class ValidationTests(UnitTestCase):

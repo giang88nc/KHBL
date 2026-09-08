@@ -341,6 +341,10 @@ kiểm thật trên trình duyệt 08/09: quét GĐB 260908060 → mở 26-09-08
 = popup XÁC NHẬN CHUNG (`HANH_DONG["xoa_nhap"]`, cờ `nhap`: KHÔNG passcode, không mốc két; hiện mã/số món/hậu quả; nút
 XÁC NHẬN autofocus, Enter = OK) → `ban_thuc_hien/xoa_nhap` → `_huy_nhap` (tách từ `ban_huy`, URL cũ còn sống) + đóng popup;
 phiếu trắng/đơn chốt → popup báo không có gì để xóa. Nút ＋ ĐƠN MỚI bỏ `hx-confirm` — bấm là mở phiếu trắng ngay.
+**TÍNH TỔNG nổi (08/09 chiều)**: nút ◀/▶ trước tiêu đề `.pg-tong__tg` thu/mở khối (class `pg-ban__body--thu` đặt trên
+`.pg-ban__body` vì `#pos-tong` bị OOB thay mỗi thao tác; click ủy quyền + nhớ `localStorage khbl.tong.thu`); thu = cột
+38px chỉ còn nút. Màn ≤1180px: cột trái GIỮ min 640px (cuộn ngang trong body, không bể form), `#pos-tong` absolute nổi
+đè bên phải (z 20, bóng). Kiểm 1400/1000px: thu 38px, mở 320px absolute.
 Popup DANH SÁCH cột KHÁCH TRẢ = 2 dòng: `PayAmount` / `⚡ CardPay` (cột có sẵn trên TRN_RT_BUYSELL = phần thẻ/CK; CardPay = PayAmount → XANH, khác → ĐỎ, CardPay = 0 → không có dòng 2) — `bill.danh_sach` SELECT thêm `ISNULL(b.CardPay,0)`.
 Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
 **MẪU IN GĐB TÙY CHỈNH (GĐ chốt 08/09/2026 — "in thực tế chữ quá nhỏ")**: module **`apps/pos/gdb_layout.py`** —

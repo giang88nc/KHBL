@@ -1075,7 +1075,6 @@ def gia_sync_pmv_report_xem(request):
 @require_POST
 def gia_sync_pmv_report_ap_dung(request):
     from . import prices
-    from django.http import HttpResponse
     try:
         count = prices.apply_pmv_report_sync(request.POST.get("sync_token", ""), request.user)
     except prices.PriceError as exc:
@@ -1124,6 +1123,34 @@ def gia_kk_trang_thai(request):
     except Exception:
         logger.exception("Không thể kiểm tra chênh lệch giá KK")
         return render(request, "pos/_gia_kk_status.html", {"loi": "Không đọc được giá KK."}, status=503)
+
+
+@require_GET
+def gia_kk_canh_bao(request):
+    """Tín hiệu nhẹ cho topbar: cache chung 10 phút, chỉ báo động khi có giá lệch thật."""
+    from django.core.cache import cache
+    from . import prices
+
+    key = "khbl:gia_kk_canh_bao:v1"
+    payload = cache.get(key)
+    if payload is None:
+        try:
+            preview = prices.kk_sync_preview()
+            payload = {
+                "ok": True,
+                "mismatch_count": len(preview["changes"]),
+                "issue_count": len(preview["issues"]),
+                "checked_at": preview["checked_at"].isoformat(),
+            }
+            cache.set(key, payload, 10 * 60)
+        except Exception:
+            # Không báo động đỏ khi chưa so sánh được; tránh gây hoang mang vì lỗi mạng tạm thời.
+            logger.exception("Không thể kiểm tra cảnh báo chênh giá KK trên topbar")
+            payload = {"ok": False, "mismatch_count": 0, "issue_count": 0}
+            cache.set(key, payload, 60)
+    response = JsonResponse(payload)
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @require_GET

@@ -52,6 +52,17 @@ document.addEventListener("mousedown", function (e) {
   });
 });
 
+/* TÍNH TỔNG thu/mở (08/09 chiều): class trên .pg-ban__body (không bị OOB thay), nhớ localStorage; nút được ủy quyền */
+(function () {
+  var body = document.querySelector(".pg-ban__body"); if (!body) return;
+  try { if (localStorage.getItem("khbl.tong.thu") === "1") body.classList.add("pg-ban__body--thu"); } catch (_) {}
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(".pg-tong__tg")) return;
+    var thu = body.classList.toggle("pg-ban__body--thu");
+    try { localStorage.setItem("khbl.tong.thu", thu ? "1" : "0"); } catch (_) {}
+  });
+})();
+
 /* phím tắt */
 document.addEventListener("keydown", function (e) {
   var map = { F2: "#o-khach", F4: "#o-de", F6: "#nut-bot-le" };

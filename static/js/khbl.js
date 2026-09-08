@@ -436,6 +436,32 @@
     window.__khblDongHo = setInterval(nhipDongHo, 1000);
   }
 
+  /* ---------- cảnh báo giá MySQL khác KK: kiểm tra server cache mỗi 10 phút ---------- */
+  function batCanhBaoGia() {
+    var alert = document.getElementById("khbl-price-alert");
+    if (!alert || alert.dataset.bound) return;
+    alert.dataset.bound = "1";
+    var message = alert.querySelector("[data-price-alert-text]");
+    function check() {
+      fetch(alert.dataset.url, { headers: { "X-Requested-With": "XMLHttpRequest" }, cache: "no-store" })
+        .then(function (response) { if (!response.ok) throw new Error("status"); return response.json(); })
+        .then(function (data) {
+          var count = Number(data.mismatch_count || 0);
+          if (data.ok && count > 0) {
+            if (message) message.textContent = count + " mã MySQL khác MSSQL";
+            alert.hidden = false;
+            document.documentElement.classList.add("khbl-gia-lech");
+          } else {
+            alert.hidden = true;
+            document.documentElement.classList.remove("khbl-gia-lech");
+          }
+        })
+        .catch(function () { alert.hidden = true; document.documentElement.classList.remove("khbl-gia-lech"); });
+    }
+    check();
+    window.setInterval(check, 10 * 60 * 1000);
+  }
+
   /* ---------- điểm vào ---------- */
   window.khblBind = function (root) {
     root = root || document;
@@ -450,7 +476,7 @@
     var f = root.querySelector("[data-autofocus]");
     if (f && !document.querySelector(".khbl-loi-nhay")) { try { f.focus(); f.select && f.select(); } catch (_) {} }
   };
-  document.addEventListener("DOMContentLoaded", function () { window.khblBind(document); batDongHo(); });
+  document.addEventListener("DOMContentLoaded", function () { window.khblBind(document); batDongHo(); batCanhBaoGia(); });
   document.addEventListener("htmx:afterSwap", function (e) { window.khblBind(e.target); });
   document.addEventListener("htmx:afterSettle", function (e) { window.khblBind(e.target); });
 })();
