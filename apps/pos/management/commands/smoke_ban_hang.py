@@ -399,9 +399,12 @@ class Command(BaseCommand):
 
                 # thanh toán lại → HỦY THANH TOÁN (passcode) → về nháp, form TRẮNG, đơn ở DS chờ
                 bf = body(cl.post("/banle/ban-hang/thanh-toan/", {"in": "1"}))
-                self.ok("C12f THANH TOÁN & IN → CHỐT + lệnh in thẳng iframe ẩn (khblInThang, raw=1&auto=1), KHÔNG popup",
+                # 08/09 chiều: in từ CHÍNH cửa sổ — tờ GĐB nằm trong mảnh OOB #pos-in, không iframe/raw, form TRẮNG
+                self.ok("C12f THANH TOÁN & IN → CHỐT + tờ GĐB trong #pos-in (khblInThang in từ cửa sổ bán) + form TRẮNG, KHÔNG popup",
                         self._trang_thai(hd["TrnID"]) == B.CHOT_ROI and "khblInThang(" in bf
-                        and "raw=1&auto=1" in bf and 'htmx.ajax("GET"' not in bf and "{#" not in bf
+                        and 'id="pos-in"' in bf and 'class="gdb-a5"' in bf and hd["BillCode"] in bf
+                        and "gdb-layout-css" in bf and "raw=1&auto=1" not in bf and "khbl-modal" not in bf
+                        and "Chưa có món nào" in bf and "{#" not in bf
                         and cl.post("/banle/ban-hang/in/dem/?im=1", {"trn_id": hd["TrnID"]}).status_code == 204)
                 braw = body(cl.get(f"/banle/hoa-don/xem/?trn_id={hd['TrnID']}&loai=BAN&nguon=live&raw=1&auto=1"))
                 self.ok("C12f2 trang in thẳng raw=1: standalone (không modal), có tờ GĐB, tự window.print()",

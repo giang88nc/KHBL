@@ -303,7 +303,7 @@ hóa đơn, popup passcode `huy_hd`) · SỬA (popup `sua`) · IN bật, TT/TT&I
 (kể cả IN, icon 🔒 thành span `.pg-khoa--cu`), server `ban_thuc_hien` cũng từ chối — chỉ xem, MỌI user. Badge
 ✎ ĐANG SỬA mã · **🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM** (`g.gio` lưu từ TrnTime khi nạp). BỎ KHÁCH TRẢ ở chân
 (`.pg-ban__foot-tra`). **THANH TOÁN → GIỮ đơn vừa chốt trên form** ở chế độ xem (`cart.nap(B.doc)`), ＋ ĐƠN MỚI để
-bán khách kế; THANH TOÁN & IN → chốt + mở luôn popup GĐB. **IN HÓA ĐƠN = popup Giấy đảm bảo A5** tái dùng
+bán khách kế; **THANH TOÁN & IN → chốt + IN THẲNG + FORM TRẮNG** (xem "IN — chốt lần 3" bên dưới). **IN HÓA ĐƠN = popup Giấy đảm bảo A5** tái dùng
 `hoa_don_chi_tiet` (`?trn_id&loai=BAN|BAN_DOI&nguon=live&in=1` — `nguon=live` đi theo công tắc đích; `in=1` → popup
 96vw + chân có nút **🖨 IN** = `ban_in_dem` POST đếm lần in vào bill_audit rồi `window.print()`; @page A5 portrait
 margin 0 đã có ở CSS gdb-a5, trình duyệt tự nhớ máy in). Nút HỦY THANH TOÁN đã BỎ khỏi chân (view `huy_tt` còn
@@ -313,6 +313,16 @@ giấy GĐB đã in sẵn, chỉ in nội dung, chữ đen viền xám); (b) **T
 **`gdb_in.html`**, tờ GĐB tách thành partial **`_gdb_a5.html`** dùng chung với popup) → trang tự `window.print()`,
 postMessage ready/done về trang mẹ để đếm lần in (`ban_in_dem`) và gỡ iframe. ⚠ Hộp thoại in của trình duyệt KHÔNG
 bỏ được bằng JS — muốn in thẳng ra máy in mặc định, chạy Chrome với cờ **`--kiosk-printing`** (shortcut máy quầy).
+**IN — chốt lần 3 (08/09 chiều, GĐ: "THANH TOÁN & IN chỉ mới chốt, chưa in ra giấy")**: log Caddy máy quầy
+(192.168.1.205, Edge 152) cho thấy iframe ẩn ĐÃ nạp `raw=1&auto=1` và `in/dem?im=1` ĐÃ đếm nhưng không ra giấy →
+Edge bỏ qua `window.print()` gọi TRONG IFRAME ẨN. Cách mới: `ban_thanh_toan` với `in=1` dựng tờ GĐB ngay (`_gdb_ctx`
+→ `render_to_string("_gdb_a5.html")` = `in_html`) nhét vào mảnh OOB **`#pos-in`** (div `.pos-in` trong base.html
+ngoài shell, `display:none` trên màn, `@media print .pos-in:not(:empty){display:block}` — shell/toast đã ẩn khi in),
+rồi `khblInThang(trn, demUrl)` (khbl.js, chữ ký MỚI) chờ ảnh mã vạch/QR nạp → đếm im=1 → **`window.print()` từ CHÍNH
+cửa sổ bán hàng** (đúng cơ chế nút 🖨 IN của popup vốn in được) → `afterprint` dọn `#pos-in`; mọi thao tác khác trả
+`#pos-in` rỗng. Đồng thời **`cart.clear` → form TRẮNG như ĐƠN MỚI** (THANH TOÁN thường vẫn giữ đơn). `_gdb_ctx` lỗi →
+vẫn chốt, toast đỏ bảo mở lại từ DANH SÁCH bấm IN. Trang `gdb_in.html` raw=1 vẫn sống cho 🖨 In thử ở trang chỉnh mẫu.
+Smoke C12f cập nhật (tờ GĐB trong OOB, không raw, form trắng).
 Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
 **MẪU IN GĐB TÙY CHỈNH (GĐ chốt 08/09/2026 — "in thực tế chữ quá nhỏ")**: module **`apps/pos/gdb_layout.py`** —
 10 KHỐI (`BLOCKS`: mã vạch, số mã vạch, thông tin HĐ, bảng món, tổng tiền, giờ-ngày, người bán, bảng vàng khách,
@@ -324,7 +334,20 @@ pos_extras) sinh `<style id="gdb-layout-css">` chèn trong `_gdb_a5.html` (mỗi
 ở chân popup GĐB): xem trước phiếu chốt gần nhất (hoặc `?trn_id=`; không có → dữ liệu mẫu `_gdb_ctx_mau`),
 **kéo-thả** khối / phím mũi tên 0,2 % (Shift 1 %), bảng số 5 cột, 💾 LƯU (POST JSON `{layout}`), ↺ Mặc định
 (`{reset:true}`), 🖨 In thử (lưu rồi mở raw=1&auto=1). JS `buildCss` PHẢI y hệt `gdb_layout.css()` (sửa 1 nơi thì
-sửa nơi kia). View `hoa_don_chi_tiet` tách thành **`_gdb_ctx(trn_id, loai, nguon)`** dùng chung. Smoke_ui 7c (3 kịch bản).
+sửa nơi kia). View `hoa_don_chi_tiet` tách thành **`_gdb_ctx(trn_id, loai, nguon)`** dùng chung. Link "Mẫu in GĐB" cũng
+nằm ở nav trang Hệ thống (`/he-thong/`). ⚠ `_gdb_ctx_mau` dòng mẫu PHẢI có key `GoldCode` (template dùng làm tham số
+filter `default:` — thiếu là nổ VariableDoesNotExist, dòng thật từ proc KK luôn có).
+**+ THIẾT LẬP MÁY IN (08/09/2026 — GĐ báo "IN thật bị TOP gần như gấp 2 từ mã vạch")**: nguyên nhân ĐO ĐƯỢC bằng
+Edge headless `--print-to-pdf` (script scratch dựng HTML 2 đường in raw + popup rồi đọc MediaBox PDF): CSS khai
+`@page{size:A5}` CỨNG (khbl.css + gdb_in.html) trong khi máy in mặc định Windows nhận khổ **Letter** (`Get-PrintConfiguration`,
+A4 tương tự) → Chromium CANH GIỮA tờ A5 trên trang lớn: dọc +35 mm (Letter) / +43 mm (A4) → mã vạch 41 mm thành ~80 mm;
+ngang +34 mm nhưng khay HP canh giữa giấy nên không thấy. Fix: `gdb_layout.css_in()` sinh khối `@media print` ĐỨNG SAU
+mọi rule in cũ (cùng !important → khai sau thắng, gdb_in.html đã BỎ @page cứng): mặc định **`@page{size:auto}`** (= khổ
+máy in đang chọn) + `.gdb-a5{top:0;margin:0 auto}` (ghim SÁT MÉP TRÊN, canh GIỮA ngang) → chọn A5 thật hay Letter/A4 đều
+đúng vị trí. Trang chỉnh mẫu thêm khối **MÁY IN** (`state._in`, lưu chung JSON key `_in`): Khổ giấy gửi máy in
+(auto/A5/A4/Letter) · Canh ngang (giữa/sát trái) · Lệch ngang/dọc **mm** (±80, âm = trái/lên) · Tỷ lệ % (50–150,
+`transform:scale`). Kiểm chứng PDF: Letter → tờ 148×210 top 0 canh giữa, mã vạch 41 mm; ép A5 + dy −5 → trang A5, lên 5 mm.
+Smoke_ui 7c → 6 kịch bản (142 PASS).
 (Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.)
 
 **BẢNG `gold_bill` + NV HỖ TRỢ (GĐ chốt 08/09/2026)** — model `GoldBill` (migration pos-0005), thuật toán

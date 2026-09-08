@@ -15,7 +15,7 @@ Bố cục (vị trí %, cỡ chữ pt) từng khối data-gdb="…" do apps/pos
 
     <section class="gdb-a5__front-items" data-gdb="front_items" aria-label="Danh sách món khách mua">
       <table>
-        <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>L.Vàng</th><th>TL vàng</th><th>TL hột</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
+        <thead><tr><th>#</th><th>Mã SP</th><th>Tên sản phẩm</th><th>Vàng</th><th>TL vàng</th><th>TL hột</th><th>Đ.Giá</th><th>Công</th><th>Thành tiền</th></tr></thead>
         <tbody>
           {% for x in lines %}
           <tr><td>{{ forloop.counter }}</td><td class="mono">{{ x.ProductCode|default:"—" }}</td><td>{{ x.ProductDesc }}</td><td>{{ x.GoldLabel|default:x.GoldCode|default:"—" }}</td><td>{{ x.tl_text|default:"—" }}</td><td>0</td><td class="num">{{ x.rate|don_gia }}</td><td class="num">{% if x.task %}{{ x.task|don_gia }}{% else %}0{% endif %}</td><td class="num"><b>{{ x.amount|tien_tran }}</b></td></tr>
@@ -53,10 +53,10 @@ Bố cục (vị trí %, cỡ chữ pt) từng khối data-gdb="…" do apps/pos
     <aside class="gdb-a5__store-side" data-gdb="store_side" aria-label="Thông tin và thanh toán tiệm giữ">
       <img class="gdb-a5__store-qr" src="{{ gdb_qr }}" alt="QR nhận diện hóa đơn {{ barcode_code }}">
       <table class="gdb-a5__store-info"><tbody>
-        <tr><th>Số HĐ:</th><td>{{ r.BillCode|default:r.TrnID }}</td></tr>
-        <tr><th>Loại GD:</th><td>{% if loai == 'THAU' %}Thâu vàng{% elif loai == 'BAN_DOI' %}Bán đổi{% else %}Bán hàng{% endif %}</td></tr>
-        <tr><th>KH:</th><td>{{ r.CustName|default:"Khách lẻ" }}</td></tr>
-        <tr><th>ĐT:</th><td>{{ r.Phone|default:"—" }}</td></tr>
+        <tr><th>🧾 </th><td>{{ r.BillCode|default:r.TrnID }}</td></tr>
+        <tr><th>📌 </th><td>{% if loai == 'THAU' %}Thâu vàng{% elif loai == 'BAN_DOI' %}Bán đổi{% else %}Bán hàng{% endif %}</td></tr>
+        <tr><th>🏷️ </th><td>{{ r.CustName|default:"Khách lẻ" }}</td></tr>
+        <tr><th>📞 </th><td>{{ r.Phone|default:"—" }}</td></tr>
       </tbody></table>
       <table class="gdb-a5__store-payment" aria-label="Thống kê thanh toán"><tbody>
         <tr><th>Tiền vàng mới</th><td>{{ r.TienBan|tien_tran }}</td></tr>
@@ -68,6 +68,6 @@ Bố cục (vị trí %, cỡ chữ pt) từng khối data-gdb="…" do apps/pos
         <tr class="gdb-a5__store-final"><th>TỔNG:</th><td class="{% if r.SoTien < 0 %}hd-negative{% endif %}">{{ r.SoTien|tien_tran }}</td></tr>
       </tbody></table>
     </aside>
-    <footer class="gdb-a5__store-footer" data-gdb="store_footer">{{ r.TrnTime }}, ngày {{ r.TrnDate|date:"d" }} tháng {{ r.TrnDate|date:"m" }} năm {{ r.TrnDate|date:"Y" }} <i>|</i> Bán: <b>{{ r.EmpName|default:"" }}</b>{% if emp_sup_name %} <i>|</i> Hỗ trợ: <b>{{ emp_sup_name }}</b>{% endif %}</footer>
+    <footer class="gdb-a5__store-footer" data-gdb="store_footer">{{ r.TrnTime }} {{ r.TrnDate|date:"d" }}/{{ r.TrnDate|date:"m" }}/{{ r.TrnDate|date:"Y" }} <i>|</i> Bán: <b>{{ r.EmpName|default:"" }}</b>{% if emp_sup_name %} <i>|</i> Hỗ trợ: <b>{{ emp_sup_name }}</b>{% endif %}</footer>
   </section>
 </article>

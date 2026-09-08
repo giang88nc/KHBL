@@ -3,6 +3,7 @@ Chân trang màn bán — mảnh OOB `#pos-foot`. GĐ chốt 08/09/2026: LUÔN 4
 IN HÓA ĐƠN (+ SỬA khi đơn chốt hôm nay), bật/tắt theo trạng thái:
 - trang trắng (chưa quét, chưa có mã) → tất cả TẮT
 - nháp có mã / đang sửa            → XÓA · THANH TOÁN · THANH TOÁN & IN bật; IN tắt
+  (THANH TOÁN → giữ đơn vừa chốt trên form; THANH TOÁN & IN → chốt + IN THẲNG từ cửa sổ này + form TRẮNG — 08/09 chiều)
 - đã chốt HÔM NAY (vừa chốt / mở lại) → XÓA (= hủy hóa đơn, passcode) · SỬA (passcode) · IN bật; TT & TT&IN tắt
 - đã chốt NGÀY CŨ                  → tất cả TẮT, chỉ xem (mọi user)
 Badge: ✎ ĐANG SỬA mã · 🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM. Không còn KHÁCH TRẢ ở chân (đã có ở TÍNH TỔNG).
@@ -27,7 +28,7 @@ Badge: ✎ ĐANG SỬA mã · 🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM. Không còn KH�
 
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% endif %}
           hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none">💰 THANH TOÁN</button>
-  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% endif %}
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% else %}title="Chốt, in Giấy đảm bảo ngay (không popup) rồi mở phiếu trắng cho khách kế"{% endif %}
           hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none">
     💰 THANH TOÁN &amp; IN</button>
   <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_ngay_cu %}disabled title="Hóa đơn ngày khác — chỉ xem"{% elif not phieu_chot %}disabled title="Thanh toán xong mới in Giấy đảm bảo"{% else %}title="Xem trước & in Giấy đảm bảo (A5 đứng)"

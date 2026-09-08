@@ -6,11 +6,11 @@
 <title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.gdbm1">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.gdbm2">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/vn_text.js' %}?v=20260905.qr5"></script>
   <script defer src="{% static 'js/cccd.js' %}?v=20260905.qr5"></script>
-  <script defer src="{% static 'js/khbl.js' %}?v=20260908.gdbin1"></script>
+  <script defer src="{% static 'js/khbl.js' %}?v=20260908.gdbin3"></script>
 {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -44,6 +44,8 @@
 
 <div id="modal-root"></div>
 <div id="toast-root" class="khbl-toast">{% include "partials/messages.html" %}</div>
+{% comment %}IN THẲNG (THANH TOÁN & IN, 08/09/2026): server nhét tờ GĐB vào đây qua OOB, ẩn trên màn, lúc in chỉ khối này hiện{% endcomment %}
+<div id="pos-in" class="pos-in" aria-hidden="true"></div>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

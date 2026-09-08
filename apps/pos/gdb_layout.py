@@ -43,9 +43,23 @@ BLOCK_MAP = {b["key"]: b for b in BLOCKS}
 CANH_PHAI = {"front_date", "front_emp", "store_side"}
 GIOI_HAN = {"left": (0, 100), "top": (0, 100), "w": (1, 100), "h": (0.5, 100), "fs": (3, 30)}
 
+# ── THIẾT LẬP MÁY IN (08/09/2026 — GĐ báo bản in thật bị dời xuống ~GẤP ĐÔI từ mã vạch) ──
+# Nguyên nhân đo được: khổ giấy máy in mặc định Windows là Letter/A4, còn CSS khai @page A5 → Edge/Chrome CANH GIỮA
+# tờ A5 trên trang lớn hơn: Letter +35 mm, A4 +43 mm theo chiều dọc (mã vạch 41 mm thành ~80 mm), chiều ngang cũng
+# +34 mm nhưng khay HP canh giữa tờ giấy nên nhìn không thấy lệch. Mặc định MỚI: @page size:auto (= khổ máy in đang
+# chọn), tờ GĐB ghim SÁT MÉP TRÊN, canh GIỮA chiều ngang → chọn A5 thật hay Letter/A4 đều đúng vị trí. Còn lệch do
+# máy in (biên cứng, RDP Easy Print…) thì nhập dx/dy mm (âm được) hoặc tỷ lệ %. Lưu chung JSON dưới key "_in".
+IN_KEY = "_in"
+IN_MAC_DINH = {"kho": "auto", "canh": "giua", "dx": 0, "dy": 0, "ty_le": 100}
+IN_KHO = {"auto": "auto", "A5": "A5 portrait", "A4": "A4 portrait", "Letter": "letter portrait"}
+IN_CANH = ("giua", "trai")
+IN_GIOI_HAN = {"dx": (-80, 80), "dy": (-80, 80), "ty_le": (50, 150)}
+
 
 def mac_dinh():
-    return {b["key"]: {k: b[k] for k in ("left", "top", "w", "h", "fs") if b[k] is not None} for b in BLOCKS}
+    out = {b["key"]: {k: b[k] for k in ("left", "top", "w", "h", "fs") if b[k] is not None} for b in BLOCKS}
+    out[IN_KEY] = dict(IN_MAC_DINH)
+    return out
 
 
 def _ep(v, lo, hi):
@@ -56,8 +70,37 @@ def _ep(v, lo, hi):
     return max(lo, min(hi, round(f, 2)))
 
 
+def _nhan_in(dst, vals):
+    """Nhận thiết lập máy in hợp lệ vào dst (khổ/canh phải thuộc danh sách, số trong giới hạn)."""
+    if vals.get("kho") in IN_KHO:
+        dst["kho"] = vals["kho"]
+    if vals.get("canh") in IN_CANH:
+        dst["canh"] = vals["canh"]
+    for p, (lo, hi) in IN_GIOI_HAN.items():
+        if p in vals:
+            f = _ep(vals[p], lo, hi)
+            if f is not None:
+                dst[p] = f
+
+
+def _gop(out, data):
+    """Đè bản lưu lên mặc định — chỉ nhận key/thuộc tính hợp lệ, số trong giới hạn (dùng chung load/save)."""
+    for key, vals in (data or {}).items():
+        if key not in out or not isinstance(vals, dict):
+            continue
+        if key == IN_KEY:
+            _nhan_in(out[key], vals)
+            continue
+        for p, v in vals.items():
+            if p in out[key] and p in GIOI_HAN:
+                f = _ep(v, *GIOI_HAN[p])
+                if f is not None:
+                    out[key][p] = f
+    return out
+
+
 def load():
-    """Bố cục hiện hành = mặc định ⊕ bản lưu (chỉ nhận key/thuộc tính hợp lệ, số trong giới hạn)."""
+    """Bố cục hiện hành = mặc định ⊕ bản lưu."""
     out = mac_dinh()
     raw = PmvState.get(KEY, "")
     if raw:
@@ -65,31 +108,16 @@ def load():
             data = json.loads(raw)
         except ValueError:
             data = {}
-        for key, vals in (data or {}).items():
-            if key not in out or not isinstance(vals, dict):
-                continue
-            for p, v in vals.items():
-                if p in out[key] and p in GIOI_HAN:
-                    f = _ep(v, *GIOI_HAN[p])
-                    if f is not None:
-                        out[key][p] = f
+        _gop(out, data)
     return out
 
 
 def save(data):
-    """Lưu bố cục (đi qua load-merge để chỉ giữ phần hợp lệ). data = dict hoặc None/{} = về mặc định."""
+    """Lưu bố cục (đi qua merge để chỉ giữ phần hợp lệ). data = dict hoặc None/{} = về mặc định."""
     if not data:
         PmvState.set(KEY, "")
         return mac_dinh()
-    clean = mac_dinh()
-    for key, vals in data.items():
-        if key not in clean or not isinstance(vals, dict):
-            continue
-        for p, v in vals.items():
-            if p in clean[key] and p in GIOI_HAN:
-                f = _ep(v, *GIOI_HAN[p])
-                if f is not None:
-                    clean[key][p] = f
+    clean = _gop(mac_dinh(), data)
     PmvState.set(KEY, json.dumps(clean, ensure_ascii=False))
     return clean
 
@@ -99,8 +127,21 @@ def _so(v):
     return "%g" % float(v)
 
 
+def css_in(inn=None):
+    """Khối @media print: khổ trang gửi máy in + cách đặt tờ GĐB 148×210 trên trang đó. Đứng SAU mọi rule in
+    của khbl.css/gdb_in.html (cùng !important → khai sau thắng) nên là nguồn duy nhất quyết định @page + margin."""
+    inn = {**IN_MAC_DINH, **(inn or {})}
+    giua = inn["canh"] != "trai"
+    rule = [f"left:{_so(inn['dx'])}mm!important", f"top:{_so(inn['dy'])}mm!important",
+            "margin:0 auto!important" if giua else "margin:0!important"]
+    ty_le = float(inn["ty_le"])
+    if ty_le != 100:
+        rule.append(f"transform:scale({_so(ty_le / 100)})!important;transform-origin:top {'center' if giua else 'left'}!important")
+    return "@media print{@page{size:%s;margin:0}.gdb-a5{%s}}" % (IN_KHO.get(inn["kho"], "auto"), ";".join(rule))
+
+
 def css(layout=None):
-    """CSS ghi đè vị trí + cỡ chữ từng khối. Tờ giấy trên màn = 148mm thật (WYSIWYG với @page A5)."""
+    """CSS ghi đè vị trí + cỡ chữ từng khối. Tờ giấy trên màn = 148mm thật (WYSIWYG với tờ in 148×210)."""
     layout = layout or load()
     out = [".gdb-a5{width:148mm!important;max-width:100%;height:auto;aspect-ratio:148/210}"]
     for b in BLOCKS:
@@ -116,4 +157,5 @@ def css(layout=None):
         if "fs" in v:      # bảng bên trong khối ăn theo khối (CSS gốc ép .gdb-a5 table 9px)
             out.append(b["sel"] + " table{font-size:inherit!important}")
     out.append(".gdb-a5__front-date{text-align:right}")
+    out.append(css_in(layout.get(IN_KEY)))
     return "\n".join(out)

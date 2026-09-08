@@ -13,8 +13,9 @@
   {% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
   {# lỗi thiếu dữ liệu (08/09/2026): FOCUS + rung ô đang thiếu — selector do view gửi (loi_o) #}
   {% if loi_o %}<script>window.khblFocusLoi && window.khblFocusLoi("{{ loi_o|escapejs }}");</script>{% endif %}
-  {% comment %}THANH TOÁN & IN (GĐ chốt 08/09/2026): KHÔNG mở popup — nạp trang in thẳng vào iframe ẩn, tự print +
-  đếm lần in IM LẶNG (im=1, không toast). Hộp thoại in chỉ bỏ được khi Chrome/Edge chạy --kiosk-printing.
-  ⚠ chú thích nhiều dòng PHẢI dùng comment-block — {# #} 2 dòng từng bị in nguyên văn ra toast.{% endcomment %}
-  {% if in_luon %}<script>window.khblInThang && window.khblInThang("{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ vua_chot|urlencode }}&loai={{ in_loai|default:'BAN' }}&nguon=live&raw=1&auto=1", "{{ vua_chot|escapejs }}", "{% url 'pos:ban_in_dem' %}?im=1");</script>{% endif %}
+  {% comment %}⚠ chú thích nhiều dòng PHẢI dùng comment-block — {# #} 2 dòng từng bị in nguyên văn ra toast.{% endcomment %}
 </div>
+{% comment %}THANH TOÁN & IN (GĐ chốt 08/09/2026 chiều): KHÔNG popup, KHÔNG iframe — tờ GĐB (in_html, view dựng bằng _gdb_ctx)
+nhét vào #pos-in (base.html, ẩn trên màn), khblInThang in từ CHÍNH cửa sổ rồi dọn; đếm lần in IM LẶNG (im=1, không toast).
+Mảnh này rỗng ở mọi thao tác khác → dọn luôn tờ đang chờ in (nếu có). Hộp thoại in chỉ bỏ được khi Edge chạy --kiosk-printing.{% endcomment %}
+<div id="pos-in" class="pos-in" hx-swap-oob="true" aria-hidden="true">{% if in_html %}{{ in_html }}<script>window.khblInThang && window.khblInThang("{{ vua_chot|escapejs }}", "{% url 'pos:ban_in_dem' %}?im=1");</script>{% endif %}</div>

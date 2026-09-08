@@ -821,8 +821,8 @@ def ban_thanh_toan(request):
         return _loi(request, _loi_goi(exc))
     g["trn_id"], g["bill_code"] = kq["trn_id"], kq["bill_code"]
     _audit(request, g, "CHOT", note=f"khách trả {M.money_vn(kq['tong']['khach_tra'])}")
-    # GĐ chốt 08/09/2026 (đổi so với 07/09): thanh toán xong GIỮ ĐƠN VỪA CHỐT trên form ở chế độ xem
-    # (chỉ IN bật) — ＋ ĐƠN MỚI để bán khách kế. THANH TOÁN & IN → mở luôn popup Giấy đảm bảo.
+    # GĐ chốt 08/09/2026 (đổi so với 07/09): THANH TOÁN xong GIỮ ĐƠN VỪA CHỐT trên form ở chế độ xem
+    # (chỉ IN bật) — ＋ ĐƠN MỚI để bán khách kế.
     emp_sup, pm, bank, tm = g.get("emp_sup") or "", g.get("pay_method") or "cash", g.get("bank_id") or "", g.get("tien_mat") or ""
     g2 = cart.nap(request, B.doc(kq["trn_id"], c))
     g2["emp_sup"], g2["pay_method"], g2["bank_id"], g2["tien_mat"] = emp_sup, pm, bank, tm   # app-only giữ qua nap
@@ -830,9 +830,20 @@ def ban_thanh_toan(request):
     from . import gold_bill as GB
     GB.upsert_tu_gio(g2, status=B.CHOT_ROI, is_del=False, user=request.user)       # ghi xuyên gold_bill
     tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
-    return _pos_oob(request, {"tin": tin, "vua_chot": kq["trn_id"],
-                              "in_luon": request.POST.get("in") == "1",
-                              "in_loai": "BAN_DOI" if g["doi"] else "BAN"})
+    extra = {"tin": tin, "vua_chot": kq["trn_id"]}
+    if request.POST.get("in") == "1":
+        # THANH TOÁN & IN (GĐ chốt 08/09/2026 chiều — "chưa in ra giấy được"): CHỐT → IN THẲNG → FORM TRẮNG (như ĐƠN MỚI).
+        # Tờ GĐB dựng ngay ở đây (in_html) nhét vào #pos-in qua OOB, JS in từ CHÍNH cửa sổ bán hàng — không popup,
+        # không iframe (print() trong iframe ẩn bị Edge 152 bỏ qua dù iframe đã nạp + in/dem đã đếm — log Caddy máy quầy).
+        from django.template.loader import render_to_string
+        ctx_in, _err = _gdb_ctx(kq["trn_id"], "BAN_DOI" if g["doi"] else "BAN", "live")
+        if ctx_in:
+            extra["in_html"] = render_to_string("pos/_gdb_a5.html", ctx_in, request=request)
+            extra["tin"] = f"{tin} · đang in Giấy đảm bảo — form đã trắng cho khách kế"
+        else:
+            extra["loi_phieu"] = f"{tin} — nhưng KHÔNG dựng được tờ in; mở lại từ DANH SÁCH rồi bấm IN HÓA ĐƠN."
+        cart.clear(request, giu_nv=False)
+    return _pos_oob(request, extra)
 
 
 @require_POST
@@ -1436,12 +1447,14 @@ def _gdb_ctx_mau():
          "CustName": "Nguyễn Văn Mẫu", "Phone": "0909 000 000", "Address": "1276 Kha Vạn Cân, Thủ Đức",
          "EmpName": "Lý Ngọc Sơn", "TienBan": 25_600_000, "TienMua": 8_350_000, "SoTien": 17_250_000,
          "TienVangThem": 0, "TienCongThem": 0, "TienBot": 0, "TienCoc": 0}
-    lines = [{"ProductCode": "1B60000975", "ProductDesc": "Bông khoen 2 nơ", "GoldLabel": "610", "tl_text": "0,385 chỉ",
-              "rate": 8850, "task": 350, "amount": 3_757_000},
-             {"ProductCode": "9N60016834", "ProductDesc": "Nhẫn trơn 1 chỉ", "GoldLabel": "99.99", "tl_text": "1 chỉ",
-              "rate": 14250, "task": 0, "amount": 14_250_000},
-             {"ProductCode": "KC600175", "ProductDesc": "Dây chuyền", "GoldLabel": "610", "tl_text": "0,86 chỉ",
-              "rate": 8850, "task": 450, "amount": 7_593_000}]
+    # ⚠ phải có cả GoldCode: template dùng `GoldLabel|default:x.GoldCode` — tham số filter thiếu key là NỔ
+    # VariableDoesNotExist (dòng thật từ proc KK luôn có GoldCode nên chỉ dữ liệu mẫu mới dính).
+    lines = [{"ProductCode": "1B60000975", "ProductDesc": "Bông khoen 2 nơ", "GoldCode": "610", "GoldLabel": "610",
+              "tl_text": "0,385 chỉ", "rate": 8850, "task": 350, "amount": 3_757_000},
+             {"ProductCode": "9N60016834", "ProductDesc": "Nhẫn trơn 1 chỉ", "GoldCode": "9999", "GoldLabel": "99.99",
+              "tl_text": "1 chỉ", "rate": 14250, "task": 0, "amount": 14_250_000},
+             {"ProductCode": "KC600175", "ProductDesc": "Dây chuyền", "GoldCode": "610", "GoldLabel": "610",
+              "tl_text": "0,86 chỉ", "rate": 8850, "task": 450, "amount": 7_593_000}]
     store_lines = [{"loai_dong": "Đổi", "ProductDesc": "Dẻ 610", "GoldLabel": "610", "tl_vang": "0,5", "tl_hot": "0",
                     "rate": 8350, "task": 0, "amount": 4_175_000},
                    {"loai_dong": "Thâu", "ProductDesc": "Vàng khách", "GoldLabel": "99.99", "tl_vang": "0,3", "tl_hot": "0",
@@ -1503,7 +1516,7 @@ def gdb_mau(request):
     ctx.update({
         "nav_active": "hoadon", "trn_mau": trn, "loai_mau": ctx.get("loai") or "BAN",
         "blocks": GL.BLOCKS, "layout_json": json.dumps(layout), "mac_dinh_json": json.dumps(GL.mac_dinh()),
-        "canh_phai_json": json.dumps(sorted(GL.CANH_PHAI)),
+        "canh_phai_json": json.dumps(sorted(GL.CANH_PHAI)), "kho_json": json.dumps(GL.IN_KHO),
         "sel_json": json.dumps({b["key"]: b["sel"] for b in GL.BLOCKS}),
     })
     return render(request, "pos/gdb_mau.html", ctx)

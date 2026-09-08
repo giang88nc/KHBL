@@ -218,6 +218,22 @@ class Command(BaseCommand):
                         content_type="application/json").json()
             check("đặt lại mặc định → 7pt bảng món; giới hạn số (fs tối đa 30pt) được ép",
                   "font-size:7pt" in j2["css"] and j3["css"].count("font-size:30pt") == 1)
+            # thiết lập MÁY IN (08/09/2026 — bản in tụt xuống gấp đôi vì @page A5 cứng trên máy in Letter/A4):
+            # mặc định @page size:auto + tờ ghim sát mép trên canh giữa; ép khổ/lệch/tỷ lệ; giá trị lạ bị bỏ
+            check("mặc định in: @page size:auto, tờ GĐB top 0 canh giữa (không còn A5 cứng)",
+                  "@media print{@page{size:auto;margin:0}.gdb-a5{left:0mm!important;top:0mm!important;margin:0 auto!important}}"
+                  in j2["css"] and "size:A5" not in j2["css"])
+            j4 = c.post("/banle/giay-dam-bao/mau/", data=json.dumps({"layout": {"_in": {
+                "kho": "A4", "canh": "trai", "dx": 2.5, "dy": -40, "ty_le": 95, "la": 1}}}), content_type="application/json").json()
+            check("thiết lập in A4 · sát trái · lệch 2.5/-40mm · tỷ lệ 95% → CSS đúng, khối bảng vẫn giữ",
+                  "@page{size:A4 portrait;margin:0}" in j4["css"] and "left:2.5mm!important;top:-40mm!important;margin:0!important;"
+                  "transform:scale(0.95)!important;transform-origin:top left!important" in j4["css"]
+                  and j4["layout"]["_in"] == {"kho": "A4", "canh": "trai", "dx": 2.5, "dy": -40, "ty_le": 95}
+                  and "font-size:7pt" in j4["css"])
+            j5 = c.post("/banle/giay-dam-bao/mau/", data=json.dumps({"layout": {"_in": {"kho": "B5", "canh": "x", "dy": 999}}}),
+                        content_type="application/json").json()
+            check("khổ/canh lạ bị bỏ → về auto/giữa; dy vượt ngưỡng ép 80mm",
+                  j5["layout"]["_in"]["kho"] == "auto" and j5["layout"]["_in"]["canh"] == "giua" and j5["layout"]["_in"]["dy"] == 80)
         finally:
             PmvState.set("gdb_layout", goc)
 

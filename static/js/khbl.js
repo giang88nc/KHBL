@@ -117,32 +117,26 @@
     hanToast(item);
   }
 
-  /* IN THẲNG Giấy đảm bảo (THANH TOÁN & IN, 08/09/2026): iframe ẩn nạp trang raw=1&auto=1 → trang tự window.print()
-     → afterprint báo về → gỡ iframe. Đếm lần in (ban_in_dem) ngay khi iframe sẵn sàng. Không popup. */
-  window.khblInThang = function (url, trn, demUrl) {
-    var old = document.getElementById("khbl-in-thang");
-    if (old) old.remove();
-    var f = document.createElement("iframe");
-    f.id = "khbl-in-thang";
-    f.setAttribute("aria-hidden", "true");
-    f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
-    f.src = url;
-    document.body.appendChild(f);
-    var daDem = false;
-    function dem() {
-      if (daDem || !demUrl || !window.htmx) return;
-      daDem = true;
-      window.htmx.ajax("POST", demUrl, { values: { trn_id: trn }, swap: "none",
-        headers: { "X-CSRFToken": (window.KHBL_CSRF || "") } });
-    }
-    function onMsg(e) {
-      var d = e.data || {};
-      if (!d.khblGdb || d.trn !== trn) return;
-      if (d.khblGdb === "ready") dem();
-      if (d.khblGdb === "done") { window.removeEventListener("message", onMsg); setTimeout(function () { f.remove(); }, 500); }
-    }
-    window.addEventListener("message", onMsg);
-    setTimeout(function () { if (f.parentNode) { window.removeEventListener("message", onMsg); f.remove(); } }, 120000);
+  /* IN THẲNG Giấy đảm bảo (THANH TOÁN & IN — sửa 08/09/2026 chiều): server nhét sẵn tờ GĐB vào #pos-in (OOB) và gọi
+     hàm này → chờ ảnh (mã vạch/QR) nạp xong → đếm lần in (ban_in_dem?im=1) → window.print() TỪ CHÍNH CỬA SỔ NÀY
+     (CSS in ẩn shell, chỉ #pos-in hiện) → afterprint dọn #pos-in. Cách cũ nạp iframe ẩn rồi print() trong iframe:
+     log Caddy máy quầy cho thấy iframe nạp xong, in/dem đã đếm nhưng Edge 152 BỎ QUA print() của iframe → không ra giấy. */
+  window.khblInThang = function (trn, demUrl) {
+    var box = document.getElementById("pos-in");
+    if (!box || !box.querySelector(".gdb-a5")) return;
+    var cho = Array.prototype.map.call(box.querySelectorAll("img"), function (i) {
+      return (i.complete && i.naturalWidth) ? Promise.resolve() : new Promise(function (ok) { i.onload = i.onerror = ok; });
+    });
+    function xong() { box.innerHTML = ""; window.removeEventListener("afterprint", xong); }
+    window.addEventListener("afterprint", xong);
+    Promise.all(cho).then(function () { return new Promise(function (ok) { setTimeout(ok, 60); }); }).then(function () {
+      if (demUrl && window.htmx) {
+        window.htmx.ajax("POST", demUrl, { values: { trn_id: trn }, swap: "none",
+          headers: { "X-CSRFToken": (window.KHBL_CSRF || "") } });
+      }
+      window.print();
+    });
+    setTimeout(function () { if (box.querySelector(".gdb-a5")) xong(); }, 120000);
   };
 
   /* FOCUS ô đang thiếu/lỗi + hiệu ứng rung & viền đỏ 3s (server gửi selector qua _ban_oob loi_o) */

@@ -29,10 +29,23 @@
       <input type="number" step="0.5" min="3" max="30" data-p="fs" {% if b.fs is None %}disabled{% endif %}>
     </div>
     {% endfor %}
+    <div class="gdbm-in">
+      <div class="gdbm-in__t">MÁY IN · ĐẶT TỜ GĐB 148 × 210 TRÊN TRANG IN</div>
+      <label>Khổ giấy gửi máy in
+        <select data-in="kho"><option value="auto">Theo máy in đang chọn</option><option value="A5">A5 (148 × 210)</option><option value="A4">A4</option><option value="Letter">Letter</option></select></label>
+      <label>Canh ngang
+        <select data-in="canh"><option value="giua">Giữa trang</option><option value="trai">Sát mép trái</option></select></label>
+      <label>Lệch ngang (mm, âm = sang trái)<input type="number" step="0.5" min="-80" max="80" data-in="dx"></label>
+      <label>Lệch dọc (mm, âm = lên trên)<input type="number" step="0.5" min="-80" max="80" data-in="dy"></label>
+      <label>Tỷ lệ in (%)<input type="number" step="1" min="50" max="150" data-in="ty_le"></label>
+    </div>
     <p class="gdbm-help">
       • Bấm vào khối trên tờ giấy để chọn, <b>kéo</b> để dời; phím <b>← ↑ → ↓</b> dời 0,2 % (giữ Shift = 1 %).<br>
       • Cỡ chữ tính bằng <b>pt</b> như Word (10 pt ≈ 3,5 mm). Rộng/Cao là % tờ giấy 148 × 210 mm.<br>
-      • <b>LƯU MẪU</b> áp cho popup xem trước, nút IN và THANH TOÁN & IN ngay lập tức. <b>In thử</b> tự lưu rồi in phiếu đang xem.
+      • <b>LƯU MẪU</b> áp cho popup xem trước, nút IN và THANH TOÁN & IN ngay lập tức. <b>In thử</b> tự lưu rồi in phiếu đang xem.<br>
+      • Bản in bị <b>dời xuống ~gấp đôi</b> (mã vạch ở ~80 mm thay vì ~41 mm): máy in đang nhận khổ Letter/A4 nên trình duyệt
+      canh giữa tờ A5 trên trang lớn. Để <b>Theo máy in</b> (mặc định) thì tờ GĐB luôn ghim sát mép trên; còn lệch thì đo bằng mm
+      rồi nhập <b>Lệch dọc / Lệch ngang</b>.
     </p>
   </aside>
 </div>
@@ -43,6 +56,8 @@
 (function () {
   var KEYS = {{ sel_json|safe }};
   var CANH_PHAI = {{ canh_phai_json|safe }};
+  var KHO = {{ kho_json|safe }};
+  var LIM_IN = { dx: [-80, 80], dy: [-80, 80], ty_le: [50, 150] };
   var MAC_DINH = {{ mac_dinh_json|safe }};
   var state = {{ layout_json|safe }};
   var CSRF = "{{ csrf_token }}";
@@ -63,7 +78,15 @@
       if (v.fs != null) out.push(KEYS[k] + " table{font-size:inherit!important}");
     });
     out.push(".gdb-a5__front-date{text-align:right}");
+    out.push(cssIn(st._in || {}));
     return out.join("\n");
+  }
+  /* khối @media print — y hệt gdb_layout.css_in(): khổ trang + đặt tờ 148×210 trên trang (chỉ tác dụng lúc in) */
+  function cssIn(i) {
+    var giua = i.canh !== "trai", ty = +i.ty_le || 100;
+    var r = ["left:" + (+i.dx || 0) + "mm!important", "top:" + (+i.dy || 0) + "mm!important", giua ? "margin:0 auto!important" : "margin:0!important"];
+    if (ty !== 100) r.push("transform:scale(" + (ty / 100) + ")!important;transform-origin:top " + (giua ? "center" : "left") + "!important");
+    return "@media print{@page{size:" + (KHO[i.kho] || "auto") + ";margin:0}.gdb-a5{" + r.join(";") + "}}";
   }
   function apply() { styleEl.textContent = buildCss(state); }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v * 100) / 100)); }
@@ -80,7 +103,22 @@
       row.classList.toggle("is-sel", k === sel);
     });
     paper.querySelectorAll("[data-gdb]").forEach(function (el) { el.classList.toggle("is-sel", el.dataset.gdb === sel); });
+    var inn = state._in || {};
+    document.querySelectorAll("[data-in]").forEach(function (el) {
+      if (document.activeElement !== el && inn[el.dataset.in] != null) el.value = inn[el.dataset.in];
+    });
   }
+
+  /* thiết lập máy in → state._in */
+  document.querySelectorAll("[data-in]").forEach(function (el) {
+    el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () {
+      var p = el.dataset.in;
+      state._in = state._in || {};
+      if (LIM_IN[p]) { var n = parseFloat(el.value); if (isNaN(n)) return; state._in[p] = clamp(n, LIM_IN[p][0], LIM_IN[p][1]); }
+      else state._in[p] = el.value;
+      apply();
+    });
+  });
   function chon(k) { sel = k; syncInputs(); var row = document.querySelector('.gdbm-row[data-key="' + k + '"]'); if (row) row.scrollIntoView({ block: "nearest" }); }
 
   /* bảng số → state */

@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <title>In GĐB {{ r.BillCode|default:r.TrnID }}</title>
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.gdbin1">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.gdbin2">
 <style>
   /* Trang IN THẲNG (GĐ chốt 08/09/2026): dùng trong iframe ẩn sau THANH TOÁN & IN — không popup, không nền ảnh.
-     Hộp thoại in của trình duyệt chỉ bỏ được khi Chrome chạy --kiosk-printing (in thẳng ra máy in mặc định). */
+     Hộp thoại in của trình duyệt chỉ bỏ được khi Chrome chạy --kiosk-printing (in thẳng ra máy in mặc định).
+     @page (khổ trang) + margin tờ GĐB do gdb_layout.css_in() sinh trong _gdb_a5.html quyết định — KHÔNG khai lại ở đây
+     (từng khai A5 cứng → máy in Letter/A4 bị canh giữa, tờ tụt xuống gấp đôi). */
   html,body{margin:0;padding:0;background:#fff}
   .gdb-a5{margin:0 auto}
-  @page{size:A5 portrait;margin:0}
-  @media print{.gdb-a5{width:148mm!important;height:210mm!important;aspect-ratio:auto!important;margin:0!important;background:none!important}}
+  @media print{.gdb-a5{width:148mm!important;height:210mm!important;aspect-ratio:auto!important;background:none!important}}
 </style>
 </head>
 <body class="gdb-in">
