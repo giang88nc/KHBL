@@ -445,8 +445,17 @@ button,input,select,textarea{font:inherit;color:inherit}
 .th-cat__kq img{outline:2px solid var(--gold-500);outline-offset:-2px}
 .th-cat__stage{position:relative;width:100%;aspect-ratio:1/1;max-height:60vh;display:grid;place-items:center;background:#1C1917;border-radius:6px;overflow:hidden;cursor:grab;touch-action:none;user-select:none}
 .th-cat__stage.dang-keo{cursor:grabbing}
-.th-cat__stage img{max-width:96%;max-height:96%;width:auto;height:auto;object-fit:contain;background:none;transition:transform .06s linear;will-change:transform}
-.th-cat__stage.dang-keo img{transition:none}
+.th-cat__khung{position:relative;display:inline-block;line-height:0;overflow:hidden;border-radius:4px;transition:transform .06s linear;will-change:transform}
+.th-cat__stage.dang-keo .th-cat__khung{transition:none}
+.th-cat__stage img{max-width:var(--sw,96%);max-height:var(--sh,96%);width:auto;height:auto;object-fit:contain;background:none;display:block}
+.th-cat__vung{position:absolute;inset:0;box-shadow:0 0 0 9999px rgba(0,0,0,.6);outline:2px solid var(--gold-500);outline-offset:-2px;pointer-events:none}
+.th-cat__tay{position:absolute;pointer-events:auto;background:var(--gold-500);border:2px solid #fff;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.5);touch-action:none}
+.th-cat__tay--t,.th-cat__tay--b{left:50%;width:46px;height:12px;margin-left:-23px;cursor:ns-resize}
+.th-cat__tay--l,.th-cat__tay--r{top:50%;width:12px;height:46px;margin-top:-23px;cursor:ew-resize}
+.th-cat__tay--t{top:-6px}.th-cat__tay--b{bottom:-6px}.th-cat__tay--l{left:-6px}.th-cat__tay--r{right:-6px}
+.th-cat__cho{display:flex;gap:14px;align-items:center;font-size:13px}
+.th-cat__quay{width:34px;height:34px;flex:none;border-radius:50%;border:4px solid var(--gold-100);border-top-color:var(--gold-500);animation:thcatquay .9s linear infinite}
+@keyframes thcatquay{to{transform:rotate(360deg)}}
 .th-cat__deg{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:2px 8px;border-radius:10px;pointer-events:none}
 .th-cat__tools{display:flex;gap:6px;justify-content:center;margin-top:2px}
 .pg-ck__ico[disabled],.pg-ck__ico--off{opacity:.35;cursor:not-allowed;pointer-events:none}

@@ -37,7 +37,16 @@ Cột trái: THÔNG TIN (#pos-info) + VÀNG THÂU (#pos-thau, form như Vàng đ
 {% endblock %}
 
 {% block extra_js %}
+<template id="th-cat-loading">
+<div class="khbl-modal" role="dialog" aria-modal="true"><div class="khbl-modal__veil"></div>
+  <div class="khbl-modal__box" style="width:min(420px,92vw)">
+    <div class="khbl-modal__head"><h2>✂ Đang tách thẻ…</h2></div>
+    <div class="khbl-modal__body th-cat__cho"><span class="th-cat__quay"></span><div><b>Đang tìm và tách thẻ CCCD</b><br><span class="dim">Mất vài giây (ảnh nhiều chi tiết tới ~10 s). Vui lòng chờ, không bấm lại.</span></div></div>
+  </div></div>
+</template>
 <script>
+// ✂ tách thẻ: hiện popup LOADING ngay khi bấm (server mất 1–12 s) — nút đã hx-disabled-elt nên không bấm trùng
+function khblCatLoading(label){ var mr=document.getElementById("modal-root"), t=document.getElementById("th-cat-loading"); if(mr&&t){ mr.innerHTML=t.innerHTML; var h=mr.querySelector("h2"); if(h&&label) h.textContent="✂ Đang tách thẻ " + label + "…"; } }
 var KHBL_CSRF = "{{ csrf_token }}";
 
 /* Khách vừa THÊM/SỬA qua popup → gắn/nạp lại vào phiếu thâu */

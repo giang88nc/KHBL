@@ -669,9 +669,28 @@ def _xoay_nho(img, goc_cv):
     return cv2.resize(rot[y0:y0 + ch, x0:x0 + cw], (w, h), interpolation=cv2.INTER_CUBIC)
 
 
-def cat_cccd(data, goc=0.0):
+def _cat_bot(quad, cat):
+    """Dịch 4 cạnh tứ giác (đã ngang: tl,tr,br,bl) vào trong theo phần cạnh cat=(trên, phải, dưới, trái) ∈ [−0,3; 0,45]
+    (âm = nới ra); người dùng kéo tay cầm trên ảnh kết quả → server cắt trên TỨ GIÁC trước khi nắn nên ảnh vẫn đủ khổ."""
+    import numpy as np
+    t, r, b, l = [min(max(float(v or 0.0), -0.3), 0.45) for v in cat]
+    if t + b > 0.8 or l + r > 0.8:
+        return quad
+    q = np.asarray(quad, dtype=np.float64)
+    tl, tr, br, bl = q
+    doc_l, doc_r = bl - tl, br - tr            # véc-tơ cạnh trái/phải (trên → dưới)
+    ngang_t, ngang_b = tr - tl, br - bl        # véc-tơ cạnh trên/dưới (trái → phải)
+    n_tl = tl + t * doc_l + l * ngang_t
+    n_tr = tr + t * doc_r - r * ngang_t
+    n_bl = bl - b * doc_l + l * ngang_b
+    n_br = br - b * doc_r - r * ngang_b
+    return np.array([n_tl, n_tr, n_br, n_bl], dtype="float32")
+
+
+def cat_cccd(data, goc=0.0, cat=None):
     """bytes ảnh → bytes JPEG thẻ đã cắt/nắn, khổ CHUAN_W×CHUAN_H (ngang). goc = độ xoay thêm theo CHIỀU KIM ĐỒNG HỒ
-    (như CSS rotate) do người dùng kéo; bội 90° xoay không mất nét (90/270 → ảnh dọc CHUAN_H×CHUAN_W)."""
+    (như CSS rotate) do người dùng kéo; bội 90° xoay không mất nét (90/270 → ảnh dọc CHUAN_H×CHUAN_W).
+    cat = (trên, phải, dưới, trái) phần cạnh cắt bớt (âm = nới) do người dùng kéo tay cầm — áp lên tứ giác trước khi nắn."""
     import cv2
     import numpy as np
     arr = np.frombuffer(bytes(data), dtype=np.uint8)
@@ -686,6 +705,8 @@ def cat_cccd(data, goc=0.0):
     h_left = np.linalg.norm(quad[3] - quad[0])
     if h_left > w_top:                     # thẻ đang DỌC trong ảnh → đổi thứ tự góc cho thành ngang
         quad = np.array([quad[3], quad[0], quad[1], quad[2]], dtype="float32")
+    if cat and any(float(v or 0) for v in cat):
+        quad = _cat_bot(quad, cat)
     dst = np.array([[0, 0], [CHUAN_W - 1, 0], [CHUAN_W - 1, CHUAN_H - 1], [0, CHUAN_H - 1]], dtype="float32")
     m = cv2.getPerspectiveTransform(quad, dst)
     noi_suy = cv2.INTER_AREA if max(w_top, h_left) > CHUAN_W * 1.3 else cv2.INTER_CUBIC

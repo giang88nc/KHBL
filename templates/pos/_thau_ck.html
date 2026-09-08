@@ -25,7 +25,8 @@ phiên · phiếu đã lưu: gold_bill.anh_*. Camera dùng lại dialog #kh-came
           {% if a.cua_khach %}<span class="pg-ck__tag" title="Ảnh đang lưu trong hồ sơ khách (máy KK)">👤</span>{% endif %}
           {% if a.slot == "cccd1" or a.slot == "cccd2" %}<button class="pg-ck__ico pg-ck__ico--cat" type="button" {% if not a.co or phieu_chot %}disabled{% endif %}
                   title="✂ Tách thẻ: OpenCV tự tìm thẻ trong ảnh → cắt, nắn phối cảnh, khổ chuẩn 1170×738, kéo xoay bằng con trỏ — xem trước rồi LƯU"
-                  hx-get="{% url 'pos:thau_anh_cat' %}?slot={{ a.slot }}" hx-target="#modal-root" hx-swap="innerHTML">✂</button>{% endif %}
+                  hx-get="{% url 'pos:thau_anh_cat' %}?slot={{ a.slot }}" hx-target="#modal-root" hx-swap="innerHTML"
+                  hx-disabled-elt="this" hx-on::before-request="khblCatLoading('{{ a.label }}')">✂</button>{% endif %}
           {# ⚠ hx-swap="innerHTML" BẮT BUỘC: form cha .pg-ck có hx-swap="none" và htmx KẾ THỪA hx-swap → popup trả về bị bỏ (bẫy 08/09 tối) #}
           {% if a.slot == "qr" %}<button class="pg-ck__ico pg-ck__ico--quet" type="button" {% if not a.co %}disabled{% endif %}
                   title="Quét mã QR chuyển khoản (chuẩn NAPAS/VietQR) trong ảnh → điền ngân hàng · số TK · nội dung vào TÍNH TỔNG"

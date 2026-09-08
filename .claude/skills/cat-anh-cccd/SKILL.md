@@ -25,7 +25,9 @@ description: >-
 ```python
 from apps.pos import anh_cccd as AC
 
-jpeg = AC.cat_cccd(data_bytes, goc=0.0)   # bytes ảnh bất kỳ (JPEG/PNG, EXIF đã xoay) → bytes JPEG 1170×738 (q92)
+jpeg = AC.cat_cccd(data_bytes, goc=0.0, cat=None)   # bytes ảnh bất kỳ → bytes JPEG 1170×738 (q92)
+#   cat = (trên, phải, dưới, trái) phần cạnh CẮT BỚT (âm = nới, kẹp −0,3…0,45) người dùng kéo tay cầm — dịch 4 cạnh tứ giác
+#   TRƯỚC khi nắn phối cảnh (_cat_bot) nên ảnh vẫn đủ khổ, không méo tỉ lệ
 quad = AC.tim_the(img_bgr)               # ndarray BGR → 4 điểm float32 (tl, tr, br, bl) tọa độ ảnh gốc, hoặc None
 ```
 
@@ -48,11 +50,14 @@ quad = AC.tim_the(img_bgr)               # ndarray BGR → 4 điểm float32 (tl
 2. **View xem trước** (GET, `@require_GET` đặt NGAY TRÊN hàm view): `kq = AC.cat_cccd(data, 0.0)` → trả popup extend
    `partials/modal_shell.html` với 2 ảnh base64 (`_nen_anh(..., canh=900)` cho nhẹ) + khung kéo xoay. Copy nguyên khối
    JS trong `_thau_cat_modal.html` (pointer events, hít 0/90/180/270 trong ±6°, nhãn độ, nút ↺/↻ 90° + Đặt lại, hidden
-   `goc`); nút ✓ LƯU dùng `hx-include="#th-cat-form"` + `hx-swap="none"`.
+   `goc`; 4 tay cầm `.th-cat__tay` cắt bớt từng cạnh → hidden `cat_t/r/b/l`, kéo quy về hệ tọa độ ảnh bằng quay −goc);
+   nút ✓ LƯU dùng `hx-include="#th-cat-form"` + `hx-swap="none"`.
 3. **View LƯU** (POST): `AC.cat_cccd(data, _goc_xoay(request.POST.get("goc")))` → nén `_nen_anh(kq, canh=AC.CHUAN_W,
    chat_luong=88)` → ghi đè đúng ô + cập nhật hồ sơ (khách: `customer.cap_nhat_anh` trong `SAVE_LOCK`; nhân viên: cột
    tương ứng) → trả OOB làm mới ô ảnh + `dong_modal`.
-4. **Nút ✂ trên ô ảnh**: chỉ bật khi ô có ảnh và phiếu/hồ sơ không khóa; **phải khai tường minh
+4. **Nút ✂ trên ô ảnh**: chỉ bật khi ô có ảnh và phiếu/hồ sơ không khóa; thêm `hx-disabled-elt="this"` +
+   `hx-on::before-request="khblCatLoading(label)"` (hàm + template `#th-cat-loading` ở trang chứa — popup LOADING hiện
+   NGAY vì server mất 1–12 s, chống bấm nhiều lần); **phải khai tường minh
    `hx-target="#modal-root" hx-swap="innerHTML"`** — htmx KẾ THỪA `hx-swap="none"` từ form cha nên nút từng bấm không
    thấy gì.
 5. Thêm 3–4 kịch bản smoke như mục 8b `smoke_thau` (ảnh giả `AC.anh_thu_nghiem(goc=12)`, so độ sáng với

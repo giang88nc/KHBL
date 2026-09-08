@@ -1,8 +1,10 @@
 {% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
-Popup ✂ TÁCH THẺ CCCD (08/09/2026 tối; viết lại v2 08/09 khuya): OpenCV tự tìm thẻ trong ảnh ô cccd1/cccd2 → cắt, nắn phối cảnh,
-khổ chuẩn ID-1 1170×738. Xem trước gốc ↔ kết quả; thẻ ngược đầu / lệch → KÉO XOAY trực tiếp bằng con trỏ trên ảnh kết quả
-(tự hít 0/90/180/270° trong ±6°), nút ↺/↻ 90° và Đặt lại; ✓ LƯU gửi góc (độ, thuận kim đồng hồ như CSS rotate) → server
-xoay lại thẻ đã cắt (bội 90° không mất nét, góc lẻ xoay + cắt hình nội tiếp) rồi ghi đè ô + cập nhật hồ sơ khách.
+Popup ✂ TÁCH THẺ CCCD (08/09/2026 tối; viết lại v2 08/09 khuya; 09/09: LOADING + CẮT BỚT 4 CẠNH): OpenCV tự tìm thẻ trong ảnh
+ô cccd1/cccd2 → cắt, nắn phối cảnh, khổ chuẩn ID-1 1170×738. Xem trước gốc ↔ kết quả; thẻ ngược đầu / lệch → KÉO XOAY trực
+tiếp bằng con trỏ trên ảnh kết quả (tự hít 0/90/180/270° trong ±6°); 4 TAY CẦM ở 4 cạnh → kéo để CẮT BỚT (hay nới thêm) từng
+cạnh, vùng bỏ đi tối lại; nút ↺/↻ 90° và Đặt lại; ✓ LƯU gửi góc + 4 tỉ lệ cắt (cat_t/r/b/l, phần cạnh) → server dịch 4 cạnh
+tứ giác thẻ trước khi nắn rồi xoay, ghi đè ô + cập nhật hồ sơ khách. Trong lúc chờ server (1–12 s) nút ✂ mở popup LOADING
+(template #th-cat-loading ở thau.html) và bị disable — chống bấm nhiều lần.
 {% endcomment %}
 {% block modal_style %}width:min(1040px,96vw){% endblock %}
 {% block modal_title %}✂ Tách thẻ {{ label }}{% endblock %}
@@ -14,33 +16,57 @@ xoay lại thẻ đã cắt (bội 90° không mất nét, góc lẻ xoay + cắ
   <div class="th-cat">
     <figure class="th-cat__goc"><img src="{{ anh_goc }}" alt="Ảnh gốc"><figcaption>Ảnh gốc</figcaption></figure>
     <figure class="th-cat__kq">
-      <div class="th-cat__stage" id="th-cat-stage" title="Kéo để xoay thẻ">
-        <img src="{{ anh_kq }}" alt="Thẻ đã tách" id="th-cat-img" draggable="false">
+      <div class="th-cat__stage" id="th-cat-stage" title="Kéo trên ảnh để xoay · kéo tay cầm ở cạnh để cắt bớt">
+        <div class="th-cat__khung" id="th-cat-khung">
+          <img src="{{ anh_kq }}" alt="Thẻ đã tách" id="th-cat-img" draggable="false">
+          <div class="th-cat__vung" id="th-cat-vung">
+            <span class="th-cat__tay th-cat__tay--t" data-canh="t" title="Kéo để cắt bớt cạnh trên"></span>
+            <span class="th-cat__tay th-cat__tay--r" data-canh="r" title="Kéo để cắt bớt cạnh phải"></span>
+            <span class="th-cat__tay th-cat__tay--b" data-canh="b" title="Kéo để cắt bớt cạnh dưới"></span>
+            <span class="th-cat__tay th-cat__tay--l" data-canh="l" title="Kéo để cắt bớt cạnh trái"></span>
+          </div>
+        </div>
         <div class="th-cat__deg" id="th-cat-deg">0°</div>
       </div>
-      <figcaption>Thẻ đã tách · {{ w }}×{{ h }} px (khổ chuẩn ID-1) · <b>kéo trên ảnh để xoay</b>, tự hít 0/90/180/270°</figcaption>
+      <figcaption>Thẻ đã tách · {{ w }}×{{ h }} px (khổ chuẩn ID-1) · <b>kéo trên ảnh để xoay</b> (tự hít 0/90/180/270°) · <b>kéo tay cầm 4 cạnh để cắt bớt</b></figcaption>
       <div class="th-cat__tools">
         <button class="khbl-btn khbl-btn--outline" type="button" data-xoay="-90" title="Xoay trái 90°" style="padding:4px 10px;font-size:12px">↺ 90°</button>
         <button class="khbl-btn khbl-btn--outline" type="button" data-xoay="90" title="Xoay phải 90°" style="padding:4px 10px;font-size:12px">↻ 90°</button>
-        <button class="khbl-btn khbl-btn--outline" type="button" data-xoay="0" title="Về 0°" style="padding:4px 10px;font-size:12px">Đặt lại</button>
+        <button class="khbl-btn khbl-btn--outline" type="button" data-xoay="0" title="Về 0° và bỏ cắt bớt" style="padding:4px 10px;font-size:12px">Đặt lại</button>
       </div>
     </figure>
   </div>
-  <div id="th-cat-form" hidden><input type="hidden" name="slot" value="{{ slot }}"><input type="hidden" name="goc" id="th-cat-goc" value="0"></div>
-  <p class="dim" style="margin:8px 0 0;font-size:12px">Ảnh lưu sẽ thay ảnh ở ô {{ label|lower }} (và hồ sơ khách nếu đang chọn khách).</p>
+  <div id="th-cat-form" hidden><input type="hidden" name="slot" value="{{ slot }}"><input type="hidden" name="goc" id="th-cat-goc" value="0">
+    <input type="hidden" name="cat_t" id="th-cat-t" value="0"><input type="hidden" name="cat_r" id="th-cat-r" value="0"><input type="hidden" name="cat_b" id="th-cat-b" value="0"><input type="hidden" name="cat_l" id="th-cat-l" value="0"></div>
+  <p class="dim" style="margin:8px 0 0;font-size:12px">Ảnh lưu sẽ thay ảnh ở ô {{ label|lower }} (và hồ sơ khách nếu đang chọn khách). Cắt bớt cạnh: server dịch cạnh thẻ rồi nắn lại nên ảnh lưu vẫn đủ khổ 1170×738.</p>
   <script>
   (function(){
-    var st=document.getElementById('th-cat-stage'), im=document.getElementById('th-cat-img'), lb=document.getElementById('th-cat-deg'), inp=document.getElementById('th-cat-goc');
+    var st=document.getElementById('th-cat-stage'), kh=document.getElementById('th-cat-khung'), im=document.getElementById('th-cat-img'),
+        vung=document.getElementById('th-cat-vung'), lb=document.getElementById('th-cat-deg'), inp=document.getElementById('th-cat-goc');
     if(!st||st.dataset.san) return; st.dataset.san='1';
-    var goc=0, keo=null;
+    var goc=0, keo=null, cat={t:0,r:0,b:0,l:0}, keoCat=null;
+    function coStage(){ var r=st.getBoundingClientRect(); st.style.setProperty('--sw', Math.round(r.width*0.96)+'px'); st.style.setProperty('--sh', Math.round(r.height*0.96)+'px'); }
     function hit(g){ g=((g%360)+360)%360; var b=Math.round(g/90)*90; if(Math.abs(g-b)<=6) g=b%360; return g; }
-    function ve(){ var v=Math.round(goc*10)/10; im.style.transform='rotate('+v+'deg)'; lb.textContent=v+'°'; inp.value=String(v); }
+    function ve(){
+      var v=Math.round(goc*10)/10; kh.style.transform='rotate('+v+'deg)'; lb.textContent=v+'°'; inp.value=String(v);
+      vung.style.top=(cat.t*100)+'%'; vung.style.right=(cat.r*100)+'%'; vung.style.bottom=(cat.b*100)+'%'; vung.style.left=(cat.l*100)+'%';
+      ['t','r','b','l'].forEach(function(c){ document.getElementById('th-cat-'+c).value=(Math.round(cat[c]*1000)/1000).toString(); });
+      var co=(cat.t||cat.r||cat.b||cat.l); lb.textContent=v+'°'+(co?' · cắt':'');
+    }
     function gocTro(e){ var r=st.getBoundingClientRect(); return Math.atan2(e.clientY-(r.top+r.height/2), e.clientX-(r.left+r.width/2))*180/Math.PI; }
-    st.addEventListener('pointerdown',function(e){ e.preventDefault(); try{st.setPointerCapture(e.pointerId);}catch(x){} keo={a:gocTro(e),g:goc}; st.classList.add('dang-keo'); });
-    st.addEventListener('pointermove',function(e){ if(!keo) return; goc=hit(keo.g+(gocTro(e)-keo.a)); ve(); });
-    function tha(){ if(!keo) return; keo=null; st.classList.remove('dang-keo'); }
+    st.addEventListener('pointerdown',function(e){ if(e.target.classList.contains('th-cat__tay')) return; e.preventDefault(); try{st.setPointerCapture(e.pointerId);}catch(x){} keo={a:gocTro(e),g:goc}; st.classList.add('dang-keo'); });
+    st.addEventListener('pointermove',function(e){
+      if(keoCat){ var dx=e.clientX-keoCat.x, dy=e.clientY-keoCat.y, th=goc*Math.PI/180, c=Math.cos(th), s=Math.sin(th);
+        var lx=dx*c+dy*s, ly=-dx*s+dy*c, W=kh.offsetWidth||1, H=kh.offsetHeight||1, n=Object.assign({},keoCat.cat);
+        if(keoCat.canh==='t') n.t=keoCat.cat.t+ly/H; if(keoCat.canh==='b') n.b=keoCat.cat.b-ly/H; if(keoCat.canh==='l') n.l=keoCat.cat.l+lx/W; if(keoCat.canh==='r') n.r=keoCat.cat.r-lx/W;
+        ['t','r','b','l'].forEach(function(k){ n[k]=Math.max(-0.15, Math.min(0.45, n[k])); });
+        if(n.t+n.b>0.8||n.l+n.r>0.8) return; cat=n; ve(); return; }
+      if(!keo) return; goc=hit(keo.g+(gocTro(e)-keo.a)); ve(); });
+    function tha(){ keo=null; keoCat=null; st.classList.remove('dang-keo'); }
     st.addEventListener('pointerup',tha); st.addEventListener('pointercancel',tha);
-    st.parentNode.querySelectorAll('.th-cat__tools [data-xoay]').forEach(function(b){ b.addEventListener('click',function(){ var v=parseInt(b.dataset.xoay,10); goc=(v===0)?0:hit(goc+v); ve(); }); });
+    vung.querySelectorAll('.th-cat__tay').forEach(function(t){ t.addEventListener('pointerdown',function(e){ e.preventDefault(); e.stopPropagation(); try{st.setPointerCapture(e.pointerId);}catch(x){} keoCat={canh:t.dataset.canh, x:e.clientX, y:e.clientY, cat:Object.assign({},cat)}; }); });
+    st.parentNode.querySelectorAll('.th-cat__tools [data-xoay]').forEach(function(b){ b.addEventListener('click',function(){ var v=parseInt(b.dataset.xoay,10); if(v===0){ goc=0; cat={t:0,r:0,b:0,l:0}; } else goc=hit(goc+v); ve(); }); });
+    coStage(); window.addEventListener('resize', coStage); if(!im.complete) im.addEventListener('load', coStage);
     ve();
   })();
   </script>
@@ -49,7 +75,7 @@ xoay lại thẻ đã cắt (bội 90° không mất nét, góc lẻ xoay + cắ
 {% block modal_foot %}
   <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
   {% if not loi %}
-  <button class="khbl-btn khbl-btn--gold" type="button" title="Ghi đè ảnh ô {{ label|lower }} bằng thẻ đã tách (theo góc đang xoay)"
+  <button class="khbl-btn khbl-btn--gold" type="button" title="Ghi đè ảnh ô {{ label|lower }} bằng thẻ đã tách (theo góc xoay + cắt bớt đang chọn)"
           hx-post="{% url 'pos:thau_anh_cat_luu' %}" hx-include="#th-cat-form" hx-swap="none" hx-disabled-elt="this">✓ LƯU thẻ đã tách</button>
   {% endif %}
 {% endblock %}

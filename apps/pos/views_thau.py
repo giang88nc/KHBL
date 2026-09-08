@@ -243,6 +243,20 @@ def _goc_xoay(raw):
 
 
 @require_GET
+def _phan_cat(request):
+    """4 tỉ lệ cắt bớt cạnh (trên, phải, dưới, trái) từ tay cầm popup — phần cạnh, chấp nhận phẩy VN, kẹp [−0,3; 0,45]."""
+    out = []
+    for k in ("cat_t", "cat_r", "cat_b", "cat_l"):
+        try:
+            v = float(str(request.POST.get(k) or "0").replace(",", "."))
+        except ValueError:
+            v = 0.0
+        if v != v:
+            v = 0.0
+        out.append(min(max(v, -0.3), 0.45))
+    return tuple(out)
+
+
 def thau_anh_cat(request):
     """Popup ✂: OpenCV tìm thẻ CCCD trong ảnh ô cccd1/cccd2 → cắt + nắn phối cảnh + khổ chuẩn 1170×738; xem trước ở 0°,
     người dùng KÉO XOAY bằng con trỏ trên ảnh kết quả (JS), ✓ LƯU gửi góc → thau_anh_cat_luu."""
@@ -278,6 +292,7 @@ def thau_anh_cat_luu(request):
     slot (+ hồ sơ khách). Bội 90° → xoay không mất nét (90/270 ra ảnh dọc 738×1170); góc lẻ → xoay + cắt hình nội tiếp."""
     slot = (request.POST.get("slot") or "").strip()
     xoay = _goc_xoay(request.POST.get("goc"))
+    cat = _phan_cat(request)
     if slot not in ("cccd1", "cccd2"):
         return _loi(request, "Chỉ tách thẻ cho ô CCCD", {"dong_modal": True})
     if _dang_khoa(request):
@@ -287,7 +302,7 @@ def thau_anh_cat_luu(request):
     if not data:
         return _loi(request, "Ô này chưa có ảnh", {"dong_modal": True})
     try:
-        kq = AC.cat_cccd(data, xoay)
+        kq = AC.cat_cccd(data, xoay, cat)
     except Exception as exc:
         return _loi(request, str(exc)[:160], {"dong_modal": True})
     # lưu đúng khổ đã xoay (ngang 1170×738 hay dọc 738×1170) — _nen_anh chỉ thu khi cạnh dài vượt CHUAN_W

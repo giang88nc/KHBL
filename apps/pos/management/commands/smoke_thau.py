@@ -290,7 +290,7 @@ class Command(BaseCommand):
                 r = web.post("/banle/thau-vao/anh/len/", {"anh_cccd2": SimpleUploadedFile("the.png", png_the, content_type="image/png")})
                 b = r.content.decode()
                 self._ok("tải ảnh thẻ giả lập vào CCCD sau → có nút ✂ bật", 'pg-ck__ico--cat" type="button" disabled' not in b.split('data-label="CCCD mặt sau"')[1].split("</div>")[2] if 'data-label="CCCD mặt sau"' in b else False)
-                self._ok("nút ✂ khai hx-swap=innerHTML (form cha hx-swap=none kế thừa → popup từng không hiện)", 'hx-target="#modal-root" hx-swap="innerHTML">✂' in b)
+                self._ok("nút ✂ khai hx-swap=innerHTML (form cha hx-swap=none kế thừa → popup từng không hiện)", 'hx-target="#modal-root" hx-swap="innerHTML"' in b and b.count('>✂</button>') >= 2)
                 r = web.get("/banle/thau-vao/anh/cat/?slot=cccd2")
                 b = r.content.decode()
                 self._ok("✂ xem trước: popup có ảnh gốc + thẻ đã tách 1170×738", r.status_code == 200 and "Thẻ đã tách" in b and "1170×738" in b and b.count("data:image/jpeg") == 2)
@@ -316,6 +316,17 @@ class Command(BaseCommand):
                 sang = _sang(im)
                 self._ok("LƯU với góc lẻ 187,5° (phẩy VN) → ngang 1170×738 (xoay 180 + 7,5° cắt nội tiếp), sáng ≥90% thẻ giả",
                          im.size == (1170, 738) and sang >= 0.9 * sang_the, f"{im.size} sáng={sang:.2f}/{sang_the:.2f}")
+                kq0 = bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)
+                r = web.post("/banle/thau-vao/anh/cat/luu/", {"slot": "cccd2", "goc": "180", "cat_t": "0", "cat_r": "0,3", "cat_b": "0", "cat_l": "0"})
+                im2 = _Im.open(BytesIO(bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)))
+                r0 = web.post("/banle/thau-vao/anh/cat/luu/", {"slot": "cccd2", "goc": "180"})
+                im0 = _Im.open(BytesIO(bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)))
+                a2 = im2.convert("L").resize((16, 10)).getdata(); a0 = im0.convert("L").resize((16, 10)).getdata()
+                self._ok("LƯU cắt bớt cạnh phải 30% (cat_r=0,3 phẩy VN) → vẫn 1170×738, nội dung khác ảnh không cắt (cạnh thẻ dịch trước khi nắn)",
+                         im2.size == (1170, 738) and list(a2) != list(a0) and r.status_code == 200 and r0.status_code == 200, str(im2.size))
+                b_ck = web.get("/banle/thau-vao/").content.decode()
+                self._ok("nút ✂ mở popup LOADING ngay + disable (hx-on::before-request khblCatLoading, template #th-cat-loading)",
+                         "khblCatLoading(" in b_ck and 'id="th-cat-loading"' in b_ck and 'hx-disabled-elt="this" hx-on::before-request' in b_ck)
                 try:
                     AC.cat_cccd(anh("gray").read(), 0)
                     self._ok("ảnh không có thẻ → báo không tìm thấy", False)
