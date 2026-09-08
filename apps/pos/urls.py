@@ -37,6 +37,8 @@ urlpatterns = [
     path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
     path("banle/ban-hang/in/", views.ban_in, name="ban_in"),
     path("banle/ban-hang/in/dem/", views.ban_in_dem, name="ban_in_dem"),
+    # 🖨 IN trong popup GĐB: in thẳng từ cửa sổ bán + đóng popup + phiếu trắng (08/09/2026 chiều)
+    path("banle/ban-hang/in/thang/", views.ban_in_thang, name="ban_in_thang"),
 
     # Thâu vào
     path("banle/thau-vao/", views.thau, name="thau"),

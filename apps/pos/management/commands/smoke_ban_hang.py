@@ -297,7 +297,16 @@ class Command(BaseCommand):
                     "ĐÃ CHỐT" in b and f"hoa-don/xem/?trn_id={hd['TrnID']}" in b and "in=1" in b
                     and b.count('disabled title="Đơn đã thanh toán"') == 2 and 'pg-khoa-fs" title' in b)
             b3 = body(cl.post("/banle/ban-hang/in/dem/", {"trn_id": hd["TrnID"]}))
-            self.ok("C8c nút 🖨 IN trong popup → đếm 'IN lần 1' vào bill_audit", "IN lần 1" in b3)
+            self.ok("C8c in/dem (khblInThang gọi im=1) → đếm 'IN lần 1' vào bill_audit", "IN lần 1" in b3)
+            # 08/09 chiều: nút 🖨 IN popup = ban_in_thang → tờ GĐB trong #pos-in + đóng popup + PHIẾU TRẮNG
+            b3b = body(cl.post("/banle/ban-hang/in/thang/", {"trn_id": hd["TrnID"], "loai": "BAN"}))
+            self.ok("C8c2 🖨 IN popup → tờ GĐB vào #pos-in (in từ cửa sổ bán) + closeKhblModal + form TRẮNG",
+                    'id="pos-in"' in b3b and 'class="gdb-a5"' in b3b and hd["BillCode"] in b3b
+                    and f'khblInThang("{hd["TrnID"]}"' in b3b and "closeKhblModal" in b3b
+                    and "Chưa có món nào" in b3b and "phiếu trắng" in b3b)
+            bpp = body(cl.get(f"/banle/hoa-don/xem/?trn_id={hd['TrnID']}&loai=BAN&nguon=live&in=1"))
+            self.ok("C8c3 popup GĐB in=1: nút IN trỏ in/thang (không còn window.print tại chỗ)",
+                    "ban-hang/in/thang/" in bpp and "window.print()" not in bpp)
             self.ok("C8d ĐƠN MỚI xóa cả nhân viên bán",
                     'id="o-nv"' in body(cl.post("/banle/ban-hang/moi/")))
 

@@ -869,6 +869,32 @@ def ban_in_dem(request):
 
 
 @require_POST
+def ban_in_thang(request):
+    """Nút 🖨 IN trong popup Giấy đảm bảo (GĐ chốt 08/09/2026 chiều): chạy ĐÚNG thuật toán THANH TOÁN & IN —
+    tờ GĐB nhét vào #pos-in in từ CHÍNH cửa sổ bán (khblInThang tự đếm lần in im=1) → ẨN popup (dong_modal)
+    → PHIẾU TRẮNG như ĐƠN MỚI. Chỉ đơn ĐÃ CHỐT HÔM NAY (đơn ngày cũ: chỉ xem — cùng luật chân trang)."""
+    g = cart.get(request)
+    trn = (request.POST.get("trn_id") or g.get("trn_id") or "").strip()
+    loai = request.POST.get("loai") or ("BAN_DOI" if g["doi"] else "BAN")
+    if not trn:
+        return _loi(request, "Chưa có hóa đơn để in")
+    if trn == g.get("trn_id"):
+        if g.get("status") != B.CHOT_ROI:
+            return _loi(request, "Hóa đơn đang SỬA / chưa thanh toán — THANH TOÁN xong mới in được Giấy đảm bảo.")
+        if (g.get("ngay") or datetime.date.today().isoformat()) != datetime.date.today().isoformat():
+            return _loi(request, "Hóa đơn ngày khác — chỉ xem, không in lại.", {"dong_modal": True})
+    ctx_in, _err = _gdb_ctx(trn, loai if loai in ("BAN", "BAN_DOI") else "BAN", "live")
+    if not ctx_in:
+        return _loi(request, "Không dựng được tờ in — thử lại hoặc mở lại đơn từ DANH SÁCH.")
+    from django.template.loader import render_to_string
+    in_html = render_to_string("pos/_gdb_a5.html", ctx_in, request=request)
+    ma = (g.get("bill_code") if trn == g.get("trn_id") else "") or ctx_in["r"].get("BillCode") or trn
+    cart.clear(request, giu_nv=False)
+    return _pos_oob(request, {"tin": f"Đang in Giấy đảm bảo {ma} — đã mở phiếu trắng cho khách kế",
+                              "vua_chot": trn, "in_html": in_html, "dong_modal": True})
+
+
+@require_POST
 def ban_huy(request):
     """Nút XÓA: phiếu chưa lưu thì dọn form; hóa đơn đã lưu thì HỦY THẬT (hàng về kho)."""
     g = cart.get(request)
@@ -1421,6 +1447,7 @@ def _gdb_ctx(trn_id, loai, nguon="live"):
                 "tl_hot": _tl_chi(x.get("DiamondWeight"), "L", False),
                 "rate": x.get("BuyRate"), "task": 0, "amount": x.get("BuyAmount"),
             })
+    store_lines = _sap_store_lines(store_lines)
     bill_code = r.get("BillCode") or r.get("TrnID") or trn_id
     barcode_code = _ma_gdb(bill_code)
     # Chỉ phiếu có vàng khách (đổi/thâu) mới hiện trạng thái đổi bù/dư.
@@ -1438,6 +1465,15 @@ def _gdb_ctx(trn_id, loai, nguon="live"):
         "emp_sup_name": __import__("apps.pos.gold_bill", fromlist=["ten_nv"]).ten_nv(
             __import__("apps.pos.gold_bill", fromlist=["emp_sup_cua"]).emp_sup_cua(trn_id)) if loai != "THAU" else "",
     }, None
+
+
+_TT_DONG_TIEM_GIU = {"Thâu": 0, "Đổi": 1}     # còn lại = dòng MÃ SP (vàng mới bán) → 2
+
+
+def _sap_store_lines(ds):
+    """Bảng vàng khách (tiệm giữ) xếp theo cột Mã SP — GĐ chốt 08/09/2026: THÂU trên cùng → ĐỔI → dòng MÃ SP.
+    sorted ổn định nên trong từng nhóm giữ nguyên thứ tự KK trả về."""
+    return sorted(ds, key=lambda x: _TT_DONG_TIEM_GIU.get(x.get("loai_dong"), 2))
 
 
 def _gdb_ctx_mau():
@@ -1460,6 +1496,7 @@ def _gdb_ctx_mau():
                    {"loai_dong": "Thâu", "ProductDesc": "Vàng khách", "GoldLabel": "99.99", "tl_vang": "0,3", "tl_hot": "0",
                     "rate": 13750, "task": 0, "amount": 4_125_000}]
     code = _ma_gdb(r["BillCode"])
+    store_lines = _sap_store_lines(store_lines)
     return {"r": r, "loai": "BAN_DOI", "nguon": "mau", "lines": lines, "store_lines": store_lines, "tong_mon": len(lines),
             "tien_chu": _tien_bang_chu(r["SoTien"]), "barcode_code": code, "codebar": _codebar(code),
             "gdb_qr": _qr_hoa_don(code), "co_vang_doi_thau": True, "gdb_status": "Đổi bù", "emp_sup_name": "Trần Huỳnh Như"}

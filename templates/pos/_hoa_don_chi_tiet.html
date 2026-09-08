@@ -4,15 +4,15 @@
 {% block modal_title %}Giấy đảm bảo · {{ r.BillCode|default:r.TrnID }}{% endblock %}
 {% block modal_style %}{% if in_mode %}width:96vw;max-width:96vw;max-height:96vh{% else %}width:min(760px,96vw);max-height:94vh{% endif %}{% endblock %}
 {% block modal_foot %}{% if in_mode %}
-  {% comment %}IN từ màn bán (08/09/2026): đếm lần in (bill_audit) rồi window.print(); A5 đứng, lề trên 0, canh giữa
-  (CSS @media print). ⚠ if phải nằm TRONG block — Django bỏ qua if bao quanh block ở template con. Chú thích nhiều dòng
+  {% comment %}IN từ màn bán (GĐ chốt 08/09/2026 chiều): 🖨 IN → ban_in_thang = ĐÚNG thuật toán THANH TOÁN & IN (tờ GĐB
+  vào #pos-in, in từ chính cửa sổ bán, tự đếm lần in) → popup ẨN (dong_modal) → PHIẾU TRẮNG như ĐƠN MỚI.
+  ⚠ if phải nằm TRONG block — Django bỏ qua if bao quanh block ở template con. Chú thích nhiều dòng
   PHẢI dùng comment-block, {# #} chỉ 1 dòng (từng in nguyên văn ra chân popup).{% endcomment %}
-  <span class="dim" style="margin-right:auto;font-size:11.5px">Tờ GĐB 148 × 210 ghim sát mép trên trang in, lề 0 — trình duyệt nhớ máy in & thiết lập lần in trước ·
+  <span class="dim" style="margin-right:auto;font-size:11.5px">Bấm IN: in thẳng (trình duyệt nhớ máy in), popup tự đóng và mở phiếu trắng cho khách kế ·
     <a href="{% url 'pos:gdb_mau' %}?trn_id={{ r.TrnID }}&loai={{ loai }}" target="_blank" title="Kéo-thả khối, chỉnh cỡ chữ từng phần trên tờ giấy">⚙ Chỉnh mẫu in</a></span>
   <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
   <button class="khbl-btn khbl-btn--gold" type="button"
-          hx-post="{% url 'pos:ban_in_dem' %}" hx-vals='{"trn_id": "{{ r.TrnID }}"}' hx-swap="none"
-          hx-on::after-request="if(event.detail.successful){window.print()}">🖨 IN</button>
+          hx-post="{% url 'pos:ban_in_thang' %}" hx-vals='{"trn_id": "{{ r.TrnID }}", "loai": "{{ loai }}"}' hx-swap="none">🖨 IN</button>
 {% else %}
   <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
 {% endif %}{% endblock %}

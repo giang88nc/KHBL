@@ -305,8 +305,12 @@ hóa đơn, popup passcode `huy_hd`) · SỬA (popup `sua`) · IN bật, TT/TT&I
 (`.pg-ban__foot-tra`). **THANH TOÁN → GIỮ đơn vừa chốt trên form** ở chế độ xem (`cart.nap(B.doc)`), ＋ ĐƠN MỚI để
 bán khách kế; **THANH TOÁN & IN → chốt + IN THẲNG + FORM TRẮNG** (xem "IN — chốt lần 3" bên dưới). **IN HÓA ĐƠN = popup Giấy đảm bảo A5** tái dùng
 `hoa_don_chi_tiet` (`?trn_id&loai=BAN|BAN_DOI&nguon=live&in=1` — `nguon=live` đi theo công tắc đích; `in=1` → popup
-96vw + chân có nút **🖨 IN** = `ban_in_dem` POST đếm lần in vào bill_audit rồi `window.print()`; @page A5 portrait
-margin 0 đã có ở CSS gdb-a5, trình duyệt tự nhớ máy in). Nút HỦY THANH TOÁN đã BỎ khỏi chân (view `huy_tt` còn
+96vw + chân có nút **🖨 IN** — **08/09 chiều (GĐ chốt): IN = `ban_in_thang` POST** (`banle/ban-hang/in/thang/`,
+trn_id+loai) chạy ĐÚNG thuật toán THANH TOÁN & IN: tờ GĐB vào `#pos-in` in từ chính cửa sổ bán (khblInThang tự đếm
+im=1) → `dong_modal` ẨN popup → `cart.clear` PHIẾU TRẮNG; chỉ đơn chốt HÔM NAY (ngày cũ → từ chối + đóng popup).
+`ban_in_dem` giờ chỉ còn vai trò đếm im=1. **Bảng vàng khách tiệm giữ (`.gdb-a5__store-old`) xếp theo cột Mã SP:
+THÂU → ĐỔI → dòng MÃ SP vàng mới** (`_sap_store_lines`, sorted ổn định, áp cả dữ liệu mẫu — GĐ chốt 08/09 chiều).
+Nút HỦY THANH TOÁN đã BỎ khỏi chân (view `huy_tt` còn
 sống). **IN — chốt thêm 08/09 trưa**: (a) khi in KHÔNG in nền ảnh tờ mẫu (`@media print .gdb-a5{background:none}` —
 giấy GĐB đã in sẵn, chỉ in nội dung, chữ đen viền xám); (b) **THANH TOÁN & IN không mở popup**: OOB gọi
 `khblInThang(url, trn, demUrl)` (khbl.js) → iframe ẩn nạp `hoa_don_chi_tiet?…&raw=1&auto=1` (template standalone
