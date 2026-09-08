@@ -2,7 +2,7 @@
 Chân trang màn bán — mảnh OOB `#pos-foot`. GĐ chốt 08/09/2026: LUÔN 4 NÚT XÓA · THANH TOÁN · THANH TOÁN & IN ·
 IN HÓA ĐƠN (+ SỬA khi đơn chốt hôm nay), bật/tắt theo trạng thái:
 - trang trắng (chưa quét, chưa có mã) → tất cả TẮT
-- nháp có mã / đang sửa            → XÓA · THANH TOÁN · THANH TOÁN & IN bật; IN tắt
+- nháp có mã / đang sửa            → XÓA (popup XÁC NHẬN chung `xoa_nhap`, không passcode — 08/09 chiều) · THANH TOÁN · THANH TOÁN & IN bật; IN tắt
   (THANH TOÁN → giữ đơn vừa chốt trên form; THANH TOÁN & IN → chốt + IN THẲNG từ cửa sổ này + form TRẮNG — 08/09 chiều)
 - đã chốt HÔM NAY (vừa chốt / mở lại) → XÓA (= hủy hóa đơn, passcode) · SỬA (passcode) · IN bật; TT & TT&IN tắt
   (IN → popup xem trước → 🖨 IN = in thẳng từ cửa sổ này + popup ẩn + phiếu TRẮNG — 08/09 chiều)
@@ -18,9 +18,9 @@ Badge: ✎ ĐANG SỬA mã · 🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM. Không còn KH�
     <span class="pg-info__tt pg-info__tt--chot" title="{{ g.bill_code|default:g.trn_id }}">🔒 ĐÃ CHỐT
       <b class="mono">{% if g.ngay %}{{ g.ngay|slice:"8:10" }}/{{ g.ngay|slice:"5:7" }}/{{ g.ngay|slice:":4" }}{% endif %} {{ g.gio }}</b></span>
   {% else %}
-    <button class="khbl-btn khbl-btn--nguy" type="button" {% if not co_don %}disabled title="Chưa có đơn"{% endif %}
-            hx-post="{% url 'pos:ban_huy' %}" hx-swap="none"
-            hx-confirm="{% if dang_sua %}XÓA HẲN đơn chờ {{ g.bill_code|default:g.trn_id }}?&#10;&#10;Đơn bị xóa khỏi phần mềm (chỉ còn trong nhật ký), toàn bộ món hàng + dẻ trả về kho.{% else %}Xóa trắng phiếu đang nhập?{% endif %}">
+    {# 08/09 chiều: XÓA nháp/đang sửa → popup XÁC NHẬN chung (không passcode) thay JS confirm #}
+    <button class="khbl-btn khbl-btn--nguy" type="button" {% if not co_don %}disabled title="Chưa có đơn"{% else %}title="Xóa đơn nháp: hàng về kho, phiếu trắng (có xác nhận)"
+            hx-get="{% url 'pos:ban_xac_nhan' 'xoa_nhap' %}" hx-target="#modal-root"{% endif %}>
       🗑 XÓA</button>
     {% if dang_sua %}<span class="pg-info__tt">✎ ĐANG SỬA <b class="mono">{{ g.bill_code|default:g.trn_id }}</b></span>{% endif %}
   {% endif %}

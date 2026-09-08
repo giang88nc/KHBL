@@ -111,6 +111,35 @@ class Command(BaseCommand):
               "đã có trong phiếu" in b2 or "P-008" in b2 or "đang trong đơn" in b2)
         check("mã không tồn tại → câu lỗi vendor P-002",
               "P-002" in body(c.post("/banle/ban-hang/quet/", {"ma": "ZZZKHONGCO"})))
+        # ── QUÉT MÃ GĐB ở ô quét (08/09/2026 chiều): 9 số yymmdd+stt → mở hóa đơn; ngày vô lý/không có → quét hàng như cũ ──
+        from apps.pos import bill as B
+        from apps.pos.views import _ma_gdb
+        check("mã GĐB hợp lệ 260908038 → (2026-09-08, '038'); tháng 13 / mã hàng có chữ → None",
+              B.ma_gdb_hop_le("260908038") == ("2026-09-08", "038") and B.ma_gdb_hop_le("261308038") is None
+              and B.ma_gdb_hop_le("1B60000865") is None and B.ma_gdb_hop_le("26090803") is None)
+        hd = S.client("smoke_ui").query("SELECT TOP 1 TrnID, BillCode FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+                                        "WHERE IsDel='0' AND Status='C' ORDER BY TrnDate DESC, TrnTime DESC")[0]
+        tim = B.tim_theo_ma_gdb(_ma_gdb(hd["BillCode"]))
+        check(f"tra mã GĐB {_ma_gdb(hd['BillCode'])} → đúng hóa đơn {hd['BillCode']}",
+              bool(tim) and tim["TrnID"] == hd["TrnID"])
+        check("mã dạng GĐB nhưng không có hóa đơn (200101999) → rơi về quét hàng, vendor P-002",
+              "P-002" in body(c.post("/banle/ban-hang/quet/", {"ma": "200101999"})))
+        # ── QUÉT QR THẺ CCCD vào ô khách (08/09/2026 chiều): chỉ lấy 12 số đầu, tự chọn nếu đúng 1 khách ──
+        qr_rac = "|381472415|Tr0198017601980161ng Ng022501870141c Giang|07041988|Nam|Kh01950179m 4, TT. N0196m|15092023"
+        check("cccd_tu_qr: rút đúng 12 số dù tên/địa chỉ hỏng; gõ tay (không '|') → ''",
+              S.cccd_tu_qr("096088009068" + qr_rac) == "096088009068" and S.cccd_tu_qr("0944351461") == ""
+              and S.cccd_tu_qr("xx|096088009068|y") == "096088009068")
+        kh = S.client("smoke_ui").query("SELECT TOP 1 CustID, CMND FROM I_CUSTOMER WITH (NOLOCK) WHERE Active='1' "
+                                        "AND LEN(CMND)=12 AND CMND NOT LIKE '%[^0-9]%' ORDER BY LastTradingDate DESC")
+        if kh:
+            bq = body(c.get("/banle/ban-hang/tim-khach/", {"q": kh[0]["CMND"] + qr_rac}))
+            # tự chọn = gọi thẳng htmx.ajax ban_dat (b.click() rơi vì htmx chưa gắn hx-post cho nút vừa swap)
+            check(f"quét QR CCCD {kh[0]['CMND']} → ô tìm = 12 số, khách {kh[0]['CustID']} hiện + tự chọn (htmx.ajax ban_dat)",
+                  f'o.value = "{kh[0]["CMND"]}"' in bq and f'cust_id: "{kh[0]["CustID"]}"' in bq
+                  and 'htmx.ajax("POST", "/banle/ban-hang/dat/"' in bq)
+        check("QR CCCD chưa có khách → báo 'Chưa có khách' + không tự chọn",
+              (lambda b0: "Chưa có khách" in b0 and "ban-hang/dat/" not in b0)(
+                  body(c.get("/banle/ban-hang/tim-khach/", {"q": "000000000001" + qr_rac}))))
         b = body(c.post("/banle/ban-hang/vang-doi/",
                         {"gold": "D9999", "tong_tl": "100", "tl_hot": "0", "gia": ""}))
         check("thêm dòng VÀNG ĐỔI (giá tự lấy từ bảng giá)",

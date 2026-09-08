@@ -234,6 +234,21 @@ def tim_khach(q="", limit=25):
         (WALK_IN, f"%{q}%", f"%{q}%", f"{q}%", f"%{q}%"))
 
 
+def cccd_tu_qr(q):
+    """Chuỗi QUÉT QR thẻ CCCD ('096088009068|381472415|Họ tên|07041988|Nam|Địa chỉ|15092023' — tiếng Việt
+    thường bị máy quét làm hỏng thành số/ký tự lạ) → 12 số CCCD ở trường đầu. Không có '|' = gõ tay → ''.
+    Trường đầu hỏng thì vớt cụm 12 số đứng riêng đầu tiên trong chuỗi."""
+    import re as _re
+    s = (q or "").strip()
+    if "|" not in s:
+        return ""
+    dau = _re.sub(r"\D", "", s.split("|", 1)[0])
+    if len(dau) == 12:
+        return dau
+    m = _re.search(r"(?<!\d)\d{12}(?!\d)", s)
+    return m.group(0) if m else ""
+
+
 def khach_theo_id(cust_id):
     r = client("khach").query(
         "SELECT TOP 1 c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, c.CMND, c.BirthDate, "

@@ -1,3 +1,21 @@
+{% comment %}QUÉT QR CCCD (08/09/2026): server rút 12 số CCCD (qr_cccd) → ô tìm chỉ còn số đó; đúng 1 khách (auto) → bấm
+luôn mục đầu = chọn khách; không có → báo để bấm ＋ THÊM. Script chạy được vì htmx swap innerHTML #khach-goiy.{% endcomment %}
+{% if qr_cccd %}
+<script>(function () {
+  var o = document.getElementById("o-khach"); if (o) o.value = "{{ qr_cccd }}";
+  {% if auto %}/* ⚠ không b.click(): script chạy lúc htmx CHƯA gắn hx-post cho nút mới swap → click rơi. Gọi thẳng ban_dat. */
+  setTimeout(function () {
+    if (!window.htmx) return;
+    htmx.ajax("POST", "{% url 'pos:ban_dat' %}", { values: { cust_id: "{{ ds.0.CustID }}" }, swap: "none",
+      headers: { "X-CSRFToken": (window.KHBL_CSRF || "") } });
+  }, 0);{% endif %}
+})();</script>
+{% if not ds %}
+<div class="khbl-card khbl-card--flat" style="box-shadow:var(--sh-lift);width:420px;padding:9px 11px;font-size:12.5px">
+  <b>Chưa có khách</b> mang CCCD <span class="mono">{{ qr_cccd }}</span> — bấm <b>＋ THÊM</b> rồi quét lại QR vào form khách.
+</div>
+{% endif %}
+{% endif %}
 {% if ds %}
 <div class="khbl-card khbl-card--flat" style="box-shadow:var(--sh-lift);width:420px;max-height:300px;overflow:auto">
   {% for k in ds %}

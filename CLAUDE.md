@@ -327,6 +327,20 @@ cửa sổ bán hàng** (đúng cơ chế nút 🖨 IN của popup vốn in đư
 `#pos-in` rỗng. Đồng thời **`cart.clear` → form TRẮNG như ĐƠN MỚI** (THANH TOÁN thường vẫn giữ đơn). `_gdb_ctx` lỗi →
 vẫn chốt, toast đỏ bảo mở lại từ DANH SÁCH bấm IN. Trang `gdb_in.html` raw=1 vẫn sống cho 🖨 In thử ở trang chỉnh mẫu.
 Smoke C12f cập nhật (tờ GĐB trong OOB, không raw, form trắng).
+**QUÉT MÃ GĐB + QUÉT QR CCCD (GĐ chốt 08/09/2026 chiều)**: (a) ô quét VÀNG BÁN (`.khbl-scan__in`) nhận thêm **mã 9 số
+in trên Giấy đảm bảo** (`yymmdd`+3 số cuối BillCode, vd 260908038): `bill.ma_gdb_hop_le` (đúng 9 số + ngày có thật)
+→ `bill.tim_theo_ma_gdb` tra `BillCode LIKE 'yy-mm-dd-%stt'` theo quy tắc ngày cũ → HIST / hôm nay → live → có
+hóa đơn → **`_nap_phieu`** (tách từ `ban_mo`, dùng chung XEM từ DANH SÁCH) mở lên form kể cả đang xem đơn khác;
+không có → quét mã hàng như cũ (vendor P-002). (b) ô khách `#o-khach`: gõ tay giữ nguyên; **chuỗi QR thẻ CCCD**
+(7 trường `|`, máy quét hay làm hỏng tiếng Việt thành số/ký tự lạ) → `services.cccd_tu_qr` rút 12 số trường đầu →
+`ban_tim_khach` lọc khách ĐÚNG CMND đó → `_khach_goiy` script đặt ô tìm = 12 số, **đúng 1 khách → tự chọn** bằng
+`htmx.ajax` POST ban_dat (⚠ BẪY: `b.click()` nút vừa swap KHÔNG ăn — script chạy lúc htmx chưa gắn hx-post cho nút
+mới; đã dính lúc kiểm trên server thật), 0 → khung "Chưa có khách … bấm ＋ THÊM". Smoke_ui +6 kịch bản (chỉ đọc);
+kiểm thật trên trình duyệt 08/09: quét GĐB 260908060 → mở 26-09-08-000060 ĐÃ CHỐT; QR CCCD 020172000714 → tự chọn khách.
+**XÓA nháp qua popup + ĐƠN MỚI không hỏi (GĐ chốt 08/09 chiều)**: nút 🗑 XÓA đơn NHÁP/ĐANG SỬA → `ban_xac_nhan/xoa_nhap`
+= popup XÁC NHẬN CHUNG (`HANH_DONG["xoa_nhap"]`, cờ `nhap`: KHÔNG passcode, không mốc két; hiện mã/số món/hậu quả; nút
+XÁC NHẬN autofocus, Enter = OK) → `ban_thuc_hien/xoa_nhap` → `_huy_nhap` (tách từ `ban_huy`, URL cũ còn sống) + đóng popup;
+phiếu trắng/đơn chốt → popup báo không có gì để xóa. Nút ＋ ĐƠN MỚI bỏ `hx-confirm` — bấm là mở phiếu trắng ngay.
 Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
 **MẪU IN GĐB TÙY CHỈNH (GĐ chốt 08/09/2026 — "in thực tế chữ quá nhỏ")**: module **`apps/pos/gdb_layout.py`** —
 10 KHỐI (`BLOCKS`: mã vạch, số mã vạch, thông tin HĐ, bảng món, tổng tiền, giờ-ngày, người bán, bảng vàng khách,

@@ -6,8 +6,7 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
 <div class="pg-info pg-info--1d{% if dang_sua %} pg-info--sua{% endif %}">
 
   <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
-          hx-post="{% url 'pos:ban_moi' %}" hx-swap="none"
-          hx-confirm="Bỏ phiếu đang lập và mở phiếu mới?" title="Đơn mới">＋<span class="pg-btn-noi__t"> ĐƠN MỚI</span></button>
+          hx-post="{% url 'pos:ban_moi' %}" hx-swap="none" title="Đơn mới — mở phiếu trắng ngay (08/09: không hỏi lại)">＋<span class="pg-btn-noi__t"> ĐƠN MỚI</span></button>
 
   <label class="pg-f pg-f--ngay">
     <span>Ngày</span>
@@ -69,7 +68,7 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
     {% else %}
       <div class="pg-inb">
         <input id="o-khach" class="khbl-input" autocomplete="off"
-               placeholder="tên · số điện thoại · CCCD" {% if phieu_chot %}disabled title="Đơn đang khóa"{% endif %}
+               placeholder="tên · số điện thoại · CCCD · quét QR thẻ CCCD" {% if phieu_chot %}disabled title="Đơn đang khóa"{% endif %}
                hx-get="{% url 'pos:ban_tim_khach' %}" hx-trigger="keyup changed delay:220ms"
                hx-target="#khach-goiy" name="q">
         <button class="khbl-btn khbl-btn--outline pg-inb__btn" type="button"

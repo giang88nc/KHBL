@@ -555,7 +555,14 @@ class Command(BaseCommand):
                 self.ok("F7 hột không tính tiền: tổng = bán+60, hột 60 → TL vàng = hạn mức → 1 dòng ngang",
                         len(d) == 1 and d[0]["DoiNgang"] == "1" and M.dec(d[0]["GoldWeight"]) == w_ban)
             finally:
-                cl.post("/banle/ban-hang/huy/")   # xóa đơn W sandbox, hàng về kho
+                # 08/09 chiều: XÓA nháp đi qua popup XÁC NHẬN chung (không passcode) → thuc-hien/xoa_nhap
+                bx = body(cl.get("/banle/ban-hang/xac-nhan/xoa_nhap/"))
+                self.ok("F8 popup XÓA ĐƠN NHÁP: có mã đơn + hậu quả, KHÔNG ô passcode, nút xác nhận",
+                        "XÓA ĐƠN NHÁP" in bx and "xn-passcode" not in bx and 'id="xn-ok"' in bx and "thuc-hien/xoa_nhap" in bx)
+                bh = body(cl.post("/banle/ban-hang/thuc-hien/xoa_nhap/"))
+                self.ok("F9 xác nhận → xóa đơn W sandbox (hàng về kho) + đóng popup + form trắng",
+                        "hàng trả về kho" in bh and "closeKhblModal" in bh and "Chưa có món nào" in bh)
+                cl.post("/banle/ban-hang/huy/")   # phòng hờ nếu F9 trượt
                 cl.post("/banle/ban-hang/moi/")
 
     def _phan_botle(self):

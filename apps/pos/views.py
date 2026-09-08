@@ -318,10 +318,21 @@ def passcode_save(request):
 
 @require_POST
 def ban_quet(request):
-    """Quét tem hoặc gõ mã hàng → thêm 1 dòng VÀNG BÁN, ô nhập tự trống để quét tiếp."""
+    """Quét tem hoặc gõ mã hàng → thêm 1 dòng VÀNG BÁN, ô nhập tự trống để quét tiếp.
+    + QUÉT MÃ GĐB (GĐ chốt 08/09/2026 chiều): mã 9 số yymmdd+stt in trên Giấy đảm bảo → MỞ LẠI hóa đơn đó lên
+    form (như XEM từ DANH SÁCH, kể cả khi đang xem đơn khác). Không thấy hóa đơn → quét mã hàng như cũ."""
+    ma = (request.POST.get("ma") or "").strip()
+    if B.ma_gdb_hop_le(ma):
+        try:
+            hd = B.tim_theo_ma_gdb(ma)
+        except Exception as exc:
+            return _pos_oob(request, {"scan_err": {"code": "", "style": "do",
+                                                   "desc": f"Không tra được mã GĐB {ma}: {S.error_message(exc)}"},
+                                      "scan_val": ma})
+        if hd:
+            return _nap_phieu(request, hd["TrnID"], ghi_chu=f" · quét mã GĐB {ma}")
     if _dang_khoa(request):
         return _loi(request, KHOA_MSG)
-    ma = (request.POST.get("ma") or "").strip()
     ph = _phien(request)
     kq = S.quet_ma(ma, till_id=ph["till_id"])
     if not kq["ok"]:
@@ -584,7 +595,16 @@ def ban_moi(request):
 
 
 def ban_tim_khach(request):
-    return render(request, "pos/_khach_goiy.html", {"ds": S.tim_khach(request.GET.get("q", ""))})
+    """Gợi ý khách theo tên / SĐT / CCCD / mã (gõ tay — giữ nguyên). QUÉT QR THẺ CCCD (GĐ chốt 08/09/2026 chiều):
+    chuỗi 7 trường ngăn '|' (máy quét hay làm hỏng tiếng Việt: 'Tr0198017601980161ng' / 'Trng Ngc') → chỉ lấy
+    12 số CCCD ở trường đầu, lọc khách ĐÚNG số đó; đúng 1 khách → tự chọn (script trong _khach_goiy), 0 → báo
+    chưa có để bấm ＋ THÊM."""
+    q = request.GET.get("q", "")
+    cccd = S.cccd_tu_qr(q)
+    if not cccd:
+        return render(request, "pos/_khach_goiy.html", {"ds": S.tim_khach(q)})
+    ds = [k for k in S.tim_khach(cccd, limit=50) if re.sub(r"\D", "", str(k.get("CMND") or "")) == cccd]
+    return render(request, "pos/_khach_goiy.html", {"ds": ds, "qr_cccd": cccd, "auto": len(ds) == 1})
 
 
 def ban_tim_nv(request):
@@ -638,8 +658,12 @@ def ban_ds(request):
 
 @require_POST
 def ban_mo(request):
-    """Nạp 1 hóa đơn đã lưu lên form để xem / sửa."""
-    trn = (request.POST.get("trn_id") or "").strip()
+    """Nạp 1 hóa đơn đã lưu lên form để xem / sửa (XEM từ DANH SÁCH)."""
+    return _nap_phieu(request, (request.POST.get("trn_id") or "").strip())
+
+
+def _nap_phieu(request, trn, ghi_chu=""):
+    """Nạp hóa đơn `trn` lên form — dùng chung: XEM từ DANH SÁCH (ban_mo) + QUÉT MÃ GĐB ở ô quét (ban_quet)."""
     try:
         phieu = B.doc(trn)
     except Exception as exc:
@@ -661,7 +685,7 @@ def ban_mo(request):
     g["_fp"], g["_fp_kk"] = __import__("apps.pos.don", fromlist=["van_tay"]).van_tay(g), \
         __import__("apps.pos.don", fromlist=["van_tay_kk"]).van_tay_kk(g)
     cart.save(request, g)
-    tin = f"Đã mở {phieu['bill_code'] or trn} · {phieu['ten_trang_thai']}"
+    tin = f"Đã mở {phieu['bill_code'] or trn} · {phieu['ten_trang_thai']}{ghi_chu}"
     if not phieu["sua_duoc"]:
         tin += " — muốn sửa phải bấm MỞ LẠI."
     return _pos_oob(request, {"tin": tin})
@@ -684,6 +708,12 @@ HANH_DONG = {
                "hau_qua": ["Sổ quỹ (két) bị HOÀN, rồi hóa đơn bị XÓA khỏi phần mềm (chỉ còn trong nhật ký).",
                            "Toàn bộ món hàng + dẻ trả về kho. KHÔNG khôi phục được.",
                            "Giấy đảm bảo đã in KHÔNG CÒN HIỆU LỰC."]},
+    # 08/09/2026 chiều (GĐ chốt): XÓA đơn NHÁP / ĐANG SỬA cũng đi qua popup XÁC NHẬN chung (thay JS confirm),
+    # KHÔNG passcode (`nhap`: True) — OK → ban_huy như cũ (xóa đơn W trên KK, hàng về kho / dọn phiếu chưa lưu)
+    "xoa_nhap": {"ten": "XÓA ĐƠN NHÁP", "icon": "🗑", "audit": "HUY_HD", "nguy": True, "nhap": True,
+                 "hau_qua": ["Đơn nháp bị XÓA khỏi phần mềm (chỉ còn trong nhật ký) — KHÔNG khôi phục được.",
+                             "Toàn bộ món hàng + dẻ đang giữ trả về kho.",
+                             "Màn hình về phiếu trắng."]},
 }
 
 
@@ -705,8 +735,12 @@ def _audit(request, g, action, note="", version=0):
 def _xac_nhan_ctx(request, hanh_dong, loi=""):
     g = cart.get(request)
     hd = HANH_DONG.get(hanh_dong)
-    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi,
-            "khoa": g.get("status") == B.CHOT_ROI and bool(hd),
+    # khoa = popup có việc để làm: hành động đơn chốt cần đơn ĐÃ CHỐT; xoa_nhap cần phiếu NHÁP (đã lưu W hoặc đang nhập)
+    if hd and hd.get("nhap"):
+        hop_le = g.get("status") != B.CHOT_ROI and bool(g.get("trn_id") or g["ban"] or g["doi"])
+    else:
+        hop_le = g.get("status") == B.CHOT_ROI and bool(hd)
+    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi, "khoa": hop_le,
             "nguoi": request.user.first_name or request.user.username, "username": request.user.username,
             "luc": datetime.datetime.now()}
 
@@ -729,6 +763,10 @@ def ban_thuc_hien(request, hanh_dong):
     g = cart.get(request)
     ph = _phien(request)
     trn = g.get("trn_id")
+    if hd.get("nhap"):                                     # XÓA nháp: không passcode, không mốc két
+        if g.get("status") == B.CHOT_ROI:
+            return _loi(request, "Hóa đơn đã CHỐT — dùng 🗑 XÓA (hủy hóa đơn, passcode).", {"dong_modal": True})
+        return _huy_nhap(request, {"dong_modal": True})
     if not trn:
         return _loi(request, "Chưa mở hóa đơn nào", {"dong_modal": True})
     if g.get("status") != B.CHOT_ROI:
@@ -896,21 +934,27 @@ def ban_in_thang(request):
 
 @require_POST
 def ban_huy(request):
-    """Nút XÓA: phiếu chưa lưu thì dọn form; hóa đơn đã lưu thì HỦY THẬT (hàng về kho)."""
+    """URL cũ (POST thẳng): XÓA phiếu nháp. Từ 08/09 chiều nút 🗑 XÓA đi qua popup XÁC NHẬN (xoa_nhap)."""
+    return _huy_nhap(request)
+
+
+def _huy_nhap(request, extra=None):
+    """XÓA nháp: phiếu chưa lưu thì dọn form; đơn W đã lưu thì HỦY THẬT trên KK (hàng về kho) + gold_bill is_del."""
     g = cart.get(request)
     ph = _phien(request)
     trn = g.get("trn_id")
+    extra = dict(extra or {})
     if not trn:
         cart.clear(request)
-        return _pos_oob(request, {"tin": "Đã xóa phiếu đang nhập."})
+        return _pos_oob(request, {**extra, "tin": "Đã xóa phiếu đang nhập."})
     try:
         B.huy(trn, user_id=ph["user_id"])
     except Exception as exc:
-        return _loi(request, f"Hủy không được: {_loi_goi(exc)}")
+        return _loi(request, f"Hủy không được: {_loi_goi(exc)}", extra)
     from . import gold_bill as GB
     GB.upsert_tu_gio(g, status=g.get("status") or B.NHAP, is_del=True, user=request.user)
     cart.clear(request)
-    return _pos_oob(request, {"tin": f"Đã hủy hóa đơn {g.get('bill_code') or trn} — hàng trả về kho."})
+    return _pos_oob(request, {**extra, "tin": f"Đã hủy hóa đơn {g.get('bill_code') or trn} — hàng trả về kho."})
 
 
 def _loi_goi(exc):

@@ -231,6 +231,42 @@ def trong_ngay(ngay, c=None, limit=100):
     return HR.doc(lambda cl: cl.query(sql, (ngay,)), ngay_iso=ngay, tag="ds_hoa_don")
 
 
+def ma_gdb_hop_le(ma):
+    """Mã 9 số in trên Giấy đảm bảo (`views._ma_gdb`: BillCode 26-09-08-000038 → 260908038 = yymmdd + 3 số
+    cuối). Trả (ngay_iso, stt3) khi đúng dạng và 6 số đầu là NGÀY CÓ THẬT, ngược lại None (mã hàng thường
+    có chữ nên không lẫn; mã hàng 9 số thuần mà ngày vô lý cũng không lẫn)."""
+    import datetime as _dt
+    s = (ma or "").strip()
+    if len(s) != 9 or not s.isdigit():
+        return None
+    try:
+        d = _dt.date(2000 + int(s[:2]), int(s[2:4]), int(s[4:6]))
+    except ValueError:
+        return None
+    return d.isoformat(), s[6:]
+
+
+def tim_theo_ma_gdb(ma, c=None):
+    """QUÉT MÃ GĐB ở ô quét màn bán (GĐ chốt 08/09/2026 chiều): mã 9 số → hóa đơn. BillCode vendor =
+    yy-mm-dd-NNNNNN nên tra `LIKE 'yy-mm-dd-%stt'` theo ngày nằm trong mã; ngày quá khứ → kho lịch sử, hôm nay
+    → live (quy tắc chung hist_read.la_qua_khu). Trả {TrnID, BillCode, Status} hoặc None; >1 khớp (hơn 999
+    đơn/ngày — chưa từng) → dòng mới nhất."""
+    kq = ma_gdb_hop_le(ma)
+    if not kq:
+        return None
+    ngay, stt = kq
+    y, m, d = ngay.split("-")
+    mau = f"{y[2:]}-{m}-{d}-%{stt}"
+    sql = ("SELECT TOP 2 TrnID, BillCode, Status FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+           "WHERE IsDel = '0' AND BillCode LIKE ? ORDER BY TrnDate DESC, TrnTime DESC")
+    if c is not None:
+        rows = c.query(sql, (mau,))
+    else:
+        from apps.pmv import hist_read as HR
+        rows = HR.doc(lambda cl: cl.query(sql, (mau,)), ngay_iso=ngay, tag="quet_gdb")
+    return rows[0] if rows else None
+
+
 # ─────────────────────────── ghi ───────────────────────────
 def _tham_so(c, proc, **rieng):
     co = {n for n, _ in c.params_of(proc)}

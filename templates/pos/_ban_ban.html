@@ -9,7 +9,7 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
           hx-trigger="submit, khbl:scan" hx-on::after-request="this.reset(); this.ma.focus()">
       {% csrf_token %}
       <input name="ma" class="khbl-input khbl-scan__in" autocomplete="off" {% if not phieu_chot %}data-autofocus{% endif %}
-             placeholder="{% if phieu_chot %}Đơn đang KHÓA — bấm 🔒 để mở sửa{% else %}Quét tem hoặc gõ mã hàng rồi Enter{% endif %}"
+             placeholder="{% if phieu_chot %}Đơn đang KHÓA — bấm 🔒 để mở sửa{% else %}Quét tem / mã Giấy đảm bảo hoặc gõ mã hàng rồi Enter{% endif %}"
              value="{{ scan_val|default:'' }}" {% if phieu_chot %}disabled{% endif %}>
       <span class="pg-scan__dots khbl-scan__dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
     </form>
