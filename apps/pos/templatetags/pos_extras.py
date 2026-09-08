@@ -126,3 +126,11 @@ def sokhong(x):
     """Số trần để nhúng vào data-*/value= (chống localize)."""
     d = M.dec(x)
     return str(int(d)) if d == d.to_integral_value() else format(d.normalize(), "f")
+
+
+@register.simple_tag
+def gdb_css():
+    """<style> bố cục GIẤY ĐẢM BẢO tùy chỉnh (apps/pos/gdb_layout, GĐ 08/09/2026) — nhúng trong _gdb_a5.html
+    nên popup xem, trang in thẳng và trang chỉnh mẫu đều cùng một bố cục đã lưu."""
+    from apps.pos import gdb_layout as GL
+    return mark_safe('<style id="gdb-layout-css">' + GL.css() + "</style>")

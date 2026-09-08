@@ -2,6 +2,7 @@
 Bộ kiểm GIAO DIỆN bán lẻ: URL /banle/, trang chủ, bán hàng, khách hàng, thâu, bảng giá, hóa đơn.
 Chạy: manage.py smoke_ui        (đọc PMV thật + sandbox, KHÔNG ghi gì)
 """
+import json
 import re
 
 from django.conf import settings
@@ -199,6 +200,26 @@ class Command(BaseCommand):
         b = body(c.post("/banle/thau-vao/tinh/", {"gold": "D9999", "gw": "1000", "pct": "100",
                                                   "add_money": "0", "dau": "+"}))
         check(f"thâu 1 lượng D9999 = {mong}", mong in b)
+
+        # ── 7c. MẪU IN GĐB tùy chỉnh (08/09/2026): trang chỉnh + lưu/đặt lại bố cục ──
+        from apps.pmv.models import PmvState
+        goc = PmvState.get("gdb_layout", "")
+        try:
+            b = body(c.get("/banle/giay-dam-bao/mau/"))
+            check("trang chỉnh mẫu GĐB: tờ A5 + 10 khối data-gdb + CSS bố cục",
+                  b.count('data-gdb="') >= 10 and "gdb-layout-css" in b and 'class="gdbm-row"' in b)
+            r = c.post("/banle/giay-dam-bao/mau/", data=json.dumps({"layout": {"front_items": {"fs": 9.5, "left": 3}}}),
+                       content_type="application/json")
+            j = r.json() if r.status_code == 200 else {}
+            check("lưu bố cục → CSS có font-size 9.5pt / left 3% cho bảng món",
+                  bool(j.get("ok")) and "font-size:9.5pt" in j["css"] and ".gdb-a5__front-items{left:3%" in j["css"])
+            j2 = c.post("/banle/giay-dam-bao/mau/", data=json.dumps({"reset": True}), content_type="application/json").json()
+            j3 = c.post("/banle/giay-dam-bao/mau/", data=json.dumps({"layout": {"front_items": {"fs": 99}}}),
+                        content_type="application/json").json()
+            check("đặt lại mặc định → 7pt bảng món; giới hạn số (fs tối đa 30pt) được ép",
+                  "font-size:7pt" in j2["css"] and j3["css"].count("font-size:30pt") == 1)
+        finally:
+            PmvState.set("gdb_layout", goc)
 
         # ── 8. tài nguyên tĩnh: vừa PHẢI TỒN TẠI vừa PHẢI ĐƯỢC NHÚNG vào trang ──
         # (03/09/2026 từng làm rơi thẻ nạp htmx khi viết lại base.html → mọi tương tác chết

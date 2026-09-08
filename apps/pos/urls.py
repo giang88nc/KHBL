@@ -70,4 +70,6 @@ urlpatterns = [
     path("banle/hoa-don/xem/", views.hoa_don_chi_tiet, name="hoa_don_chi_tiet"),
     path("banle/hoa-don/xac-nhan/", views.hoa_don_xac_nhan, name="hoa_don_xac_nhan"),
     path("banle/hoa-don/huy/", views.hoa_don_huy, name="hoa_don_huy"),
+    # Mẫu in GIẤY ĐẢM BẢO tùy chỉnh (kéo-thả khối, cỡ chữ pt) — 08/09/2026
+    path("banle/giay-dam-bao/mau/", views.gdb_mau, name="gdb_mau"),
 ]

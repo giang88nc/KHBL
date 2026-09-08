@@ -13,7 +13,7 @@ import secrets
 
 from django.contrib import messages
 from django.db import DatabaseError
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
@@ -1347,15 +1347,11 @@ def hoa_don_xac_nhan(request):
         "action_name": "Hủy thanh toán" if action == "thanh_toan" else "Hủy hóa đơn"})
 
 
-@require_GET
-def hoa_don_chi_tiet(request):
-    """Popup xem nhanh; nguồn luôn bám theo bảng người dùng đang xem."""
-    trn_id, loai = (request.GET.get("trn_id") or "").strip(), (request.GET.get("loai") or "").strip()
-    nguon = request.GET.get("nguon")
-    # "live" (08/09/2026, nút IN màn bán): đi theo CÔNG TẮC ĐÍCH (kk/sandbox) như mọi thao tác bán hàng
-    nguon = "live" if nguon == "live" else ("kk" if nguon == "kk" else "hist")
+def _gdb_ctx(trn_id, loai, nguon="live"):
+    """Dựng context TỜ GIẤY ĐẢM BẢO cho 1 phiếu (dùng chung: popup xem, in thẳng raw=1, trang chỉnh mẫu).
+    nguon: "live" = theo công tắc đích · "kk" · "hist". Trả (ctx, None) hoặc (None, HttpResponse lỗi)."""
     if not trn_id or loai not in ("BAN", "BAN_DOI", "THAU"):
-        return HttpResponse("Phiếu không hợp lệ.", status=400)
+        return None, HttpResponse("Phiếu không hợp lệ.", status=400)
     bang = "TRN_RT_BUYGOLD" if loai == "THAU" else "TRN_RT_BUYSELL"
     try:
         c = PmvClient(tag="hd_xem") if nguon == "live" else PmvClient(nguon, tag="hd_xem")
@@ -1363,9 +1359,9 @@ def hoa_don_chi_tiet(request):
         alias = "t" if loai == "THAU" else "b"
         row = c.query(f"SELECT {alias}.TrnID, {alias}.BillCode, {alias}.TrnDate, {alias}.TrnTime, {alias}.Status, {alias}.IsDel, {extra}, ISNULL(k.CustName,'') AS CustName, ISNULL(k.Phone,'') AS Phone, ISNULL(k.Address,'') AS Address, ISNULL(e.EmpName,'') AS EmpName FROM {bang} {alias} WITH (NOLOCK) LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID={alias}.CustID LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID={alias}.EmpID WHERE {alias}.TrnID=?", (trn_id,))
     except Exception as exc:
-        return HttpResponse("Không thể đọc thông tin phiếu: " + S.error_message(exc), status=503)
+        return None, HttpResponse("Không thể đọc thông tin phiếu: " + S.error_message(exc), status=503)
     if not row:
-        return HttpResponse("Không tìm thấy phiếu.", status=404)
+        return None, HttpResponse("Không tìm thấy phiếu.", status=404)
     r = row[0]
 
     def _tl_chi(value, unit="L", co_don_vi=True):
@@ -1421,11 +1417,7 @@ def hoa_don_chi_tiet(request):
     co_vang_doi_thau = any(x.get("loai_dong") in ("Đổi", "Thâu") for x in store_lines)
     so_tien = M.dec(r.get("SoTien"))
     gdb_status = ("Đổi bù" if so_tien > 0 else "Đổi dư" if so_tien < 0 else "") if co_vang_doi_thau else ""
-    # raw=1 (08/09/2026): trang IN THẲNG standalone cho iframe ẩn (THANH TOÁN & IN) — auto=1 tự window.print()
-    tpl = "pos/gdb_in.html" if request.GET.get("raw") == "1" else "pos/_hoa_don_chi_tiet.html"
-    return render(request, tpl, {
-        # in_mode (08/09/2026): mở từ nút IN HÓA ĐƠN màn bán → popup rộng + nút 🖨 IN (đếm lần in qua ban_in_dem)
-        "in_mode": request.GET.get("in") == "1", "auto": request.GET.get("auto") == "1",
+    return {
         "r": r, "loai": loai, "nguon": nguon, "lines": lines, "store_lines": store_lines,
         "tong_mon": len(lines), "tien_chu": _tien_bang_chu(r.get("SoTien")), "barcode_code": barcode_code,
         "codebar": _codebar(barcode_code), "gdb_qr": _qr_hoa_don(barcode_code),
@@ -1434,7 +1426,87 @@ def hoa_don_chi_tiet(request):
         # NV HỖ TRỢ (gold_bill, 08/09/2026) in ở chân phần tiệm giữ: "Bán: … | Hỗ trợ: …"
         "emp_sup_name": __import__("apps.pos.gold_bill", fromlist=["ten_nv"]).ten_nv(
             __import__("apps.pos.gold_bill", fromlist=["emp_sup_cua"]).emp_sup_cua(trn_id)) if loai != "THAU" else "",
+    }, None
+
+
+def _gdb_ctx_mau():
+    """Dữ liệu MẪU khi chưa có phiếu nào để xem trước trang chỉnh mẫu in."""
+    now = datetime.datetime.now()
+    r = {"TrnID": "TRB260900000000", "BillCode": "26-09-08-000001", "TrnDate": now, "TrnTime": now.strftime("%H:%M:%S"),
+         "CustName": "Nguyễn Văn Mẫu", "Phone": "0909 000 000", "Address": "1276 Kha Vạn Cân, Thủ Đức",
+         "EmpName": "Lý Ngọc Sơn", "TienBan": 25_600_000, "TienMua": 8_350_000, "SoTien": 17_250_000,
+         "TienVangThem": 0, "TienCongThem": 0, "TienBot": 0, "TienCoc": 0}
+    lines = [{"ProductCode": "1B60000975", "ProductDesc": "Bông khoen 2 nơ", "GoldLabel": "610", "tl_text": "0,385 chỉ",
+              "rate": 8850, "task": 350, "amount": 3_757_000},
+             {"ProductCode": "9N60016834", "ProductDesc": "Nhẫn trơn 1 chỉ", "GoldLabel": "99.99", "tl_text": "1 chỉ",
+              "rate": 14250, "task": 0, "amount": 14_250_000},
+             {"ProductCode": "KC600175", "ProductDesc": "Dây chuyền", "GoldLabel": "610", "tl_text": "0,86 chỉ",
+              "rate": 8850, "task": 450, "amount": 7_593_000}]
+    store_lines = [{"loai_dong": "Đổi", "ProductDesc": "Dẻ 610", "GoldLabel": "610", "tl_vang": "0,5", "tl_hot": "0",
+                    "rate": 8350, "task": 0, "amount": 4_175_000},
+                   {"loai_dong": "Thâu", "ProductDesc": "Vàng khách", "GoldLabel": "99.99", "tl_vang": "0,3", "tl_hot": "0",
+                    "rate": 13750, "task": 0, "amount": 4_125_000}]
+    code = _ma_gdb(r["BillCode"])
+    return {"r": r, "loai": "BAN_DOI", "nguon": "mau", "lines": lines, "store_lines": store_lines, "tong_mon": len(lines),
+            "tien_chu": _tien_bang_chu(r["SoTien"]), "barcode_code": code, "codebar": _codebar(code),
+            "gdb_qr": _qr_hoa_don(code), "co_vang_doi_thau": True, "gdb_status": "Đổi bù", "emp_sup_name": "Trần Huỳnh Như"}
+
+
+@require_GET
+def hoa_don_chi_tiet(request):
+    """Popup xem nhanh; nguồn luôn bám theo bảng người dùng đang xem."""
+    trn_id, loai = (request.GET.get("trn_id") or "").strip(), (request.GET.get("loai") or "").strip()
+    nguon = request.GET.get("nguon")
+    # "live" (08/09/2026, nút IN màn bán): đi theo CÔNG TẮC ĐÍCH (kk/sandbox) như mọi thao tác bán hàng
+    nguon = "live" if nguon == "live" else ("kk" if nguon == "kk" else "hist")
+    ctx, err = _gdb_ctx(trn_id, loai, nguon)
+    if err:
+        return err
+    # raw=1 (08/09/2026): trang IN THẲNG standalone cho iframe ẩn (THANH TOÁN & IN) — auto=1 tự window.print()
+    tpl = "pos/gdb_in.html" if request.GET.get("raw") == "1" else "pos/_hoa_don_chi_tiet.html"
+    # in_mode (08/09/2026): mở từ nút IN HÓA ĐƠN màn bán → popup rộng + nút 🖨 IN (đếm lần in qua ban_in_dem)
+    ctx.update({"in_mode": request.GET.get("in") == "1", "auto": request.GET.get("auto") == "1"})
+    return render(request, tpl, ctx)
+
+
+def gdb_mau(request):
+    """TRANG TÙY CHỈNH MẪU IN GĐB (GĐ chốt 08/09/2026): xem trước tờ A5 đúng 148mm, KÉO-THẢ từng khối, nhập
+    left/top/rộng/cao (%) + cỡ chữ (pt); LƯU vào PmvState (gdb_layout) → popup xem & in thẳng dùng ngay.
+    POST JSON {layout: {key: {left,top,w,h,fs}}} hoặc {reset: true} → trả {ok, layout, css}."""
+    from . import gdb_layout as GL
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body or b"{}")
+        except ValueError:
+            return JsonResponse({"ok": False, "loi": "JSON không hợp lệ"}, status=400)
+        layout = GL.save(None) if data.get("reset") else GL.save(data.get("layout") or {})
+        logger.info("gdb_layout: %s %s", request.user.username, "reset" if data.get("reset") else "save")
+        return JsonResponse({"ok": True, "layout": layout, "css": GL.css(layout)})
+    trn = (request.GET.get("trn_id") or "").strip()
+    loai = (request.GET.get("loai") or "").strip()
+    if not trn:                                   # mặc định: phiếu ĐÃ CHỐT gần nhất theo công tắc đích
+        try:
+            row = PmvClient(tag="gdb_mau").query(
+                "SELECT TOP 1 TrnID, BuyTotalAmount FROM TRN_RT_BUYSELL WITH (NOLOCK) "
+                "WHERE Status = 'C' AND IsDel = '0' ORDER BY TrnDate DESC, TrnTime DESC")
+            if row:
+                trn = row[0]["TrnID"]
+                loai = "BAN_DOI" if M.dec(row[0].get("BuyTotalAmount")) > 0 else "BAN"
+        except Exception:
+            trn = ""
+    ctx = None
+    if trn:
+        ctx, _err = _gdb_ctx(trn, loai or "BAN", "live")
+    if not ctx:
+        ctx, trn = _gdb_ctx_mau(), ""
+    layout = GL.load()
+    ctx.update({
+        "nav_active": "hoadon", "trn_mau": trn, "loai_mau": ctx.get("loai") or "BAN",
+        "blocks": GL.BLOCKS, "layout_json": json.dumps(layout), "mac_dinh_json": json.dumps(GL.mac_dinh()),
+        "canh_phai_json": json.dumps(sorted(GL.CANH_PHAI)),
+        "sel_json": json.dumps({b["key"]: b["sel"] for b in GL.BLOCKS}),
     })
+    return render(request, "pos/gdb_mau.html", ctx)
 
 
 @require_POST

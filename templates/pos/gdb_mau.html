@@ -1,0 +1,153 @@
+{% extends "base.html" %}{% load pos_extras %}
+{% block title %}Mẫu in Giấy đảm bảo{% endblock %}
+{% block page_title %}Mẫu in Giấy đảm bảo (A5){% endblock %}
+{% block page_sub %}Kéo-thả từng khối trên tờ giấy hoặc nhập số · vị trí theo % tờ giấy, cỡ chữ theo <b>pt</b> · tờ xem trước rộng đúng 148 mm nên <b>nhìn sao in vậy</b>{% if trn_mau %} · đang xem phiếu <b class="mono">{{ r.BillCode|default:trn_mau }}</b>{% else %} · đang xem <b>dữ liệu mẫu</b>{% endif %}{% endblock %}
+{% block page_tools %}
+  <form method="get" class="gdbm-tools">
+    <input class="khbl-input mono" name="trn_id" value="{{ trn_mau }}" placeholder="TrnID phiếu để xem thử">
+    <select class="khbl-select" name="loai" style="padding:5px 8px"><option value="BAN" {% if loai_mau == 'BAN' %}selected{% endif %}>Bán hàng</option><option value="BAN_DOI" {% if loai_mau == 'BAN_DOI' %}selected{% endif %}>Bán đổi</option></select>
+    <button class="khbl-btn khbl-btn--outline" type="submit">Xem phiếu</button>
+  </form>
+  <button class="khbl-btn khbl-btn--outline" type="button" id="gdbm-reset">↺ Mặc định</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" id="gdbm-print" {% if not trn_mau %}disabled title="Chọn 1 phiếu thật để in thử"{% endif %}>🖨 In thử</button>
+  <button class="khbl-btn khbl-btn--gold" type="button" id="gdbm-save">💾 LƯU MẪU</button>
+{% endblock %}
+
+{% block content %}
+<div class="gdbm">
+  <div class="gdbm-paper" id="gdbm-paper">{% include "pos/_gdb_a5.html" %}</div>
+
+  <aside class="gdbm-panel">
+    <div class="gdbm-head"><span>KHỐI</span><span>Trái %</span><span>Trên %</span><span>Rộng %</span><span>Cao %</span><span>Chữ pt</span></div>
+    {% for b in blocks %}
+    <div class="gdbm-row" data-key="{{ b.key }}" title="{{ b.sel }}">
+      <b>{{ b.ten }}</b>
+      <input type="number" step="0.1" min="0" max="100" data-p="left">
+      <input type="number" step="0.1" min="0" max="100" data-p="top">
+      <input type="number" step="0.1" min="1" max="100" data-p="w">
+      <input type="number" step="0.1" min="0.5" max="100" data-p="h" {% if b.h is None %}disabled{% endif %}>
+      <input type="number" step="0.5" min="3" max="30" data-p="fs" {% if b.fs is None %}disabled{% endif %}>
+    </div>
+    {% endfor %}
+    <p class="gdbm-help">
+      • Bấm vào khối trên tờ giấy để chọn, <b>kéo</b> để dời; phím <b>← ↑ → ↓</b> dời 0,2 % (giữ Shift = 1 %).<br>
+      • Cỡ chữ tính bằng <b>pt</b> như Word (10 pt ≈ 3,5 mm). Rộng/Cao là % tờ giấy 148 × 210 mm.<br>
+      • <b>LƯU MẪU</b> áp cho popup xem trước, nút IN và THANH TOÁN & IN ngay lập tức. <b>In thử</b> tự lưu rồi in phiếu đang xem.
+    </p>
+  </aside>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var KEYS = {{ sel_json|safe }};
+  var CANH_PHAI = {{ canh_phai_json|safe }};
+  var MAC_DINH = {{ mac_dinh_json|safe }};
+  var state = {{ layout_json|safe }};
+  var CSRF = "{{ csrf_token }}";
+  var paper = document.querySelector("#gdbm-paper .gdb-a5");
+  var styleEl = document.getElementById("gdb-layout-css");
+  var sel = null;
+
+  /* sinh CSS y hệt apps/pos/gdb_layout.css() để xem trước = lúc in */
+  function buildCss(st) {
+    var out = [".gdb-a5{width:148mm!important;max-width:100%;height:auto;aspect-ratio:148/210}"];
+    Object.keys(KEYS).forEach(function (k) {
+      var v = st[k]; if (!v) return;
+      var r = ["left:" + v.left + "%!important", "top:" + v.top + "%!important", "width:" + v.w + "%!important"];
+      if (CANH_PHAI.indexOf(k) >= 0) r.push("right:auto!important");
+      if (v.h != null) r.push("height:" + v.h + "%!important");
+      if (v.fs != null) r.push("font-size:" + v.fs + "pt!important");
+      out.push(KEYS[k] + "{" + r.join(";") + "}");
+      if (v.fs != null) out.push(KEYS[k] + " table{font-size:inherit!important}");
+    });
+    out.push(".gdb-a5__front-date{text-align:right}");
+    return out.join("\n");
+  }
+  function apply() { styleEl.textContent = buildCss(state); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v * 100) / 100)); }
+  var LIM = { left: [0, 100], top: [0, 100], w: [1, 100], h: [0.5, 100], fs: [3, 30] };
+
+  function syncInputs() {
+    document.querySelectorAll(".gdbm-row").forEach(function (row) {
+      var k = row.dataset.key, v = state[k] || {};
+      row.querySelectorAll("input").forEach(function (inp) {
+        if (inp.disabled) return;
+        var p = inp.dataset.p;
+        if (document.activeElement !== inp) inp.value = v[p] != null ? v[p] : "";
+      });
+      row.classList.toggle("is-sel", k === sel);
+    });
+    paper.querySelectorAll("[data-gdb]").forEach(function (el) { el.classList.toggle("is-sel", el.dataset.gdb === sel); });
+  }
+  function chon(k) { sel = k; syncInputs(); var row = document.querySelector('.gdbm-row[data-key="' + k + '"]'); if (row) row.scrollIntoView({ block: "nearest" }); }
+
+  /* bảng số → state */
+  document.querySelectorAll(".gdbm-row").forEach(function (row) {
+    row.addEventListener("click", function () { chon(row.dataset.key); });
+    row.querySelectorAll("input").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var k = row.dataset.key, p = inp.dataset.p, n = parseFloat(inp.value);
+        if (isNaN(n)) return;
+        state[k][p] = clamp(n, LIM[p][0], LIM[p][1]);
+        apply();
+      });
+      inp.addEventListener("focus", function () { chon(row.dataset.key); });
+    });
+  });
+
+  /* kéo-thả trên tờ giấy */
+  var drag = null;
+  paper.addEventListener("mousedown", function (e) {
+    var el = e.target.closest("[data-gdb]"); if (!el) return;
+    e.preventDefault();
+    var k = el.dataset.gdb; chon(k);
+    var rect = paper.getBoundingClientRect();
+    drag = { k: k, x0: e.clientX, y0: e.clientY, left: state[k].left, top: state[k].top, w: rect.width, h: rect.height };
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!drag) return;
+    var dx = (e.clientX - drag.x0) / drag.w * 100, dy = (e.clientY - drag.y0) / drag.h * 100;
+    state[drag.k].left = clamp(drag.left + dx, 0, 100);
+    state[drag.k].top = clamp(drag.top + dy, 0, 100);
+    apply(); syncInputs();
+  });
+  window.addEventListener("mouseup", function () { drag = null; });
+  document.addEventListener("keydown", function (e) {
+    if (!sel || e.target.matches("input,select,textarea")) return;
+    var step = e.shiftKey ? 1 : 0.2, v = state[sel], moved = true;
+    if (e.key === "ArrowLeft") v.left = clamp(v.left - step, 0, 100);
+    else if (e.key === "ArrowRight") v.left = clamp(v.left + step, 0, 100);
+    else if (e.key === "ArrowUp") v.top = clamp(v.top - step, 0, 100);
+    else if (e.key === "ArrowDown") v.top = clamp(v.top + step, 0, 100);
+    else moved = false;
+    if (moved) { e.preventDefault(); apply(); syncInputs(); }
+  });
+
+  /* lưu / đặt lại / in thử */
+  function toast(t, tone) { var r = document.getElementById("toast-root"); if (!r) return; var d = document.createElement("div"); d.className = tone || "success"; d.textContent = t; r.appendChild(d); setTimeout(function () { d.remove(); }, 5000); }
+  function post(payload) {
+    return fetch("{% url 'pos:gdb_mau' %}", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); });
+  }
+  function luu() {
+    return post({ layout: state }).then(function (j) {
+      if (!j.ok) { toast("Lưu lỗi: " + (j.loi || "?"), "error"); return false; }
+      state = j.layout; styleEl.textContent = j.css; syncInputs(); toast("Đã lưu mẫu in Giấy đảm bảo."); return true;
+    });
+  }
+  document.getElementById("gdbm-save").addEventListener("click", luu);
+  document.getElementById("gdbm-reset").addEventListener("click", function () {
+    if (!confirm("Đưa TOÀN BỘ khối về vị trí/cỡ chữ mặc định?")) return;
+    post({ reset: true }).then(function (j) { state = j.layout; styleEl.textContent = j.css; syncInputs(); toast("Đã về mặc định."); });
+  });
+  var btnIn = document.getElementById("gdbm-print");
+  if (btnIn && !btnIn.disabled) btnIn.addEventListener("click", function () {
+    luu().then(function (ok) { if (ok) window.open("{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ trn_mau|urlencode }}&loai={{ loai_mau }}&nguon=live&raw=1&auto=1", "_blank"); });
+  });
+
+  apply(); syncInputs(); chon("front_items");
+})();
+</script>
+{% endblock %}

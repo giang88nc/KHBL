@@ -314,6 +314,17 @@ giấy GĐB đã in sẵn, chỉ in nội dung, chữ đen viền xám); (b) **T
 postMessage ready/done về trang mẹ để đếm lần in (`ban_in_dem`) và gỡ iframe. ⚠ Hộp thoại in của trình duyệt KHÔNG
 bỏ được bằng JS — muốn in thẳng ra máy in mặc định, chạy Chrome với cờ **`--kiosk-printing`** (shortcut máy quầy).
 Smoke 87 (C8b giữ đơn, C8c in/dem, C10, C11c3 badge giờ, C11c5/6 ngày cũ, C12f in thẳng + raw) + smoke_ui 136.
+**MẪU IN GĐB TÙY CHỈNH (GĐ chốt 08/09/2026 — "in thực tế chữ quá nhỏ")**: module **`apps/pos/gdb_layout.py`** —
+10 KHỐI (`BLOCKS`: mã vạch, số mã vạch, thông tin HĐ, bảng món, tổng tiền, giờ-ngày, người bán, bảng vàng khách,
+QR+thông tin+thanh toán tiệm giữ, chân tiệm giữ) mỗi khối `left/top/w(/h)` % tờ giấy + **`fs` pt** (mặc định đã
+tăng ~1,3× so với 9px cũ). Lưu `PmvState['gdb_layout']` (JSON, không migration). `gdb_css()` (template tag trong
+pos_extras) sinh `<style id="gdb-layout-css">` chèn trong `_gdb_a5.html` (mỗi khối gắn `data-gdb="key"`) với
+`!important` → thắng CSS cũ (kể cả `.gdb-a5 table{font-size:9px}` và print `9px!important`); `.gdb-a5` rộng
+**148mm thật trên màn** → popup xem = bản in. Trang **`/banle/giay-dam-bao/mau/`** (`gdb_mau`, link "⚙ Chỉnh mẫu in"
+ở chân popup GĐB): xem trước phiếu chốt gần nhất (hoặc `?trn_id=`; không có → dữ liệu mẫu `_gdb_ctx_mau`),
+**kéo-thả** khối / phím mũi tên 0,2 % (Shift 1 %), bảng số 5 cột, 💾 LƯU (POST JSON `{layout}`), ↺ Mặc định
+(`{reset:true}`), 🖨 In thử (lưu rồi mở raw=1&auto=1). JS `buildCss` PHẢI y hệt `gdb_layout.css()` (sửa 1 nơi thì
+sửa nơi kia). View `hoa_don_chi_tiet` tách thành **`_gdb_ctx(trn_id, loai, nguon)`** dùng chung. Smoke_ui 7c (3 kịch bản).
 (Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.)
 
 **BẢNG `gold_bill` + NV HỖ TRỢ (GĐ chốt 08/09/2026)** — model `GoldBill` (migration pos-0005), thuật toán
