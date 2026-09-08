@@ -18,7 +18,8 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
 
     {# đơn ĐÃ CHỐT (khóa): toàn bộ ô tiền/ghi chú/hình thức thanh toán disable (07/09/2026, quy tắc 4) #}
     {% if phieu_chot %}<fieldset disabled class="pg-khoa-fs" title="Đơn đang KHÓA — SỬA ĐƠN (passcode) mới đổi được">{% endif %}
-    <form class="pg-tong__form" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
+    {# hx-trigger có submit + onsubmit false (08/09 chiều): Enter trong ô tiền từng submit thường → reload trang, mất phiếu #}
+    <form class="pg-tong__form" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change, submit" onsubmit="return false">
       {% csrf_token %}
       <label class="pg-tong__r pg-tong__r--nhap">
         <span>Tiền vàng thêm <i>+</i></span>
@@ -57,7 +58,7 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
     </div>
 
     {# ── PHƯƠNG THỨC THANH TOÁN: tiền mặt + chuyển khoản/thẻ (tự tính cho đủ khách trả) ── #}
-    <form class="pg-pay" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change">
+    <form class="pg-pay" hx-post="{% url 'pos:ban_dat' %}" hx-swap="none" hx-trigger="change, submit" onsubmit="return false">
       {% csrf_token %}
       <div class="pg-pay__ways">
         <label class="pg-pay__way{% if t.pay_method == 'cash' %} on{% endif %}">

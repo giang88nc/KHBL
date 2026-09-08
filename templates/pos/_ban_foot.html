@@ -27,10 +27,12 @@ Badge: ✎ ĐANG SỬA mã · 🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM. Không còn KH�
 
   <span class="pg-ban__foot-sp"></span>
 
+  {# 08/09 chiều: CHỐNG BẤM ĐÔI — 2 nút thanh toán chung hàng đợi :drop (đang gửi thì bỏ lượt bấm sau) + tự disable
+     + class htmx-request (CSS hiện đang xử lý); server còn khóa theo phiên 30s (ban_thanh_toan) #}
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% endif %}
-          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none">💰 THANH TOÁN</button>
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN</button>
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% else %}title="Chốt, in Giấy đảm bảo ngay (không popup) rồi mở phiếu trắng cho khách kế"{% endif %}
-          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none">
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">
     💰 THANH TOÁN &amp; IN</button>
   <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_ngay_cu %}disabled title="Hóa đơn ngày khác — chỉ xem"{% elif not phieu_chot %}disabled title="Thanh toán xong mới in Giấy đảm bảo"{% else %}title="Xem trước Giấy đảm bảo — bấm IN trong popup: in thẳng, đóng popup, mở phiếu trắng"
           hx-get="{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ g.trn_id|urlencode }}&loai={% if g.doi %}BAN_DOI{% else %}BAN{% endif %}&nguon=live&in=1" hx-target="#modal-root"{% endif %}>🖨 IN HÓA ĐƠN</button>

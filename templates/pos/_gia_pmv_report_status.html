@@ -1,7 +1,7 @@
 {% if loi %}
-<div class="pg-gia__kk-status pg-gia__kk-status--error"><b>Không kiểm tra được PMV Report</b><span>{{ loi }}</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--error" data-sync-state="error"><b>× PMV Report chưa kiểm tra được</b><span>{{ loi }}</span></div>
 {% elif changes or issues %}
-<div class="pg-gia__kk-status pg-gia__kk-status--warn"><b>⚠ PMV Report lệch {{ changes|length }} loại giá{% if issues %} · {{ issues|length }} vấn đề{% endif %}</b><span>Nguồn UPSERT {{ source_updated_at|date:"H:i:s d/m/Y" }} · bấm SYNC PMV REPORT để xem và duyệt.</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--warn" data-sync-state="mismatch" data-sync-count="{{ changes|length }}"><b>× PMV Report lệch {{ changes|length }} loại giá{% if issues %} · {{ issues|length }} vấn đề{% endif %}</b><span>Nguồn {{ source_updated_at|date:"H:i:s d/m/Y" }} · bấm nút Report để xem và duyệt.</span></div>
 {% else %}
-<div class="pg-gia__kk-status pg-gia__kk-status--ok"><b>✓ MySQL local khớp PMV Report</b><span>{{ matched }} loại · nguồn {{ source_updated_at|date:"H:i:s d/m/Y" }}</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--ok" data-sync-state="synced" data-sync-count="0"><b>✓ MySQL local đã khớp PMV Report</b><span>{{ matched }} loại · nguồn {{ source_updated_at|date:"H:i:s d/m/Y" }}</span></div>
 {% endif %}

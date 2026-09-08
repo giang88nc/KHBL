@@ -341,6 +341,19 @@ kiểm thật trên trình duyệt 08/09: quét GĐB 260908060 → mở 26-09-08
 = popup XÁC NHẬN CHUNG (`HANH_DONG["xoa_nhap"]`, cờ `nhap`: KHÔNG passcode, không mốc két; hiện mã/số món/hậu quả; nút
 XÁC NHẬN autofocus, Enter = OK) → `ban_thuc_hien/xoa_nhap` → `_huy_nhap` (tách từ `ban_huy`, URL cũ còn sống) + đóng popup;
 phiếu trắng/đơn chốt → popup báo không có gì để xóa. Nút ＋ ĐƠN MỚI bỏ `hx-confirm` — bấm là mở phiếu trắng ngay.
+**RÀ SOÁT MÀN BÁN 08/09 chiều (GĐ duyệt "tiến hành theo đề xuất")** — đã làm: (1) chống bấm đôi: 2 nút THANH TOÁN
+`hx-sync="closest footer:drop"` + `hx-disabled-elt` + CSS `.htmx-request`, server `cache.add("khbl:tt:<session>",30s)`
+trong `ban_thanh_toan`; ô quét `hx-sync="this:drop"`; (2) `ban_quet` gọi proc quét 1 lần (`S._quet`); (3) form
+TÍNH TỔNG/thanh toán `hx-trigger="change, submit"` + `onsubmit=false` (Enter không reload); JS `tra()` nhận số ÂM
+→ 0; (4) hạn mức đổi ngang: `_budget` khớp mã bán thẳng như `_han_muc_doi_ngang`; giá vàng đổi nhập tay lệch >30%
+bảng giá → chặn + focus `#o-giadoi`; (5) nhớ tick ⇄ Đổi ngang trong phiếu (`g["doi_ngang_ui"]`, form không ép tick
+lại); (6) "✎ ĐANG SỬA" chỉ khi mở lại đơn chốt (`g["sua_lai"]`); XÓA nháp về trắng xóa cả NV; (7) passcode sai 5
+lần → khóa 30s (`_passcode_khoa`, cache `khbl:pc_sai:<user>`, audit `PASSCODE_SAI`); (8) `_kiem_truoc_khi_luu` chặn
+bớt/cọc > CÒN LẠI; (9) `so_lan_in` tăng `F()+1`; `don_treo(force=True)` sau chốt/hủy; (10) JS giữ focus + chữ đang gõ
+qua OOB (`htmx:beforeRequest`/`afterSettle`), phím tắt bỏ qua khi popup mở + toast khi không có đích; (11) bỏ
+`gia/gia_sig/gia_moc` khỏi `_ctx_pos`; DỌN CHẾT: `ban_bot_le`, `ban_mo_khoa`, `ban_mo_lai`, `ban_in` + `in_phieu.html`,
+`bill.trong_ngay` (smoke đổi theo: C11b/C11c2/C11d-e/C12/C12d/B21, +C11e2 khóa passcode). **GĐ chốt 08/09: tiền CK/thẻ KHÔNG đẩy lên KK (`CARDPAY_Ins`) — phát triển sau**; két KK hiện gộp cả CK vào
+tiền mặt, nguồn CK/thẻ duy nhất là `gold_bill`. Còn treo: giảm round-trip KK mỗi lần blur ô tiền.
 **TÍNH TỔNG nổi (08/09 chiều)**: nút ◀/▶ trước tiêu đề `.pg-tong__tg` thu/mở khối (class `pg-ban__body--thu` đặt trên
 `.pg-ban__body` vì `#pos-tong` bị OOB thay mỗi thao tác; click ủy quyền + nhớ `localStorage khbl.tong.thu`); thu = cột
 38px chỉ còn nút. Màn ≤1180px: cột trái GIỮ min 640px (cuộn ngang trong body, không bể form), `#pos-tong` absolute nổi

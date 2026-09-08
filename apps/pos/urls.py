@@ -18,7 +18,6 @@ urlpatterns = [
     path("banle/ban-hang/vang-doi/tinh-lai/", views.ban_doi_tinh_lai, name="ban_doi_tinh_lai"),
     path("banle/ban-hang/dat/", views.ban_dat, name="ban_dat"),
     path("banle/ban-hang/qr/", views.ban_qr, name="ban_qr"),
-    path("banle/ban-hang/bot-le/", views.ban_bot_le, name="ban_bot_le"),
     path("banle/ban-hang/moi/", views.ban_moi, name="ban_moi"),
     path("banle/ban-hang/tim-khach/", views.ban_tim_khach, name="ban_tim_khach"),
     path("banle/ban-hang/tim-nv/", views.ban_tim_nv, name="ban_tim_nv"),
@@ -29,13 +28,11 @@ urlpatterns = [
     # đơn ĐÃ CHỐT: popup xác nhận chung + passcode (sua | huy_tt | huy_hd) — 07/09/2026
     path("banle/ban-hang/xac-nhan/<str:hanh_dong>/", views.ban_xac_nhan, name="ban_xac_nhan"),
     path("banle/ban-hang/thuc-hien/<str:hanh_dong>/", views.ban_thuc_hien, name="ban_thuc_hien"),
-    path("banle/ban-hang/mo-lai/", views.ban_mo_lai, name="ban_mo_lai"),        # = thuc-hien/sua (giữ URL cũ)
-    path("banle/ban-hang/mo-khoa/", views.ban_mo_khoa, name="ban_mo_khoa"),     # = xac-nhan/sua (giữ URL cũ)
     path("tai-khoan/passcode/", views.passcode_form, name="passcode_form"),
     path("tai-khoan/passcode/luu/", views.passcode_save, name="passcode_save"),
     path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
+    # 08/09 chiều dọn code chết: bỏ bot-le · mo-lai · mo-khoa · in/ (in_phieu.html); XÓA nháp đi qua thuc-hien/xoa_nhap
     path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
-    path("banle/ban-hang/in/", views.ban_in, name="ban_in"),
     path("banle/ban-hang/in/dem/", views.ban_in_dem, name="ban_in_dem"),
     # 🖨 IN trong popup GĐB: in thẳng từ cửa sổ bán + đóng popup + phiếu trắng (08/09/2026 chiều)
     path("banle/ban-hang/in/thang/", views.ban_in_thang, name="ban_in_thang"),

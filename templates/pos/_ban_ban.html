@@ -5,7 +5,8 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
 <section class="pg-box pg-box--ban{% if phieu_chot %} pg-box--khoa{% endif %}">
   <header class="pg-box__head">
     <h3>VÀNG BÁN</h3>
-    <form class="pg-scan" hx-post="{% url 'pos:ban_quet' %}" hx-swap="none"
+    {# hx-sync this:drop (08/09 chiều): đầu đọc gõ xong tự nộp (120ms) VÀ gửi Enter → 2 request cùng mã; giữ 1 #}
+    <form class="pg-scan" hx-post="{% url 'pos:ban_quet' %}" hx-swap="none" hx-sync="this:drop"
           hx-trigger="submit, khbl:scan" hx-on::after-request="this.reset(); this.ma.focus()">
       {% csrf_token %}
       <input name="ma" class="khbl-input khbl-scan__in" autocomplete="off" {% if not phieu_chot %}data-autofocus{% endif %}

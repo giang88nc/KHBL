@@ -12,7 +12,9 @@ import re
 import secrets
 
 from django.contrib import messages
+from django.core.cache import cache
 from django.db import DatabaseError
+from django.db.models import F
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
@@ -178,19 +180,22 @@ def _phien(request):
 def _ctx_pos(request, extra=None):
     g = cart.get(request)
     ph = _phien(request)
+    # 08/09 chiều (rà soát): bỏ gia/gia_sig/gia_moc — dải giá đã rời màn bán 05/09, tính mỗi request là thừa
     ctx = {
         "nav_active": "ban", "g": g, "t": cart.tong(request), "phien": ph,
-        "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc(),
         "nvs": S.nhan_vien_ban(), "loai_de": S.loai_de(), "hm_ngang": _hm_ngang_list(g),
         "banks": QR.active_banks(), "bank_sel": str(g.get("bank_id") or QR.default_bank_id() or ""),
         "treo": __import__("apps.pos.don", fromlist=["don_treo"]).don_treo(),   # đơn W treo >30' (v5 pha 9)
         "ngay": g.get("ngay") or datetime.date.today().isoformat(),
         "hom_nay": datetime.date.today().isoformat(),
         "ma_du_kien": g.get("trn_id") or _ma_du_kien_an_toan(),
-        "dang_sua": bool(g.get("trn_id")),
+        # 08/09 chiều: "✎ ĐANG SỬA" CHỈ khi mở lại đơn đã chốt (cờ sua_lai đặt ở ban_thuc_hien 'sua') —
+        # trước đây = bool(trn_id) nên mọi phiếu mới (đã có đơn W từ món đầu) đều bị gắn nhãn sửa
+        "dang_sua": bool(g.get("sua_lai")),
         # hóa đơn đã chốt thì proc vendor TỪ CHỐI sửa — phải MỞ LẠI trước (bill.py luật 1)
         "phieu_chot": g.get("status") == B.CHOT_ROI,
-        "doi_ngang_ui": True,   # checkbox ⇄ Đổi ngang mặc định TICK; TÍNH LẠI trả lại trạng thái người bán chọn
+        # checkbox ⇄ Đổi ngang: mặc định TICK; 08/09 chiều NHỚ lựa chọn người bán trong phiếu (THÊM/TÍNH LẠI ghi lại)
+        "doi_ngang_ui": g.get("doi_ngang_ui", True),
     }
     # Trạng thái nút chân trang (GĐ chốt 08/09/2026): trang trắng → tất cả tắt · nháp có mã → XÓA/TT/TT&IN ·
     # chốt HÔM NAY → XÓA(hủy HĐ)/SỬA/IN · chốt NGÀY CŨ → tất cả tắt, chỉ xem (mọi user)
@@ -249,19 +254,47 @@ def _passcode_cua(user):
     return PC.lay_hash(user)
 
 
+PC_SAI_TOI_DA, PC_KHOA_GIAY = 5, 30      # 08/09 chiều: sai 5 lần liên tiếp → khóa nhập 30 giây (chống dò 4 số)
+
+
+def _pc_key(request):
+    return f"khbl:pc_sai:{getattr(request.user, 'pk', 0)}"
+
+
+def _passcode_khoa(request):
+    """Số giây còn bị khóa nhập passcode (0 = được nhập)."""
+    d = cache.get(_pc_key(request)) or {}
+    if d.get("n", 0) >= PC_SAI_TOI_DA:
+        con = int(d.get("den", 0) - datetime.datetime.now().timestamp())
+        if con > 0:
+            return con
+        cache.delete(_pc_key(request))
+    return 0
+
+
 def _passcode_dung(request, ma):
-    """Ưu tiên passcode băm tại auth_user, sau đó .env rồi mật khẩu web."""
+    """Ưu tiên passcode băm tại auth_user, sau đó .env rồi mật khẩu web.
+    Sai → đếm theo user (cache), đủ PC_SAI_TOI_DA lần → khóa PC_KHOA_GIAY giây; đúng → xóa đếm."""
     from django.conf import settings as st
     ma = (ma or "").strip()
-    if not ma:
+    if not ma or _passcode_khoa(request):
         return False
     rieng = _passcode_cua(request.user)
     if rieng:
-        return PC.kiem(request.user, ma)
-    cau_hinh = (getattr(st, "KHBL_UNLOCK_PASSCODE", "") or "").strip()
-    if cau_hinh:
-        return secrets.compare_digest(ma, cau_hinh)
-    return request.user.is_authenticated and request.user.check_password(ma)
+        ok = PC.kiem(request.user, ma)
+    else:
+        cau_hinh = (getattr(st, "KHBL_UNLOCK_PASSCODE", "") or "").strip()
+        ok = secrets.compare_digest(ma, cau_hinh) if cau_hinh else (
+            request.user.is_authenticated and request.user.check_password(ma))
+    key = _pc_key(request)
+    if ok:
+        cache.delete(key)
+    else:
+        d = cache.get(key) or {"n": 0}
+        d["n"] += 1
+        d["den"] = datetime.datetime.now().timestamp() + PC_KHOA_GIAY
+        cache.set(key, d, PC_KHOA_GIAY * 4)
+    return ok
 
 
 def _passcode_ctx(request, target=None, loi="", ok=""):
@@ -334,9 +367,10 @@ def ban_quet(request):
     if _dang_khoa(request):
         return _loi(request, KHOA_MSG)
     ph = _phien(request)
-    kq = S.quet_ma(ma, till_id=ph["till_id"])
-    if not kq["ok"]:
-        err = dict(kq["err"])
+    # 08/09 chiều: gọi proc quét ĐÚNG 1 LẦN (trước đây quet_ma rồi quet_ma_row = 2 lần T_PRODUCT_GetByCodeForSell/tem)
+    row, err0 = S._quet(ma, ph["till_id"])
+    if err0:
+        err = dict(err0)
         if err.get("code") == "P-008":            # v5 pha 9: báo rõ ĐƠN NÀO đang giữ SP
             from . import don
             d = don.don_giu_sp(ma)
@@ -348,7 +382,6 @@ def ban_quet(request):
                 if d.get("Status") == B.NHAP and str(d.get("CreatedBy") or "") == str(ph["user_id"]):
                     err["mo_don"] = d.get("TrnID")      # đơn của chính mình → nút MỞ
         return _pos_oob(request, {"scan_err": err, "scan_val": ma})
-    row = S.quet_ma_row(ma, till_id=ph["till_id"])
     if not row:
         return _pos_oob(request, {"scan_err": {"code": "", "style": "do",
                                                "desc": f"Không đọc lại được mã {ma}"}, "scan_val": ma})
@@ -411,6 +444,17 @@ def ban_doi_them(request):
     if tl_hot > tong_tl:
         return _loi(request, "Trọng lượng hột không được lớn hơn tổng trọng lượng")
     pu = de["PriceUnit"]
+    # 08/09 chiều: KIỂM BIÊN giá nhập tay — lệch quá 30% so với bảng giá (thường do gõ theo nghìn "8750" thay vì
+    # 8.750.000) → chặn, focus lại ô giá
+    if gia > 0:
+        moc = M.dec(de.get("SellRate") if doi_ngang else de.get("BuyRate"))
+        if moc > 0 and abs(gia - moc) / moc > M.dec("0.3"):
+            return _loi(request, f"Giá {M.money_vn(gia * M.RATE_SCALE)} lệch quá 30% so với bảng giá "
+                                 f"{M.money_vn(moc * M.RATE_SCALE)} ₫/{de.get('don_vi', 'chỉ')} — nhập theo ĐỒNG, kiểm lại",
+                        {"loi_o": "#o-giadoi"})
+    g0 = cart.get(request)
+    g0["doi_ngang_ui"] = doi_ngang          # nhớ tick cho lần thêm sau (không ép tick lại)
+    cart.save(request, g0)
 
     # Ô GIÁ theo trạng thái tick (GĐ chốt 07/09/2026): BỎ TICK → ô = GIÁ THÂU VÀO (sửa tay được);
     # TICK → ô = GIÁ BÁN RA cho phần đổi ngang (sửa tay được), phần DƯ luôn giá thâu bảng giá MySQL.
@@ -479,9 +523,11 @@ def ban_doi_tinh_lai(request):
     budget = {}
 
     def _budget(base):
+        # 08/09 chiều: cùng 1 cách khớp với _han_muc_doi_ngang (mã vàng BÁN so thẳng với base) —
+        # trước đây qua de_base → THÊM và TÍNH LẠI ra hạn mức khác nhau với một số mã
         if base not in budget:
             budget[base] = max(sum((M.dec(x["row"].get("GoldReal")) for x in g["ban"]
-                                    if M.de_base(x["row"].get("GoldCode")) == base), M.D0), M.D0)
+                                    if (x["row"].get("GoldCode") or "").strip() == base), M.D0), M.D0)
         return budget[base]
 
     rows = []
@@ -502,6 +548,9 @@ def ban_doi_tinh_lai(request):
             rows.append(B.dong_doi(code, de["GoldDesc"], p["w"] + p["hot"], p["hot"], p["rate"], pu,
                                    doi_ngang=p["ngang"]))
     cart.dat_doi(request, rows)
+    g = cart.get(request)
+    g["doi_ngang_ui"] = doi_ngang
+    cart.save(request, g)
     return _pos_oob(request, {"tin": "Đã gộp & tính lại vàng đổi theo từng loại"
                                      + (" (đổi ngang trong hạn mức bán ra)." if doi_ngang else " (toàn bộ giá thâu)."),
                               "doi_ngang_ui": doi_ngang})
@@ -573,17 +622,6 @@ def ban_qr(request):
         "bank_num": row["bank_number"], "bank_user": row.get("bank_user") or "",
         "amount": M.dec(amount), "info": info, "ten_kh": ten_kh,
     })
-
-
-@require_POST
-def ban_bot_le(request):
-    if _dang_khoa(request):
-        return _loi(request, KHOA_MSG)
-    g = cart.get(request)
-    t = cart.tong(request)
-    g["bot"] = str(M.dec(g.get("bot") or 0) + M.bot_le(t["khach_tra"]))
-    cart.save(request, g)
-    return _pos_oob(request)
 
 
 @require_POST
@@ -775,9 +813,16 @@ def ban_thuc_hien(request, hanh_dong):
         # GĐ chốt 08/09/2026: hóa đơn NGÀY CŨ chỉ XEM — không sửa/hủy từ màn bán, với MỌI user
         return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(
             request, hanh_dong, loi="Hóa đơn của NGÀY KHÁC chỉ được xem — không sửa/hủy từ màn bán hàng."))
+    con = _passcode_khoa(request)
+    if con:
+        return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(
+            request, hanh_dong, loi=f"Sai passcode {PC_SAI_TOI_DA} lần — khóa nhập, thử lại sau {con} giây."))
     if not _passcode_dung(request, request.POST.get("passcode")):
-        return render(request, "pos/_xac_nhan_modal.html",
-                      _xac_nhan_ctx(request, hanh_dong, loi="Passcode không đúng — thử lại."))
+        _audit(request, g, "PASSCODE_SAI", note=hd["audit"])
+        con = _passcode_khoa(request)
+        return render(request, "pos/_xac_nhan_modal.html", _xac_nhan_ctx(
+            request, hanh_dong, loi=f"Sai passcode {PC_SAI_TOI_DA} lần — khóa nhập {con} giây." if con
+            else "Passcode không đúng — thử lại."))
     try:
         B.kiem_moc(trn, g.get("upd"))                       # chống 2 người cùng sửa
     except Exception as exc:
@@ -795,6 +840,7 @@ def ban_thuc_hien(request, hanh_dong):
     if hanh_dong == "sua":
         g2 = cart.nap(request, B.doc(trn))
         g2["emp_sup"], g2["pay_method"], g2["bank_id"] = emp_sup, pm, bank   # phần app-only giữ qua mở lại
+        g2["sua_lai"] = True                                                 # nhãn ✎ ĐANG SỬA (08/09 chiều)
         cart.save(request, g2)
         GB.upsert_tu_gio(g2, status=B.NHAP, is_del=False, user=request.user)
         tin = f"Đã mở {ma} về NHÁP để sửa — sửa xong bấm THANH TOÁN lại."
@@ -806,25 +852,21 @@ def ban_thuc_hien(request, hanh_dong):
         GB.upsert_tu_gio(g, status=g.get("status"), is_del=True, user=request.user)
         cart.clear(request, giu_nv=False)
         tin = f"Đã HỦY HÓA ĐƠN {ma} — hàng trả về kho."
+    from . import don as _don
+    _don.don_treo(force=True)
     return _pos_oob(request, {"tin": tin, "dong_modal": True})
-
-
-@require_GET
-def ban_mo_khoa(request):
-    """URL cũ (07/09 sáng) → popup xác nhận SỬA ĐƠN."""
-    return ban_xac_nhan(request, "sua")
-
-
-@require_POST
-def ban_mo_lai(request):
-    """URL cũ (07/09 sáng) → thực hiện SỬA ĐƠN (passcode)."""
-    return ban_thuc_hien(request, "sua")
 
 
 def _kiem_truoc_khi_luu(request, g, ph):
     """Trả (thông điệp, selector ô đang thiếu) — selector để JS FOCUS + rung ô đó (GĐ 08/09/2026)."""
     if not g["ban"] and not g["doi"]:
         return "Phiếu chưa có món nào — quét tem hoặc gõ mã hàng", ".khbl-scan__in"
+    # 08/09 chiều: chặn khoản tiền vô lý — bớt / cọc vượt CÒN LẠI (chỉ xét khi còn lại > 0)
+    t = cart.tong_cua(g)
+    if t["con_lai"] > 0 and t["bot"] > t["con_lai"]:
+        return f"Tiền bớt {M.money_vn(t['bot'])} lớn hơn CÒN LẠI {M.money_vn(t['con_lai'])}", "#o-bot"
+    if t["con_lai"] > 0 and t["coc"] > t["con_lai"]:
+        return f"Tiền cọc {M.money_vn(t['coc'])} lớn hơn CÒN LẠI {M.money_vn(t['con_lai'])}", "input[name=coc]"
     if not ph["user_id"]:
         return "Tài khoản web chưa gắn với tài khoản PMV — vào trang Hệ thống đồng bộ lại", ""
     if not ph["till_id"]:
@@ -844,6 +886,11 @@ def ban_thanh_toan(request):
     loi, o_loi = _kiem_truoc_khi_luu(request, g, ph)
     if loi:
         return _loi(request, loi, {"loi_o": o_loi})
+    # 08/09 chiều: KHÓA CHỐNG BẤM ĐÔI theo phiên (cache.add nguyên tử, 30s) — 2 request tới gần nhau đều đọc session
+    # CHƯA có trn_id → B.luu(trn_id="") 2 lần = 2 hóa đơn, 2 lần vào két. Nút chân trang cũng hx-sync/disable.
+    khoa = f"khbl:tt:{request.session.session_key}"
+    if not cache.add(khoa, 1, 30):
+        return _loi(request, "Đang thanh toán phiếu này — chờ vài giây, đừng bấm lại.")
     c = S.client("thanh_toan")
     now = datetime.datetime.now()
     try:
@@ -856,7 +903,13 @@ def ban_thanh_toan(request):
                    vang_them=g.get("vang_them"), coc=g.get("coc"), c=c)
         B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
     except Exception as exc:
+        cache.delete(khoa)
         return _loi(request, _loi_goi(exc))
+    finally:
+        pass
+    cache.delete(khoa)
+    from . import don as _don
+    _don.don_treo(force=True)                     # badge ⚠ đơn treo làm mới ngay (cache 60s)
     g["trn_id"], g["bill_code"] = kq["trn_id"], kq["bill_code"]
     _audit(request, g, "CHOT", note=f"khách trả {M.money_vn(kq['tong']['khach_tra'])}")
     # GĐ chốt 08/09/2026 (đổi so với 07/09): THANH TOÁN xong GIỮ ĐƠN VỪA CHỐT trên form ở chế độ xem
@@ -899,7 +952,7 @@ def ban_in_dem(request):
     snap = g if trn == g.get("trn_id") else {"trn_id": trn}
     _audit(request, snap, "IN", version=lan)
     from .models import GoldBill
-    GoldBill.objects.filter(trn_id=trn).update(so_lan_in=lan)
+    GoldBill.objects.filter(trn_id=trn).update(so_lan_in=F("so_lan_in") + 1)   # tăng nguyên tử (2 máy in cùng lúc)
     if request.GET.get("im") == "1":          # THANH TOÁN & IN: đếm im lặng, không toast (GĐ 08/09)
         return HttpResponse(status=204)
     return _pos_oob(request, {"tin": f"Đã ghi nhận IN lần {lan} · {datetime.datetime.now():%H:%M} — "
@@ -945,15 +998,16 @@ def _huy_nhap(request, extra=None):
     trn = g.get("trn_id")
     extra = dict(extra or {})
     if not trn:
-        cart.clear(request)
+        cart.clear(request, giu_nv=False)          # 08/09 chiều: về phiếu trắng = xóa cả NV như ĐƠN MỚI
         return _pos_oob(request, {**extra, "tin": "Đã xóa phiếu đang nhập."})
     try:
         B.huy(trn, user_id=ph["user_id"])
     except Exception as exc:
         return _loi(request, f"Hủy không được: {_loi_goi(exc)}", extra)
-    from . import gold_bill as GB
+    from . import gold_bill as GB, don as _don
     GB.upsert_tu_gio(g, status=g.get("status") or B.NHAP, is_del=True, user=request.user)
-    cart.clear(request)
+    _don.don_treo(force=True)
+    cart.clear(request, giu_nv=False)
     return _pos_oob(request, {**extra, "tin": f"Đã hủy hóa đơn {g.get('bill_code') or trn} — hàng trả về kho."})
 
 
@@ -968,35 +1022,6 @@ def _loi_goi(exc):
                 if isinstance(r, dict) and r.get("ErrorDesc"):
                     return r["ErrorDesc"]
     return str(exc)
-
-
-def ban_in(request):
-    """GIẤY ĐẢM BẢO — mẫu tạm, chờ GĐ đưa mẫu giấy thật.
-    ?trn_id=... → in ĐÚNG hóa đơn đó đọc từ PMV (không đụng phiếu đang lập trên form — dùng cho
-    THANH TOÁN & IN vì form đã được xóa trắng); không có → in phiếu đang lập như cũ."""
-    trn = (request.GET.get("trn_id") or "").strip()
-    ctx = _ctx_pos(request)
-    if trn:
-        phieu = B.doc(trn)
-        if not phieu:
-            return HttpResponse(f"Không thấy hóa đơn {trn}", status=404)
-        ctx["g"] = cart.tu_phieu(phieu)
-        ctx["t"] = cart.tong_cua(ctx["g"])
-        ctx["ten_nv"] = phieu.get("nhan_vien") or next(
-            (e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == phieu.get("emp_id")), "")
-    # GĐ chốt 07/09/2026 (quy tắc 5 + 7): CHỈ đơn ĐÃ CHỐT mới in; nháp/đang sửa → chặn.
-    # Mỗi lần in ghi audit IN kèm SỐ LẦN IN; sau Sửa/Hủy đơn chốt, bản in cũ hết hiệu lực (hậu quả trong popup).
-    if ctx["g"].get("status") != B.CHOT_ROI:
-        return HttpResponse("<h3 style='font-family:sans-serif;padding:24px'>Hóa đơn đang SỬA / chưa thanh toán — "
-                            "THANH TOÁN xong mới in được Giấy đảm bảo.</h3>", status=403)
-    from .models import BillAudit
-    lan = BillAudit.objects.filter(trn_id=ctx["g"]["trn_id"], action="IN").count() + 1
-    _audit(request, ctx["g"], "IN", version=lan)
-    ctx["ban_in_lan"] = lan
-    ctx["ban_in_luc"] = datetime.datetime.now()
-    ctx["hom_nay"] = datetime.date.today()
-    ctx["tiem"] = S.thong_tin_tiem()
-    return render(request, "pos/in_phieu.html", ctx)
 
 
 # ─────────────────────────── BẢNG GIÁ ───────────────────────────

@@ -708,6 +708,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .khbl-modal__head:has(.pg-ds__tk){padding:12px 18px;background:linear-gradient(180deg,#FFFDF8,#FAF6EC);border-bottom:1px solid var(--gold-300);flex-wrap:wrap;row-gap:10px}
 .pg-ds__ttl{display:flex;flex-direction:column;line-height:1.1;min-width:150px}
 .pg-ds__ttl em{font-style:normal;font-family:var(--f-head);font-size:24px;color:var(--gold-700);font-weight:600}
+/* nút đang gửi (htmx-request, 08/09 chiều): mờ + con trỏ chờ để người bán không bấm lại */
+.khbl-btn.htmx-request{opacity:.55;cursor:progress;filter:grayscale(.3)}
 .pg-ds__foot{margin-right:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-600);flex-wrap:wrap}
 .pg-ds__foot b{color:var(--ink-900);font-weight:600}
 .pg-ds__foot i{font-style:normal;color:var(--ink-400)}

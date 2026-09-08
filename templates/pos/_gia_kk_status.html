@@ -1,7 +1,7 @@
 {% if loi %}
-<div class="pg-gia__kk-status pg-gia__kk-status--error"><b>Không kiểm tra được KK</b><span>{{ loi }}</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--error" data-sync-state="error"><b>× Giá KK chưa kiểm tra được</b><span>{{ loi }}</span></div>
 {% elif changes or issues %}
-<div class="pg-gia__kk-status pg-gia__kk-status--warn"><b>⚠ KK lệch {{ changes|length }} loại giá{% if issues %} · {{ issues|length }} dòng chưa thể SYNC{% endif %}</b><span>Đã kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }} · bấm SYNC để xem và duyệt từng thay đổi.</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--warn" data-sync-state="mismatch" data-sync-count="{{ changes|length }}"><b>× KK lệch {{ changes|length }} loại giá{% if issues %} · {{ issues|length }} dòng chưa thể SYNC{% endif %}</b><span>Kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }} · bấm nút KK để xem và duyệt.</span></div>
 {% else %}
-<div class="pg-gia__kk-status pg-gia__kk-status--ok"><b>✓ Giá KK và MySQL đang khớp</b><span>{{ matched }} loại · kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }}</span></div>
+<div class="pg-gia__kk-status pg-gia__kk-status--ok" data-sync-state="synced" data-sync-count="0"><b>✓ Giá KK và MySQL đã khớp</b><span>{{ matched }} loại · kiểm tra {{ checked_at|date:"H:i:s d/m/Y" }}</span></div>
 {% endif %}

@@ -2,12 +2,40 @@
   const form = document.getElementById('gia-form');
   if (!form) return;
   document.querySelectorAll('[data-status-url]').forEach(syncStatus => {
+    const updateSyncButton = state => {
+      const button = document.getElementById(syncStatus.dataset.syncButton);
+      if (!button) return;
+      const source = syncStatus.dataset.syncSource || 'SYNC';
+      const detail = syncStatus.firstElementChild;
+      const resolvedState = state || detail?.dataset.syncState || 'error';
+      const count = Number(detail?.dataset.syncCount || 0);
+      button.classList.remove('is-checking', 'is-synced', 'is-mismatch', 'is-error');
+      button.classList.add(`is-${resolvedState}`);
+      const icon = button.querySelector('[data-sync-icon]');
+      const label = button.querySelector('[data-sync-label]');
+      if (resolvedState === 'synced') {
+        icon.textContent = '✓'; label.textContent = `${source} ĐÃ KHỚP`;
+        button.title = `${source} đã khớp. Bấm để xem trạng thái đồng bộ.`;
+      } else if (resolvedState === 'mismatch') {
+        icon.textContent = '×'; label.textContent = `${source} LỆCH${count ? ` ${count}` : ''}`;
+        button.title = `${source} có giá chênh lệch. Bấm để xem và duyệt đồng bộ.`;
+      } else if (resolvedState === 'checking') {
+        icon.textContent = '…'; label.textContent = `KIỂM TRA ${source}`;
+      } else {
+        icon.textContent = '×'; label.textContent = `${source} LỖI`;
+        button.title = `Không kiểm tra được ${source}. Bấm để thử lại.`;
+      }
+    };
     const checkSource = async () => {
+      updateSyncButton('checking');
       try {
         const response = await fetch(syncStatus.dataset.statusUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+        if (!response.ok) throw new Error('Không nhận được trạng thái nguồn giá.');
         syncStatus.innerHTML = await response.text();
+        updateSyncButton();
       } catch (_) {
-        syncStatus.innerHTML = '<div class="pg-gia__kk-status pg-gia__kk-status--error"><b>Không kiểm tra được nguồn giá</b><span>Hệ thống sẽ thử lại sau 10 phút.</span></div>';
+        syncStatus.innerHTML = '<div class="pg-gia__kk-status pg-gia__kk-status--error" data-sync-state="error"><b>× Không kiểm tra được nguồn giá</b><span>Hệ thống sẽ tự kiểm tra lại sau 10 phút.</span></div>';
+        updateSyncButton();
       }
     };
     checkSource();

@@ -46,7 +46,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
     <label class="khbl-field pg-ds__loc-khach"><span>Khách hàng</span>
       <input class="khbl-input" name="khach" value="{{ loc.khach }}" placeholder="tên · SĐT · CCCD"
              hx-trigger="keyup changed delay:350ms" hx-get="{% url 'pos:ban_ds' %}"
-             hx-include="closest form" hx-target="#modal-root"></label>
+             hx-include="closest form" hx-target="#modal-root" hx-sync="closest form:replace"></label>
     <label class="khbl-field"><span>Trạng thái</span>
       <select class="khbl-select" name="trang_thai">
         <option value="">Tất cả</option>

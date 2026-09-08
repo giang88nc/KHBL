@@ -177,10 +177,11 @@ class Command(BaseCommand):
         check("6 khoản tiền đủ trong cột TÍNH TỔNG",
               all(x in b for x in ("Tiền vàng mới", "Tiền vàng cũ", "CÒN LẠI", "Tiền vàng thêm",
                                    "Tiền công thêm", "Tiền bớt", "Tiền cọc", "Ghi chú")))
-        check("giấy đảm bảo: phiếu ĐANG SỬA (nháp) bị chặn in 403 (GĐ 07/09: chốt mới in)",
-              c.get("/banle/ban-hang/in/").status_code == 403)
-        # v5: giỏ = đơn W THẬT trên sandbox → dọn bằng XÓA ĐƠN (hàng về kho), không để đơn treo
-        c.post("/banle/ban-hang/huy/")
+        check("giấy đảm bảo: phiếu nháp bị chặn in (in/thang từ chối; trang in cũ /in/ đã bỏ → 404)",
+              "chưa thanh toán" in body(c.post("/banle/ban-hang/in/thang/", {}))
+              and c.get("/banle/ban-hang/in/").status_code == 404)
+        # v5: giỏ = đơn W THẬT → dọn bằng XÓA ĐƠN qua popup xác nhận (hàng về kho), không để đơn treo
+        c.post("/banle/ban-hang/thuc-hien/xoa_nhap/")
         c.post("/banle/ban-hang/moi/")
 
         # ── 5. bảng giá + nhịp 204 ──

@@ -10,7 +10,7 @@ cùng loại) tính GIÁ BÁN RA, phần dư tính GIÁ THÂU; server tự tách
     {# data-hm = hạn mức đổi ngang CÒN LẠI theo loại vàng bán (TL vàng = tổng − hột, cùng đơn vị nhập) — JS xem trước tách ngang/thâu #}
     <form class="pg-doi-nhap" hx-post="{% url 'pos:ban_doi_them' %}" hx-swap="none"
           data-hm='{ {% for h in hm_ngang %}"{{ h.base }}": "{{ h.con }}"{% if not forloop.last %}, {% endif %}{% endfor %} }'
-          hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('o-doingang').checked=true;window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
+          hx-on::after-request="if(event.detail.successful){this.reset();window.khblDoiNgangSync&&window.khblDoiNgangSync();this.gold.focus()}">
     {% csrf_token %}
     <input type="hidden" name="doi_ngang" id="o-doingang-hidden" value="">
     <label><span>LOẠI DẺ</span>

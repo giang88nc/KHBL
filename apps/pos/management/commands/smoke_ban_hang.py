@@ -203,9 +203,8 @@ class Command(BaseCommand):
                 M.dec(c.query("SELECT Discount FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
                               (hd,))[0]["Discount"]) == 9999)
 
-        ds = B.trong_ngay(c.fmt_date(now.date()).split("/")[::-1] and
-                          now.date().isoformat(), c)
-        self.ok("B21 hóa đơn có trong DANH SÁCH theo ngày",
+        ds, _tk = B.danh_sach(now.date().isoformat(), now.date().isoformat(), c=c)
+        self.ok("B21 hóa đơn có trong DANH SÁCH theo ngày (danh_sach — trong_ngay đã bỏ 08/09)",
                 any(x["TrnID"] == hd for x in ds), f"{len(ds)} phiếu trong ngày")
 
         # hủy
@@ -335,12 +334,14 @@ class Command(BaseCommand):
                     all("đang KHÓA" in body(cl.post(u, d)) for u, d in (
                         ("/banle/ban-hang/dat/", {"emp": ""}),
                         ("/banle/ban-hang/vang-doi/", {"gold": de["GoldCode"], "tong_tl": "10", "tl_hot": "0", "gia": ""}),
-                        ("/banle/ban-hang/bot-le/", {}))))
+                        ("/banle/ban-hang/xoa/", {"code": ma1}))))
             bx = body(cl.get("/banle/ban-hang/xac-nhan/huy_hd/"))
             self.ok("C11c popup xác nhận chung: hành động · mã HĐ · người thao tác · hậu quả · ô passcode",
                     all(x in bx for x in ("HỦY HÓA ĐƠN", hd["BillCode"], "Người thao tác", u.username,
                                           "Hậu quả", 'name="passcode"')))
-            self.ok("C11c2 URL cũ /mo-khoa/ = popup SỬA ĐƠN", "SỬA ĐƠN" in body(cl.get("/banle/ban-hang/mo-khoa/")))
+            self.ok("C11c2 xac-nhan/sua = popup SỬA ĐƠN (URL cũ mo-khoa đã bỏ 08/09)",
+                    "SỬA ĐƠN" in body(cl.get("/banle/ban-hang/xac-nhan/sua/"))
+                    and cl.get("/banle/ban-hang/mo-khoa/").status_code == 404)
             ng = cl.session["phieu"].get("ngay") or ""
             self.ok("C11c4 ngày đơn mở lên là ISO (proc trả dd/mm/yyyy → cart đổi)",
                     len(ng) == 10 and ng[4] == "-" and ng[7] == "-" and ng[:4].isdigit(), ng)
@@ -363,12 +364,21 @@ class Command(BaseCommand):
             PC.dat(u, "smoke-1276")
             try:
                 with override_settings(KHBL_UNLOCK_PASSCODE="env-khac"):
-                    b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "env-khac"}))
+                    b = body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "env-khac"}))
                     self.ok("C11d có passcode RIÊNG thì .env KHÔNG còn tác dụng (ưu tiên bản ghi user)",
                             "không đúng" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
-                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "sai"}))
+                b = body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "sai"}))
                 self.ok("C11e passcode SAI → báo lỗi, đơn vẫn ĐÃ CHỐT",
                         "không đúng" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI)
+                # 08/09 chiều: sai 5 lần liên tiếp → KHÓA nhập 30s (đã sai 2 lần ở C11d/e) + audit PASSCODE_SAI
+                from django.core.cache import cache as _cache
+                for _ in range(3):
+                    b = body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "sai"}))
+                self.ok("C11e2 sai passcode 5 lần → khóa nhập, báo 'khóa nhập … giây', đúng mã cũng bị chặn, audit PASSCODE_SAI",
+                        "khóa nhập" in b and "khóa nhập" in body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "smoke-1276"}))
+                        and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI
+                        and BillAudit.objects.filter(trn_id=hd["TrnID"], action="PASSCODE_SAI").count() >= 5)
+                _cache.delete(f"khbl:pc_sai:{u.pk}")           # mở khóa để chạy tiếp
                 # popup 🔑 đổi passcode: sai hiện tại → chặn; đúng → đổi được; đổi xong mở khóa bằng mã mới
                 b = body(cl.post("/tai-khoan/passcode/luu/", {"user": u.pk, "hien_tai": "sai", "moi": "9999", "moi2": "9999"}))
                 self.ok("C11f đổi passcode: nhập hiện tại SAI → từ chối", "không đúng" in b)
@@ -384,11 +394,11 @@ class Command(BaseCommand):
                         "người khác sửa" in b and self._trang_thai(hd["TrnID"]) == B.CHOT_ROI and bool(upd_that))
                 s = cl.session; s["phieu"]["upd"] = upd_that; s.save()
 
-                from apps.pos.models import BillAudit
                 n0 = BillAudit.objects.filter(trn_id=hd["TrnID"]).count()
-                b = body(cl.post("/banle/ban-hang/mo-lai/", {"passcode": "9999"}))
-                self.ok("C12 SỬA ĐƠN (passcode mới) → về nháp, Ở LẠI form, icon 🔓",
-                        self._trang_thai(hd["TrnID"]) == B.NHAP and "pg-khoa--mo" in b and hd["BillCode"] in b,
+                b = body(cl.post("/banle/ban-hang/thuc-hien/sua/", {"passcode": "9999"}))
+                self.ok("C12 SỬA ĐƠN (passcode mới) → về nháp, Ở LẠI form, icon 🔓 + nhãn ✎ ĐANG SỬA (chỉ khi mở lại)",
+                        self._trang_thai(hd["TrnID"]) == B.NHAP and "pg-khoa--mo" in b and hd["BillCode"] in b
+                        and "ĐANG SỬA" in b,
                         f"tt={self._trang_thai(hd['TrnID'])} | {self._trich(b)}")
                 a = BillAudit.objects.filter(trn_id=hd["TrnID"]).order_by("-id").first()
                 self.ok("C12b audit SUA ghi kèm ảnh chụp đơn + người + không sửa được",
@@ -399,9 +409,10 @@ class Command(BaseCommand):
                 except PermissionError:
                     sua_duoc = False
                 self.ok("C12c bill_audit append-only: save() sửa dòng cũ bị từ chối", not sua_duoc)
-                self.ok("C12d đơn đang SỬA → KHÔNG in được (403 trang in cũ + in/dem từ chối)",
-                        cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}").status_code == 403
-                        and "chưa thanh toán" in body(cl.post("/banle/ban-hang/in/dem/", {})))
+                self.ok("C12d đơn đang SỬA → KHÔNG in được (in/dem + in/thang từ chối; trang in cũ /in/ đã bỏ → 404)",
+                        "chưa thanh toán" in body(cl.post("/banle/ban-hang/in/dem/", {}))
+                        and "chưa thanh toán" in body(cl.post("/banle/ban-hang/in/thang/", {}))
+                        and cl.get(f"/banle/ban-hang/in/?trn_id={hd['TrnID']}").status_code == 404)
                 self.ok("C12e audit có dòng CHOT (lúc C6) + IN lần 1 (lúc C8c)",
                         BillAudit.objects.filter(trn_id=hd["TrnID"], action="CHOT").exists()
                         and BillAudit.objects.filter(trn_id=hd["TrnID"], action="IN", version=1).exists())
@@ -562,7 +573,7 @@ class Command(BaseCommand):
                 bh = body(cl.post("/banle/ban-hang/thuc-hien/xoa_nhap/"))
                 self.ok("F9 xác nhận → xóa đơn W sandbox (hàng về kho) + đóng popup + form trắng",
                         "hàng trả về kho" in bh and "closeKhblModal" in bh and "Chưa có món nào" in bh)
-                cl.post("/banle/ban-hang/huy/")   # phòng hờ nếu F9 trượt
+                cl.post("/banle/ban-hang/thuc-hien/xoa_nhap/")   # phòng hờ nếu F9 trượt
                 cl.post("/banle/ban-hang/moi/")
 
     def _phan_botle(self):

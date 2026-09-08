@@ -63,14 +63,43 @@ document.addEventListener("mousedown", function (e) {
   });
 })();
 
-/* phím tắt */
+/* phím tắt — 08/09 chiều: bỏ qua khi popup đang mở; không có đích thì báo toast thay vì im lặng */
 document.addEventListener("keydown", function (e) {
   var map = { F2: "#o-khach", F4: "#o-de", F6: "#nut-bot-le" };
   var sel = map[e.key];
   if (!sel) return;
+  var mr = document.getElementById("modal-root");
+  if (mr && mr.innerHTML.trim()) return;
+  e.preventDefault();
   var el = document.querySelector(sel);
-  if (el) { e.preventDefault(); el.focus(); if (el.tagName === "BUTTON") el.click(); }
+  if (el) { el.focus(); if (el.tagName === "BUTTON") el.click(); return; }
+  var r = document.getElementById("toast-root");
+  if (r) { var d = document.createElement("div"); d.className = "warning"; d.textContent =
+    e.key === "F2" ? "Đã chọn khách — bấm × để đổi" : e.key === "F6" ? "Không có gợi ý bớt lẻ" : "Đơn đang khóa"; r.appendChild(d); setTimeout(function () { d.remove(); }, 3000); }
 });
+
+/* GIỮ Ô ĐANG GÕ qua OOB (08/09 chiều): mọi thao tác thay trọn #pos-tong/#pos-doi → ô đang focus bị thay mất
+   chữ đang gõ + mất focus (vd đổi Tiền bớt rồi tab sang Tiền cọc gõ tiếp). Chụp ô focus trước swap, sau settle
+   trả lại focus + giá trị đang gõ nếu ô đó KHÔNG phải ô vừa gửi. */
+(function () {
+  var giu = null;
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var a = document.activeElement;
+    if (!a || !a.matches("input, select") || !a.closest("#pos-tong, #pos-doi, #pos-info")) { giu = null; return; }
+    var src = e.detail && e.detail.elt;
+    giu = { id: a.id, name: a.name, form: a.closest("form") && a.closest("form").className, value: a.value,
+            pos: a.selectionStart, la_nguon: !!(src && (src === a || (src.contains && src.contains(a) && src.tagName === "FORM" && e.detail.requestConfig && e.detail.requestConfig.triggeringEvent && e.detail.requestConfig.triggeringEvent.target === a))) };
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    if (!giu) return;
+    var g = giu; giu = null;
+    var el = g.id ? document.getElementById(g.id) : null;
+    if (!el && g.name && g.form) { var f = document.querySelector("form." + g.form.split(" ")[0]); el = f && f.querySelector("[name='" + g.name + "']"); }
+    if (!el || el.disabled) return;
+    if (!g.la_nguon && g.value !== "" && el.value !== g.value && el.tagName === "INPUT") el.value = g.value;
+    try { el.focus({ preventScroll: true }); if (g.pos != null && el.setSelectionRange && el.type !== "date") el.setSelectionRange(g.pos, g.pos); } catch (_) {}
+  });
+})();
 
 /* form VÀNG ĐỔI (GĐ chốt 07/09/2026): tick Đổi ngang → ô GIÁ = GIÁ BÁN RA (MySQL sell), bỏ tick → GIÁ THÂU
    VÀO (MySQL buy); sửa tay được. Xem trước THÀNH TIỀN đúng thuật toán server: a = TL vàng khách − TL vàng bán
@@ -170,8 +199,11 @@ document.addEventListener("keydown", function (e) {
   function mInt(s) { return parseInt(String(s || "").replace(/[^\d]/g, ""), 10) || 0; }
   function fmt(n) { return Math.max(n, 0).toLocaleString("vi-VN"); }
   function tra() {
+    // TIỀN KHÁCH TRẢ hiển thị; ÂM (trả lại khách) → 0, không tách. 08/09 chiều: nhận cả dấu "−"/"-" (mInt bỏ dấu → sai)
     var el = document.querySelector(".pg-tong__tra b");
-    return el ? mInt(el.textContent) : 0;   // TIỀN KHÁCH TRẢ hiển thị (âm → 0, không tách)
+    if (!el) return 0;
+    var t = el.textContent.trim();
+    return (/^[-−–]/.test(t)) ? 0 : mInt(t);
   }
   function sync(src) {
     var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
