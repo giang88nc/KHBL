@@ -241,6 +241,52 @@ def _ti_le_quad(quad):
     return max(a, b) / min(a, b)
 
 
+def _diem_bo_cuc(hsv):
+    """Dấu hiệu bố cục CỐ ĐỊNH của CCCD trên ảnh thẻ đã nắn ngang (HSV, cỡ nhỏ), chiều đang xét. Mỗi dấu hiệu phải ĐÚNG CHỖ
+    và VẮNG ở chỗ khác (tiệm vàng: đỏ nhung, vàng trang sức khắp nơi):
+    mặt TRƯỚC = quốc huy ĐỎ góc trên-trái (x 3–22 %, y 5–38 %) + tiêu đề đỏ (x 28–90 %, y 20–38 %), thân thẻ dưới tiêu đề
+    và ô ảnh chân dung KHÔNG đỏ; mặt SAU = chip VÀNG (x 8–30 %, y 35–68 %) có vành quanh không vàng, nửa phải (vân tay)
+    không vàng, dải đáy (y 66–95 %) có chữ MRZ tối. Trả max(trước, sau) ∈ [0, 1]."""
+    import numpy as np
+    h, w = hsv.shape[:2]
+    H, S, V = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    do = ((H <= 8) | (H >= 170)) & (S >= 90) & (V >= 80)
+    vang = (H >= 12) & (H <= 35) & (S >= 70) & (V >= 120)
+    toi = (V < 90) & (S < 90)
+
+    def ti_le(m, x0, x1, y0, y1):
+        return float(m[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)].mean())
+
+    def kep(v, chuan):
+        return min(1.0, v / chuan)
+
+    def vang_mat(v, nguong):                                 # dấu hiệu phải VẮNG: 1 khi ≈0, về 0 khi ≥ ngưỡng
+        return max(0.0, 1.0 - v / nguong)
+
+    truoc = (0.6 * kep(ti_le(do, .03, .22, .05, .38), 0.22) + 0.4 * kep(ti_le(do, .28, .90, .20, .38), 0.035))
+    truoc *= vang_mat(ti_le(do, .28, .95, .42, .95), 0.06) * vang_mat(ti_le(do, .03, .28, .42, .92), 0.06)
+    chip = ti_le(vang, .08, .30, .35, .68)
+    vanh = (ti_le(vang, .02, .36, .27, .76) * (0.34 * 0.49) - chip * (0.22 * 0.33)) / max(0.34 * 0.49 - 0.22 * 0.33, 1e-6)
+    mrz = ti_le(toi, .05, .95, .66, .95)
+    sau = 0.6 * kep(chip, 0.22) + 0.4 * (1.0 if 0.04 <= mrz <= 0.35 else 0.3)
+    sau *= vang_mat(max(vanh, 0.0), 0.08) * vang_mat(ti_le(vang, .40, .95, .05, .65), 0.08)
+    return max(truoc, sau)
+
+
+def _bo_cuc(quad, ctx):
+    """Điểm bố cục của ứng viên: nắn tứ giác (đưa về ngang) về 234×148 từ ảnh nhỏ, xét cả 2 chiều 0°/180° → max."""
+    import cv2
+    import numpy as np
+    q = _order(quad).astype(np.float32)
+    if np.linalg.norm(q[3] - q[0]) > np.linalg.norm(q[1] - q[0]):
+        q = np.array([q[3], q[0], q[1], q[2]], dtype=np.float32)
+    W, Hh = 234, 148
+    dst = np.array([[0, 0], [W - 1, 0], [W - 1, Hh - 1], [0, Hh - 1]], dtype=np.float32)
+    im = cv2.warpPerspective(ctx["small"], cv2.getPerspectiveTransform(q, dst), (W, Hh), flags=cv2.INTER_AREA)
+    hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
+    return max(_diem_bo_cuc(hsv), _diem_bo_cuc(cv2.rotate(hsv, cv2.ROTATE_180)))
+
+
 def _tuong_phan(quad, ctx):
     """TƯƠNG PHẢN 2 BÊN từng cạnh: 40 điểm/cạnh, so màu Lab tại ±off (2 % cạnh ngắn, ≥4 px) hai bên cạnh — ΔE/20 kẹp 1.
     Cạnh thật của thẻ: trong (thẻ) ≠ ngoài (nền); đường cắt ngang thẻ hay chạy trên khay: 2 bên cùng màu → thấp.
@@ -452,19 +498,22 @@ def _ung_vien_duong(ctx):
             continue
         capA, capB = cap(A), cap(B)
         for pa in capA:
+            DA = abs(pa[0][0] - pa[1][0])
             for pb in capB:
-                them(pa, pb, "hough")
+                DB = abs(pb[0][0] - pb[1][0])
+                if 1.15 <= max(DA, DB) / max(min(DA, DB), 1e-6) <= 2.3:   # lọc rẻ theo tỉ lệ 2 bề rộng (ID-1 1,586 ± phối cảnh)
+                    them(pa, pb, "hough")
         # 3 đường + suy đường thứ 4 (cạnh nhạt không có biên — vd viền trên thẻ VNeID trên nền trắng):
         # cặp song song cho bề rộng D → cạnh còn lại cách đường đơn D/TI_LE hoặc D×TI_LE (thẻ ngang/dọc), 2 phía
         for pa in capA:
             D = abs(pa[0][0] - pa[1][0])
-            for b in B:
+            for b in B[:10]:
                 for kc in (D / TI_LE, D * TI_LE):
                     for dau in (1, -1):
                         them(pa, (b[:2], (b[0] + dau * kc, b[1])), "hough3")
         for pb in capB:
             D = abs(pb[0][0] - pb[1][0])
-            for a in A:
+            for a in A[:10]:
                 for kc in (D / TI_LE, D * TI_LE):
                     for dau in (1, -1):
                         them((a[:2], (a[0] + dau * kc, a[1])), pb, "hough3")
@@ -541,19 +590,68 @@ def _tinh_chinh(quad, ctx):
     return moi
 
 
-def _tim_ung_vien(img):
-    """Mọi ứng viên (điểm giảm dần), tỉ lệ thu nhỏ và ngữ cảnh — dùng cho tim_the và script soi lỗi."""
+def _vung_mau(small):
+    """VÙNG MÀU THẺ: khối màu lam/lục (hue 60–108, S>30, V>50 — nền CCCD/CMND, không lấy chăn/áo xanh dương hue >108) đủ lớn
+    → hộp bao nới 35 % (tọa độ small). Thẻ chỉ chiếm 5–10 % khung giữa tủ vàng: chạy lại pipeline TRONG hộp này ở độ phân
+    giải đủ, cạnh tủ/vòng ngoài hộp không còn phá. Tối đa 4 vùng, bỏ vùng phủ >60 % ảnh (toàn ảnh đã xét)."""
     import cv2
-    h, w = img.shape[:2]
-    scale = min(1.0, 1200.0 / max(h, w))
-    small = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img.copy()
+    import numpy as np
+    h, w = small.shape[:2]
+    hsv = cv2.cvtColor(cv2.GaussianBlur(small, (5, 5), 0), cv2.COLOR_BGR2HSV)
+    m = ((hsv[:, :, 0] >= 60) & (hsv[:, :, 0] <= 108) & (hsv[:, :, 1] > 30) & (hsv[:, :, 2] > 50)).astype(np.uint8) * 255
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15)))
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7)))
+    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    out = []
+    for c in sorted(cnts, key=cv2.contourArea, reverse=True)[:6]:
+        a = cv2.contourArea(c)
+        if a < 0.003 * h * w or a > 0.6 * h * w:
+            continue
+        x, y, bw, bh = cv2.boundingRect(c)
+        nx, ny = int(bw * 0.35), int(bh * 0.35)
+        x0, y0, x1, y1 = max(0, x - nx), max(0, y - ny), min(w, x + bw + nx), min(h, y + bh + ny)
+        if (x1 - x0) * (y1 - y0) > 0.6 * h * w:
+            continue
+        out.append((x0, y0, x1, y1))
+        if len(out) == 4:
+            break
+    return out
+
+
+def _ung_vien_trong(small):
+    """Mọi ứng viên trong 1 ảnh (small): mặt nạ khối + đường Hough; trả [(điểm, quad_small, tên)] và ctx."""
     ctx = _ngu_canh(small)
     ung = []
     for ten, m in _mat_na(small, ctx["gray_blur"], ctx["dist"], ctx["d8"]):
         ung.extend(_ung_vien_khoi(m, ten, ctx))
     ung.extend(_ung_vien_duong(ctx))
-    ung.sort(key=lambda z: -z[0])
-    return ung, scale, ctx
+    return ung, ctx
+
+
+def _tim_ung_vien(img):
+    """Mọi ứng viên trên TOÀN ẢNH (thu ≤1200 px) + trong từng VÙNG MÀU THẺ (cắt từ ảnh gốc, phóng ~1000 px, ×1,05).
+    Trả list (điểm giảm dần) của (điểm, quad tọa độ ẢNH GỐC, tên, src) — src = dict(ctx, scale, dx, dy, toan_anh):
+    quad_local = (quad − (dx, dy)) × scale. Dùng cho tim_the và script soi lỗi."""
+    import cv2
+    h, w = img.shape[:2]
+    scale = min(1.0, 1200.0 / max(h, w))
+    small = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img.copy()
+    ung, ctx = _ung_vien_trong(small)
+    src = dict(ctx=ctx, scale=scale, dx=0.0, dy=0.0, toan_anh=True)
+    kq = [(d, q / scale, t, src) for d, q, t in ung]
+    for x0, y0, x1, y1 in _vung_mau(small):
+        gx0, gy0 = int(x0 / scale), int(y0 / scale)
+        gx1, gy1 = min(w, int(math.ceil(x1 / scale))), min(h, int(math.ceil(y1 / scale)))
+        roi = img[gy0:gy1, gx0:gx1]
+        if roi.shape[0] < 40 or roi.shape[1] < 40:
+            continue
+        rs = 1000.0 / max(roi.shape[:2])
+        roi_s = cv2.resize(roi, None, fx=rs, fy=rs, interpolation=cv2.INTER_AREA if rs < 1 else cv2.INTER_CUBIC)
+        u2, c2 = _ung_vien_trong(roi_s)
+        src2 = dict(ctx=c2, scale=rs, dx=float(gx0), dy=float(gy0), toan_anh=False)
+        kq.extend((d * 1.05, q / rs + (gx0, gy0), t, src2) for d, q, t in u2)
+    kq.sort(key=lambda z: -z[0])
+    return kq
 
 
 DIEM_TRON_KHUNG = 0.12    # điểm cố định cho "ảnh đã là thẻ cắt sát" (3–4 cạnh trên mép, tỉ lệ ảnh 1,50–1,70) — chỉ thắng khi không có gì hơn
@@ -617,36 +715,138 @@ def _sat_mep(quad, ctx):
     return moi
 
 
-def tim_the(img, chi_tiet=False):
-    """Trả 4 điểm (float32, tọa độ ảnh gốc) của thẻ hoặc None. chi_tiet=True → (quad, tên ứng viên, điểm)."""
+_MAU = None
+
+
+def _nap_mau():
+    """Nạp 1 lần mẫu SIFT (apps/pos/cccd_mau/*.npz: kp N×2 trong khung 1170×738, des N×128 float16, kich)."""
+    global _MAU
+    if _MAU is None:
+        import glob
+        import os
+        import numpy as np
+        out = []
+        for p in sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cccd_mau", "*.npz"))):
+            z = np.load(p)
+            out.append((os.path.splitext(os.path.basename(p))[0], z["kp"].astype(np.float32), z["des"].astype(np.float32), tuple(int(v) for v in z["kich"])))
+        _MAU = out
+    return _MAU
+
+
+SIFT_INLIER_MIN = 15      # số điểm khớp đồng thuận RANSAC tối thiểu để tin là thẻ
+
+
+def _tim_the_sift(img):
+    """So khớp SIFT ảnh (xám, cạnh dài ≤2000) với từng mẫu → homography RANSAC → 4 góc thẻ THEO THỨ TỰ MẪU (tl,tr,br,bl →
+    biết chiều thẻ). Trả (quad tọa độ ảnh gốc, số inlier, tên mẫu) của mẫu khớp nhất hoặc None."""
     import cv2
     import numpy as np
-    ung, scale, ctx = _tim_ung_vien(img)
+    mau = _nap_mau()
+    if not mau:
+        return None
+    h, w = img.shape[:2]
+    sc = min(1.0, 2000.0 / max(h, w))
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if sc < 1:
+        g = cv2.resize(g, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA)
+    g = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(g)
+    sift = cv2.SIFT_create(nfeatures=6000, contrastThreshold=0.03)
+    kp, des = sift.detectAndCompute(g, None)
+    if des is None or len(kp) < 30:
+        return None
+    pts = np.array([k.pt for k in kp], np.float32)
+    bf = cv2.BFMatcher(cv2.NORM_L2)
+    tot = None
+    for ten, mkp, mdes, (MW, MH) in mau:
+        try:
+            m2 = bf.knnMatch(mdes, des, k=2)
+        except cv2.error:
+            continue
+        tot_ok = [a for a, b in (p for p in m2 if len(p) == 2) if a.distance < 0.75 * b.distance]
+        if len(tot_ok) < SIFT_INLIER_MIN:
+            continue
+        src = np.float32([mkp[a.queryIdx] for a in tot_ok]).reshape(-1, 1, 2)
+        dst = np.float32([pts[a.trainIdx] for a in tot_ok]).reshape(-1, 1, 2)
+        Hm, mask = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
+        if Hm is None:
+            continue
+        n_in = int(mask.sum())
+        if n_in < SIFT_INLIER_MIN:
+            continue
+        goc = np.float32([[0, 0], [MW - 1, 0], [MW - 1, MH - 1], [0, MH - 1]]).reshape(-1, 1, 2)
+        quad = cv2.perspectiveTransform(goc, Hm).reshape(4, 2) / sc
+        # kiểm hợp lý: lồi, tỉ lệ cạnh 1,1–2,4, diện tích ≥ 0,5 % ảnh, không lộn ngược (định thức dương)
+        if not cv2.isContourConvex(quad.astype(np.float32).reshape(-1, 1, 2)):
+            continue
+        r = _ti_le_quad(quad)
+        a = cv2.contourArea(quad.astype(np.float32))
+        if not (1.1 <= r <= 2.4) or a < 0.005 * w * h:
+            continue
+        v1, v2 = quad[1] - quad[0], quad[3] - quad[0]
+        if v1[0] * v2[1] - v1[1] * v2[0] <= 0:                 # tl→tr→bl phải thuận chiều (không lật gương)
+            continue
+        if tot is None or n_in > tot[1]:
+            tot = (quad.astype(np.float32), n_in, ten)
+    return tot
+
+
+def _khop_thu_tu(goc_cu, goc_moi):
+    """Trả goc_moi sắp lại theo thứ tự của goc_cu (mỗi góc cũ → góc mới gần nhất) — giữ CHIỀU thẻ sau khi nắn cạnh."""
+    import numpy as np
+    out = []
+    for p in goc_cu:
+        d = np.linalg.norm(goc_moi - p, axis=1)
+        out.append(goc_moi[int(np.argmin(d))])
+    return np.array(out, dtype=np.float32)
+
+
+def tim_the(img, chi_tiet=False):
+    """Trả 4 điểm (float32, tọa độ ảnh gốc) của thẻ hoặc None. chi_tiet=True → (quad, tên ứng viên, điểm).
+    Đường CHÍNH: so khớp SIFT với mẫu thẻ (tên 'sift:<mẫu>', quad theo thứ tự tl,tr,br,bl CỦA THẺ → biết chiều);
+    không khớp → đường hình học (tên mặt nạ/hough…, quad thứ tự hình học)."""
+    import cv2
+    import numpy as np
+    h, w = img.shape[:2]
+    kq = _tim_the_sift(img)
+    if kq is not None:
+        quad, n_in, ten = kq
+        # nắn cạnh theo biên thật trong ảnh nhỏ rồi trả về thứ tự thẻ
+        scale = min(1.0, 1200.0 / max(h, w))
+        small = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else img.copy()
+        ctx = _ngu_canh(small)
+        q_s = (quad * scale).astype(np.float32)
+        q_r = _khop_thu_tu(q_s, _sat_mep(_tinh_chinh(q_s, ctx), ctx)) / scale
+        q_r[:, 0] = np.clip(q_r[:, 0], -0.02 * w, 1.02 * w)
+        q_r[:, 1] = np.clip(q_r[:, 1], -0.02 * h, 1.02 * h)
+        return (q_r.astype(np.float32), "sift:" + ten, float(n_in)) if chi_tiet else q_r.astype(np.float32)
+    ung = _tim_ung_vien(img)
     if not ung:
         return (None, "", 0.0) if chi_tiet else None
-    diem, quad, ten = ung[0]
+    diem, quad_goc, ten, src = ung[0]
+    ctx, scale, dx, dy = src["ctx"], src["scale"], src["dx"], src["dy"]
+    quad = ((quad_goc - (dx, dy)) * scale).astype(np.float32)
     phu_tb, phu_canh, n_mep = _do_phu(quad, ctx)
     if n_mep < 3 and 0.6 * phu_tb + 0.4 * phu_canh[1] < NGUONG_PHU:
         return (None, "", diem) if chi_tiet else None
-    h, w = img.shape[:2]
     ra = max(w, h) / min(w, h)
-    tl = cv2.contourArea(_order(quad)) / ctx["dien_tich"]
-    if n_mep >= 3 or (1.50 <= ra <= 1.70 and tl >= 0.8):
+    tl = cv2.contourArea(_order(quad_goc).astype(np.float32)) / (w * h)
+    if src["toan_anh"] and (n_mep >= 3 or (1.50 <= ra <= 1.70 and tl >= 0.8)):
         if ctx["bien"].mean() < 2.55:                  # < 1 % điểm biên: ảnh trơn / mờ tịt, không phải thẻ cắt sát
             return (None, "", diem) if chi_tiet else None
         # chính ảnh đã là thẻ cắt sát (tỉ lệ ID-1, tứ giác chiếm ≥80 %): giữ TRỌN KHUNG — cắt thêm chỉ mất nội dung
         quad = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype=np.float32)
         return (quad, "tron_khung", diem) if chi_tiet else quad
-    quad = _sat_mep(_tinh_chinh(quad, ctx), ctx) / scale
-    return (quad, ten, diem) if chi_tiet else quad
+    quad = _sat_mep(_tinh_chinh(quad, ctx), ctx) / scale + (dx, dy)
+    return (quad.astype(np.float32), ten, diem) if chi_tiet else quad.astype(np.float32)
 
 
 # ───────────────────────────── E. cắt · nắn · xoay ─────────────────────────────
-def _noi_bien(quad, w, h, ti_le=0.012):
-    """Nới 1,2 % ra ngoài (thà dính chút nền còn hơn lẹm viền/dòng chữ sát mép thẻ), kẹp trong ảnh; thẻ ≥ 90 % khung → trọn khung."""
+def _noi_bien(quad, w, h, ti_le=0.012, giu_thu_tu=False):
+    """Nới 1,2 % ra ngoài (thà dính chút nền còn hơn lẹm viền/dòng chữ sát mép thẻ), kẹp trong ảnh; thẻ ≥ 90 % khung → trọn khung.
+    giu_thu_tu=True: quad đã đúng thứ tự tl,tr,br,bl của THẺ (từ SIFT) — không sắp lại theo hình học."""
     import cv2
     import numpy as np
-    q = _order(quad)
+    q = np.asarray(quad, dtype=np.float32) if giu_thu_tu else _order(quad)
     if cv2.contourArea(q) >= 0.9 * w * h:
         return np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype="float32")
     tam = q.mean(axis=0)
@@ -697,13 +897,14 @@ def cat_cccd(data, goc=0.0, cat=None):
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise KhongThayThe("Không đọc được ảnh")
-    quad = tim_the(img)
+    quad, ten, _ = tim_the(img, chi_tiet=True)
     if quad is None:
         raise KhongThayThe("Không tìm thấy thẻ trong ảnh — đặt thẻ trên nền phẳng, tương phản, lấy trọn 4 góc rồi chụp lại")
-    quad = _noi_bien(quad, img.shape[1], img.shape[0])
+    tu_sift = ten.startswith("sift:")
+    quad = _noi_bien(quad, img.shape[1], img.shape[0], giu_thu_tu=tu_sift)
     w_top = np.linalg.norm(quad[1] - quad[0])
     h_left = np.linalg.norm(quad[3] - quad[0])
-    if h_left > w_top:                     # thẻ đang DỌC trong ảnh → đổi thứ tự góc cho thành ngang
+    if not tu_sift and h_left > w_top:     # đường hình học: chưa biết chiều — thẻ DỌC trong ảnh → đổi thứ tự góc cho thành ngang
         quad = np.array([quad[3], quad[0], quad[1], quad[2]], dtype="float32")
     if cat and any(float(v or 0) for v in cat):
         quad = _cat_bot(quad, cat)

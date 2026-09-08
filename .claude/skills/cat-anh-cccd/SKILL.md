@@ -15,7 +15,7 @@ description: >-
 
 | Thứ | Nơi | Vai trò |
 |---|---|---|
-| 1 | `apps/pos/anh_cccd.py` | **Thuật toán thuần OpenCV, không đụng DB, không biết khách/nhân viên là ai.** Mọi màn hình gọi chung |
+| 1 | `apps/pos/anh_cccd.py` + `apps/pos/cccd_mau/*.npz` | **Thuật toán thuần OpenCV (SIFT khớp mẫu → dự phòng hình học), không đụng DB, không biết khách/nhân viên là ai.** Mọi màn hình gọi chung |
 | 2 | `apps/pos/views_thau.py` → `thau_anh_cat` / `thau_anh_cat_luu` + `templates/pos/_thau_cat_modal.html` | Mẫu tích hợp đã chạy thật: popup xem trước + KÉO XOAY bằng con trỏ + ✓ LƯU |
 | 3 | `manage.py smoke_thau` mục 8b | Hồi quy web (xem trước 1170×738, khung kéo xoay, LƯU góc 0/90/187,5, ảnh trơn báo không thấy) |
 | 4 | Skill này | Vì sao lại thế, cách tái dùng cho KHÁCH / NHÂN VIÊN, bẫy đã dính |
@@ -63,7 +63,31 @@ quad = AC.tim_the(img_bgr)               # ndarray BGR → 4 điểm float32 (tl
 5. Thêm 3–4 kịch bản smoke như mục 8b `smoke_thau` (ảnh giả `AC.anh_thu_nghiem(goc=12)`, so độ sáng với
    `AC._the_gia()`; LƯU goc 90 → (738, 1170); ảnh xám trơn → `KhongThayThe`).
 
-## Thuật toán (đọc khi cần sửa chất lượng cắt)
+## Đường CHÍNH v3 — so khớp SIFT với mẫu thẻ (09/09/2026)
+
+`_tim_the_sift(img)`: ảnh xám ≤2000 px + CLAHE → SIFT (6000 điểm) → với mỗi mẫu trong `apps/pos/cccd_mau/*.npz`
+(`kp` N×2 trong khung 1170×738, `des` N×128 float16, `kich`) BFMatcher knn ratio 0,75 → `findHomography` RANSAC 5 px →
+≥ `SIFT_INLIER_MIN` 15 inlier → chiếu 4 góc khung mẫu = 4 góc thẻ theo THỨ TỰ tl,tr,br,bl của thẻ (biết chiều, không cần
+đoán ngược đầu) → kiểm lồi / tỉ lệ 1,1–2,4 / ≥0,5 % ảnh / không lật gương → lấy mẫu nhiều inlier nhất. Sau đó nắn cạnh
+(`_tinh_chinh` + `_sat_mep` trong ảnh nhỏ) và `_khop_thu_tu` giữ chiều. `tim_the(chi_tiet=True)` trả tên `sift:<mẫu>`;
+`cat_cccd` thấy tên đó thì `_noi_bien(giu_thu_tu=True)` và KHÔNG sắp lại góc theo hình học.
+
+**Mẫu**: dựng bằng script scratchpad `build_mau.py` từ ảnh cắt chuẩn (1170×738): chỉ giữ SIFT ở vùng in CỐ ĐỊNH — mặt
+trước: dải đầu y 0–40 % trừ ô QR; VNeID: y 0–42 % trừ ô ảnh; mặt sau: cột trái x 0–55 % y 0–72 % (nhãn, chức danh, chip,
+mộc) trừ dòng đặc điểm nhân dạng + chữ ký, thêm nhãn "Ngón trỏ" — che ảnh/số/tên/địa chỉ/QR/vân tay/MRZ. **Chỉ lưu
+descriptor, không lưu ảnh** (dữ liệu cá nhân). Thêm mẫu mới (thẻ mẫu 2024 "CĂN CƯỚC", CMND cũ) = thêm 1 file .npz cùng
+định dạng, không sửa code. Không khớp mẫu nào → rơi về đường hình học bên dưới (kể cả thẻ giả của smoke).
+
+Thực đo 09/09: 4/4 ảnh tại quầy GĐ đưa (thẻ trong tay + bao nhựa 140 inlier, mặt sau 65, thẻ trên màn hình điện thoại
+giữa tủ vàng 78–101, thẻ nhỏ ~5 % khung) đúng trong 0,25–0,5 s; hình học + màu (v2) từng cắt sai cả 4 — trong tiệm vàng
+mọi tiêu chí màu/cạnh đều bị vàng, đỏ nhung, cạnh tủ làm nhiễu.
+
+## Đường DỰ PHÒNG — hình học (đọc khi cần sửa chất lượng cắt khi không khớp mẫu)
+
+Trước khi vào pipeline dưới: `_vung_mau` tìm khối màu lam/lục (hue 60–108) → cắt ROI nới 35 % từ ảnh gốc, phóng ~1000 px
+và chạy lại toàn bộ trong ROI (ứng viên ×1,05; thẻ nhỏ giữa khung được xem ở độ phân giải đủ). Cặp đường Hough chỉ ghép
+khi tỉ lệ 2 bề rộng 1,15–2,3 (từng 60 s/ảnh).
+
 
 Ảnh thu ≤1200 px → `_ngu_canh()` tính 1 lần: biên (Canny xám 30/90 ∪ Canny ΔE-so-nền 16/48), hướng gradient (kênh
 mạnh hơn tại từng điểm), điểm XANH thẻ (hue 60–130, S>24), điểm giống nền (ΔE<10 so màu trung vị dải mép ảnh), Lab.
@@ -117,4 +141,5 @@ trên KK (`customer.saved_image`, CHỈ ĐỌC) — đo IoU bằng `AC.iou_quad`
    không dùng ngưỡng cứng 70 %.
 9. Chèn helper vào giữa decorator `@require_GET` và `def thau_anh_cat` → helper bị bọc → 500 `'str' has no attribute
    'method'`. Decorator phải đứng ngay trên view.
-10. Thư viện: `opencv-python-headless==5.0.0.93` + `numpy>=2.0` trong `requirements.txt` — chỉ server cần, PC LAN không.
+10. Thư viện: `opencv-python-headless==5.0.0.93` + `numpy>=2.0` trong `requirements.txt` — chỉ server cần, PC LAN không (SIFT có sẵn trong bản chính, không cần contrib).
+11. Hệ số 'bố cục màu' (quốc huy đỏ / chip vàng đúng chỗ, v2.16–2.17) tưởng hay nhưng trong tiệm vàng đỏ nhung + vàng trang sức khắp nơi → điểm thẻ thật 0,4–0,7 lẫn với mảnh sai 0,3–0,5 → đã bỏ, dùng SIFT.
