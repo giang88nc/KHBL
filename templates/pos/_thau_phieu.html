@@ -4,7 +4,7 @@ Dùng 2 nơi: nhét vào #pos-in in THẲNG (khblInThau) · trang standalone tha
 {% endcomment %}
 <div class="th-phieu">
   <header class="th-phieu__head">
-    <img class="th-phieu__logo" src="{% static 'img/logo_icon.png' %}" alt="">
+    <img class="th-phieu__logo" src="{% static 'img/logo_full.png' %}" alt="">
     <div>
       <b class="th-phieu__tiem">{{ tiem.ShopName|default:"KIM HẠNH 2" }}</b>
       <span>{{ tiem.ShopAddress|default:"" }}</span>
@@ -31,7 +31,7 @@ Dùng 2 nơi: nhét vào #pos-in in THẲNG (khblInThau) · trang standalone tha
     <tbody>
       {% for l in p.lines %}
       <tr>
-        <td><b>{{ l.desc }}</b>{% if p.so_dong > 1 %}<br><small class="mono">{{ l.bill }}</small>{% endif %}</td>
+        <td><b>Vàng {{ l.gold|default:l.desc|nhan_vang_thau }}</b></td>
         <td class="r">{{ l.tl_vang|tl_man:l.unit }}</td>
         <td class="r">{% if l.tl_hot %}{{ l.tl_hot|tl_man:l.unit }}{% else %}—{% endif %}</td>
         <td class="r">{{ l.gia|nhan:1000|tien_tran }}</td>

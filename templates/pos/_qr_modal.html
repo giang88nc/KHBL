@@ -23,3 +23,8 @@
   </div>
 {% endif %}
 {% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  {% if luu_url and not loi %}<button class="khbl-btn khbl-btn--gold" type="button" title="Lưu hình QR này đè lên ô “QR chuyển khoản” của phiếu"
+          hx-post="{{ luu_url }}" hx-swap="none" hx-disabled-elt="this">💾 LƯU hình vào phiếu</button>{% endif %}
+{% endblock %}

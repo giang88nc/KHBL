@@ -197,6 +197,7 @@ class ThauNhom(models.Model):
     ck_bank = models.CharField(max_length=12, blank=True, default="")
     ck_stk = models.CharField(max_length=40, blank=True, default="")
     ck_nd = models.CharField(max_length=60, blank=True, default="")
+    ck_ten = models.CharField("Tên chủ TK", max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 

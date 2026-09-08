@@ -66,4 +66,4 @@ class InvoiceDisplayTests(TestCase):
         self.assertEqual(response.status_code, 200)
         client.assert_called_once_with('hist', tag='hd_thau_preview')
         self.assertEqual([c.args[0] for c in read.call_args_list], ['A', 'B'])
-        self.assertIn('Bill 110mm', response.content.decode())
+        self.assertIn('PHIẾU THÂU', response.content.decode())

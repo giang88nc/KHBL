@@ -65,6 +65,9 @@ urlpatterns = [
     path("banle/thau-vao/anh/", VT.thau_anh, name="thau_anh"),
     path("banle/thau-vao/qr/quet/", VT.thau_qr_quet, name="thau_qr_quet"),
     path("banle/thau-vao/qr/tao/", VT.thau_qr_tao, name="thau_qr_tao"),
+    path("banle/thau-vao/qr/luu/", VT.thau_qr_luu, name="thau_qr_luu"),
+    path("banle/thau-vao/anh/cat/", VT.thau_anh_cat, name="thau_anh_cat"),
+    path("banle/thau-vao/anh/cat/luu/", VT.thau_anh_cat_luu, name="thau_anh_cat_luu"),
 
     # Bảng giá
     path("banle/bang-gia/", views.bang_gia, name="bang_gia"),

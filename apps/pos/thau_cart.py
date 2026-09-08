@@ -23,7 +23,7 @@ def _chuoi(v):
 
 def _rong(emp=""):
     return {"lines": [], "cust": None, "emp": emp, "bu": "0", "bot": "0", "ghi_chu": "",
-            "pay_method": "cash", "tien_mat": "", "ck_bank": "", "ck_stk": "", "ck_nd": "", "status": "", "trn_ids": [], "bill_codes": [],
+            "pay_method": "cash", "tien_mat": "", "ck_bank": "", "ck_stk": "", "ck_nd": "", "ck_ten": "", "status": "", "trn_ids": [], "bill_codes": [],
             "nhom_id": "", "ngay": "", "gio": "", "kieu_ui": "thau", "sua_lai": False}
 
 
@@ -147,6 +147,7 @@ def nap(request, rows, nhom=None, emp=""):
         g["nhom_id"] = str(nhom.pk)
         g["pay_method"] = nhom.pay_method or g["pay_method"]
         g["ck_bank"], g["ck_stk"], g["ck_nd"] = nhom.ck_bank or "", nhom.ck_stk or "", nhom.ck_nd or g["bill_codes"][0]
+        g["ck_ten"] = nhom.ck_ten or ""
         for i, kieu in enumerate(nhom.kieu or []):
             if i < len(g["lines"]):
                 g["lines"][i]["kieu"] = kieu

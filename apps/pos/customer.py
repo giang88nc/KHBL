@@ -286,6 +286,41 @@ def delete(cust_id, client=None):
             "name": current.get("CustName") or ""}
 
 
+def cap_nhat_anh(cust_id, images, client=None):
+    """CHỈ ĐỔI ẢNH (đại diện / CCCD) của khách ĐÃ CÓ — mọi thông tin khác đọc lại từ I_CUSTOMER và ghi y nguyên
+    (proc I_CUSTOMER_Upd ghi cả 35 cột). images = dict như prepare_images. Dùng cho ô CCCD trên phiếu thâu (08/09/2026).
+    Phải gọi trong SAVE_LOCK. Kiểm đọc lại đường dẫn ảnh đã ghi."""
+    import datetime
+    client = client or PmvClient(tag="khach_anh_upd")
+    cu = _current(client, cust_id)
+    if not cu:
+        raise CustomerSaveError("Khách hàng không còn tồn tại")
+
+    def ngay(v):
+        return v.strftime("%d/%m/%Y") if isinstance(v, (datetime.date, datetime.datetime)) and v.year > 1900 else ""
+
+    loai = (cu.get("CustTypeID") or "").strip().upper()
+    data = {"cust_id": cust_id, "name": cu.get("CustName") or "", "phone": cu.get("Phone") or "", "cmnd": cu.get("CMND") or "",
+            "address": cu.get("Address") or "", "birth": ngay(cu.get("BirthDate")),
+            "gender": "1" if cu.get("Gender") in (True, 1, "1", "True") else "0",
+            "issued": ngay(cu.get("NgayCap")), "issued_by": cu.get("NoiCap") or "", "email": cu.get("Email") or "",
+            "notes": cu.get("Notes") or "", "cust_type": loai if loai in ("VIP", "VVIP", "CANHBAO") else "",
+            "active": "1" if cu.get("Active") in (True, 1, "1") else "0"}
+    params = _params(data, cu, "", client)
+    params.update(images)
+    params["p_CustID"] = cust_id
+    params["p_CustCode"] = _image_prefix(data["name"])
+    try:
+        client.call("I_CUSTOMER_Upd", write=True, day_du=True, **params)
+    except PmvProcError as exc:
+        raise CustomerSaveError(_proc_error(exc)) from exc
+    after = _current(client, cust_id) or {}
+    for data_param, (path_field, label) in IMAGE_PARAM_PATHS.items():
+        if data_param in images and not after.get(path_field):
+            raise CustomerSaveError(f"{label}: PMV chưa ghi đường dẫn tệp ảnh")
+    return after
+
+
 def saved_image(cust_id, kind, client=None):
     """Đọc và kiểm tra một ảnh đã lưu, không nhận đường dẫn từ phía trình duyệt."""
     if kind not in SAVED_IMAGE_FIELDS:
@@ -385,7 +420,7 @@ def _current(client, cust_id):
         "SELECT TOP 1 CustID, CustCode, CustName, Address, Phone, Notes, Active, CMND, "
         "CustGroupID, CustTypeID, BirthDate, Gender, Email, TuDongNangHang, Company, "
         "Company_Address, Masothue, GhiChu2, GhiChu3, Passport, ImagePath, "
-        "ImagePathMatTruoc, ImagePathMatSau FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID = ?",
+        "ImagePathMatTruoc, ImagePathMatSau, NgayCap, NoiCap FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID = ?",
         (cust_id,))
     return rows[0] if rows else None
 

@@ -41,7 +41,12 @@ gợi ý BỚT LẺ; phương thức tiền mặt / chuyển khoản / thẻ v�
       <label class="pg-tong__r pg-tong__r--nhap"><span id="lb-tienck">Chuyển khoản cho khách</span>
         <input id="o-tienck" class="khbl-input khbl-money r" inputmode="numeric" value="{{ t.tien_ck|tien_tran }}"></label>
       <div class="pg-ckinfo">
-        <div class="pg-ckinfo__ttl">THÔNG TIN CHUYỂN KHOẢN <i>· tài khoản của khách — quét QR ở ô “QR chuyển khoản” để điền nhanh</i></div>
+        <div class="pg-ckinfo__ttl">THÔNG TIN CHUYỂN KHOẢN <i>· tài khoản của khách</i></div>
+        {# ô SCAN máy quét (08/09 tối): máy quét gõ chuỗi VietQR + Enter → thau_qr_quet điền NH/STK/nội dung; Enter không submit form cha #}
+        <label class="pg-tong__r pg-tong__r--nhap"><span>Scan QR</span>
+          <input id="o-ckscan" name="chuoi" class="khbl-input mono r khbl-scan__in" autocomplete="off" placeholder="quét mã QR CK bằng máy scan…"
+                 hx-post="{% url 'pos:thau_qr_quet' %}" hx-trigger="keyup[key=='Enter']" hx-swap="none" hx-sync="this:drop"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();}" hx-on::after-request="this.value=''"></label>
         <label class="pg-tong__r pg-tong__r--nhap"><span>Ngân hàng</span>
           <select name="ck_bank" class="khbl-select" id="o-ckbank">
             <option value="">— chọn —</option>
@@ -49,17 +54,25 @@ gợi ý BỚT LẺ; phương thức tiền mặt / chuyển khoản / thẻ v�
           </select></label>
         <label class="pg-tong__r pg-tong__r--nhap"><span>Số tài khoản</span>
           <input name="ck_stk" id="o-ckstk" class="khbl-input mono r" inputmode="numeric" autocomplete="off" value="{{ g.ck_stk }}" placeholder="số TK khách nhận"></label>
+        <label class="pg-tong__r pg-tong__r--nhap"><span>Tên chủ TK</span>
+          <input name="ck_ten" id="o-ckten" class="khbl-input r" maxlength="100" autocomplete="off" value="{{ g.ck_ten }}" placeholder="tên trên tài khoản"></label>
         <label class="pg-tong__r pg-tong__r--nhap"><span>Nội dung</span>
           <input name="ck_nd" id="o-cknd" class="khbl-input mono r" maxlength="25" autocomplete="off" value="{{ g.ck_nd|default:ck_nd_mac_dinh }}" placeholder="mã phiếu"></label>
-        <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-ckinfo__qr" type="button" title="Tạo mã QR chuyển khoản theo NH + số TK + nội dung, kèm số tiền CK"
-                hx-get="{% url 'pos:thau_qr_tao' %}" hx-target="#modal-root" hx-include="closest form"
-                hx-vals='js:{amount: (document.getElementById("o-tienck")||{}).value || ""}'>🔳 Tạo mã QR chuyển khoản</button>
       </div>
       {% else %}
       <input type="hidden" name="tien_mat" value="">
       {% endif %}
     </form>
     {% if phieu_chot %}</fieldset>{% endif %}
+    {% if t.pay_method == 'bank' %}
+    <div class="pg-ckinfo__btns">
+      <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Xóa ngân hàng + số TK + tên chủ TK"
+              {% if phieu_chot %}disabled{% else %}hx-post="{% url 'pos:thau_dat' %}" hx-vals='{"ck_bank": "", "ck_stk": "", "ck_ten": ""}' hx-swap="none"{% endif %}>✕ Clear</button>
+      <button class="khbl-btn khbl-btn--gold khbl-btn--sm pg-ckinfo__qr" type="button"
+              {% if tao_qr_duoc %}hx-get="{% url 'pos:thau_qr_tao' %}" hx-target="#modal-root" title="Tạo mã QR chuyển khoản: NH + số TK + nội dung + số tiền CK"
+              {% else %}disabled title="{% if not phieu_chot %}THANH TOÁN (chốt) xong mới tạo QR{% else %}Thiếu ngân hàng / số TK — 🔓 SỬA để bổ sung{% endif %}"{% endif %}>🔳 Tạo mã QR chuyển khoản</button>
+    </div>
+    {% endif %}
 
     <div class="pg-tong__tra pg-tong__tra--thau{% if t.khach_tra > 0 %} pg-tong__tra--duong{% endif %}">
       <span>TIỆM TRẢ KHÁCH</span>

@@ -8,6 +8,14 @@ from apps.pmv import money as M
 
 register = template.Library()
 
+
+@register.filter
+def nhan_vang_thau(value):
+    code = str(value or '').strip().upper()
+    if code.startswith('DẺ '):
+        code = code[3:].strip()
+    return M.tuoi(code).replace('99.99', '9999') or '—'
+
 _ICONS = {
     # tổng quan: 4 ô số liệu
     "tong": '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',

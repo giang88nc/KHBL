@@ -19,7 +19,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.pmv import gateway, money as M
 from apps.pmv.client import PmvProcError
 
-from . import bill as B, services as S, thau_cart as TC, vietqr as QR
+from . import anh_cccd as AC, bill as B, customer as C, services as S, thau_cart as TC, vietqr as QR
 from .models import GoldBill, ThauAnhTam, ThauNhom
 
 # 5 slot ảnh chuyển khoản (GĐ chốt 08/09/2026 tối): CCCD 2 mặt · 2 hình · QR chuyển khoản → cột gold_bill.anh_*
@@ -78,6 +78,7 @@ def _ctx(request, extra=None):
     ctx["anh"] = _anh_slots(request, g)
     ctx["banks_vn"] = QR.BANKS
     ctx["ck_nd_mac_dinh"] = (g.get("bill_codes") or [""])[0] or "thau vang"
+    ctx["tao_qr_duoc"] = ctx["phieu_chot"] and bool(g.get("ck_bank") and g.get("ck_stk"))
     ctx.update(extra or {})
     return ctx
 
@@ -101,8 +102,20 @@ def _anh_slots(request, g):
         co = {s: s in tam for s in ANH_COT}
         trn = ""
     out = []
+    cust_id = (g.get("cust") or {}).get("id") or ""
+    khach = None
+    if cust_id and not (co.get("cccd1") and co.get("cccd2")):
+        try:
+            khach = C._current(S.client("khach_anh"), cust_id)
+        except Exception:
+            khach = None
+    KH = {"cccd1": ("ImagePathMatTruoc", "mat-truoc"), "cccd2": ("ImagePathMatSau", "mat-sau")}
     for s, label, facing in ANH_SLOTS:
-        out.append({"slot": s, "label": label, "facing": facing, "co": co.get(s, False), "trn": trn})
+        d = {"slot": s, "label": label, "facing": facing, "co": co.get(s, False), "trn": trn, "src": "", "cua_khach": False}
+        # 08/09 tối (GĐ chốt): CCCD chưa có trên phiếu → hiện ảnh CCCD ĐÃ CÓ của khách (I_CUSTOMER.ImagePathMat*)
+        if not d["co"] and s in KH and khach and khach.get(KH[s][0]):
+            d.update(co=True, cua_khach=True, src=f"/banle/khach-hang/{cust_id}/anh/{KH[s][1]}/")
+        out.append(d)
     return out
 
 
@@ -150,30 +163,139 @@ def _nen_min(data):
 @require_POST
 def thau_anh_len(request):
     """Tải ảnh lên (chụp / chọn) cho 1 hoặc nhiều slot — phiếu đang nhập → ThauAnhTam; phiếu đã lưu → gold_bill ngay."""
-    if _dang_khoa(request) and not _co_fullcontrol_hoa_don(request):
+    if _dang_khoa(request):                       # GĐ chốt 08/09 tối: đơn KHÓA → không chụp/chọn; 🔓 SỬA (W, hôm nay) → upsert thẳng gold_bill
         return _loi(request, KHOA_MSG)
     g = TC.get(request)
-    trn = (g.get("trn_ids") or [""])[0]
-    n = 0
+    n, canh_bao_kh = 0, []
     try:
-        for slot, cot in ANH_COT.items():
+        for slot in ANH_COT:
             f = request.FILES.get("anh_" + slot)
             if not f:
                 continue
-            data = _nen_anh(f)
-            if trn:
-                gb, _ = GoldBill.objects.get_or_create(trn_id=trn, defaults=_gb_mac_dinh(g, trn))
-                setattr(gb, cot, data)
-                gb.save(update_fields=[cot, "updated_at"])
-            else:
-                ThauAnhTam.objects.update_or_create(session_key=_skey(request), slot=slot, defaults={"data": data})
+            _luu_anh_slot(request, g, slot, _nen_anh(f), canh_bao_kh)
             n += 1
     except Exception as exc:
         logger.warning("Ảnh thâu lỗi: %s", exc)
         return _loi(request, "Ảnh không hợp lệ: " + str(exc)[:160])
     if not n:
         return _loi(request, "Chưa chọn ảnh nào")
-    return _oob(request, {"tin": f"Đã lưu {n} ảnh"})
+    return _oob(request, _tin_anh(f"Đã lưu {n} ảnh", canh_bao_kh))
+
+
+def _tin_anh(tin, canh_bao_kh):
+    tin = tin + (" · " + " · ".join(canh_bao_kh) if canh_bao_kh else "")
+    return {"tin": tin} if not any("CHƯA" in x for x in canh_bao_kh) else {"loi_phieu": tin}
+
+
+def _luu_anh_slot(request, g, slot, data, canh_bao_kh):
+    """Ghi 1 ảnh (bytes JPEG đã nén) vào slot: phiếu đã lưu → gold_bill; đang nhập → ThauAnhTam.
+    Ảnh CCCD + đang chọn khách → UPDATE luôn hồ sơ khách (I_CUSTOMER_Upd chỉ đổi ảnh) — GĐ chốt 08/09 tối."""
+    trn = (g.get("trn_ids") or [""])[0]
+    cot = ANH_COT[slot]
+    if trn:
+        gb, _ = GoldBill.objects.get_or_create(trn_id=trn, defaults=_gb_mac_dinh(g, trn))
+        setattr(gb, cot, data)
+        gb.save(update_fields=[cot, "updated_at"])
+    else:
+        ThauAnhTam.objects.update_or_create(session_key=_skey(request), slot=slot, defaults={"data": data})
+    cust_id = (g.get("cust") or {}).get("id") or ""
+    if slot in ("cccd1", "cccd2") and cust_id:
+        dp, pp = ("p_ImageDataMatTruoc", "p_ImagePathMatTruoc") if slot == "cccd1" else ("p_ImageDataMatSau", "p_ImagePathMatSau")
+        try:
+            with C.SAVE_LOCK:
+                C.cap_nhat_anh(cust_id, {dp: data, pp: ".jpg"}, client=S.client("khach_anh_upd"))
+            canh_bao_kh.append(f"đã cập nhật {'CCCD mặt trước' if slot == 'cccd1' else 'CCCD mặt sau'} vào hồ sơ khách")
+        except Exception as exc:
+            logger.warning("Không cập nhật ảnh CCCD khách %s: %s", cust_id, exc)
+            canh_bao_kh.append(f"ảnh đã lưu vào phiếu nhưng CHƯA cập nhật hồ sơ khách: {C.error_message(exc)[:120]}")
+
+
+def _anh_slot_data(request, g, slot):
+    """Bytes ảnh hiện có của slot: gold_bill (phiếu đã lưu) → ảnh tạm phiên → ảnh CCCD trong hồ sơ khách (chỉ cccd1/2)."""
+    trn = (g.get("trn_ids") or [""])[0]
+    cot = ANH_COT[slot]
+    if trn:
+        gb = GoldBill.objects.filter(trn_id=trn).only(cot).first()
+        if gb and getattr(gb, cot):
+            return bytes(getattr(gb, cot))
+    t = ThauAnhTam.objects.filter(session_key=_skey(request), slot=slot).first()
+    if t:
+        return bytes(t.data)
+    cust_id = (g.get("cust") or {}).get("id") or ""
+    if cust_id and slot in ("cccd1", "cccd2"):
+        try:
+            data, _ = C.saved_image(cust_id, "mat-truoc" if slot == "cccd1" else "mat-sau", client=S.client("khach_anh"))
+            return data
+        except Exception:
+            return None
+    return None
+
+
+def _goc_xoay(raw):
+    """Góc xoay người dùng kéo (độ, thuận kim đồng hồ như CSS rotate) → float trong [0, 360), làm tròn 0,1°."""
+    try:
+        goc = float(str(raw or "0").replace(",", "."))
+    except ValueError:
+        goc = 0.0
+    if goc != goc or goc in (float("inf"), float("-inf")):
+        goc = 0.0
+    return round(goc % 360.0, 1)
+
+
+@require_GET
+def thau_anh_cat(request):
+    """Popup ✂: OpenCV tìm thẻ CCCD trong ảnh ô cccd1/cccd2 → cắt + nắn phối cảnh + khổ chuẩn 1170×738; xem trước ở 0°,
+    người dùng KÉO XOAY bằng con trỏ trên ảnh kết quả (JS), ✓ LƯU gửi góc → thau_anh_cat_luu."""
+    import base64
+    slot = (request.GET.get("slot") or "").strip()
+    label = {"cccd1": "CCCD mặt trước", "cccd2": "CCCD mặt sau"}.get(slot)
+    if not label:
+        return HttpResponse("Chỉ tách thẻ cho ô CCCD.", status=400)
+    g = TC.get(request)
+    ctx = {"slot": slot, "label": label}
+    if _dang_khoa(request):
+        return render(request, "pos/_thau_cat_modal.html", {**ctx, "loi": KHOA_MSG})
+    data = _anh_slot_data(request, g, slot)
+    if not data:
+        return render(request, "pos/_thau_cat_modal.html", {**ctx, "loi": "Ô này chưa có ảnh — chụp / chọn ảnh trước."})
+    try:
+        kq = AC.cat_cccd(data, 0.0)
+    except AC.KhongThayThe as exc:
+        return render(request, "pos/_thau_cat_modal.html", {**ctx, "loi": str(exc)})
+    except Exception as exc:
+        logger.exception("Tách CCCD lỗi")
+        return render(request, "pos/_thau_cat_modal.html", {**ctx, "loi": "Lỗi xử lý ảnh: " + str(exc)[:120]})
+    goc = _nen_anh(data, canh=900, chat_luong=70)
+    xem = _nen_anh(kq, canh=900, chat_luong=80)
+    ctx.update({"anh_goc": "data:image/jpeg;base64," + base64.b64encode(goc).decode("ascii"),
+                "anh_kq": "data:image/jpeg;base64," + base64.b64encode(xem).decode("ascii"), "w": AC.CHUAN_W, "h": AC.CHUAN_H})
+    return render(request, "pos/_thau_cat_modal.html", ctx)
+
+
+@require_POST
+def thau_anh_cat_luu(request):
+    """✓ LƯU thẻ đã tách: tính lại y hệt xem trước (cùng ảnh nguồn) + xoay theo góc người dùng kéo (goc, độ) rồi ghi đè
+    slot (+ hồ sơ khách). Bội 90° → xoay không mất nét (90/270 ra ảnh dọc 738×1170); góc lẻ → xoay + cắt hình nội tiếp."""
+    slot = (request.POST.get("slot") or "").strip()
+    xoay = _goc_xoay(request.POST.get("goc"))
+    if slot not in ("cccd1", "cccd2"):
+        return _loi(request, "Chỉ tách thẻ cho ô CCCD", {"dong_modal": True})
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG, {"dong_modal": True})
+    g = TC.get(request)
+    data = _anh_slot_data(request, g, slot)
+    if not data:
+        return _loi(request, "Ô này chưa có ảnh", {"dong_modal": True})
+    try:
+        kq = AC.cat_cccd(data, xoay)
+    except Exception as exc:
+        return _loi(request, str(exc)[:160], {"dong_modal": True})
+    # lưu đúng khổ đã xoay (ngang 1170×738 hay dọc 738×1170) — _nen_anh chỉ thu khi cạnh dài vượt CHUAN_W
+    canh_bao_kh = []
+    _luu_anh_slot(request, g, slot, _nen_anh(kq, canh=AC.CHUAN_W, chat_luong=88), canh_bao_kh)
+    kq_tin = _tin_anh("Đã lưu thẻ đã tách", canh_bao_kh)
+    kq_tin["dong_modal"] = True
+    return _oob(request, kq_tin)
 
 
 @require_POST
@@ -181,7 +303,7 @@ def thau_anh_xoa(request):
     slot = (request.POST.get("slot") or "").strip()
     if slot not in ANH_COT:
         return _loi(request, "Slot ảnh không hợp lệ")
-    if _dang_khoa(request) and not _co_fullcontrol_hoa_don(request):
+    if _dang_khoa(request):
         return _loi(request, KHOA_MSG)
     g = TC.get(request)
     trn = (g.get("trn_ids") or [""])[0]
@@ -302,6 +424,8 @@ def thau_dat(request):
         g["ck_stk"] = "".join(ch for ch in (P.get("ck_stk") or "") if ch.isalnum())[:40]
     if "ck_nd" in P:
         g["ck_nd"] = (P.get("ck_nd") or "").strip()[:60]
+    if "ck_ten" in P:
+        g["ck_ten"] = (P.get("ck_ten") or "").strip()[:100]
     if "tien_mat" in P:
         v = (P.get("tien_mat") or "").strip()
         g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
@@ -523,25 +647,27 @@ def thau_qr_quet(request):
     if _dang_khoa(request):
         return _loi(request, KHOA_MSG)
     g = TC.get(request)
-    trn = (g.get("trn_ids") or [""])[0]
-    data = None
-    if trn:
-        gb = GoldBill.objects.filter(trn_id=trn).only("anh_qr").first()
-        data = gb.anh_qr if gb else None
-    if not data:
-        t = ThauAnhTam.objects.filter(session_key=_skey(request), slot="qr").first()
-        data = t.data if t else None
-    if not data:
-        return _loi(request, "Chưa có ảnh ở ô QR chuyển khoản — chụp / chọn ảnh QR của khách trước")
-    try:
-        chuoi = QR.doc_anh(data)
-    except RuntimeError as exc:
-        return _loi(request, str(exc))
+    chuoi = (request.POST.get("chuoi") or "").strip()          # 08/09 tối: ô SCAN máy quét gửi thẳng chuỗi QR
     if not chuoi:
-        return _loi(request, "Không đọc được mã QR trong ảnh — chụp lại rõ, thẳng, đủ 4 góc")
+        trn = (g.get("trn_ids") or [""])[0]
+        data = None
+        if trn:
+            gb = GoldBill.objects.filter(trn_id=trn).only("anh_qr").first()
+            data = gb.anh_qr if gb else None
+        if not data:
+            t = ThauAnhTam.objects.filter(session_key=_skey(request), slot="qr").first()
+            data = t.data if t else None
+        if not data:
+            return _loi(request, "Chưa có ảnh ở ô QR chuyển khoản — chụp / chọn ảnh QR của khách trước", {"loi_o": "#o-ckscan"})
+        try:
+            chuoi = QR.doc_anh(data)
+        except RuntimeError as exc:
+            return _loi(request, str(exc))
+        if not chuoi:
+            return _loi(request, "Không đọc được mã QR trong ảnh — chụp lại rõ, thẳng, đủ 4 góc")
     kq = QR.parse(chuoi)
     if not kq["hop_le"]:
-        return _loi(request, kq["loi"] or "QR không hợp lệ")
+        return _loi(request, kq["loi"] or "QR không hợp lệ", {"loi_o": "#o-ckscan"})
     g["ck_bank"], g["ck_stk"] = kq["bank_code"], kq["account"]
     g["ck_nd"] = (g.get("bill_codes") or [""])[0] or g.get("ck_nd") or ""
     g["pay_method"] = "bank"
@@ -553,23 +679,53 @@ def thau_qr_quet(request):
 def thau_qr_tao(request):
     """Popup QR chuyển khoản CHO KHÁCH (tiệm trả): ngân hàng + số TK khách trong form + số tiền CK + nội dung = mã phiếu."""
     g = TC.get(request)
+    if g.get("status") != B.CHOT_ROI:
+        return render(request, "pos/_qr_modal.html", {"loi": "Phiếu chưa THANH TOÁN — chốt xong (có mã phiếu) mới tạo QR."})
     t = TC.tong_cua(g)
-    bank, stk = (request.GET.get("ck_bank") or g.get("ck_bank") or "").strip(), (request.GET.get("ck_stk") or g.get("ck_stk") or "").strip()
-    nd = (request.GET.get("ck_nd") or g.get("ck_nd") or "").strip() or (g.get("bill_codes") or [""])[0]
-    amount = _so(request.GET.get("amount")) if request.GET.get("amount") else t["tien_ck"]
+    bank, stk = (g.get("ck_bank") or "").strip(), (g.get("ck_stk") or "").strip()
+    nd = (g.get("ck_nd") or "").strip() or (g.get("bill_codes") or [""])[0]
+    amount = t["tien_ck"]
     try:
         chuoi = QR.payload(bank, stk, amount, nd)
     except ValueError as exc:
         return render(request, "pos/_qr_modal.html", {"loi": str(exc)})
+    return render(request, "pos/_qr_modal.html", {
+        "qr_img": "data:image/png;base64," + _qr_png_b64(chuoi),
+        "bank_ten": QR.bank_ten(bank) if QR.bank_bin(bank) else bank, "bank_num": stk, "bank_user": g.get("ck_ten") or "",
+        "amount": M.dec(amount), "info": nd, "ten_kh": (g.get("cust") or {}).get("name") or "",
+        "luu_url": "/banle/thau-vao/qr/luu/"})
+
+
+def _qr_png_b64(chuoi, scale=7):
     import base64
     from io import BytesIO
     import segno
     buf = BytesIO()
-    segno.make(chuoi, error="m").save(buf, kind="png", scale=7, border=2)
-    return render(request, "pos/_qr_modal.html", {
-        "qr_img": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii"),
-        "bank_ten": QR.bank_ten(bank) if QR.bank_bin(bank) else bank, "bank_num": stk, "bank_user": "",
-        "amount": M.dec(amount), "info": nd, "ten_kh": (g.get("cust") or {}).get("name") or ""})
+    segno.make(chuoi, error="m").save(buf, kind="png", scale=scale, border=2)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+@require_POST
+def thau_qr_luu(request):
+    """LƯU hình QR vừa tạo ĐÈ lên ô 'QR chuyển khoản' của phiếu ĐÃ CHỐT (gold_bill.anh_qr) — GĐ chốt 08/09 tối."""
+    import base64
+    g = TC.get(request)
+    trn = (g.get("trn_ids") or [""])[0]
+    if g.get("status") != B.CHOT_ROI or not trn:
+        return _loi(request, "Phiếu chưa THANH TOÁN — không có phiếu để gắn hình QR", {"dong_modal": True})
+    t = TC.tong_cua(g)
+    nd = (g.get("ck_nd") or "").strip() or (g.get("bill_codes") or [""])[0]
+    try:
+        chuoi = QR.payload(g.get("ck_bank"), g.get("ck_stk"), t["tien_ck"], nd)
+    except ValueError as exc:
+        return _loi(request, str(exc), {"dong_modal": True})
+    png = base64.b64decode(_qr_png_b64(chuoi, scale=8))
+    gb, _ = GoldBill.objects.get_or_create(trn_id=trn, defaults=_gb_mac_dinh(g, trn))
+    gb.anh_qr = _nen_anh(png, canh=800, chat_luong=90)
+    gb.save(update_fields=["anh_qr", "updated_at"])
+    ThauNhom.objects.filter(pk=g.get("nhom_id") or 0).update(ck_bank=g.get("ck_bank") or "", ck_stk=g.get("ck_stk") or "",
+                                                              ck_nd=nd, ck_ten=g.get("ck_ten") or "")
+    return _oob(request, {"tin": "Đã lưu hình QR chuyển khoản vào phiếu", "dong_modal": True})
 
 
 # ─────────────────────────── THANH TOÁN ───────────────────────────
@@ -656,7 +812,8 @@ def thau_thanh_toan(request):
                                    pay_method=g.get("pay_method") or "cash", tien_mat=t["tien_mat"], tien_ck=t["tien_ck"],
                                    bu=t["bu"], bot=t["bot"], ghi_chu=g.get("ghi_chu") or "", kieu=[x["kieu"] for x in g["lines"]],
                                    ck_bank=g.get("ck_bank") or "", ck_stk=g.get("ck_stk") or "",
-                                   ck_nd=(g.get("ck_nd") or rows[0].get("BillCode") or ids[0]) if t["tien_ck"] else "")
+                                   ck_nd=(g.get("ck_nd") or rows[0].get("BillCode") or ids[0]) if t["tien_ck"] else "",
+                                   ck_ten=g.get("ck_ten") or "")
     gateway.canh_bao("thau_tt", f"THÂU {', '.join(nhom.bill_codes)} — tiệm trả {M.money_vn(t['khach_tra'])} "
                                 f"(CK {M.money_vn(t['tien_ck'])}); người: {request.user.username}")
     _chuyen_anh_tam(request, g, ids[0], rows)
@@ -758,10 +915,12 @@ def thau_thuc_hien(request, hanh_dong):
         TC.save(request, g2)
         tin = f"Đã mở {ma} về CHỜ để sửa — sửa xong bấm THANH TOÁN lại."
     elif hanh_dong == "huy_tt":
+        ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
         TC.clear(request, giu_nv=False)
         tin = f"Đã HỦY THANH TOÁN {ma} — phiếu về DANH SÁCH CHỜ."
     else:
         GoldBill.objects.filter(trn_id__in=ids).update(is_del=True)
+        ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
         TC.clear(request, giu_nv=False)
         tin = f"Đã XÓA phiếu thâu {ma}."
     return _oob(request, {"tin": tin, "dong_modal": True})
