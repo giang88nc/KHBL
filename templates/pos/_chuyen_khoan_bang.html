@@ -1,0 +1,17 @@
+{% load pos_extras %}
+<div id="ck-results" data-signature="{{ signature }}" data-page="{{ page|default:1 }}">
+{% if error %}<p class="khbl-alert khbl-alert--do" role="alert">{{ error }}</p>{% endif %}
+{% if form.errors %}<div class="khbl-alert khbl-alert--do" role="alert">{{ form.errors }}</div>{% endif %}
+{% if signature %}
+<div class="ck-summary" aria-label="Thống kê giao dịch theo bộ lọc">
+  <b class="ck-summary__count">{{ total }} giao dịch</b>
+  <span class="ck-summary__sep" aria-hidden="true">·</span>
+  <span class="ck-summary__amount ck-summary__amount--in">Vào <b>{{ tien_vao|tien }}</b></span>
+  <span class="ck-summary__sep" aria-hidden="true">|</span>
+  <span class="ck-summary__amount ck-summary__amount--out">Ra <b>{{ tien_ra|tien }}</b></span>
+  {% if pages > 1 %}<span class="ck-summary__page">Trang {{ page }}/{{ pages }}</span>{% endif %}
+</div>
+<div class="khbl-wrap"><table class="khbl-tbl"><thead><tr><th>Thời gian</th><th>Ngân hàng / tài khoản</th><th>Nguồn</th><th>Mã HĐ</th><th class="num">Số tiền (₫)</th><th>Nội dung</th><th>Mã tham chiếu</th></tr></thead>
+<tbody>{% for r in rows %}<tr><td class="mono">{{ r.transaction_time }}</td><td class="ck-account">{{ r.bank_name|default:"—" }} - <span class="mono">{{ r.bank_number|default:"—" }}</span></td><td><span class="khbl-badge {% if r.direction == 'in' %}khbl-badge--xanh{% else %}khbl-badge--do{% endif %}">{% if r.direction == 'in' %}Vào{% elif r.direction == 'out' %}Ra{% else %}{{ r.direction|default:"—" }}{% endif %}</span></td><td class="mono">{{ r.bill_code_raw|default:"—" }}</td><td class="num{% if r.direction == 'out' %} ck-money-out{% endif %}"><b>{{ r.trans_amount|tien_tran }}</b></td><td class="ck-description"><span title="{{ r.description|default:'—' }}">{{ r.description|default:"—" }}</span></td><td>{{ r.ref_code }}</td></tr>{% empty %}<tr><td colspan="7" class="khbl-empty">Không có giao dịch phù hợp.</td></tr>{% endfor %}</tbody></table></div>
+<div class="ck-pages">{% if page > 1 %}<button class="khbl-btn khbl-btn--outline" data-ck-page="{{ page|add:'-1' }}">← Trước</button>{% endif %}{% if page < pages %}<button class="khbl-btn khbl-btn--outline" data-ck-page="{{ page|add:'1' }}">Sau →</button>{% endif %}</div>
+{% endif %}</div>

@@ -1,0 +1,58 @@
+{% load pos_extras %}{% comment %}
+THÔNG TIN phiếu thâu — 1 DÒNG như màn bán: ＋ PHIẾU MỚI · Ngày (chỉ xem) · Nhân viên thâu · Khách hàng (+THÊM) · ☰ DANH SÁCH.
+{% endcomment %}
+<div class="pg-info pg-info--1d{% if dang_sua %} pg-info--sua{% endif %}">
+  <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
+          hx-post="{% url 'pos:thau_moi' %}" hx-swap="none" title="Phiếu thâu mới — mở phiếu trắng ngay">＋<span class="pg-btn-noi__t"> PHIẾU MỚI</span></button>
+
+  <label class="pg-f pg-f--ngay">
+    <span>Ngày</span>
+    <input type="date" class="khbl-input" id="o-ngay" value="{{ ngay }}" max="{{ hom_nay }}" readonly tabindex="-1"
+           title="Phiếu thâu mới luôn mang ngày hôm nay (giờ máy KK)">
+  </label>
+
+  <div class="pg-f pg-f--tim">
+    <span>Nhân viên thâu</span>
+    {% if g.emp %}
+      <div class="pg-chon">
+        <b>{{ ten_nv|default:g.emp }}</b>
+        {% if not phieu_chot %}<button class="pg-chon__x" type="button" title="Bỏ chọn"
+                hx-post="{% url 'pos:thau_dat' %}" hx-vals='{"emp": ""}' hx-swap="none">×</button>{% endif %}
+      </div>
+    {% else %}
+      <input id="o-nv" class="khbl-input" autocomplete="off" placeholder="Nhập tên nhân viên" name="q"
+             {% if phieu_chot %}disabled title="Phiếu đang khóa"{% endif %}
+             hx-get="{% url 'pos:thau_tim' %}?kind=nv" hx-trigger="focus, keyup changed delay:200ms" hx-target="#nv-goiy">
+      <div id="nv-goiy" class="pg-goiy"></div>
+    {% endif %}
+  </div>
+
+  <div class="pg-f pg-f--tim pg-f--khach">
+    <span>Khách bán vàng</span>
+    {% if g.cust %}
+      <div class="pg-chon">
+        <b>{{ g.cust.name }}</b>
+        <i class="mono">{{ g.cust.phone }}{% if g.cust.code %} · {{ g.cust.code }}{% endif %}</i>
+        {% if not phieu_chot %}
+        <button class="pg-chon__x" type="button" title="Bỏ chọn khách"
+                hx-post="{% url 'pos:thau_dat' %}" hx-vals='{"cust_id": ""}' hx-swap="none">×</button>
+        <button class="khbl-btn khbl-btn--outline khbl-btn--sm pg-chon__sua" type="button" title="Sửa thông tin khách hàng này"
+                hx-get="{% url 'pos:khach_sua' g.cust.id %}" hx-target="#modal-root">✎ SỬA</button>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="pg-inb">
+        <input id="o-khach" class="khbl-input" autocomplete="off" name="q"
+               placeholder="tên · số điện thoại · CCCD · quét QR thẻ CCCD (trống = khách lẻ)" {% if phieu_chot %}disabled title="Phiếu đang khóa"{% endif %}
+               hx-get="{% url 'pos:thau_tim' %}?kind=khach" hx-trigger="keyup changed delay:220ms" hx-target="#khach-goiy">
+        <button class="khbl-btn khbl-btn--outline pg-inb__btn" type="button" title="Thêm khách hàng mới"
+                hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋<span class="pg-btn-noi__t">👥</span></button>
+      </div>
+      <div id="khach-goiy" class="pg-goiy"></div>
+    {% endif %}
+  </div>
+
+  <button class="khbl-btn khbl-btn--gold pg-btn-noi" type="button"
+          hx-get="{% url 'pos:thau_ds' %}" hx-target="#modal-root" title="Danh sách phiếu thâu">
+    ☰<span class="pg-btn-noi__t"> DANH SÁCH</span>{% if treo %} <span class="pg-treo" title="Phiếu thâu CHỜ chưa thanh toán hôm nay: {% for t in treo %}{{ t.BillCode }}{% if not forloop.last %}, {% endif %}{% endfor %}">⚠ {{ treo|length }}</span>{% endif %}</button>
+</div>

@@ -1,0 +1,23 @@
+{% load static pos_extras %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Phiếu thâu {{ p.BillCode|default:p.TrnID }}</title>
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.thau">
+<style>
+  /* Trang in / xem trước phiếu thâu — khổ bill 110mm (GĐ chốt 08/09/2026). auto=1 → tự in. */
+  html,body{margin:0;padding:0;background:#fff}
+  body{display:flex;justify-content:center;padding:12px}
+  @media print{body{padding:0;display:block} @page{size:110mm auto;margin:3mm}}
+</style>
+</head>
+<body class="th-in">
+{% include "pos/_thau_phieu.html" %}
+<script>
+  window.addEventListener("load", function () {
+    setTimeout(function () { {% if auto %}window.print();{% endif %} }, 120);
+  });
+</script>
+</body>
+</html>

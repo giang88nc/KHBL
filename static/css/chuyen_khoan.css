@@ -1,0 +1,19 @@
+.ck-filter{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:16px}
+.ck-filter .khbl-field{flex:1 1 140px;min-width:0}
+.ck-filter input,.ck-filter select,.ck-bank-form input:not([type=checkbox]){width:100%;border:1px solid #d5cabc;border-radius:7px;padding:9px;background:white;font:inherit;min-width:0}
+.ck-bank-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.ck-description{max-width:520px}
+.ck-description>span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ck-results .ck-account{white-space:nowrap}
+#ck-results .ck-money-out{color:#c62828}
+.ck-pages{display:flex;gap:10px;justify-content:end;margin-top:12px}
+.ck-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 16px;margin:0 0 14px;border:1px solid #e8ddc3;border-radius:10px;background:linear-gradient(110deg,#fff9e9,#fff);font-size:14px}
+.ck-summary__count{color:#665019;white-space:nowrap}
+.ck-summary__sep{color:#b4a78d}
+.ck-summary__amount{display:inline-flex;align-items:baseline;gap:8px;white-space:nowrap}
+.ck-summary__amount b{font-size:16px;font-variant-numeric:tabular-nums}
+.ck-summary__amount--in{color:#15803d}
+.ck-summary__amount--out{color:#c62828}
+.ck-summary__page{margin-left:auto;color:#817866;font-size:12px;white-space:nowrap}
+#ck-results .khbl-wrap{overflow:auto}#ck-results td{vertical-align:top}
+@media(max-width:600px){.ck-bank-form{grid-template-columns:1fr}}

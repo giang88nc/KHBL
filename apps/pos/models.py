@@ -139,3 +139,33 @@ class PriceBatch(models.Model):
     class Meta:
         db_table = "gold_price_batches"
         ordering = ["-created_at"]
+
+
+class ThauNhom(models.Model):
+    """NHÓM phiếu thâu web (08/09/2026 tối, GĐ chốt): PMVGoldRT chỉ Ins 1 dòng/1 phiếu → web cho nhiều dòng cùng 1 khách,
+    mỗi dòng = 1 TRN_RT_BUYGOLD, cả nhóm chốt chung CompleteMore 'A@B@'. Bảng này giữ danh sách TrnID của nhóm để mở lại /
+    in 1 tờ 110mm + phần app-only KK không giữ (kiểu giá từng dòng, cách thanh toán)."""
+
+    trn_ids = models.JSONField("Các TrnID TRN_RT_BUYGOLD", default=list)
+    bill_codes = models.JSONField("Số phiếu KK", default=list)
+    kieu = models.JSONField("Kiểu giá từng dòng (thau/ban)", default=list)
+    cust_id = models.CharField(max_length=15, blank=True, default="")
+    cust_name = models.CharField(max_length=200, blank=True, default="")
+    emp_id = models.CharField(max_length=15, blank=True, default="")
+    pay_method = models.CharField(max_length=10, default="cash")
+    tien_mat = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    tien_ck = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    bu = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    bot = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    ghi_chu = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        db_table = "thau_nhom"
+        ordering = ["-id"]
+        verbose_name = "Nhóm phiếu thâu"
+        verbose_name_plural = "Nhóm phiếu thâu"
+
+    def __str__(self):
+        return f"Thâu #{self.pk} {', '.join(self.bill_codes or self.trn_ids)}"

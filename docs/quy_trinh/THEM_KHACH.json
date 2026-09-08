@@ -3,13 +3,13 @@
   "name": "thêm khách và xóa",
   "description": "",
   "status": "approved",
-  "version": 2,
+  "version": 3,
   "source": "HỌC từ đánh dấu seq 2340326→2341168 (08/09/2026 07:30, admin)",
-  "updated_at": "2026-09-08T07:30:24.127881+07:00",
+  "updated_at": "2026-09-08T14:59:13.591971+07:00",
   "phases": [
     {
       "title": "Đã học 08/09 07:30 — chưa phân nhóm",
-      "note": "Bảng đổi trong khung: I_CUSTOMER, I_DIEMTICHLUY, I_LICHSUTICHLUYDIEM, SYS_BILL_COUNTER, SYS_CODEMASTERS, TRN_RT_BUYGOLD, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL",
+      "note": "Bảng đổi trong khung: I_CUSTOMER, I_DIEMTICHLUY, I_LICHSUTICHLUYDIEM, SYS_BILL_COUNTER, SYS_CODEMASTERS, TRN_RT_BUYGOLD, T_TILL_BAL, T_TILL_TXN, T_TILL_TXN_DETAIL — ĐỐI CHIẾU 08/09: chỉ I_CUSTOMER +1 · I_DIEMTICHLUY +1 · SYS_CODEMASTERS CurValue(CU/09/26)+1 là của thao tác khách; SYS_BILL_COUNTER · TRN_RT_BUYGOLD · T_TILL_* · I_LICHSUTICHLUYDIEM là NHIỄU do máy khác đang bán/thâu trong khung đo, không thuộc quy trình.",
       "steps": [
         {
           "title": "Khách hàng: I_CUSTOMER_Lst",
@@ -51,9 +51,9 @@
           "repeat": false,
           "params": "declare @p18 xml set @p18=convert(xml,N'') exec [I_CUSTOMER_Ins] @p_CustID='',@p_CustCode=N'',@p_CustName=N'Chị Njglsop',@p_Address=N'',@p_Phone='0236587491',@p_Notes=N'',@p_Active='1',@p_CMND='',@p_CustGroupID='',@p_CustTypeID='',@p_BirthDate='08/09/2026',@p_Gender='0',@p_Email='',@p_DateOfJoining='',@p_LastTradingDate='',@TuDongNangHang='1',@p_Image=NULL,@MaGD=@p18,@p_Company=N'',@p_Company_Addr",
           "tables": "",
-          "khbl": "kiem",
-          "doi_chieu": "chua",
-          "note": ""
+          "khbl": "lam",
+          "doi_chieu": "khop",
+          "note": "08/09/2026 14:56 kiểm SANDBOX qua đúng view web /banle/khach-hang/luu/ (ép đích sandbox, không đụng KK): KHBL gọi Ins → đọc lại → I_DiemTichLuy_InsFromGT đúng thứ tự app; CustCode kế tiếp (KH55286→KH55287), sổ điểm mở, gửi lặp cùng token không tạo dòng trùng, trùng SĐT bị chặn. KHÁC app (cố ý): BirthDate gửi 01/01/1900 (app gửi = hôm nay), ImagePath NULL khi không có ảnh. ⚠ Proc vendor sinh CustCode bằng SELECT không MAX/ORDER — KK đang có 1.118 CustCode trùng (KH49124 ×3…), CustID mới là khóa thật."
         },
         {
           "title": "Khách hàng: I_DiemTichLuy_InsFromGT",
@@ -85,8 +85,8 @@
           "params": "exec [I_CUSTOMER_Del] @p_CustID='CU1807000000001'",
           "tables": "",
           "khbl": "kiem",
-          "doi_chieu": "chua",
-          "note": ""
+          "doi_chieu": "khop",
+          "note": "08/09/2026 kiểm SANDBOX: I_CUSTOMER_Del xóa I_DIEMTICHLUY + I_GIAODICH_KHACHHANG + SHOP_CUSTOMER + I_CUSTOMER, mọi bảng về số dòng ban đầu, counter SYS_CODEMASTERS KHÔNG lùi (mã CU cách quãng là bình thường); khách có TRN_RT_BUYSELL/DEBT/CHANGE/PO → Result=-1 từ chối. ⚠ fn_CheckValidate KHÔNG kiểm TRN_RT_BUYGOLD → khách CHỈ có hóa đơn THÂU vẫn xóa được (sandbox: 2.346 khách như vậy) → HĐ thâu mồ côi. ⚠ Proc luôn gọi XoaAnhKhachHang→SaveImageToFile (sp_OACreate): KK bật OLE nên chạy, ghi đè ảnh khách bằng PNG 1×1 chứ không xóa file; sandbox tắt OLE nên nổ (đã kiểm bằng cách tạm LuuAnhBangDuongDan=0). KHBL CHƯA có nút xóa khách; I_CUSTOMER_Del chưa vào PROC_WRITE_ALLOW. ⚠ Lần đo 07:29 trên KK: app xóa CU1807000000001 (KH0002 'A', tạo 20/07/2018) chứ KHÔNG phải khách vừa tạo — dòng đầu lưới sort CustName ASC; 2 khách thử KH55434 'Anh Abcdef' + KH55435 'Chị Njglsop' vẫn còn trên KK."
         },
         {
           "title": "Khách hàng: I_CUSTOMER_Lst",

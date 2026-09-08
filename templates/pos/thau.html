@@ -1,45 +1,162 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Thâu vào{% endblock %}
-{% block page_title %}Thâu vàng vào{% endblock %}
-{% block page_sub %}Khách bán vàng cũ cho tiệm — phiếu thâu độc lập. Muốn nhận vàng cũ <b>trong cùng hóa đơn bán</b> thì dùng ngăn “Thâu vào” ở màn Mua bán.{% endblock %}
-{% block page_tools %}<span class="khbl-badge khbl-badge--cam">Lưu phiếu — chờ mở kênh ghi</span>{% endblock %}
+{% block main_mod %} khbl-main--pos{% endblock %}
+{% block extra_head %}<style>@media print{@page{size:110mm auto;margin:3mm}}</style>{% endblock %}
 
-{% block content %}
-<div style="display:grid;grid-template-columns:minmax(360px,460px) 1fr;gap:16px;align-items:start">
-  <section class="khbl-card khbl-card--sunk">
-    <div class="khbl-card__head"><h3 style="color:var(--ink-mua)">Phiếu thâu</h3></div>
-    <div class="khbl-card__body" style="padding-bottom:14px">
-      <form hx-post="{% url 'pos:thau_tinh' %}" hx-target="#thau-kq" hx-trigger="change, submit"
-            style="display:grid;gap:10px">
-        {% csrf_token %}
-        <div class="khbl-field">
-          <label>Loại vàng cũ</label>
-          <select class="khbl-select" name="gold">
-            {% for g in loai %}<option value="{{ g.GoldCcy }}">{{ g.GoldDesc }} — {{ g.mua_dong|tien_tran }} {{ g.don_vi }}</option>{% endfor %}
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 90px;gap:10px">
-          <div class="khbl-field"><label>Trọng lượng (ly · 1 chỉ = 100)</label>
-            <input class="khbl-input num" name="gw" inputmode="decimal" placeholder="vd 1000 = 1 lượng" autofocus autocomplete="off"></div>
-          <div class="khbl-field"><label>Tuổi (%)</label>
-            <input class="khbl-input num" name="pct" value="100" inputmode="decimal"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:96px 1fr;gap:10px">
-          <div class="khbl-field"><label>Bù / bớt</label>
-            <select class="khbl-select" name="dau"><option value="+">+ bù</option><option value="-">− bớt</option></select></div>
-          <div class="khbl-field"><label>Số tiền bù/bớt</label>
-            <input class="khbl-input khbl-money num" name="add_money" placeholder="0" autocomplete="off"></div>
-        </div>
-        <button class="khbl-btn khbl-btn--gold" type="submit">Tính tiền thâu</button>
-      </form>
+{% comment %}
+THÂU VÀO — cùng khung màn BÁN HÀNG (GĐ chốt 08/09/2026 tối), modifier .pg-ban--thau đổi nền/hiệu ứng.
+Cột trái: THÔNG TIN (#pos-info) + VÀNG THÂU (#pos-thau, form như Vàng đổi, nhiều dòng) · cột phải: TÍNH TỔNG (#pos-tong)
+· chân: #pos-foot. Mọi nút hx-swap="none" → server trả OOB (_thau_oob.html).
+{% endcomment %}
+{% block body %}
+<div class="pg-ban pg-ban--thau">
+  <div class="pg-ban__body pg-ban__body--thau">
+    <div class="pg-ban__col-l pg-ban__col-l--thau">
+      <div id="pos-info">{% include "pos/_thau_info.html" %}</div>
+      <div id="pos-thau">{% include "pos/_thau_box.html" %}</div>
     </div>
-  </section>
-
-  <div id="thau-kq">
-    <div class="khbl-card khbl-card--flat"><div class="khbl-empty" style="padding:46px 12px">
-      {% icon "thau" 40 %}<b>Nhập trọng lượng để tính</b>
-      <span>Tiền = trọng lượng ÷ hệ số × giá thâu × tuổi vàng, cộng tiền bù/bớt sau cùng</span>
-    </div></div>
+    <div class="pg-ban__c2" id="pos-tong">{% include "pos/_thau_tong.html" %}</div>
+  </div>
+  <div id="pos-foot">{% include "pos/_thau_foot.html" %}</div>
+  <div class="khbl-keys">
+    <span><kbd>Enter</kbd>Thêm dòng vàng</span>
+    <span><kbd>F2</kbd>Khách hàng</span>
+    <span><kbd>F4</kbd>Loại vàng cũ</span>
+    <span><kbd>F6</kbd>Bớt lẻ</span>
+    <span class="dim" style="margin-left:auto">{{ pmv_dich_mo_ta }}</span>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var KHBL_CSRF = "{{ csrf_token }}";
+
+/* Khách vừa THÊM/SỬA qua popup → gắn/nạp lại vào phiếu thâu */
+document.body.addEventListener("khachSaved", function (e) {
+  var id = e.detail && e.detail.custId;
+  if (!id || !window.htmx) return;
+  htmx.ajax("POST", "{% url 'pos:thau_dat' %}", { values: { cust_id: id }, swap: "none", headers: { "X-CSRFToken": KHBL_CSRF } });
+});
+
+/* Ẩn gợi ý NV/Khách khi bấm ra ngoài ô tìm */
+document.addEventListener("mousedown", function (e) {
+  var trong = e.target.closest(".pg-f--tim");
+  ["nv-goiy", "khach-goiy"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && !(trong && trong.contains(el))) el.innerHTML = "";
+  });
+});
+
+/* TÍNH TỔNG thu/mở — nhớ localStorage riêng cho trang thâu */
+(function () {
+  var body = document.querySelector(".pg-ban__body"); if (!body) return;
+  try { if (localStorage.getItem("khbl.thau.tong.thu") === "1") body.classList.add("pg-ban__body--thu"); } catch (_) {}
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(".pg-tong__tg")) return;
+    var thu = body.classList.toggle("pg-ban__body--thu");
+    try { localStorage.setItem("khbl.thau.tong.thu", thu ? "1" : "0"); } catch (_) {}
+  });
+})();
+
+/* phím tắt */
+document.addEventListener("keydown", function (e) {
+  var map = { F2: "#o-khach", F4: "#t-de", F6: "#nut-bot-le" };
+  var sel = map[e.key];
+  if (!sel) return;
+  var mr = document.getElementById("modal-root");
+  if (mr && mr.innerHTML.trim()) return;
+  e.preventDefault();
+  var el = document.querySelector(sel);
+  if (el) { el.focus(); if (el.tagName === "BUTTON") el.click(); }
+});
+
+/* GIỮ Ô ĐANG GÕ qua OOB (như màn bán) */
+(function () {
+  var giu = null;
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var a = document.activeElement;
+    if (!a || !a.matches("input, select") || !a.closest("#pos-tong, #pos-thau, #pos-info")) { giu = null; return; }
+    var src = e.detail && e.detail.elt;
+    giu = { id: a.id, name: a.name, form: a.closest("form") && a.closest("form").className, value: a.value, pos: a.selectionStart,
+            la_nguon: !!(src && (src === a || (src.contains && src.contains(a) && src.tagName === "FORM"))) };
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    if (!giu) return;
+    var g = giu; giu = null;
+    var el = g.id ? document.getElementById(g.id) : null;
+    if (!el && g.name && g.form) { var f = document.querySelector("form." + g.form.split(" ")[0]); el = f && f.querySelector("[name='" + g.name + "']"); }
+    if (!el || el.disabled) return;
+    if (!g.la_nguon && g.value !== "" && el.value !== g.value && el.tagName === "INPUT") el.value = g.value;
+    try { el.focus({ preventScroll: true }); if (g.pos != null && el.setSelectionRange && el.type !== "date") el.setSelectionRange(g.pos, g.pos); } catch (_) {}
+  });
+})();
+
+/* form VÀNG THÂU: công tắc GIÁ THÂU VÀO (mặc định) / GIÁ BÁN RA → điền ô giá theo loại dẻ (MySQL buy/sell, sửa tay
+   được); xem trước TL vàng = tổng − hột và THÀNH TIỀN = TL vàng ÷ 100 × giá (hột không tính tiền). */
+(function () {
+  function so(v) { return parseFloat(String(v || "").replace(/\./g, "").replace(",", ".")) || 0; }
+  function tienVN(n) { return Math.round(n).toLocaleString("vi-VN"); }
+  function kieu() { var r = document.querySelector("input[name='kieu']:checked"); return r ? r.value : "thau"; }
+  function dienGia() {
+    var de = document.getElementById("t-de"), g = document.getElementById("t-gia");
+    if (!de || !g) return;
+    var op = de.options[de.selectedIndex];
+    if (!op || !op.value) { g.value = ""; return; }
+    var v = parseFloat(op.dataset[kieu() === "ban" ? "sell" : "gia"] || 0) || 0;
+    g.value = v ? (v * 1000).toLocaleString("vi-VN") : "";
+  }
+  function tinh() {
+    var de = document.getElementById("t-de"); if (!de) return;
+    var op = de.options[de.selectedIndex] || {}, ds = op.dataset || {};
+    var dv = document.getElementById("t-dv"); if (dv) dv.textContent = ds.dv || "";
+    var tong = so((document.getElementById("t-tongtl") || {}).value), hot = so((document.getElementById("t-tlhot") || {}).value);
+    var vang = Math.max(0, tong - hot);
+    var outV = document.getElementById("t-tlvang"); if (outV) outV.textContent = vang ? vang.toLocaleString("vi-VN") : "0";
+    var theoGam = ds.dv === "₫/g", hs = theoGam ? 1 : 100;
+    document.querySelectorAll("[data-dvtl]").forEach(function (e) { e.textContent = theoGam ? "g" : "ly"; });
+    var gia = so((document.getElementById("t-gia") || {}).value);
+    var out = document.getElementById("t-tien"); if (out) out.textContent = tienVN(vang / hs * gia);
+    var lb = document.getElementById("lb-t-gia"); if (lb) lb.textContent = kieu() === "ban" ? "GIÁ BÁN RA" : "GIÁ THÂU VÀO";
+    var box = document.querySelector(".pg-box--thau"); if (box) box.classList.toggle("pg-thau--ban-on", kieu() === "ban");
+  }
+  window.khblThauKieu = function () { dienGia(); tinh(); };
+  function gan() {
+    var de = document.getElementById("t-de");
+    if (!de || de.dataset.gan) return;
+    de.dataset.gan = "1";
+    de.addEventListener("change", function () { dienGia(); tinh(); });
+    document.querySelectorAll("input[name='kieu']").forEach(function (r) { r.addEventListener("change", window.khblThauKieu); });
+    ["t-tongtl", "t-tlhot", "t-gia"].forEach(function (id) { var el = document.getElementById(id); if (el) el.addEventListener("input", tinh); });
+    if (!(document.getElementById("t-gia") || {}).value) dienGia();
+    tinh();
+  }
+  document.addEventListener("DOMContentLoaded", gan);
+  document.addEventListener("htmx:afterSwap", gan);
+})();
+
+/* PHƯƠNG THỨC: tiền mặt + CK/thẻ tự bù cho đủ TIỆM TRẢ KHÁCH */
+(function () {
+  function mInt(s) { return parseInt(String(s || "").replace(/[^\d]/g, ""), 10) || 0; }
+  function fmt(n) { return Math.max(n, 0).toLocaleString("vi-VN"); }
+  function tra() { var el = document.querySelector(".pg-tong__tra b"); return el ? mInt(el.textContent) : 0; }
+  function sync(src) {
+    var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
+    if (!cash || !ck) return;
+    var t = tra();
+    if (src === "ck") { var k = Math.min(mInt(ck.value), t); cash.value = fmt(t - k); }
+    else { var c = Math.min(mInt(cash.value), t); ck.value = fmt(t - c); }
+  }
+  function ganPay() {
+    var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
+    if (!cash || cash.dataset.gan) return;
+    cash.dataset.gan = "1";
+    cash.addEventListener("input", function () { sync("cash"); });
+    if (ck) ck.addEventListener("input", function () { sync("ck"); });
+    document.querySelectorAll("input[name='pay_method']").forEach(function (r) { r.addEventListener("change", function () { cash.value = ""; }); });
+  }
+  document.addEventListener("DOMContentLoaded", ganPay);
+  document.addEventListener("htmx:afterSwap", ganPay);
+})();
+</script>
 {% endblock %}

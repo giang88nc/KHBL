@@ -17,6 +17,8 @@
       {% icon_anh "khach" 50 %}<span>KHÁCH HÀNG</span></a>
     <a class="khbl-top__i{% if nav_active == 'hoadon' %} is-on{% endif %}" href="{% url 'pos:hoa_don' %}">
       {% icon_anh "hoadon" 50 %}<span>HÓA ĐƠN</span></a>
+    <a class="khbl-top__i{% if nav_active == 'chuyenkhoan' %} is-on{% endif %}" href="{% url 'pos:chuyen_khoan' %}">
+      {% icon_anh "chuyenkhoan" 50 %}<span>CHUYỂN KHOẢN</span></a>
     <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
       {% icon_anh "hethong" 50 %}<span>HỆ THỐNG</span></a>
   </nav>

@@ -96,12 +96,13 @@
       <div class="pg-tong__alert-list">
         {% for cb in tq.canh_bao %}
           <div class="pg-tong__alert pg-tong__alert--{{ cb.kind }}">
-            <span class="pg-tong__alert-ico">!</span><div><b>{{ cb.title }}</b><small>{{ cb.detail }}{% if cb.luc %} · cũ nhất {{ cb.luc|date:"d/m H:i" }}{% endif %}</small></div><strong class="num">{{ cb.count }}</strong>
+            <span class="pg-tong__alert-ico">!</span><div><b>{{ cb.title }}</b><small>{{ cb.detail }}{% if cb.luc %} · cũ nhất {{ cb.luc|date:"d/m H:i" }}{% endif %}</small></div><button class="pg-alert-count num" type="button" hx-get="{% url 'pos:dashboard_alert_detail' cb.key %}" hx-target="#modal-root" aria-label="Xem {{ cb.count }} {{ cb.title|lower }}">{{ cb.count }}</button>
           </div>
+
         {% endfor %}
       </div>
     {% else %}
-      <div class="pg-tong__all-clear"><span>✓</span><div><b>Không có phiếu đang chờ xử lý</b><small>PMV không ghi nhận đơn bán, thâu vào hoặc phiếu nhập tồn đọng.</small></div></div>
+      <div class="pg-tong__all-clear"><span>✓</span><div><b>Không có phiếu đang chờ xử lý</b><small>PMV không ghi nhận cảnh báo chờ xử lý ở bán hàng, thâu, đổi vàng, nhập/xuất hàng hoặc chuyển quầy.</small></div></div>
     {% endif %}
   </section>
 

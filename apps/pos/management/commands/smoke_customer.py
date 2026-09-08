@@ -67,8 +67,16 @@ class Command(BaseCommand):
                     except (ValueError, OSError):
                         pass
             if cust_id:
-                for table in ("I_LICHSUTICHLUYDIEM", "T_CUSTOMER_DEBT", "I_DIEMTICHLUY", "I_CUSTOMER"):
-                    sandbox.sandbox_don_dep(f"DELETE FROM {table} WHERE CustID = ?", (cust_id,))
+                # Ưu tiên xóa qua ĐÚNG đường chạy thật (I_CUSTOMER_Del + guard 5 bảng). Sandbox SQL2014
+                # tắt OLE Automation nên XoaAnhKhachHang→SaveImageToFile có thể nổ → rơi về dọn tay.
+                try:
+                    with customer.SAVE_LOCK:
+                        customer.delete(cust_id, client=client)
+                    self.stdout.write("  đã xóa khách thử qua I_CUSTOMER_Del")
+                except Exception as exc:
+                    self.stdout.write(f"  I_CUSTOMER_Del không chạy được trên sandbox ({str(exc)[:80]}…) → dọn tay")
+                    for table in ("I_LICHSUTICHLUYDIEM", "T_CUSTOMER_DEBT", "I_DIEMTICHLUY", "I_CUSTOMER"):
+                        sandbox.sandbox_don_dep(f"DELETE FROM {table} WHERE CustID = ?", (cust_id,))
 
     @staticmethod
     def _image():

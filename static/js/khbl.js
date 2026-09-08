@@ -139,6 +139,27 @@
     setTimeout(function () { if (box.querySelector(".gdb-a5")) xong(); }, 120000);
   };
 
+  /* THÂU VÀO (08/09/2026): chọn khách/NV từ gợi ý → điền hidden + ô text, đóng hộp gợi ý. */
+  window.khblThauChon = function (kind, id, ten) {
+    var hid = document.getElementById(kind === "nv" ? "th-emp-id" : "th-cust-id");
+    var o = document.getElementById(kind === "nv" ? "th-nv" : "th-khach");
+    if (hid) hid.value = id;
+    if (o) o.value = ten;
+    document.querySelectorAll(".th-goiy").forEach(function (b) { b.innerHTML = ""; });
+  };
+  /* In THẲNG phiếu thâu 110mm: server nhét .th-phieu vào #pos-in (OOB) → chờ logo nạp → window.print() → afterprint dọn. */
+  window.khblInThau = function () {
+    var box = document.getElementById("pos-in");
+    if (!box || !box.querySelector(".th-phieu")) return;
+    var cho = Array.prototype.map.call(box.querySelectorAll("img"), function (i) {
+      return (i.complete && i.naturalWidth) ? Promise.resolve() : new Promise(function (ok) { i.onload = i.onerror = ok; });
+    });
+    function xong() { box.innerHTML = ""; window.removeEventListener("afterprint", xong); }
+    window.addEventListener("afterprint", xong);
+    Promise.all(cho).then(function () { return new Promise(function (ok) { setTimeout(ok, 60); }); }).then(function () { window.print(); });
+    setTimeout(function () { if (box.querySelector(".th-phieu")) xong(); }, 120000);
+  };
+
   /* FOCUS ô đang thiếu/lỗi + hiệu ứng rung & viền đỏ 3s (server gửi selector qua _ban_oob loi_o) */
   window.khblFocusLoi = function (sel, _lan2) {
     // ⚠ htmx SETTLE (20ms sau swap) chép lại attribute class từ HTML server → class thêm sớm bị xóa.
@@ -163,6 +184,15 @@
     if (filter && window.htmx) window.htmx.trigger(filter, "submit");
     showToast(detail.message || "Đã lưu khách hàng", "success");
     (detail.warnings || []).forEach(function (warning) { showToast(warning, "warning"); });
+  });
+
+  /* Xóa khách xong: đóng popup, tải lại danh sách GIỮ bộ lọc (không reload trang), toast. */
+  document.addEventListener("khachDeleted", function (e) {
+    var detail = e.detail || {};
+    window.closeKhblModal();
+    var filter = document.querySelector("form.kh-loc");
+    if (filter && window.htmx) window.htmx.trigger(filter, "submit");
+    showToast(detail.message || "Đã xóa khách hàng", "success");
   });
 
   /* Popup xác nhận dùng chung: khóa double-submit, hiển thị tải rồi làm mới dữ liệu. */

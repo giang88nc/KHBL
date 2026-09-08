@@ -1,0 +1,9 @@
+{% extends "partials/modal_shell.html" %}
+{% block modal_title %}DANH SÁCH NGÂN HÀNG{% endblock %}
+{% block modal_style %}width:min(1100px,96vw){% endblock %}
+{% block modal_body %}
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+<button class="khbl-btn khbl-btn--gold" hx-get="{% url 'pos:bank_add' %}" hx-target="#modal-root">＋ THÊM NGÂN HÀNG</button>
+<div class="khbl-wrap"><table class="khbl-tbl"><thead><tr><th>Mã / BIN</th><th>Ngân hàng</th><th>Tài khoản</th><th>Chủ tài khoản</th><th>Chi nhánh</th><th>Loại</th><th>Trạng thái</th><th></th></tr></thead><tbody>
+{% for b in banks %}<tr><td>{{ b.bank_bin }}</td><td>{{ b.bank_name }}</td><td class="mono">{{ b.bank_number }}</td><td>{{ b.bank_user }}</td><td>{{ b.bank_addr|default:"—" }}</td><td>{{ b.type|default:"—" }}</td><td>{% if b.Active %}Đang dùng{% else %}Tắt{% endif %}</td><td><button class="khbl-btn khbl-btn--sm" hx-get="{% url 'pos:bank_edit' b.id %}" hx-target="#modal-root">Sửa</button> <button class="khbl-btn khbl-btn--sm" hx-get="{% url 'pos:bank_delete' b.id %}" hx-target="#modal-root">Xóa</button></td></tr>{% empty %}<tr><td colspan="8">Chưa có tài khoản ngân hàng.</td></tr>{% endfor %}
+</tbody></table></div>{% endblock %}

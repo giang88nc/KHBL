@@ -1,0 +1,36 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
+POPUP XÁC NHẬN phiếu thâu (cùng kiểu _xac_nhan_modal của màn bán): hành động · mã phiếu · người thao tác · hậu quả · passcode.
+hanh_dong = sua | huy_tt | huy_hd | xoa_nhap (không passcode).
+{% endcomment %}
+{% block modal_style %}width:min(470px,94vw){% endblock %}
+{% block modal_title %}{{ hd.icon }} {{ hd.ten }}{% endblock %}
+{% block modal_body %}
+  {% if not khoa %}
+    <div class="khbl-alert">{% if hd.nhap %}Không có phiếu nháp nào để xóa.{% else %}Phiếu đang CHỜ — không cần thao tác này. Dùng nút ở chân trang.{% endif %}</div>
+  {% else %}
+  <form id="xn-form" hx-post="{% url 'pos:thau_thuc_hien' hanh_dong %}" hx-target="#modal-root" hx-swap="innerHTML" hx-sync="this:drop" autocomplete="off" class="xn">
+    {% csrf_token %}
+    <div class="xn__grid">
+      <span>Phiếu thâu</span><b class="mono">{{ g.bill_codes|join:", "|default:"(chưa lưu)" }}</b>
+      <span>Trạng thái</span><b>{% if hd.nhap %}✎ NHÁP · {{ g.lines|length }} dòng vàng{% else %}🔒 ĐÃ THANH TOÁN{% if g.ngay %} · {{ g.ngay|slice:"8:10" }}/{{ g.ngay|slice:"5:7" }}/{{ g.ngay|slice:":4" }}{% endif %}{% endif %}</b>
+      <span>Khách</span><b>{{ g.cust.name|default:"Khách lẻ" }}</b>
+      <span>Người thao tác</span><b>{{ nguoi }} <i class="mono dim">({{ username }})</i> · {{ luc|date:"H:i d/m/Y" }}</b>
+    </div>
+    <div class="xn__hq{% if hd.nguy %} xn__hq--nguy{% endif %}"><b>Hậu quả khi xác nhận:</b><ul>{% for h in hd.hau_qua %}<li>{{ h }}</li>{% endfor %}</ul></div>
+    {% if loi %}<div class="khbl-alert khbl-alert--do" style="margin:0 0 10px">{{ loi }}</div>{% endif %}
+    {% if hd.nhap %}
+    <p class="dim" style="margin:0;font-size:11.5px">Phiếu nháp không cần passcode — bấm XÁC NHẬN (hoặc Enter).</p>
+    {% else %}
+    <label class="khbl-field"><span class="xn__lb">PASSCODE CỦA BẠN</span>
+      <input class="khbl-input mono" type="password" name="passcode" id="xn-passcode" required autofocus inputmode="numeric"
+             placeholder="nhập passcode rồi Enter" style="font-size:18px;letter-spacing:.2em;text-align:center"></label>
+    <p class="dim" style="margin:8px 0 0;font-size:11.5px">Sai passcode thì không có gì thay đổi trên máy KK. Hành động được ghi vào nhật ký.</p>
+    {% endif %}
+  </form>
+  <script>(function(){var i=document.getElementById("xn-passcode")||document.getElementById("xn-ok");if(i)setTimeout(function(){i.focus()},30)})();</script>
+  {% endif %}
+{% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  {% if khoa %}<button id="xn-ok" class="khbl-btn {% if hd.nguy %}khbl-btn--nguy{% else %}khbl-btn--gold{% endif %}" type="submit" form="xn-form">{{ hd.icon }} XÁC NHẬN {{ hd.ten }}</button>{% endif %}
+{% endblock %}

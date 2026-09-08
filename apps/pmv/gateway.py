@@ -283,9 +283,13 @@ PROC_WRITE_ALLOW = frozenset({
     "I_XRATE_Ins",                                         # 06/09/2026 — cập nhật giá MySQL → MSSQL, smoke_price_sync
     "I_CUSTOMER_Ins", "I_CUSTOMER_Upd",                       # 03/09/2026
     "I_DiemTichLuy_InsFromGT",                                 # 05/09/2026
+    "I_CUSTOMER_Del",                                          # 08/09/2026 — xóa khách CHƯA giao dịch, guard bán+thâu ở customer.delete, kiểm sandbox 08/09
     "TRN_RT_BUYSELL_Ins", "TRN_RT_BUYSELL_Upd",               # 03/09/2026
     "TRN_RT_BUYSELL_Complete",                                # 03/09/2026
     "TRN_RT_BUYSELL_Del", "TRN_RT_BUYGOLD_Del", "T_TILL_TXN_Proc", "T_TILL_TXN_Del",# 03/09/2026
+    # THAU_VANG (08/09/2026, GĐ chốt 3 điểm): lập/sửa/chốt phiếu thâu độc lập; CARDPAY_Ins chỉ với DS thẻ RỖNG
+    # (ghi CashPay/CardPay + TRN_TILL_TXN_Upd sửa dòng VND két) — kiểm sandbox smoke_thau 08/09
+    "TRN_RT_BUYGOLD_Ins", "TRN_RT_BUYGOLD_Upd", "TRN_RT_BUYGOLD_CompleteMore", "CARDPAY_Ins",
 })
 _PROC_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 

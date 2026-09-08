@@ -1,0 +1,4 @@
+{% extends "partials/modal_shell.html" %}
+{% block modal_title %}Xóa tài khoản ngân hàng{% endblock %}
+{% block modal_body %}<p>Xóa <b>{{ bank.bank_name }} · {{ bank.bank_number }}</b> của {{ bank.bank_user }}?</p><p>Thông báo chuyển khoản đã nhận vẫn được giữ lại.</p>{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% endblock %}
+{% block modal_foot %}<button class="khbl-btn khbl-btn--outline" hx-get="{% url 'pos:bank_list' %}" hx-target="#modal-root">Quay lại</button><form hx-post="{% url 'pos:bank_delete' bank.id %}" hx-target="#modal-root" hx-sync="this:drop" hx-disabled-elt="find button">{% csrf_token %}<button class="khbl-btn khbl-btn--gold" type="submit">Xác nhận xóa</button></form>{% endblock %}

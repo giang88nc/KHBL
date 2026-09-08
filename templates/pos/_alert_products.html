@@ -1,0 +1,12 @@
+{% load pos_extras %}
+            <div class="pg-product-pending__table"><table class="khbl-tbl">
+              <thead><tr><th>Phiếu / Ngày nhập</th><th>Mã / Tên hàng</th><th>Vàng</th><th class="num">SL</th><th class="num">TL tổng</th><th class="num">TL hột</th><th>Người nhập</th><th>Ghi chú</th></tr></thead>
+              <tbody>{% for p in rows %}<tr>
+                <td><b class="mono">{{ p.TrnID }}</b><br>{{ p.TrnDate|date:"d/m/Y" }} {{ p.TrnTime|default:"" }}</td>
+                <td><b>{{ p.ProductDesc|default:"—" }}</b><br><span class="mono">{{ p.ma_hang|default:"Chưa cấp mã" }}</span></td>
+                <td>{{ p.GoldCode }}</td><td class="num">{{ p.Quantity|floatformat:0 }}</td>
+                <td class="num">{% if p.PriceUnit == 'L' %}{{ p.TotalWeight|tl_man }}{% else %}{{ p.TotalWeight|floatformat:3 }} {{ p.PriceUnit }}{% endif %}</td>
+                <td class="num">{% if p.PriceUnit == 'L' %}{{ p.DiamondWeight|tl_man }}{% else %}{{ p.DiamondWeight|floatformat:3 }} {{ p.PriceUnit }}{% endif %}</td>
+                <td>{{ p.UserID|default:"—" }}</td><td>{{ p.Description|default:"—" }}</td>
+              </tr>{% endfor %}</tbody>
+            </table></div>

@@ -247,6 +247,45 @@ def upsert(data, images, shop_id="", client=None):
             "complete": not incomplete, "errors": incomplete}
 
 
+# Guard XÓA (08/09/2026): proc vendor I_CUSTOMER_Del chỉ kiểm 4 bảng đầu, BỎ SÓT hóa đơn THÂU
+# (TRN_RT_BUYGOLD) — kiểm chứng sandbox: 2.346 khách chỉ có thâu vẫn xóa được. Web kiểm đủ 5 bảng.
+GD_TABLES = (("TRN_RT_BUYSELL", "hóa đơn bán"), ("TRN_RT_BUYGOLD", "hóa đơn thâu"),
+             ("T_CUSTOMER_DEBT", "dòng công nợ"), ("TRN_RT_CHANGE", "hóa đơn đổi"),
+             ("TRN_PO_MASTER", "đơn đặt hàng"))
+
+
+def giao_dich(client, cust_id):
+    """Đếm giao dịch của khách theo từng loại — {nhãn: số dòng}, rỗng = xóa được."""
+    out = {}
+    for table, label in GD_TABLES:
+        n = client.query(f"SELECT COUNT(*) AS n FROM {table} WITH (NOLOCK) WHERE CustID = ?", (cust_id,))[0]["n"]
+        if n:
+            out[label] = n
+    return out
+
+
+def delete(cust_id, client=None):
+    """XÓA khách qua I_CUSTOMER_Del (vendor tự dọn I_DIEMTICHLUY / I_GIAODICH_KHACHHANG / SHOP_CUSTOMER
+    + ghi đè ảnh). Chỉ cho xóa khách CHƯA có giao dịch (guard bán + thâu + nợ + đổi + đặt hàng).
+    Phải gọi trong SAVE_LOCK. Kiểm chứng đọc lại: proc trả 0 mà dòng còn → báo lỗi (bẫy im lặng)."""
+    client = client or PmvClient(tag="khach_xoa")
+    current = _current(client, cust_id)
+    if not current:
+        raise CustomerSaveError("Khách hàng không còn tồn tại; hãy tải lại danh sách")
+    gd = giao_dich(client, cust_id)
+    if gd:
+        raise CustomerSaveError("Không xóa được — khách đã có giao dịch: "
+                                + ", ".join(f"{n} {label}" for label, n in gd.items()))
+    try:
+        client.call("I_CUSTOMER_Del", write=True, p_CustID=cust_id)
+    except PmvProcError as exc:
+        raise CustomerSaveError(f"PMV từ chối xóa khách (Result={exc.rc}: còn ràng buộc dữ liệu)") from exc
+    if _current(client, cust_id):
+        raise CustomerSaveError("PMV trả thành công nhưng khách vẫn còn trong danh sách; vui lòng kiểm tra")
+    return {"cust_id": cust_id, "cust_code": current.get("CustCode") or cust_id,
+            "name": current.get("CustName") or ""}
+
+
 def saved_image(cust_id, kind, client=None):
     """Đọc và kiểm tra một ảnh đã lưu, không nhận đường dẫn từ phía trình duyệt."""
     if kind not in SAVED_IMAGE_FIELDS:

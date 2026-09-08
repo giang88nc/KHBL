@@ -204,11 +204,23 @@ def thay_doi_theo_gio(tu, den):
 # ─────────────────────────── QUY TRÌNH CHUẨN BÁN HÀNG (seed) ───────────────────────────
 # Dữ liệu FULL nằm ở quy_trinh_ban_hang.py (GĐ chốt 05/09/2026) — đổi nội dung quy trình chuẩn ở đó.
 from .quy_trinh_ban_hang import BAN_HANG  # noqa: E402
+from .quy_trinh_thau_vang import THAU_VANG  # noqa: E402
+
+QUY_TRINH_CHUAN = {"BAN_HANG": BAN_HANG, "THAU_VANG": THAU_VANG}
 
 
 def seed_ban_hang(ghi_de=False):
     """Tạo quy trình chuẩn BÁN HÀNG (idempotent — có rồi thì thôi, ghi_de=True mới dựng lại)."""
-    d = BAN_HANG
+    return seed_chuan(BAN_HANG, ghi_de)
+
+
+def seed_thau_vang(ghi_de=False):
+    """Quy trình chuẩn THÂU VÀNG (gộp THAU_VAO + HUY_THAU_VAO, GĐ chốt 08/09/2026)."""
+    return seed_chuan(THAU_VANG, ghi_de)
+
+
+def seed_chuan(d, ghi_de=False):
+    """Dựng 1 quy trình chuẩn từ dict dữ liệu (code/name/description/source/phases) — idempotent."""
     with transaction.atomic():
         p = PmvProcess.objects.filter(code=d["code"]).first()
         if p and not ghi_de:

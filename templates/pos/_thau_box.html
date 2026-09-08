@@ -1,0 +1,94 @@
+{% load pos_extras %}{% comment %}
+Khối VÀNG THÂU — form như Vàng đổi của màn bán: LOẠI DẺ · TỔNG TL · TL HỘT · TL VÀNG · GIÁ · THÀNH TIỀN · ＋ THÊM · ↻ TÍNH LẠI;
+công tắc GIÁ THÂU VÀO (mặc định) / GIÁ BÁN RA thay cho checkbox Đổi ngang. Nhiều dòng cùng 1 khách (mỗi dòng = 1 TRN_RT_BUYGOLD).
+{% endcomment %}
+<section class="pg-box pg-box--doi pg-box--thau{% if phieu_chot %} pg-box--khoa{% endif %}">
+  <header class="pg-box__head pg-doi-head">
+    <h3>VÀNG THÂU <i>{% if g.bill_codes %}· <b class="mono">{{ g.bill_codes|join:" · " }}</b>{% else %}· khách bán vàng cũ cho tiệm{% endif %}</i></h3>
+    {% if g.trn_ids %}
+      {% if khoa_ngay_cu %}
+        <span class="pg-khoa pg-khoa--dong pg-khoa--cu" title="Phiếu ngày khác — CHỈ XEM">🔒</span>
+      {% elif phieu_chot %}
+        <button class="pg-khoa pg-khoa--dong" type="button" title="Phiếu ĐÃ THANH TOÁN — đang khóa. Bấm = SỬA PHIẾU (passcode)"
+                hx-get="{% url 'pos:thau_xac_nhan' 'sua' %}" hx-target="#modal-root">🔒</button>
+      {% else %}
+        <span class="pg-khoa pg-khoa--mo" title="Phiếu đang CHỜ (chưa thanh toán) — sửa được">🔓</span>
+      {% endif %}
+    {% endif %}
+    {% if phieu_chot %}<fieldset disabled class="pg-khoa-fs" title="Phiếu đang KHÓA — bấm 🔒 để mở sửa">{% endif %}
+    <form class="pg-doi-nhap pg-thau-nhap" hx-post="{% url 'pos:thau_them' %}" hx-swap="none"
+          hx-on::after-request="if(event.detail.successful){var k=this.kieu.value;this.reset();this.querySelector('input[name=kieu][value='+k+']').checked=true;window.khblThauKieu&&window.khblThauKieu();this.gold.focus()}">
+      {% csrf_token %}
+      <label><span>LOẠI VÀNG CŨ</span>
+        <select name="gold" id="t-de" class="khbl-select" required>
+          <option value="">— chọn —</option>
+          {% for d in loai_de %}
+          <option value="{{ d.GoldCode }}" data-gia="{{ d.BuyRate|sokhong }}" data-sell="{{ d.SellRate|sokhong }}" data-dv="{{ d.don_vi }}">{{ d.GoldDesc }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label><span>TỔNG TL</span>
+        <input name="tong_tl" id="t-tongtl" class="khbl-input r" inputmode="decimal" placeholder="0" required>
+        <i class="pg-doi-nhap__dv" data-dvtl>ly</i></label>
+      <label><span>TL HỘT</span>
+        <input name="tl_hot" id="t-tlhot" class="khbl-input r" inputmode="decimal" placeholder="0">
+        <i class="pg-doi-nhap__dv" data-dvtl>ly</i></label>
+      <label><span>TL VÀNG</span>
+        <output id="t-tlvang" class="khbl-input r pg-ro">0</output></label>
+      <label><span id="lb-t-gia">GIÁ THÂU VÀO</span>
+        <input name="gia" id="t-gia" class="khbl-input r khbl-money" inputmode="numeric" placeholder="0">
+        <i id="t-dv" class="pg-doi-nhap__dv"></i></label>
+      <label><span>THÀNH TIỀN</span>
+        <output id="t-tien" class="khbl-input r pg-ro pg-ro--tien">0</output></label>
+      <button class="khbl-btn khbl-btn--gold khbl-btn--sm" type="submit">＋ THÊM</button>
+      <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button"
+              hx-post="{% url 'pos:thau_tinh_lai' %}" hx-swap="none" hx-include="input[name=kieu]:checked"
+              title="Tính lại mọi dòng theo BẢNG GIÁ MySQL với kiểu giá đang chọn">↻ TÍNH LẠI</button>
+      {# công tắc kiểu giá (GĐ chốt 08/09 tối, thay checkbox Đổi ngang) — gửi cùng ＋ THÊM #}
+      <div class="pg-kieu" title="Giá áp cho dòng sắp thêm: THÂU VÀO (khách bán đứt) hay BÁN RA (khách đổi ngang lấy hàng mới)">
+        <label><input type="radio" name="kieu" value="thau" {% if kieu_ui != 'ban' %}checked{% endif %}><span>Giá thâu vào</span></label>
+        <label><input type="radio" name="kieu" value="ban" {% if kieu_ui == 'ban' %}checked{% endif %}><span>Giá bán ra</span></label>
+      </div>
+    </form>
+    {% if phieu_chot %}</fieldset>{% endif %}
+  </header>
+
+  <div class="pg-box__body pg-box__body--doi pg-box__body--cuon">
+    <table class="pg-tb pg-tb--gon">
+      <thead><tr>
+        <th class="w-stt">#</th><th>LOẠI VÀNG CŨ</th><th>GIÁ THEO</th>
+        <th class="r">TỔNG TL</th><th class="r">TL HỘT</th><th class="r">TL VÀNG</th>
+        <th class="r">GIÁ</th><th class="r">THÀNH TIỀN</th><th>PHIẾU</th><th class="w-x"></th>
+      </tr></thead>
+      <tbody>
+        {% for x in g.lines %}
+        <tr class="{% if x.kieu == 'ban' %}pg-tr-ngang{% endif %}">
+          <td class="w-stt dim">{{ forloop.counter }}</td>
+          <td><span class="pg-tuoi">{{ x.gold|tuoi }}</span> {{ x.desc }} <i class="pg-tb__phu mono">{{ x.gold }}</i></td>
+          <td>{% if x.kieu == 'ban' %}<span class="pg-badge pg-badge--ngang">bán ra</span>{% else %}<span class="pg-badge pg-badge--thau">thâu vào</span>{% endif %}</td>
+          <td class="r mono">{{ x.tong_tl|tl_chi:x.unit }}</td>
+          <td class="r mono dim">{{ x.tl_hot|tl_chi:x.unit }}</td>
+          <td class="r mono">{{ x.tl_vang|tl_chi:x.unit }}</td>
+          <td class="r mono">{{ x.gia|don_gia }}</td>
+          <td class="r mono b">{{ x.tien|tien_tran }}</td>
+          <td class="mono dim">{{ x.bill_code|default:"—" }}</td>
+          <td class="w-x">
+            {% if not phieu_chot %}<button class="pg-x" type="button" title="Bỏ dòng này"
+                    hx-post="{% url 'pos:thau_xoa_dong' %}" hx-vals='{"i": "{{ forloop.counter0 }}"}' hx-swap="none">×</button>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="pg-tb__trong"><td colspan="10">
+          <b>Chưa có dòng vàng nào</b><span>Chọn loại vàng cũ, nhập trọng lượng rồi ＋ THÊM — nhiều loại vàng đi chung 1 phiếu</span>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="pg-box__foot">
+    <span>{{ t.so_dong }} dòng</span>
+    <span class="pg-tl">TL vàng <b class="mono">{{ t.tl_vang|tl_man }}</b>{% if t.tl_hot %} · hột <b class="mono">{{ t.tl_hot|tl_man }}</b>{% endif %}</span>
+    <span class="pg-box__sum">TIỀN VÀNG THÂU <b>{{ t.tien_vang|tien }}</b></span>
+  </footer>
+</section>

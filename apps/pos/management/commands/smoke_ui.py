@@ -45,7 +45,7 @@ class Command(BaseCommand):
 
         # ── 1. cấu trúc URL /banle/ ──
         for url, phai_co in [("/", "KIM HẠNH 2"), ("/banle/", "KIM HẠNH 2"),
-                             ("/banle/ban-hang/", "Quét tem"), ("/banle/thau-vao/", "Thâu vàng vào"),
+                             ("/banle/ban-hang/", "Quét tem"), ("/banle/thau-vao/", "VÀNG THÂU"),
                              ("/banle/khach-hang/", "Khách hàng"), ("/banle/bang-gia/", "Bảng giá vàng"),
                              ("/banle/hoa-don/", "giao dịch")]:   # 06/09: trang đổi thành "Hóa đơn & giao dịch" (hero)
             r = c.get(url)
@@ -193,9 +193,20 @@ class Command(BaseCommand):
 
         # ── 6. khách hàng: lọc · phân trang 50 · popup CRUD · quét CCCD ──
         b = body(c.get("/banle/khach-hang/"))
-        for cot in ("Mã KH", "Họ tên", "Địa chỉ", "CCCD", "Điện thoại", "Ngày sinh", "Loại", "Giới tính", "GD cuối"):
+        for cot in ("Mã KH", "Họ tên", "Địa chỉ", "CCCD", "Điện thoại", "Ngày sinh", "Loại", "Giới tính", "Ngày tạo", "GD cuối"):
             check(f"cột '{cot}'", f">{cot}<" in b)
-        check("phân trang 50/trang", b.count('hx-get="/banle/khach-hang/CU') == 50)
+        check("phân trang 50/trang", b.count("data-kh-row=") == 50)
+        check("dòng KHÔNG còn bấm mở popup", 'style="cursor:pointer" hx-get="/banle/khach-hang/CU' not in b)
+        check("mỗi dòng có cụm icon XEM · SỬA · XÓA", b.count('class="kh-act"') == 50
+              and b.count('aria-label="Xem"') == 50 and b.count('aria-label="Sửa"') == 50
+              and b.count("kh-act__b--xoa") == 50)
+        check("ô lọc dữ liệu khách (xóa được / chưa hợp lệ)", 'name="loc"' in b and 'value="chuahople"' in b)
+        bl = body(c.get("/banle/khach-hang/?partial=1&loc=xoa"))
+        check("lọc 'xóa được' → mọi dòng đều có nút Xóa bật", "data-kh-row=" in bl
+              and 'aria-label="Không xóa được"' not in bl)
+        bx = body(c.get("/banle/khach-hang/CU0000000000000/xoa/"))
+        check("popup xóa khách lẻ → guard giao dịch, không có ô passcode",
+              "đã có giao dịch" in bx and 'name="passcode"' not in bx)
         check("nút THÊM KHÁCH", "+ THÊM KHÁCH" in b)
         check("lọc rỗng → trạng thái rỗng",
               "Không có khách nào khớp" in body(c.get("/banle/khach-hang/?partial=1&key=zzzkhongcoai")))
@@ -207,6 +218,21 @@ class Command(BaseCommand):
         check("  nút lưu thật + khóa double click", "LƯU KHÁCH" in b and
               'hx-sync="this:drop"' in b and 'name="save_token"' in b)
         check("thiếu họ tên → báo lỗi", "Chưa nhập họ tên" in body(c.post("/banle/khach-hang/luu/", {"CustName": ""})))
+
+        # ── 6b. THÂU VÀO — THAU_VANG (08/09/2026): form thật + DS hôm nay + gợi ý ──
+        b = body(c.get("/banle/thau-vao/"))
+        check("trang thâu: khung màn bán chủ đề xanh (pg-ban--thau) + 3 khối + chân", "pg-ban--thau" in b and 'id="pos-info"' in b
+              and 'id="pos-thau"' in b and 'id="pos-tong"' in b and 'id="pos-foot"' in b)
+        check("  không còn form VÀNG BÁN", 'id="pos-ban"' not in b and "VÀNG BÁN" not in b)
+        for f in ("gold", "tong_tl", "tl_hot", "gia", "kieu", "bu", "bot", "ghi_chu", "pay_method", "tien_mat"):
+            check(f"  ô '{f}'", f'name="{f}"' in b)
+        check("  công tắc Giá thâu vào / bán ra (thay Đổi ngang)", "Giá thâu vào" in b and "Giá bán ra" in b and "Đổi ngang" not in b)
+        check("  TÍNH TỔNG đầy đủ: bù · bớt · bớt lẻ · phương thức · TIỆM TRẢ", "Bớt lẻ" in b and "pg-pay__ways" in b and "TIỆM TRẢ KHÁCH" in b)
+        check("  chân 4 nút + DANH SÁCH", "THANH TOÁN &amp; IN" in b and "IN PHIẾU" in b and "thau-vao/danh-sach/" in b)
+        check("  popup DANH SÁCH mở được", "Phiếu thâu vàng" in body(c.get("/banle/thau-vao/danh-sach/")))
+        check("  thêm dòng thiếu loại → báo", "loại vàng" in body(c.post("/banle/thau-vao/them/", {"gold": "", "tong_tl": "10"})).lower())
+        check("  in phiếu không tồn tại → 404", c.get("/banle/thau-vao/in/?trn_id=TBGKHONGCO").status_code == 404)
+        c.post("/banle/thau-vao/moi/")
 
         # ── 7. GIÁ = MySQL gold_prices (07/09/2026): bảng giá web phủ sell/buy MySQL lên khung KK ──
         from apps.pos import prices as P
@@ -227,9 +253,9 @@ class Command(BaseCommand):
         # ── 7b. thâu: đối chiếu với money.py ──
         gm = S.gia_map()["D9999"]
         mong = M.money_vn(M.buy_amount_standalone(1000, gm["BuyRate"], 100, 0, gm["PriceUnit"]))
-        b = body(c.post("/banle/thau-vao/tinh/", {"gold": "D9999", "gw": "1000", "pct": "100",
-                                                  "add_money": "0", "dau": "+"}))
-        check(f"thâu 1 lượng D9999 = {mong}", mong in b)
+        b = body(c.post("/banle/thau-vao/them/", {"gold": "D9999", "tong_tl": "1000", "tl_hot": "0", "gia": "", "kieu": "thau"}))
+        check(f"thâu 1 lượng D9999 = {mong} (dòng trong giỏ, giá MySQL)", mong in b)
+        c.post("/banle/thau-vao/moi/")
 
         # ── 7c. MẪU IN GĐB tùy chỉnh (08/09/2026): trang chỉnh + lưu/đặt lại bố cục ──
         from apps.pmv.models import PmvState

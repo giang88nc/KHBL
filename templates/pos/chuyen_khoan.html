@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Chuyển khoản{% endblock %}
+{% block page_title %}CHUYỂN KHOẢN{% endblock %}
+{% block page_sub %}Thông báo ngân hàng · tự cập nhật mỗi 3 giây khi đang xem{% endblock %}
+{% block page_tools %}<button class="khbl-btn khbl-btn--gold" hx-get="{% url 'pos:bank_list' %}" hx-target="#modal-root">DANH SÁCH</button>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/chuyen_khoan.css' %}">{% endblock %}
+{% block content %}
+<form id="ck-filter" class="ck-filter" method="get" hx-get="{% url 'pos:chuyen_khoan' %}" hx-target="#ck-results" hx-swap="outerHTML" hx-sync="this:replace">
+{% for field in form %}<div class="khbl-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+<button class="khbl-btn khbl-btn--gold" type="submit">LỌC</button><a class="khbl-btn khbl-btn--outline" href="{% url 'pos:chuyen_khoan' %}">Hôm nay</a>
+</form>
+<div id="ck-status" role="status" aria-live="polite"></div>
+{% include "pos/_chuyen_khoan_bang.html" %}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/chuyen_khoan.js' %}"></script>{% endblock %}

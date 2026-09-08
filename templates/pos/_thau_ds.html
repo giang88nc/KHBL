@@ -1,0 +1,70 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
+Popup DANH SÁCH phiếu thâu — cùng kiểu popup Hóa đơn bán (80vw · lọc d1→d2/NV/khách/trạng thái · thống kê đầu popup).
+Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (ThauNhom). MỞ → nạp cả nhóm lên form.
+{% endcomment %}
+{% block modal_style %}width:80vw;max-width:80vw{% endblock %}
+{% block modal_title %}<span class="pg-ds__ttl"><em>Phiếu thâu vàng</em></span>{% endblock %}
+{% block modal_foot %}
+<span class="pg-ds__foot">
+  <b>{% if nhieu_ngay %}{{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }} → {{ d2|slice:"8:10" }}/{{ d2|slice:"5:7" }}/{{ d2|slice:":4" }}{% else %}Ngày {{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }}{% endif %}</b>
+  {% if loc.emp_id or loc.khach or loc.trang_thai %}<span class="pg-ds__nguon">đang lọc</span>{% endif %}
+  {% if nguon_hist %}<span class="pg-ds__nguon">📚 kho lịch sử</span>{% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}
+  <i>{{ tk.so }} phiếu</i>
+</span>
+<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+{% endblock %}
+{% block modal_head_extra %}
+<div class="pg-ds__tk" title="Thống kê theo bộ lọc đang chọn">
+  <div class="pg-ds__kpi pg-ds__kpi--so"><i>SỐ PHIẾU</i><b class="mono">{{ tk.so }}</b><small><span class="pg-ds__dot pg-ds__dot--xanh"></span>{{ tk.chot }} chốt <span class="pg-ds__dot"></span>{{ tk.nhap }} chờ</small></div>
+  <div class="pg-ds__kpi pg-ds__kpi--tra"><i>TIỆM ĐÃ TRẢ</i><b class="mono">{{ tk.tien|tien_tran }}</b><small>phiếu đã chốt</small></div>
+</div>
+{% endblock %}
+{% block modal_body %}
+  <form class="pg-ds__loc" hx-get="{% url 'pos:thau_ds' %}" hx-target="#modal-root" hx-swap="innerHTML" hx-trigger="change, submit" onsubmit="return false">
+    <label class="khbl-field"><span>Từ ngày</span><input class="khbl-input" type="date" name="d1" value="{{ d1 }}" max="{{ hom_nay }}"></label>
+    <label class="khbl-field"><span>Đến ngày</span><input class="khbl-input" type="date" name="d2" value="{{ d2 }}" max="{{ hom_nay }}"></label>
+    <label class="khbl-field"><span>Nhân viên</span>
+      <select class="khbl-select" name="emp_id"><option value="">Tất cả nhân viên</option>
+        {% for nv in nvs %}<option value="{{ nv.EmpID }}" {% if loc.emp_id == nv.EmpID %}selected{% endif %}>{{ nv.EmpName }}</option>{% endfor %}</select></label>
+    <label class="khbl-field pg-ds__loc-khach"><span>Khách hàng</span>
+      <input class="khbl-input" name="khach" value="{{ loc.khach }}" placeholder="tên · SĐT · CCCD" hx-trigger="keyup changed delay:350ms"
+             hx-get="{% url 'pos:thau_ds' %}" hx-include="closest form" hx-target="#modal-root" hx-sync="closest form:replace"></label>
+    <label class="khbl-field"><span>Trạng thái</span>
+      <select class="khbl-select" name="trang_thai"><option value="">Tất cả</option>
+        <option value="C" {% if loc.trang_thai == 'C' %}selected{% endif %}>Đã chốt</option>
+        <option value="W" {% if loc.trang_thai == 'W' %}selected{% endif %}>Còn chờ</option></select></label>
+    <button class="khbl-btn khbl-btn--outline pg-ds__homnay" type="button" hx-get="{% url 'pos:thau_ds' %}" hx-target="#modal-root">↺ Hôm nay</button>
+  </form>
+  {% if loi %}<div class="khbl-alert khbl-alert--do">Không đọc được danh sách: {{ loi }}</div>{% endif %}
+  <table class="pg-tb pg-tb--ds">
+    <thead><tr>
+      <th>{% if nhieu_ngay %}NGÀY · {% endif %}GIỜ</th><th>SỐ PHIẾU</th><th>KHÁCH</th><th>NHÂN VIÊN</th><th>NHÓM</th>
+      <th class="r pg-ds__th-tra">TIỆM TRẢ</th><th>TRẠNG THÁI</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for b in ds %}
+      <tr {% if b.IsDel != "0" %}class="hd-row--cancelled"{% endif %} data-th-row="{{ b.TrnID }}">
+        <td class="mono">{% if nhieu_ngay %}<span class="dim">{{ b.TrnDate|date:"d/m" }}</span> {% endif %}{{ b.TrnTime|slice:":5" }}</td>
+        <td class="mono b">{{ b.BillCode|default:b.TrnID }}</td>
+        <td>{{ b.CustName|default:"Khách lẻ" }}{% if b.Phone %} <i class="pg-tb__phu">{{ b.Phone }}</i>{% endif %}</td>
+        <td>{{ b.EmpName|default:"—" }}</td>
+        <td class="dim">{% if b.nhom %}<span title="Phiếu web #{{ b.nhom }} gồm {{ b.nhom_n }} dòng">⧉ {{ b.nhom_n }}</span>{% else %}—{% endif %}</td>
+        <td class="r mono b pg-ds__td-tra">{{ b.SoTien|tien_tran }}</td>
+        <td>{% if b.IsDel != "0" %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>{% elif b.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
+        <td class="r">
+          {% if b.IsDel == "0" %}
+          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Mở lên form (cả nhóm dòng)"
+                  hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.TrnID }}"}' hx-swap="none">MỞ</button>
+          {% if b.Status == "C" %}
+          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="In phiếu 110mm"
+                  hx-get="{% url 'pos:thau_in' %}?trn_id={{ b.TrnID }}&oob=1" hx-swap="none" hx-on::after-request="closeKhblModal()">🖨</button>
+          {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="pg-tb__trong"><span>Không có phiếu thâu nào khớp bộ lọc</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

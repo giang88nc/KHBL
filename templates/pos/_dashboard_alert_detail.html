@@ -1,0 +1,13 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_style %}width:min(1200px,96vw){% endblock %}
+{% block modal_title %}{{ title }}{% endblock %}
+{% block modal_body %}
+{% if error %}<p class="khbl-alert khbl-alert--do" role="alert">{{ error }}</p>{% else %}
+<p class="pg-alert-detail-note"><b>{{ rows|length }} phiếu</b> · {{ condition }} · Dữ liệu mới nhất từ máy KK</p>
+{% if not rows %}<p class="khbl-empty">Không còn phiếu cần xử lý trong nhóm này.</p>
+{% elif key == 'product' %}{% include "pos/_alert_products.html" %}
+{% else %}
+<div class="pg-product-pending__table"><table class="khbl-tbl"><thead><tr><th>Mã phiếu</th><th>Số phiếu</th><th>Ngày / Giờ</th>{% if bills %}<th>Khách hàng</th><th>Điện thoại</th><th class="num">Số tiền (₫)</th>{% endif %}<th>Trạng thái</th></tr></thead><tbody>
+{% for p in rows %}<tr><td class="mono">{{ p.TrnID }}</td><td>{{ p.BillCode|default:"—" }}</td><td>{{ p.TrnDate|date:"d/m/Y" }} {{ p.TrnTime|default:"" }}</td>{% if bills %}<td>{{ p.CustName|default:"Khách lẻ" }}</td><td>{{ p.Phone|default:"—" }}</td><td class="num">{{ p.Amount|tien_tran }}</td>{% endif %}<td><span class="khbl-badge khbl-badge--cam">Chờ xử lý</span></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}{% endif %}
+{% endblock %}

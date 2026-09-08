@@ -402,6 +402,143 @@ def huy(trn_id, *, user_id, c=None):
     return True
 
 
+# ─────────────────────────── PHIẾU THÂU ĐỘC LẬP — THAU_VANG (GĐ chốt 08/09/2026) ───────────────────────────
+# Đúng "giọng" app KK đo 08/09 (TBG…373 tiền mặt · 372/391/395 CK): Ins (W, BillCode sinh ngay) → [Upd khi SỬA, có mốc]
+# → CompleteMore 'TBG…@' (C + T_TILL_TXN 'U' + điểm + LastTradingDate) → [CARDPAY_Ins BRT với DS thẻ RỖNG khi có CK: proc
+# chỉ UPDATE CashPay/CardPay + TRN_TILL_TXN_Upd sửa dòng VND két — GĐ chốt KHÔNG cần dòng TRN_RT_BUYGOLD_CardPay]
+# → T_TILL_TXN_Proc (P + T_TILL_BAL). Hủy: mo_lai_thau / huy_thau bên dưới. Mọi bước ĐỌC LẠI kiểm chứng (bẫy rc=0 im lặng).
+THAU_COT = ("t.TrnID, t.BillCode, t.TrnDate, t.TrnTime, t.CustID, t.EmpID, t.TillID, t.GoldCode, t.GoldWeight, "
+            "t.DiamondWeight, t.BuyRate, t.PercentValue, ISNULL(t.AddMoney,0) AS AddMoney, t.TotalAmount, t.Notes, t.Status, "
+            "t.IsDel, ISNULL(t.CashPay,0) AS CashPay, ISNULL(t.CardPay,0) AS CardPay, t.WeightUnit, t.TrnDateTime_Upd, "
+            "ISNULL(k.CustName,'') AS CustName, ISNULL(k.Phone,'') AS Phone, ISNULL(k.Address,'') AS Address, "
+            "ISNULL(k.CMND,'') AS CMND, ISNULL(e.EmpName,'') AS EmpName, ISNULL(g.GoldDesc, t.GoldCode) AS GoldDesc")
+
+
+def phieu_thau(trn_id, c=None):
+    """1 dòng phiếu thâu kèm tên khách / NV / loại vàng (None nếu không có)."""
+    c = c or S.client("phieu_thau")
+    r = c.query(f"SELECT {THAU_COT} FROM TRN_RT_BUYGOLD t WITH (NOLOCK) "
+                "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = t.CustID "
+                "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID "
+                "LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = t.GoldCode WHERE t.TrnID = ?", (trn_id,))
+    return r[0] if r else None
+
+
+def _tham_so_thau(*, cust_id, emp_id, till_id, shop_id, user_id, gold_code, gw, dw, rate, pct, add_money, tien, notes):
+    """Bộ tham số Ins/Upd y app (đo 373): TL ly đã trừ hột, giá nghìn/chỉ, tuổi %, GoldAge/AgeChange='1', CustPay=TotalAmount."""
+    n = PmvClient.num
+    return {
+        "p_TrnDate": PmvClient.fmt_date(), "p_TrnTime": PmvClient.fmt_time(), "p_EmpID": emp_id,
+        "p_CustID": cust_id or S.WALK_IN, "p_GoldCode": gold_code, "p_GoldWeight": n(gw, 3), "p_DiamondWeight": n(dw, 3),
+        "p_BuyRate": n(rate, 3), "p_PercentValue": n(pct, 2), "p_TotalAmount": PmvClient.money(tien), "p_Notes": notes or "",
+        "p_Status": None, "p_IsDel": "0", "p_CreatedBy": user_id, "p_CreatedDate": PmvClient.fmt_date(), "p_Dirty": "0",
+        "p_ShopID": shop_id, "p_AddMoney": PmvClient.money(add_money), "p_GoldAge": "1", "p_TruLai": "0", "p_TruGia": "0",
+        "p_AgeChange": "1", "p_Debt_Bal": "0", "p_CustPay": PmvClient.money(tien), "p_Debt_Bal_New": "0",
+        "p_GoldWeightChange": n(gw, 3), "p_TillID": till_id, "p_TruDoTrenChi": "0", "p_PriceCcy": "VND", "p_CcyRate": "1000",
+        "p_TrnDateTime_Upd_GDN": None, "p_TrnID_GDN": "", "p_SoHDTuNhap": "",
+    }
+
+
+def luu_thau(*, trn_id="", cust_id, emp_id, till_id, shop_id, user_id, gold_code, gw, dw=0, rate, pct=100,
+             add_money=0, notes="", unit="L", c=None):
+    """LƯU NHÁP phiếu thâu (Status W). trn_id trống → TRN_RT_BUYGOLD_Ins (vendor sinh TrnID + BillCode ngay);
+    có trn_id → TRN_RT_BUYGOLD_Upd với mốc khóa lạc quan (phiếu C → vendor từ chối B-002). Trả dòng phiếu đọc lại."""
+    c = c or S.client("luu_thau")
+    if not (till_id and user_id and shop_id and emp_id):
+        raise ValueError("Tài khoản chưa gắn két / tiệm PMV hoặc chưa chọn nhân viên — không lập phiếu được")
+    tien = M.buy_amount_standalone(gw, rate, pct, add_money, unit, c)
+    if tien <= 0:
+        raise ValueError("Tiền thâu phải lớn hơn 0")
+    p = _tham_so_thau(cust_id=cust_id, emp_id=emp_id, till_id=till_id, shop_id=shop_id, user_id=user_id,
+                      gold_code=gold_code, gw=gw, dw=dw, rate=rate, pct=pct, add_money=add_money, tien=tien, notes=notes)
+    if trn_id:
+        cu = phieu_thau(trn_id, c)
+        if not cu or str(cu.get("IsDel")) != "0":
+            raise ValueError("Phiếu thâu không còn tồn tại")
+        if cu.get("Status") != NHAP:
+            raise ValueError("Phiếu đã THANH TOÁN — hủy thanh toán trước khi sửa")
+        p.update(p_TrnID=trn_id, p_UserUpd=user_id, p_IsGiaoDichNhanh="0", p_CreatedDate=None)
+        p.pop("p_TrnID_GDN", None)          # Upd không có tham số này (chỉ Ins/Del có)
+        full = c.tham_so_day_du("TRN_RT_BUYGOLD_Upd", p)
+        full.pop("p_TrnDateTime_Upd", None)
+        moc_cu = cu.get("TrnDateTime_Upd")
+        c.goi_co_khoa("TRN_RT_BUYGOLD_Upd", bang="TRN_RT_BUYGOLD", cot_id="TrnID", gia_tri=trn_id,
+                      kiem_tra=lambda cl: cl.moc_khoa("TRN_RT_BUYGOLD", "TrnID", trn_id) != moc_cu, **full)
+    else:
+        _, sets = c.call("TRN_RT_BUYGOLD_Ins", write=True, day_du=True, p_TrnID="", **p)
+        kq = (sets[0][0] if sets and sets[0] else {}) or {}
+        if str(kq.get("ErrCode", "0")) != "0" or not kq.get("TrnID"):
+            raise PmvProcError("TRN_RT_BUYGOLD_Ins", kq.get("ErrCode", -1), sets)
+        trn_id = str(kq["TrnID"]).strip()
+    row = phieu_thau(trn_id, c)
+    if not row or M.dec(row["TotalAmount"]) != tien:
+        raise PmvProcError("TRN_RT_BUYGOLD", -2, [{"loi": f"Đọc lại phiếu {trn_id} không khớp tiền {tien}"}])
+    return row
+
+
+def chot_thau_nhom(trn_ids, *, till_id, user_id, ck_theo_phieu=None, c=None):
+    """THANH TOÁN CẢ NHÓM phiếu thâu W → C đúng chuỗi app (app cũng gọi 2 mã một lúc, đo 07:18:42):
+    CompleteMore 'A@B@' → [CARDPAY_Ins từng dòng có CK] → T_TILL_TXN_Proc 'A@B@'. Kiểm chứng đọc lại sau MỖI bước.
+    ck_theo_phieu = {TrnID: tiền CK} (web chia CK tuần tự — thau_cart.phan_bo). Trả list dòng phiếu sau chốt."""
+    c = c or S.client("chot_thau")
+    ck_theo_phieu = dict(ck_theo_phieu or {})
+    if not till_id:
+        raise ValueError("Tài khoản chưa gắn két (TillID) — tiền/vàng không vào két nào được")
+    if not trn_ids:
+        raise ValueError("Không có phiếu nào để chốt")
+    rows = {}
+    for t in trn_ids:
+        row = phieu_thau(t, c)
+        if not row or str(row.get("IsDel")) != "0":
+            raise ValueError(f"Phiếu thâu {t} không còn tồn tại")
+        if row.get("Status") != NHAP:
+            raise ValueError(f"Phiếu {row.get('BillCode') or t} đã thanh toán rồi — muốn sửa hãy hủy thanh toán trước")
+        ck = M.dec(ck_theo_phieu.get(t, 0))
+        if ck < 0 or ck > M.dec(row["TotalAmount"]):
+            raise ValueError("Tiền chuyển khoản phải trong khoảng 0 → tổng tiền của dòng")
+        rows[t] = row
+    chuoi = "".join(f"{t}@" for t in trn_ids)
+    _, sets = c.call("TRN_RT_BUYGOLD_CompleteMore", write=True, p_TrnIDs=chuoi)
+    kq = (sets[0][0] if sets and sets[0] else {}) or {}
+    if str(kq.get("ErrorCode", "0")) != "0":
+        raise PmvProcError("TRN_RT_BUYGOLD_CompleteMore", kq.get("ErrorCode"), sets)
+    for t in trn_ids:
+        txn = c.query("SELECT TillTxnID, Status FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ?", (t,))
+        row = phieu_thau(t, c)
+        if row.get("Status") != CHOT_ROI or not txn:
+            raise PmvProcError("TRN_RT_BUYGOLD_CompleteMore", -2, [{"loi": f"Proc trả OK nhưng {t} chưa C / chưa có dòng két"}])
+        ck = M.dec(ck_theo_phieu.get(t, 0))
+        if ck > 0:
+            mat = M.dec(row["TotalAmount"]) - ck
+            # GĐ chốt 2 (08/09/2026): DS thẻ RỖNG → proc không INSERT TRN_RT_BUYGOLD_CardPay, chỉ UPDATE CashPay/CardPay
+            # + TRN_TILL_TXN_Upd đặt dòng VND két = tiền mặt. Dấu ÂM = tiền đi ra (đo 372: CardPay=−67,9tr).
+            # ⚠ p_ProductIDs phải NULL: chuỗi rỗng '' làm proc rẽ vào nhánh SRT (bán) sai.
+            c.call("CARDPAY_Ins", write=True, day_du=True, p_TillID=till_id, p_TillTxnID=txn[0]["TillTxnID"], p_TrnID=t,
+                   p_TypeTrade="BRT", p_ProductIDs=None, p_CardAmounts=None, p_Amount=-ck, p_AmountTra=-mat,
+                   p_List="<NewDataSet/>")
+            row = phieu_thau(t, c)
+            vnd = c.query("SELECT TrnTotalAmount FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ?", (t,))
+            if M.dec(row["CardPay"]) != -ck or not vnd or M.dec(vnd[0]["TrnTotalAmount"]) != mat:
+                raise PmvProcError("CARDPAY_Ins", -2, [{"loi": f"Ghi CK {t} xong nhưng CardPay / tiền mặt két đọc lại không khớp"}])
+    _, sets = c.call("T_TILL_TXN_Proc", write=True, day_du=True, p_TrnIDs=chuoi, p_TillID=till_id, p_UserID=user_id)
+    kq = (sets[0][0] if sets and sets[0] else {}) or {}
+    if str(kq.get("Result", "0")) != "0":
+        raise PmvProcError("T_TILL_TXN_Proc", kq.get("Result"), sets)
+    out = []
+    for t in trn_ids:
+        txn = c.query("SELECT TillID, Status FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ?", (t,))
+        if not txn or txn[0]["Status"] != "P" or txn[0]["TillID"] != till_id:
+            raise PmvProcError("T_TILL_TXN_Proc", -2, [{"loi": f"Két chưa nhận {t} (T_TILL_TXN chưa P / sai két)"}])
+        out.append(phieu_thau(t, c))
+    return out
+
+
+def chot_thau(trn_id, *, till_id, user_id, tien_ck=0, c=None):
+    """THANH TOÁN 1 phiếu thâu (gói của chot_thau_nhom). Trả dòng phiếu sau chốt."""
+    ck = M.dec(tien_ck)
+    return chot_thau_nhom([trn_id], till_id=till_id, user_id=user_id, ck_theo_phieu={trn_id: ck} if ck else None, c=c)[0]
+
+
 def huy_thau(trn_id, *, user_id, c=None):
     """Hủy phiếu thâu đang ở nháp; phiếu đã chốt phải hủy thanh toán trước.
 

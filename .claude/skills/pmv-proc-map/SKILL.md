@@ -63,6 +63,7 @@ HỦY (ngược lại, ĐÚNG THỨ TỰ):
 - Không cần `CARDPAY_Ins` cho hóa đơn tiền mặt.
 - Hủy KHÔNG dọn `T_CUSTOMER_DEBT` (còn dòng số dư 0) và các bảng `*_Log` — cố ý.
 - `I_CUSTOMER_Del` **từ chối** xóa khách đã phát sinh giao dịch (`Result=-1`).
+- **THÂU (TBG) chạy thật 08/09/2026** — chuỗi: `TRN_RT_BUYGOLD_Ins` (BillCode sinh ngay) → [`_Upd` khi sửa, mốc] → `TRN_RT_BUYGOLD_CompleteMore 'TBG…@'` (C + T_TILL_TXN 'U' + điểm + LastTradingDate, KHÔNG đổi mốc) → [CK: `CARDPAY_Ins` BRT với `@p_List='<NewDataSet/>'`, `@p_ProductIDs=NULL`, `@p_Amount=−CK`, `@p_AmountTra=−tiền mặt` → chỉ UPDATE CashPay/CardPay + `TRN_TILL_TXN_Upd` đặt VND két = tiền mặt] → `T_TILL_TXN_Proc` (P + T_TILL_BAL). Hủy: `T_TILL_TXN_Del` BRT '1' (log + hoàn két + về W, mốc đổi) → `TRN_RT_BUYGOLD_Del` (xóa CỨNG, từ chối C B-002). `fn_CheckValidate('I_CUSTOMER')` KHÔNG xét TRN_RT_BUYGOLD. Xem `apps/pmv/quy_trinh_thau_vang.py` + `smoke_thau`.
 
 ## 2c. ⚠ KHÓA LẠC QUAN — HỎNG IM LẶNG (bài học đắt, 03/09/2026)
 

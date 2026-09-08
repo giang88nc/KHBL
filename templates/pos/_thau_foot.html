@@ -1,0 +1,28 @@
+{% load pos_extras %}{% comment %}
+Chân trang thâu — mảnh OOB #pos-foot, cùng luật màn bán: trắng → tắt hết · nháp → XÓA/TT/TT&IN · chốt hôm nay → XÓA(passcode)/SỬA/IN · ngày cũ → chỉ xem.
+{% endcomment %}
+<footer class="pg-ban__foot{% if phieu_chot %} pg-ban__foot--khoa{% endif %}">
+  {% if phieu_chot %}
+    <button class="khbl-btn khbl-btn--nguy" type="button" {% if khoa_ngay_cu %}disabled title="Phiếu ngày khác — chỉ xem"{% else %}title="Xóa phiếu: hoàn két + xóa hẳn (passcode)"
+            hx-get="{% url 'pos:thau_xac_nhan' 'huy_hd' %}" hx-target="#modal-root"{% endif %}>🗑 XÓA</button>
+    <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_ngay_cu %}disabled title="Phiếu ngày khác — chỉ xem"{% else %}title="Sửa phiếu: hoàn két, về chờ, ở lại form (passcode)"
+            hx-get="{% url 'pos:thau_xac_nhan' 'sua' %}" hx-target="#modal-root"{% endif %}>🔓 SỬA</button>
+    <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_ngay_cu %}disabled title="Phiếu ngày khác — chỉ xem"{% else %}title="Hủy thanh toán: hoàn két, phiếu về chờ (passcode)"
+            hx-get="{% url 'pos:thau_xac_nhan' 'huy_tt' %}" hx-target="#modal-root"{% endif %}>↩ HỦY TT</button>
+    <span class="pg-info__tt pg-info__tt--chot" title="{{ g.bill_codes|join:', ' }}">🔒 ĐÃ CHỐT
+      <b class="mono">{% if g.ngay %}{{ g.ngay|slice:"8:10" }}/{{ g.ngay|slice:"5:7" }}/{{ g.ngay|slice:":4" }}{% endif %} {{ g.gio }}</b></span>
+  {% else %}
+    <button class="khbl-btn khbl-btn--nguy" type="button" {% if not co_don %}disabled title="Chưa có phiếu"{% else %}title="Xóa phiếu nháp (có xác nhận)"
+            hx-get="{% url 'pos:thau_xac_nhan' 'xoa_nhap' %}" hx-target="#modal-root"{% endif %}>🗑 XÓA</button>
+    {% if dang_sua %}<span class="pg-info__tt">✎ ĐANG SỬA <b class="mono">{{ g.bill_codes|join:", " }}</b></span>{% endif %}
+  {% endif %}
+
+  <span class="pg-ban__foot-sp"></span>
+
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Phiếu đã thanh toán{% else %}Chưa có dòng vàng{% endif %}"{% endif %}
+          hx-post="{% url 'pos:thau_thanh_toan' %}" hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN</button>
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Phiếu đã thanh toán{% else %}Chưa có dòng vàng{% endif %}"{% else %}title="Chốt, in phiếu 110mm ngay rồi mở phiếu trắng cho khách kế"{% endif %}
+          hx-post="{% url 'pos:thau_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN &amp; IN</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" {% if not phieu_chot %}disabled title="Thanh toán xong mới in phiếu"{% else %}title="In phiếu thâu 110mm (in thẳng từ cửa sổ này)"
+          hx-get="{% url 'pos:thau_in' %}?oob=1" hx-swap="none"{% endif %}>🖨 IN PHIẾU</button>
+</footer>

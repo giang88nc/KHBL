@@ -1,0 +1,13 @@
+{% comment %}Gợi ý khách / nhân viên cho phiếu thâu — bấm là hx-post thau_dat (như màn bán), OOB làm mới khối THÔNG TIN.{% endcomment %}
+{% if ds %}
+<div class="pg-goiy__hop">
+  {% for x in ds %}
+  {% if kind == "nv" %}
+  <button type="button" class="pg-goiy__i" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-vals='{"emp": "{{ x.EmpID }}"}'><b>{{ x.EmpName }}</b></button>
+  {% else %}
+  <button type="button" class="pg-goiy__i" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-vals='{"cust_id": "{{ x.CustID }}"}'>
+    <b>{{ x.CustName }}</b><i class="mono">{{ x.Phone }}{% if x.CMND %} · {{ x.CMND }}{% endif %}</i></button>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}

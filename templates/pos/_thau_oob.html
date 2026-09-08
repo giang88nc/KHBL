@@ -1,0 +1,13 @@
+{% load pos_extras %}{% comment %}Các mảnh OOB làm mới sau mỗi thao tác trên trang THÂU (cùng cách _ban_oob.html).{% endcomment %}
+<div id="pos-info" hx-swap-oob="true">{% include "pos/_thau_info.html" %}</div>
+<div id="pos-thau" hx-swap-oob="true">{% include "pos/_thau_box.html" %}</div>
+<div id="pos-tong" hx-swap-oob="true" class="pg-ban__c2">{% include "pos/_thau_tong.html" %}</div>
+<div id="pos-foot" hx-swap-oob="true">{% include "pos/_thau_foot.html" %}</div>
+<div id="toast-root" class="khbl-toast" hx-swap-oob="true">
+  {% if loi_phieu %}<div class="error">{{ loi_phieu }}</div>{% endif %}
+  {% if tin %}<div class="success">{{ tin }}</div>{% endif %}
+  {% include "partials/messages.html" %}
+  {% if dong_modal %}<script>window.closeKhblModal && window.closeKhblModal();</script>{% endif %}
+  {% if loi_o %}<script>window.khblFocusLoi && window.khblFocusLoi("{{ loi_o|escapejs }}");</script>{% endif %}
+</div>
+<div id="pos-in" class="pos-in" hx-swap-oob="true" aria-hidden="true">{% if in_html %}{{ in_html }}<script>setTimeout(function () { window.khblInThau && window.khblInThau(); }, 30);</script>{% endif %}</div>

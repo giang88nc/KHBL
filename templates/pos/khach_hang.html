@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load pos_extras %}
 {% block title %}Khách hàng{% endblock %}
 {% block page_title %}Khách hàng{% endblock %}
-{% block page_sub %}{{ tong|sokhong }} khách trong máy KK · bấm dòng để xem lịch sử mua bán{% endblock %}
+{% block page_sub %}{{ tong|sokhong }} khách trong máy KK · xếp theo hoạt động gần nhất · rê chuột lên dòng để XEM · SỬA · XÓA{% endblock %}
 {% block page_tools %}
   <button class="khbl-btn khbl-btn--gold" type="button"
           hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">+ THÊM KHÁCH</button>
@@ -9,7 +9,7 @@
 
 {% block content %}
 <form class="kh-loc" hx-get="{% url 'pos:khach_hang' %}?partial=1" hx-target="#kh-bang"
-      hx-trigger="submit, keyup changed delay:350ms from:input" hx-push-url="false">
+      hx-trigger="submit, keyup changed delay:350ms from:input, change from:select" hx-push-url="false">
   <div class="khbl-field" style="width:280px">
     <label>Tìm theo điện thoại · CCCD · họ tên</label>
     <input class="khbl-input" name="key" value="{{ key }}" placeholder="vd 0906 · 096088 · Nguyễn" autofocus autocomplete="off">
@@ -21,6 +21,12 @@
   <div class="khbl-field" style="width:160px">
     <label>Ngày sinh</label>
     <input class="khbl-input" type="date" name="sinh" value="{{ sinh }}">
+  </div>
+  <div class="khbl-field" style="width:300px">
+    <label>Lọc dữ liệu khách</label>
+    <select class="khbl-input" name="loc">
+      {% for ma, ten in loc_ds %}<option value="{{ ma }}" {% if ma == loc %}selected{% endif %}>{{ ten }}</option>{% endfor %}
+    </select>
   </div>
   <button class="khbl-btn khbl-btn--outline" type="submit">Lọc</button>
   <a class="khbl-btn khbl-btn--ghost" href="{% url 'pos:khach_hang' %}">Xóa lọc</a>

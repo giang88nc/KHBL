@@ -1,0 +1,30 @@
+{% comment %}Popup XÓA KHÁCH — cùng khung khbl-confirm với hủy hóa đơn; có giao dịch → chỉ báo, không có ô passcode.{% endcomment %}
+<div class="khbl-modal khbl-confirm khbl-confirm--compact" role="dialog" aria-modal="true" aria-labelledby="kh-xoa-title">
+  <div class="khbl-modal__veil"></div>
+  <div class="khbl-modal__box">
+    <form class="khbl-confirm__form" hx-post="{% url 'pos:khach_xoa' k.CustID %}" hx-target="#modal-root" hx-swap="innerHTML" hx-sync="this:drop" autocomplete="off">
+      {% csrf_token %}
+      <div class="khbl-confirm__top">
+        <span class="khbl-confirm__mark" aria-hidden="true">!</span>
+        <div><small>XÁC NHẬN THAO TÁC</small><h2 id="kh-xoa-title">Xóa khách hàng</h2></div>
+        <button class="khbl-modal__x" type="button" onclick="closeKhblModal()" aria-label="Đóng">×</button>
+      </div>
+      <div class="khbl-confirm__body">
+        <p class="khbl-confirm__lead">Bạn sắp <b>xóa vĩnh viễn</b> hồ sơ khách</p>
+        <p class="khbl-confirm__bill"><span class="mono">{{ k.CustCode|default:k.CustID }}</span> — {{ k.CustName }}{% if k.Phone %} · <span class="mono">{{ k.Phone }}</span>{% endif %}</p>
+        {% if gd %}
+          <div class="khbl-confirm__error" role="alert"><b>Không xóa được — khách đã có giao dịch</b>
+            <span>{% for ten, n in gd.items %}{{ n }} {{ ten }}{% if not forloop.last %} · {% endif %}{% endfor %}. Chỉ xóa được khách chưa từng mua / thâu / nợ.</span></div>
+        {% else %}
+          <div class="khbl-confirm__warning">Xóa khỏi máy KK cả hồ sơ lẫn sổ điểm tích lũy. <b>Không hoàn tác được.</b> Máy KK và web đều không còn thấy khách này.</div>
+          {% if loi %}<div class="khbl-confirm__error" role="alert" aria-live="assertive"><b>Chưa xóa được</b><span>{{ loi }}</span></div>{% endif %}
+          <label class="khbl-field khbl-confirm__pass"><span>NHẬP PASSCODE</span><input class="khbl-input mono" type="password" name="passcode" autocomplete="current-password" required autofocus inputmode="numeric" placeholder="••••"></label>
+        {% endif %}
+      </div>
+      <div class="khbl-confirm__foot">
+        <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">{% if gd %}Đóng{% else %}Quay lại{% endif %}</button>
+        {% if not gd %}<button class="khbl-btn khbl-confirm__submit" type="submit"><span class="khbl-confirm__label">Xóa khách</span><span class="khbl-confirm__loading">Đang xóa…</span></button>{% endif %}
+      </div>
+    </form>
+  </div>
+</div>

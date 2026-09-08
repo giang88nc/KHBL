@@ -1254,13 +1254,16 @@ def _ctx_khach(request):
         trang = max(1, int(request.GET.get("trang") or 1))
     except ValueError:
         trang = 1
-    ds, tong, so_trang = S.khach_loc(key, addr, sinh, trang, MOI_TRANG)
+    loc = request.GET.get("loc", "")
+    if loc not in dict(S.KHACH_LOC):
+        loc = ""
+    ds, tong, so_trang = S.khach_loc(key, addr, sinh, trang, MOI_TRANG, loc=loc)
     trang = min(trang, so_trang)
     qs = request.GET.copy()
     qs.pop("trang", None)
     return {
         "nav_active": "khach", "ds": ds, "tong": tong, "trang": trang, "so_trang": so_trang,
-        "key": key, "addr": addr, "sinh": sinh, "qstring": qs.urlencode(),
+        "key": key, "addr": addr, "sinh": sinh, "loc": loc, "loc_ds": S.KHACH_LOC, "qstring": qs.urlencode(),
         "tu": (trang - 1) * MOI_TRANG + 1, "den": min(trang * MOI_TRANG, tong),
         "truoc": trang - 1 if trang > 1 else 0, "sau": trang + 1 if trang < so_trang else 0,
         "loai_ds": S.CUST_TYPES,
@@ -1286,6 +1289,48 @@ def khach_form(request, cust_id=None):
         "loai_ds": S.CUST_TYPES, "duong_dan_anh": S.DUONG_DAN_ANH,
         "save_token": secrets.token_urlsafe(24),
     })
+
+
+@require_GET
+def khach_xoa_xac_nhan(request, cust_id):
+    """Popup XÓA khách: hiện guard giao dịch (bán·thâu·nợ·đổi·đặt hàng) — có thì không cho xác nhận."""
+    k = S.khach_theo_id(cust_id)
+    if not k:
+        return HttpResponse("Không tìm thấy khách hàng.", status=404)
+    try:
+        gd = C.giao_dich(S.client("khach_xoa"), cust_id)
+    except Exception as exc:
+        return HttpResponse("Không thể kiểm tra dữ liệu KK: " + S.error_message(exc), status=503)
+    return render(request, "pos/_khach_xoa_xn.html", {"k": k, "gd": gd})
+
+
+@require_POST
+def khach_xoa(request, cust_id):
+    """XÓA THẬT sau passcode: guard lại lần nữa trong customer.delete rồi gọi I_CUSTOMER_Del."""
+    from apps.pmv import gateway
+    k = S.khach_theo_id(cust_id)
+    if not k:
+        return HttpResponse("Không tìm thấy khách hàng.", status=404)
+    if not _passcode_dung(request, request.POST.get("passcode") or ""):
+        # 200 để HTMX thay popup bằng chính nó kèm lỗi (403 bị HTMX coi là lỗi transport)
+        return render(request, "pos/_khach_xoa_xn.html", {"k": k, "gd": {},
+                      "loi": "Passcode không đúng. Khách chưa bị xóa."})
+    try:
+        with C.SAVE_LOCK:
+            kq = C.delete(cust_id, client=S.client("khach_xoa"))
+    except C.CustomerSaveError as exc:
+        return render(request, "pos/_khach_xoa_xn.html", {"k": k, "gd": {}, "loi": str(exc)}, status=409)
+    except Exception as exc:
+        logger.exception("Không xóa được khách %s qua PMV", cust_id)
+        return render(request, "pos/_khach_xoa_xn.html", {"k": k, "gd": {},
+                      "loi": "PMV/SQL: " + C.error_message(exc)}, status=503)
+    gateway.canh_bao("khach_xoa", f"XÓA KHÁCH {kq['cust_code']} — {kq['name']} ({cust_id}); "
+                                  f"người xóa: {request.user.username}")
+    response = HttpResponse(status=204)
+    response["HX-Trigger"] = json.dumps(
+        {"khachDeleted": {"message": f"Đã xóa {kq['cust_code']} — {kq['name']}", "custId": cust_id}},
+        ensure_ascii=True)
+    return response
 
 
 @require_GET
@@ -1361,31 +1406,7 @@ def khach_luu(request):
 
 # ─────────────────────────── THÂU VÀO ───────────────────────────
 
-def thau(request):
-    ctx = {"nav_active": "thau", "loai": S.loai_vang_thau(), "nvs": S.nhan_vien_ban(),
-           "gia": S.gia_noi_bat(), "gia_sig": S.gia_chu_ky(), "gia_moc": S.gia_moc()}
-    return render(request, "pos/thau.html", ctx)
-
-
-@require_POST
-def thau_tinh(request):
-    """Máy tính phiếu thâu: % nhân TRƯỚC, tiền bù/bớt cộng SAU (đúng công thức đã kiểm chứng)."""
-    gold = (request.POST.get("gold") or "").strip()
-    gw = _so(request.POST.get("gw"))
-    pct = M.dec(request.POST.get("pct") or 100)
-    bu = _so(request.POST.get("add_money"))
-    dau = request.POST.get("dau") or "+"
-    if dau == "-":
-        bu = -bu
-    gm = S.gia_map().get(gold)
-    if not gm or gw <= 0:
-        return render(request, "pos/_thau_kq.html", {"loi": "Chọn loại vàng và nhập trọng lượng"})
-    unit = (gm["PriceUnit"] or "L").upper()
-    rate = M.dec(gm["BuyRate"])
-    tien = M.buy_amount_standalone(gw, rate, pct, bu, unit)
-    return render(request, "pos/_thau_kq.html", {
-        "gm": gm, "gw": gw, "pct": pct, "bu": bu, "rate": rate, "unit": unit, "tien": tien,
-        "tho": M.dec(gw) / M.hs(unit) * rate * M.RATE_SCALE * pct / M.dec(100)})
+# THÂU VÀO: toàn bộ view ở apps/pos/views_thau.py (08/09/2026 tối — thiết kế lại theo khung màn bán).
 
 
 # ─────────────────────────── HÓA ĐƠN HÔM NAY ───────────────────────────

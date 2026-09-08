@@ -1,10 +1,17 @@
 from django.urls import path
 
 from . import views
+from . import views_thau as VT, transfers, dashboard_alerts
 
 app_name = "pos"
 
 urlpatterns = [
+    path("banle/canh-bao/<str:key>/", dashboard_alerts.detail_view, name="dashboard_alert_detail"),
+    path("banle/chuyen-khoan/", transfers.transfers, name="chuyen_khoan"),
+    path("banle/ngan-hang/", transfers.bank_list, name="bank_list"),
+    path("banle/ngan-hang/them/", transfers.bank_edit, name="bank_add"),
+    path("banle/ngan-hang/<int:bank_id>/sua/", transfers.bank_edit, name="bank_edit"),
+    path("banle/ngan-hang/<int:bank_id>/xoa/", transfers.bank_delete, name="bank_delete"),
     # Tổng quan
     path("", views.dashboard, name="dashboard"),
     path("banle/", views.dashboard, name="dashboard_banle"),
@@ -38,8 +45,20 @@ urlpatterns = [
     path("banle/ban-hang/in/thang/", views.ban_in_thang, name="ban_in_thang"),
 
     # Thâu vào
-    path("banle/thau-vao/", views.thau, name="thau"),
-    path("banle/thau-vao/tinh/", views.thau_tinh, name="thau_tinh"),
+    # THÂU VÀO — cùng khung màn bán (08/09/2026 tối, views_thau.py): giỏ session nhiều dòng · popup DS · passcode
+    path("banle/thau-vao/", VT.thau, name="thau"),
+    path("banle/thau-vao/moi/", VT.thau_moi, name="thau_moi"),
+    path("banle/thau-vao/dat/", VT.thau_dat, name="thau_dat"),
+    path("banle/thau-vao/them/", VT.thau_them, name="thau_them"),
+    path("banle/thau-vao/xoa-dong/", VT.thau_xoa_dong, name="thau_xoa_dong"),
+    path("banle/thau-vao/tinh-lai/", VT.thau_tinh_lai, name="thau_tinh_lai"),
+    path("banle/thau-vao/tim/", VT.thau_tim, name="thau_tim"),
+    path("banle/thau-vao/danh-sach/", VT.thau_ds, name="thau_ds"),
+    path("banle/thau-vao/mo/", VT.thau_mo, name="thau_mo"),
+    path("banle/thau-vao/thanh-toan/", VT.thau_thanh_toan, name="thau_thanh_toan"),
+    path("banle/thau-vao/xac-nhan/<str:hanh_dong>/", VT.thau_xac_nhan, name="thau_xac_nhan"),
+    path("banle/thau-vao/thuc-hien/<str:hanh_dong>/", VT.thau_thuc_hien, name="thau_thuc_hien"),
+    path("banle/thau-vao/in/", VT.thau_in, name="thau_in"),
 
     # Bảng giá
     path("banle/bang-gia/", views.bang_gia, name="bang_gia"),
@@ -62,6 +81,8 @@ urlpatterns = [
     path("banle/khach-hang/them/", views.khach_form, name="khach_them"),
     path("banle/khach-hang/luu/", views.khach_luu, name="khach_luu"),
     path("banle/khach-hang/<str:cust_id>/anh/<str:kind>/", views.khach_anh, name="khach_anh"),
+    path("banle/khach-hang/<str:cust_id>/xoa/", views.khach_xoa_xac_nhan, name="khach_xoa_xn"),
+    path("banle/khach-hang/<str:cust_id>/xoa/thuc-hien/", views.khach_xoa, name="khach_xoa"),
     path("banle/khach-hang/<str:cust_id>/", views.khach_chi_tiet, name="khach_chi_tiet"),
     path("banle/khach-hang/<str:cust_id>/sua/", views.khach_form, name="khach_sua"),
 

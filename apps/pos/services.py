@@ -298,9 +298,26 @@ def _dep_khach(r):
     return r
 
 
-def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50):
-    """Lọc khách: key = SĐT / CCCD / họ tên · addr = địa chỉ · ngay_sinh = ISO yyyy-mm-dd.
-    Phân trang bằng ROW_NUMBER (SQL 2005 không có OFFSET/FETCH). Trả (dòng, tổng, số trang)."""
+# Khách "chưa có giao dịch" = không có dòng ở 5 bảng này (4 bảng proc vendor I_CUSTOMER_Del tự kiểm
+# + TRN_RT_BUYGOLD mà fn_CheckValidate BỎ SÓT — kiểm sandbox 08/09/2026). Dùng chung cho bộ lọc
+# DS khách và guard xóa (customer.GD_TABLES cùng danh sách).
+KHONG_GD_SQL = (
+    "NOT EXISTS (SELECT 1 FROM TRN_RT_BUYSELL s WITH (NOLOCK) WHERE s.CustID = {a}.CustID) "
+    "AND NOT EXISTS (SELECT 1 FROM TRN_RT_BUYGOLD g WITH (NOLOCK) WHERE g.CustID = {a}.CustID) "
+    "AND NOT EXISTS (SELECT 1 FROM T_CUSTOMER_DEBT d WITH (NOLOCK) WHERE d.CustID = {a}.CustID) "
+    "AND NOT EXISTS (SELECT 1 FROM TRN_RT_CHANGE ch WITH (NOLOCK) WHERE ch.CustID = {a}.CustID) "
+    "AND NOT EXISTS (SELECT 1 FROM TRN_PO_MASTER p WITH (NOLOCK) WHERE p.CustID = {a}.CustID)")
+KHACH_LOC = (("", "Tất cả khách"),
+             ("xoa", "Chưa có giao dịch — xóa được"),
+             ("chuahople", "Chưa hợp lệ — không SĐT & CCCD, chưa giao dịch"))
+
+
+def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50, loc=""):
+    """Lọc khách: key = SĐT / CCCD / họ tên · addr = địa chỉ · ngay_sinh = ISO yyyy-mm-dd ·
+    loc = "" tất cả · "xoa" chưa có giao dịch · "chuahople" chưa giao dịch VÀ thiếu cả SĐT lẫn CCCD.
+    Xếp theo HOẠT ĐỘNG GẦN NHẤT (ngày tạo hoặc GD cuối, cái nào mới hơn) giảm dần (GĐ chốt 08/09/2026).
+    Phân trang bằng ROW_NUMBER (SQL 2005 không có OFFSET/FETCH). Trả (dòng, tổng, số trang);
+    mỗi dòng có cờ `co_gd` (đã có giao dịch → không xóa được)."""
     key = (key or "").strip()
     addr = (addr or "").strip()
     ngay = (ngay_sinh or "").strip()
@@ -308,20 +325,31 @@ def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50):
           "AND (? = '' OR c.Phone LIKE ? OR c.CMND LIKE ? OR c.CustName LIKE ? OR c.CustCode LIKE ?) "
           "AND (? = '' OR c.Address LIKE ?) "
           "AND (? = '' OR c.BirthDate = CAST(? AS datetime))")
+    if loc in ("xoa", "chuahople"):
+        dk += " AND " + KHONG_GD_SQL.format(a="c")
+    if loc == "chuahople":
+        dk += " AND ISNULL(c.Phone, '') = '' AND ISNULL(c.CMND, '') = ''"
     ps = (WALK_IN, key, f"%{key}%", f"%{key}%", f"%{key}%", f"{key}%", addr, f"%{addr}%", ngay, ngay)
     c = client("khach_loc")
     tong = c.query(f"SELECT COUNT(*) AS n FROM I_CUSTOMER c WITH (NOLOCK) {dk}", ps)[0]["n"]
     tu = (max(1, int(trang)) - 1) * moi_trang + 1
     den = tu + moi_trang - 1
+    hoat_dong = ("CASE WHEN ISNULL(c.LastTradingDate, '19000101') > ISNULL(c.DateOfJoining, '19000101') "
+                 "THEN c.LastTradingDate ELSE ISNULL(c.DateOfJoining, '19000101') END")
     rows = c.query(
-        "SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY c.LastTradingDate DESC, c.CustName) AS rn, "
+        "SELECT t.*, CASE WHEN " + KHONG_GD_SQL.format(a="t") + " THEN 0 ELSE 1 END AS co_gd "
+        f"FROM (SELECT ROW_NUMBER() OVER (ORDER BY {hoat_dong} DESC, c.CustID DESC) AS rn, "
         "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.BirthDate, "
         "COALESCE(NULLIF(c.CustTypeID,''), c.CustType) AS CustType, "
-        "c.Gender, c.LastTradingDate, c.Active "
+        "c.Gender, c.DateOfJoining, c.LastTradingDate, c.Active "
         f"FROM I_CUSTOMER c WITH (NOLOCK) {dk}) t WHERE t.rn BETWEEN ? AND ? ORDER BY t.rn",
         ps + (tu, den))
     so_trang = max(1, -(-tong // moi_trang))
-    return [_dep_khach(r) for r in rows], tong, so_trang
+    out = []
+    for r in rows:
+        r["co_gd"] = bool(r.get("co_gd"))
+        out.append(_dep_khach(r))
+    return out, tong, so_trang
 
 
 def lich_su_khach(cust_id, limit=15):
@@ -523,28 +551,8 @@ def _tong_quan(c, ngay_iso, so_ngay=7):
         "WHERE TrnDate >= CAST(? AS datetime) AND TrnDate <= CAST(? AS datetime) AND IsDel = '0'",
         (dau_thang, ngay_iso))[0]
 
-    # Cảnh báo chỉ đọc: đơn bán / thâu Status W chưa hoàn tất và phiếu nhập chờ duyệt.
-    # Đây là các trạng thái nghiệp vụ thực của PMV, không suy diễn từ dữ liệu giao diện.
-    cho_ban = c.query(
-        "SELECT COUNT(*) AS n, MIN(CreatedDate) AS luc "
-        "FROM TRN_RT_BUYSELL WITH (NOLOCK) "
-        "WHERE Status = 'W' AND IsDel = '0' AND CreatedDate < DATEADD(minute,-30,GETDATE())")[0]
-    cho_thau = c.query(
-        "SELECT COUNT(*) AS n, MIN(CreatedDate) AS luc "
-        "FROM TRN_RT_BUYGOLD WITH (NOLOCK) "
-        "WHERE Status = 'W' AND IsDel = '0' AND CreatedDate < DATEADD(minute,-30,GETDATE())")[0]
-    cho_nhap = c.query(
-        "SELECT COUNT(*) AS n, MIN(TrnDate) AS luc "
-        "FROM TRN_PRODUCT_IN WITH (NOLOCK) WHERE Status = 'W'")[0]
-    canh_bao = [
-        {"kind": "do", "title": "Đơn bán đang chờ thanh toán", "count": cho_ban["n"] or 0,
-         "detail": "đơn nháp quá 30 phút cần kiểm tra", "luc": cho_ban["luc"]},
-        {"kind": "cam", "title": "Phiếu nhập chờ duyệt", "count": cho_nhap["n"] or 0,
-         "detail": "phiếu chưa tạo hàng chính thức vào kho", "luc": cho_nhap["luc"]},
-        {"kind": "cam", "title": "Phiếu thâu vào chưa hoàn tất", "count": cho_thau["n"] or 0,
-         "detail": "phiếu thu mua quá 30 phút cần xử lý", "luc": cho_thau["luc"]},
-    ]
-    canh_bao = [x for x in canh_bao if x["count"]]
+    from .dashboard_alerts import summaries
+    canh_bao = summaries(c)
 
     # Vàng nhẫn 9999 nhận diện bằng MÃ HÀNG 9N% (không suy từ tên: "Vòng nhẫn" 9V phải loại).
     # Tổng trọng lượng PMV lưu theo đơn vị nội bộ, dùng cùng quy đổi 100 ly = 1 chỉ.
