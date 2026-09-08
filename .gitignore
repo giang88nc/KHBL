@@ -9,3 +9,7 @@ db.sqlite3
 
 # Anh bang gia xuat tu popup
 /exports/
+
+# Caddy HTTPS (08/09/2026): binary + kho cert/key noi bo - KHONG commit
+runtime/
+ops/caddy/caddy.exe

@@ -1,0 +1,20 @@
+KIM HANH 2 - CAI HTTPS CHO PC LAN (KHBL - tiemvangkimhanh2)
+=============================================================
+
+1. Copy NGUYEN THU MUC "LAN_HTTPS_KIT" sang PC can dung (USB hoac chia se mang).
+2. Chuot phai CAI_HTTPS_PC_LAN.bat -> Run as administrator (hoac chay thuong, se tu hoi quyen).
+3. Bam Yes khi Windows hoi quyen quan tri.
+4. Dong TOAN BO cua so Edge/Chrome/Firefox roi mo lai.
+5. Vao: https://tiemvangkimhanh2:8100/banle/ban-hang/
+   (go http://tiemvangkimhanh2:8100 cung duoc - tu nhay sang https)
+
+Script lam gi:
+ - Them dong "192.168.1.6  tiemvangkimhanh2" vao file hosts cua Windows.
+ - Nap chung chi CA noi bo "Caddy Local Authority - 2026 ECC Root" (han 05/2036) vao Trusted Root.
+   PC nao da cai kit HTTPS cua nen tang KIMHANH (cong 1276) thi CA da co san, script chi them hosts.
+ - Mo trinh duyet toi trang ban hang.
+
+Luu y:
+ - Chi cai chung chi do quan tri vien Kim Hanh cung cap.
+ - Neu IP may chu doi (khong con 192.168.1.6) -> chay lai file .bat sau khi quan tri vien sua IP trong script.
+ - Chi https moi mo duoc camera (chup anh khach / CCCD).

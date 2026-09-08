@@ -1,9 +1,11 @@
 @echo off
 REM ============================================================
-REM  TURN_ON_KHBL.bat - Bat he thong KHBL (3 tien trinh AN)
-REM    1) Web (waitress) : http://0.0.0.0:8100 (log: logs\server.log)
-REM    2) Scheduler      : manage.py run_scheduler (log: logs\scheduler.log)
-REM    3) Watchdog       : WATCHDOG_KHBL.bat - 60s/lan tu goi lai file nay
+REM  TURN_ON_KHBL.bat - Bat he thong KHBL (4 tien trinh AN)
+REM    1) Web (waitress) : 127.0.0.1:8101 NOI BO (log: logs\server.log)
+REM    2) Caddy HTTPS    : *:8100 - http+https cung cong, http tu nhay https (log: logs\caddy.log)
+REM                        https://tiemvangkimhanh2:8100 = https://localhost:8100 = https://192.168.1.6:8100
+REM    3) Scheduler      : manage.py run_scheduler (log: logs\scheduler.log)
+REM    4) Watchdog       : WATCHDOG_KHBL.bat - 60s/lan tu goi lai file nay
 REM  Chong bat trung tung tien trinh - goi lai bao nhieu lan cung an toan.
 REM  KHONG goi tu Git Bash (bai hoc KHJ) - goi qua PowerShell: cmd /c ...
 REM ============================================================
@@ -26,23 +28,44 @@ ping -n 6 127.0.0.1 >nul
 goto wait_mysql
 :mysql_ok
 
-REM --- 1) WEB: port 8100 chua co ai nghe thi moi bat (waitress) ---
-REM     08/09/2026: waitress LA bind 127.0.0.1:8100 (chay tay) tung chiem cong -> guard tuong web da chay,
-REM     LAN bi tu choi. Nay: listener CHI loopback thi kill truoc; chi coi la "da chay" khi nghe 0.0.0.0/[::].
-REM     findstr mac dinh hieu [ ] la regex -> phai /L (literal) + /C: cho tung chuoi.
+REM --- 1) WEB waitress NOI BO 127.0.0.1:8101 (08/09/2026: Caddy dung truoc, waitress khong con nghe LAN) ---
+REM     findstr mac dinh hieu [ ] la regex -> /L (literal) + /C: cho tung chuoi.
+netstat -ano | findstr "LISTENING" | findstr /L /C:"127.0.0.1:8101 " >nul 2>&1
+if %errorlevel%==0 (
+    echo [KHBL] Web waitress DA CHAY san tren 127.0.0.1:8101. Bo qua.
+) else (
+    echo [KHBL] Dang bat web waitress 127.0.0.1:8101...
+    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8101 --threads=8 config.wsgi:application >> logs\server.log 2>&1"
+)
+
+REM --- 2) CADDY HTTPS *:8100 (CA dung chung KIMHANH: root.crt/root.key copy sang runtime neu chua co) ---
+if not exist "runtime\caddy-data\pki\authorities\local" mkdir "runtime\caddy-data\pki\authorities\local"
+if not exist "runtime\caddy-data\pki\authorities\local\root.key" (
+    if exist "D:\PYTHON\KIMHANH\runtime\caddy-data\pki\authorities\local\root.key" (
+        echo [KHBL] Chep CA noi bo dung chung tu KIMHANH sang runtime\caddy-data ...
+        copy /Y "D:\PYTHON\KIMHANH\runtime\caddy-data\pki\authorities\local\root.crt" "runtime\caddy-data\pki\authorities\local\" >nul
+        copy /Y "D:\PYTHON\KIMHANH\runtime\caddy-data\pki\authorities\local\root.key" "runtime\caddy-data\pki\authorities\local\" >nul
+    )
+)
+REM     Listener CHI loopback tren 8100 (waitress cu / chay tay) thi kill - cong 8100 nay la cua Caddy.
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr "LISTENING" ^| findstr /L /C:"127.0.0.1:8100 "') do (
-    echo [KHBL] Cong 8100 dang bi tien trinh loopback PID %%p chiem - kill de bat dung *:8100
+    echo [KHBL] Cong 8100 dang bi tien trinh loopback PID %%p chiem - kill de Caddy bat *:8100
     taskkill /PID %%p /F >nul 2>&1
 )
 netstat -ano | findstr "LISTENING" | findstr /L /C:"0.0.0.0:8100 " /C:"[::]:8100 " >nul 2>&1
 if %errorlevel%==0 (
-    echo [KHBL] Web DA CHAY san tren port 8100. Bo qua.
+    echo [KHBL] Caddy HTTPS DA CHAY san tren port 8100. Bo qua.
 ) else (
-    echo [KHBL] Dang bat web waitress...
-    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=*:8100 --threads=8 config.wsgi:application >> logs\server.log 2>&1"
+    if not exist "ops\caddy\caddy.exe" (
+        echo [KHBL] LOI: thieu ops\caddy\caddy.exe - copy tu D:\PYTHON\KIMHANH\ops\caddy\caddy.exe
+    ) else (
+        echo [KHBL] Dang bat Caddy HTTPS *:8100...
+        REM duong dan TUYET DOI de TURN_OFF nhan dien Caddy cua KHBL qua CommandLine (chua PYTHON\KHBL)
+        wscript //B "%~dp0run_hidden_khbl.vbs" "D:\PYTHON\KHBL\ops\caddy\caddy.exe run --config D:\PYTHON\KHBL\ops\caddy\Caddyfile --adapter caddyfile >> logs\caddy.log 2>&1"
+    )
 )
 
-REM --- 2) SCHEDULER: chua co tien trinh run_scheduler cua KHBL thi moi bat ---
+REM --- 3) SCHEDULER: chua co tien trinh run_scheduler cua KHBL thi moi bat ---
 REM     (venv = cap cha-con: cha ...\KHBL\venv\...python.exe, con D:\PYTHON\python.exe
 REM      khong mang ten du an - nhan dien con qua ParentProcessId tro ve cha KHBL)
 powershell -NoProfile -Command "$s=@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'run_scheduler' }); $l=@($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' }); exit @($s | Where-Object { $_.ExecutablePath -like '*\PYTHON\KHBL\*' -or $l.ProcessId -contains $_.ParentProcessId }).Count"
@@ -53,7 +76,7 @@ if %errorlevel% gtr 0 (
     wscript //B "%~dp0run_hidden_khbl.vbs" "set PYTHONUTF8=1&& venv\Scripts\python.exe manage.py run_scheduler >> logs\scheduler.log 2>&1"
 )
 
-REM --- 3) WATCHDOG: chua chay thi bat (tu goi lai TURN_ON moi 60s) ---
+REM --- 4) WATCHDOG: chua chay thi bat (tu goi lai TURN_ON moi 60s) ---
 powershell -NoProfile -Command "exit (@(Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" | Where-Object { $_.CommandLine -match 'WATCHDOG_KHBL' }).Count)"
 if %errorlevel% gtr 0 (
     echo [KHBL] Watchdog DA CHAY san. Bo qua.
@@ -62,16 +85,19 @@ if %errorlevel% gtr 0 (
     wscript //B "%~dp0run_hidden_khbl.vbs" "%~dp0WATCHDOG_KHBL.bat"
 )
 
-REM --- Kiem tra web len chua (toi da 30s) ---
+REM --- Kiem tra web + Caddy len chua (toi da 30s) ---
 set /a TRIES=0
 :wait_web
 ping -n 3 127.0.0.1 >nul
-netstat -ano | findstr "LISTENING" | findstr ":8100 " >nul 2>&1
+netstat -ano | findstr "LISTENING" | findstr /L /C:"127.0.0.1:8101 " >nul 2>&1
+if not %errorlevel%==0 goto wait_more
+netstat -ano | findstr "LISTENING" | findstr /L /C:"0.0.0.0:8100 " /C:"[::]:8100 " >nul 2>&1
 if %errorlevel%==0 (
-    echo [KHBL] HOAN TAT: web http://localhost:8100 + scheduler + watchdog dang chay.
+    echo [KHBL] HOAN TAT: https://tiemvangkimhanh2:8100 ^(Caddy *:8100 -^> waitress 127.0.0.1:8101^) + scheduler + watchdog dang chay.
     exit /b 0
 )
+:wait_more
 set /a TRIES+=1
 if %TRIES% lss 15 goto wait_web
-echo [KHBL] LOI: web chua len sau 30s - xem logs\server.log
+echo [KHBL] LOI: web/Caddy chua len sau 30s - xem logs\server.log va logs\caddy.log
 exit /b 1

@@ -20,7 +20,10 @@ STORAGES = {
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
-# LAN nội bộ chạy HTTP → không bật cookie secure (bật khi nào có HTTPS nội bộ)
+# HTTPS LAN (08/09/2026): Caddy *:8100 chấm dứt TLS rồi chuyển về waitress 127.0.0.1:8101 kèm
+# X-Forwarded-Proto=https → Django coi request là secure (is_secure) để CSRF so đúng origin https://…
+# Cookie vẫn KHÔNG Secure vì http://…:8100 còn được nhận (Caddy tự nhảy sang https) và dev runserver.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])

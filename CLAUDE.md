@@ -576,8 +576,33 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 
 | File tại gốc | Chức năng |
 |---|---|
-| `TURN_ON_KHBL.bat` | Bật web + scheduler + watchdog. Chờ MySQL80, chống bật trùng từng tiến trình |
-| `TURN_OFF_KHBL.bat` | Tắt watchdog TRƯỚC rồi web + scheduler |
+| `TURN_ON_KHBL.bat` | Bật **4 tiến trình ẩn**: waitress `127.0.0.1:8101` · **Caddy HTTPS `*:8100`** · scheduler · watchdog. Chờ MySQL80, chống bật trùng từng tiến trình |
+| `TURN_OFF_KHBL.bat` | Tắt watchdog TRƯỚC rồi Caddy KHBL (nhận diện qua CommandLine chứa `PYTHON\KHBL` — KHÔNG đụng Caddy KIMHANH) + mọi listener :8100/:8101 + scheduler |
+| `LAN_HTTPS_KIT\CAI_HTTPS_PC_LAN.bat` | Chạy 1 lần trên mỗi PC LAN (tự xin UAC): ghi `hosts` `192.168.1.6 tiemvangkimhanh2` + nạp CA + mở `https://tiemvangkimhanh2:8100`. Copy NGUYÊN thư mục `LAN_HTTPS_KIT` sang PC |
+
+**HTTPS LAN — GĐ chốt 08/09/2026 (A: Caddy riêng + dùng chung CA KIMHANH · B: IP tĩnh 192.168.1.6)**
+- URL chuẩn: **`https://tiemvangkimhanh2:8100`** (= `https://localhost:8100` = `https://192.168.1.6:8100` = `https://mrgiang:8100`).
+  Gõ `http://…:8100` → Caddy trả **308 sang https cùng địa chỉ** (listener wrapper `http_redirect`, CÙNG cổng 8100 —
+  không cần nginx tách luồng như KIMHANH :1276). Bookmark/shortcut Edge cũ không phải đổi.
+- Kiến trúc: `ops/caddy/Caddyfile` (Caddy v2.11, exe copy từ `D:\PYTHON\KIMHANH\ops\caddy\caddy.exe` → `ops/caddy/caddy.exe`,
+  gitignore) nghe `*:8100`, `reverse_proxy 127.0.0.1:8101` + `X-Forwarded-Proto https`; waitress **không còn nghe LAN**.
+  `admin off` vì KIMHANH giữ 127.0.0.1:2019. Log `logs/caddy.log` + `logs/caddy-access.log`.
+- **CA nội bộ dùng chung KIMHANH**: "Caddy Local Authority - 2026 ECC Root" (hạn 05/2036) — `root.crt/root.key` copy sang
+  `runtime/caddy-data/pki/authorities/local/` (gitignore; TURN_ON tự copy lại từ KIMHANH nếu thiếu). Caddy tự sinh
+  intermediate + leaf cho từng tên (`tls internal`, leaf 12h tự gia hạn — bình thường). CA công khai phát tại
+  `static/cert/kimhanh-lan-root-ca.crt` và trong `LAN_HTTPS_KIT/`. PC đã cài kit HTTPS KIMHANH (:1276) thì đã tin CA,
+  kit KHBL chỉ thêm dòng hosts.
+- Django (`prod.py`): `SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO","https")` để `is_secure()` đúng → CSRF so
+  origin https; cookie vẫn KHÔNG Secure (còn nhận http rồi nhảy). `.env`: `ALLOWED_HOSTS` + `tiemvangkimhanh2,mrgiang`,
+  `CSRF_TRUSTED_ORIGINS` đủ https/http × 5 host. Camera (chụp ảnh khách/CCCD) chỉ chạy trên https — lý do chính làm HTTPS.
+- Kiểm chứng 08/09: `http://localhost:8100` → 308 → https; `openssl s_client -CAfile root.crt` → `Verify return code: 0`;
+  POST đăng nhập qua https trả 200 (không 403 CSRF); trình duyệt `isSecureContext=true`, `mediaDevices` có; KIMHANH
+  :1276/:12765 không bị ảnh hưởng. ⚠ `curl` Git (Schannel) báo "revocation status is unknown" với CA nội bộ → dùng
+  `curl -k` hoặc `--ssl-revoke-best-effort`; PowerShell 5.1 `Invoke-WebRequest -MaximumRedirection 0` gặp 302 báo
+  "Operation is not valid" (quirk) — không phải lỗi server.
+- Chẩn đoán: `netstat -ano | findstr :8100` phải ra `0.0.0.0:8100` (Caddy) và `:8101` ra `127.0.0.1:8101` (waitress).
+  Sửa `Caddyfile` → `caddy validate --config ops\caddy\Caddyfile --adapter caddyfile` rồi RESET. Firewall Windows máy này
+  đang TẮT; nếu bật lại phải mở TCP 8100 (KIMHANH có `install_firewall_admin.bat` mẫu cho 1276).
 | `RESET_KHBL.bat` | Tắt → chờ 3s → bật (sau khi sửa file `.py`) |
 | `WATCHDOG_KHBL.bat` | Vòng canh gác — KHÔNG chạy tay |
 | `run_hidden_khbl.vbs` | Chạy lệnh ẩn hoàn toàn — KHÔNG chạy tay |

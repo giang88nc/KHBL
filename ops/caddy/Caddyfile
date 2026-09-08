@@ -1,0 +1,42 @@
+# ============================================================================
+#  Caddy RIENG cua KHBL (GD chot 08/09/2026) - lop HTTPS dung TRUOC waitress.
+#    - Nghe :8100 cho CA http lan https CUNG CONG: http_redirect (listener wrapper) doi
+#      request http thuong thanh 308 -> https cung dia chi; TLS thi phuc vu binh thuong.
+#    - waitress lui ve 127.0.0.1:8101 (noi bo, chi Caddy goi).
+#    - CA noi bo DUNG CHUNG voi nen tang KIMHANH ("Caddy Local Authority - 2026 ECC Root",
+#      han 05/2036): root.crt/root.key duoc copy sang runtime/caddy-data/pki/authorities/local
+#      -> PC LAN da tin CA KIMHANH thi KHONG phai cai lai, chi them dong hosts.
+#    - admin off: KIMHANH da giu 127.0.0.1:2019; KHBL restart bang TURN_OFF/TURN_ON.
+#  Sua file nay -> RESET_KHBL.bat. Ten mien tiemvangkimhanh2 = hosts tren tung PC (kit LAN_HTTPS_KIT).
+# ============================================================================
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+	storage file_system D:/PYTHON/KHBL/runtime/caddy-data
+	servers :8100 {
+		listener_wrappers {
+			http_redirect
+			tls
+		}
+	}
+}
+
+https://tiemvangkimhanh2:8100, https://localhost:8100, https://127.0.0.1:8100, https://192.168.1.6:8100, https://mrgiang:8100 {
+	tls internal
+	encode zstd gzip
+	log {
+		output file D:/PYTHON/KHBL/logs/caddy-access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+	}
+	reverse_proxy 127.0.0.1:8101 {
+		header_up X-Forwarded-Proto https
+	}
+}
