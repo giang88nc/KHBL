@@ -82,8 +82,8 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
         <td class="r mono dim">{{ b.Discount|tien_tran }}</td>
         <td class="r mono dim">{{ b.TienCoc|tien_tran }}</td>
         {# 08/09 chiều: 2 dòng — khách trả / ⚡ phần trả THẺ·CK (CardPay của KK), mờ khi 0 #}
-        {# GĐ chốt: CardPay = PayAmount → XANH (trả đủ qua thẻ/CK), khác → ĐỎ (chênh lệch) #}
-        <td class="r mono b pg-ds__td-tra">{{ b.PayAmount|tien_tran }}<br><small class="pg-ds__the {% if b.CardPay == b.PayAmount %}pg-ds__the--du{% else %}pg-ds__the--lech{% endif %}" title="Phần thanh toán thẻ / chuyển khoản{% if b.CardPay != b.PayAmount %} — chênh lệch với khách trả{% endif %}">⚡ {{ b.CardPay|tien_tran }}</small></td>
+        {# GĐ chốt: CardPay = PayAmount → XANH (trả đủ qua thẻ/CK), khác → ĐỎ (chênh lệch); CardPay = 0 → không có dòng 2 #}
+        <td class="r mono b pg-ds__td-tra">{{ b.PayAmount|tien_tran }}{% if b.CardPay %}<br><small class="pg-ds__the {% if b.CardPay == b.PayAmount %}pg-ds__the--du{% else %}pg-ds__the--lech{% endif %}" title="Phần thanh toán thẻ / chuyển khoản{% if b.CardPay != b.PayAmount %} — chênh lệch với khách trả{% endif %}">⚡ {{ b.CardPay|tien_tran }}</small>{% endif %}</td>
         <td>{% if b.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>
             {% else %}<span class="khbl-badge">Còn nháp</span>{% endif %}</td>
         <td class="r">
