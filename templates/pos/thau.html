@@ -26,13 +26,6 @@ Cột trái: THÔNG TIN (#pos-info) + VÀNG THÂU (#pos-thau, form như Vàng đ
     <figure><img alt=""><figcaption></figcaption></figure>
     <button class="th-lb__nav th-lb__nav--r" type="button" title="Ảnh sau (→)">›</button>
   </div>
-  <div class="khbl-keys">
-    <span><kbd>Enter</kbd>Thêm dòng vàng</span>
-    <span><kbd>F2</kbd>Khách hàng</span>
-    <span><kbd>F4</kbd>Loại vàng cũ</span>
-    <span><kbd>F6</kbd>Bớt lẻ</span>
-    <span class="dim" style="margin-left:auto">{{ pmv_dich_mo_ta }}</span>
-  </div>
 </div>
 {% endblock %}
 
@@ -88,26 +81,7 @@ document.addEventListener("keydown", function (e) {
   if (el) { el.focus(); if (el.tagName === "BUTTON") el.click(); }
 });
 
-/* GIỮ Ô ĐANG GÕ qua OOB (như màn bán) */
-(function () {
-  var giu = null;
-  document.addEventListener("htmx:beforeRequest", function (e) {
-    var a = document.activeElement;
-    if (!a || !a.matches("input, select") || !a.closest("#pos-tong, #pos-thau, #pos-info")) { giu = null; return; }
-    var src = e.detail && e.detail.elt;
-    giu = { id: a.id, name: a.name, form: a.closest("form") && a.closest("form").className, value: a.value, pos: a.selectionStart,
-            la_nguon: !!(src && (src === a || (src.contains && src.contains(a) && src.tagName === "FORM"))) };
-  });
-  document.addEventListener("htmx:afterSettle", function () {
-    if (!giu) return;
-    var g = giu; giu = null;
-    var el = g.id ? document.getElementById(g.id) : null;
-    if (!el && g.name && g.form) { var f = document.querySelector("form." + g.form.split(" ")[0]); el = f && f.querySelector("[name='" + g.name + "']"); }
-    if (!el || el.disabled) return;
-    if (!g.la_nguon && g.value !== "" && el.value !== g.value && el.tagName === "INPUT") el.value = g.value;
-    try { el.focus({ preventScroll: true }); if (g.pos != null && el.setSelectionRange && el.type !== "date") el.setSelectionRange(g.pos, g.pos); } catch (_) {}
-  });
-})();
+/* GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO trong khbl.js (09/09/2026) */
 
 /* form VÀNG THÂU: công tắc GIÁ THÂU VÀO (mặc định) / GIÁ BÁN RA → điền ô giá theo loại dẻ (MySQL buy/sell, sửa tay
    được); xem trước TL vàng = tổng − hột và THÀNH TIỀN = TL vàng ÷ 100 × giá (hột không tính tiền). */

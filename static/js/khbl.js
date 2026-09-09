@@ -513,3 +513,45 @@
   document.addEventListener("htmx:afterSwap", function (e) { window.khblBind(e.target); });
   document.addEventListener("htmx:afterSettle", function (e) { window.khblBind(e.target); });
 })();
+
+/* ---------- GIỮ Ô ĐANG GÕ qua HTMX swap (dùng chung mọi trang — 09/09/2026, thay 2 bản inline thau.html/ban.html) ----------
+   Vấn đề cũ: bản inline chạy cho CẢ yêu cầu lọc gợi ý (ô Khách tự gửi keyup) rồi sau phản hồi đặt lại con trỏ về vị trí LÚC GỬI
+   → chữ gõ tiếp bị chèn vào giữa, ô "giật", sai chữ. Quy tắc mới:
+   · ô đang gõ chính là NGUỒN gửi (gợi ý / lọc) → không đụng gì cả;
+   · chụp giá trị + con trỏ lúc SẮP SWAP (ô cũ còn trong DOM) → giữ được cả chữ gõ trong lúc chờ phản hồi;
+   · sau settle, ô vẫn là chính nó và còn focus → không đụng; ô bị THAY (OOB thay trọn khối) → tìm ô mới (id → name trong form
+     cùng class → name trong #modal-root), trả chữ (trừ khi chính ô đó vừa gửi — giữ giá trị server đã định dạng), focus, con trỏ. */
+(function () {
+  var giu = null;
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var a = document.activeElement;
+    if (!a || !a.matches || !a.matches("input, select, textarea")) { giu = null; return; }
+    var src = e.detail && e.detail.elt;
+    if (src === a) { giu = null; return; }                       // ô gợi ý / lọc tự gửi → để yên
+    var ev = e.detail && e.detail.requestConfig && e.detail.requestConfig.triggeringEvent;
+    giu = { el: a, id: a.id, name: a.name, form: a.closest("form") && a.closest("form").className, value: a.value, pos: a.selectionStart, end: a.selectionEnd,
+            la_nguon: !!(src && src.contains && src.contains(a) && ev && ev.target === a) };
+  });
+  document.addEventListener("htmx:beforeSwap", function () {
+    if (!giu || !giu.el || !document.contains(giu.el)) return;
+    giu.value = giu.el.value; giu.pos = giu.el.selectionStart; giu.end = giu.el.selectionEnd;
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    if (!giu) return;
+    var g = giu; giu = null;
+    if (document.contains(g.el) && document.activeElement === g.el) return;   // không bị thay → không đụng
+    var el = g.id ? document.getElementById(g.id) : null;
+    if (!el && g.name && g.form) { var f = document.querySelector("form." + g.form.split(" ")[0]); el = f && f.querySelector("[name='" + g.name + "']"); }
+    if (!el && g.name) { var mr = document.getElementById("modal-root"); el = mr && mr.querySelector("[name='" + g.name + "']"); }
+    if (!el || el.disabled || el === g.el) return;
+    if (!g.la_nguon && g.value != null && g.value !== "" && el.value !== g.value && el.tagName === "INPUT" && el.type !== "date") el.value = g.value;
+    try {
+      el.focus({ preventScroll: true });
+      if (g.pos != null && el.setSelectionRange && /^(text|search|tel|url|password)$/.test(el.type || "text")) {
+        var n = el.value.length, p = Math.min(g.pos, n), q = Math.min(g.end != null ? g.end : g.pos, n);
+        el.setSelectionRange(p, q);
+      }
+    } catch (_) {}
+  });
+  window.khblGiuO = true;
+})();

@@ -199,6 +199,13 @@ class Command(BaseCommand):
                 trn = trn_nhom[0] if trn_nhom else ""
                 # mở lại từ DANH SÁCH → cả nhóm lên form (khóa) → 🔓 SỬA (passcode) → về W → thêm dòng → THANH TOÁN lại
                 r = web.get("/banle/thau-vao/danh-sach/")
+                b = r.content.decode()
+                self._ok("popup DANH SÁCH: ô lọc Khách chỉ thay #ds-kq (hx-select) — gõ không bị thay ô, không giật (09/09)",
+                         'id="ds-kq"' in b and 'hx-target="#ds-kq" hx-select="#ds-kq" hx-swap="outerHTML"' in b)
+                b_page = web.get("/banle/thau-vao/").content.decode()
+                self._ok("trang thâu không còn JS giữ-ô inline (dùng module khblGiuO trong khbl.js), khbl.js đổi cache-buster",
+                         "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=20260909.giu-o" in b_page
+                         and "khblGiuO = true" in (R_JS := open("static/js/khbl.js", encoding="utf-8").read()) and "htmx:beforeSwap" in R_JS)
                 self._ok("popup DANH SÁCH 80vw có 2 dòng nhóm ⧉ 2", r.status_code == 200 and "⧉ 2" in r.content.decode())
                 r = web.post("/banle/thau-vao/mo/", {"trn_id": trn})
                 g = web.session.get(TC.KEY)

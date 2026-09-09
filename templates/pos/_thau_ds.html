@@ -1,4 +1,4 @@
-{% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
+{% extends ds_base|default:"partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
 Popup DANH SÁCH phiếu thâu — cùng kiểu popup Hóa đơn bán (80vw · lọc d1→d2/NV/khách/trạng thái · thống kê đầu popup).
 Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (ThauNhom). MỞ → nạp cả nhóm lên form.
 {% endcomment %}
@@ -11,7 +11,7 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
   {% if nguon_hist %}<span class="pg-ds__nguon">📚 kho lịch sử</span>{% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}
   <i>{{ tk.so }} phiếu</i>
 </span>
-<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+{% if not standalone %}<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>{% endif %}
 {% endblock %}
 {% block modal_head_extra %}
 <div class="pg-ds__tk" title="Thống kê theo bộ lọc đang chọn">
@@ -20,7 +20,7 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
 </div>
 {% endblock %}
 {% block modal_body %}
-  <form class="pg-ds__loc" hx-get="{% url 'pos:thau_ds' %}" hx-target="#modal-root" hx-swap="innerHTML" hx-trigger="change, submit" onsubmit="return false">
+  <form class="pg-ds__loc" hx-get="{% if standalone %}{% url 'pos:thau_vao_2' %}{% else %}{% url 'pos:thau_ds' %}{% endif %}" hx-target="{% if standalone %}#thau2-list{% else %}#modal-root{% endif %}" {% if standalone %}hx-select="#thau2-list"{% endif %} hx-swap="{% if standalone %}outerHTML{% else %}innerHTML{% endif %}" hx-trigger="change, submit" onsubmit="return false">
     <label class="khbl-field"><span>Từ ngày</span><input class="khbl-input" type="date" name="d1" value="{{ d1 }}" max="{{ hom_nay }}"></label>
     <label class="khbl-field"><span>Đến ngày</span><input class="khbl-input" type="date" name="d2" value="{{ d2 }}" max="{{ hom_nay }}"></label>
     <label class="khbl-field"><span>Nhân viên</span>
@@ -28,13 +28,14 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
         {% for nv in nvs %}<option value="{{ nv.EmpID }}" {% if loc.emp_id == nv.EmpID %}selected{% endif %}>{{ nv.EmpName }}</option>{% endfor %}</select></label>
     <label class="khbl-field pg-ds__loc-khach"><span>Khách hàng</span>
       <input class="khbl-input" name="khach" value="{{ loc.khach }}" placeholder="tên · SĐT · CCCD" hx-trigger="keyup changed delay:350ms"
-             hx-get="{% url 'pos:thau_ds' %}" hx-include="closest form" hx-target="#modal-root" hx-sync="closest form:replace"></label>
+             hx-get="{% if standalone %}{% url 'pos:thau_vao_2' %}{% else %}{% url 'pos:thau_ds' %}{% endif %}" hx-include="closest form" hx-target="{% if standalone %}#thau2-list{% else %}#ds-kq{% endif %}" hx-select="{% if standalone %}#thau2-list{% else %}#ds-kq{% endif %}" hx-swap="outerHTML" hx-sync="closest form:replace"></label>
     <label class="khbl-field"><span>Trạng thái</span>
       <select class="khbl-select" name="trang_thai"><option value="">Tất cả</option>
         <option value="C" {% if loc.trang_thai == 'C' %}selected{% endif %}>Đã chốt</option>
         <option value="W" {% if loc.trang_thai == 'W' %}selected{% endif %}>Còn chờ</option></select></label>
-    <button class="khbl-btn khbl-btn--outline pg-ds__homnay" type="button" hx-get="{% url 'pos:thau_ds' %}" hx-target="#modal-root">↺ Hôm nay</button>
+    <button class="khbl-btn khbl-btn--outline pg-ds__homnay" type="button" hx-get="{% if standalone %}{% url 'pos:thau_vao_2' %}{% else %}{% url 'pos:thau_ds' %}{% endif %}" hx-target="{% if standalone %}#thau2-list{% else %}#modal-root{% endif %}" {% if standalone %}hx-select="#thau2-list"{% endif %}>↺ Hôm nay</button>
   </form>
+  <div id="ds-kq">{# gõ ô Khách chỉ thay khối này (hx-select) — ô đang gõ đứng yên, không giật (09/09) #}
   {% if loi %}<div class="khbl-alert khbl-alert--do">Không đọc được danh sách: {{ loi }}</div>{% endif %}
   <table class="pg-tb pg-tb--ds">
     <thead><tr>
@@ -54,7 +55,7 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
         <td class="r">
           {% if b.IsDel == "0" %}
           <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Mở lên form (cả nhóm dòng)"
-                  hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.TrnID }}"}' hx-swap="none">MỞ</button>
+                  hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.TrnID }}"{% if standalone %}, "from_list_page": "1"{% endif %}}' hx-swap="none">MỞ</button>
           {% if b.Status == "C" %}
           <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="In phiếu 110mm"
                   hx-get="{% url 'pos:thau_in' %}?trn_id={{ b.TrnID }}&oob=1" hx-swap="none" hx-on::after-request="closeKhblModal()">🖨</button>
@@ -67,4 +68,5 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% endblock %}

@@ -46,7 +46,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
     <label class="khbl-field pg-ds__loc-khach"><span>Khách hàng</span>
       <input class="khbl-input" name="khach" value="{{ loc.khach }}" placeholder="tên · SĐT · CCCD"
              hx-trigger="keyup changed delay:350ms" hx-get="{% url 'pos:ban_ds' %}"
-             hx-include="closest form" hx-target="#modal-root" hx-sync="closest form:replace"></label>
+             hx-include="closest form" hx-target="#ds-kq" hx-select="#ds-kq" hx-swap="outerHTML" hx-sync="closest form:replace"></label>
     <label class="khbl-field"><span>Trạng thái</span>
       <select class="khbl-select" name="trang_thai">
         <option value="">Tất cả</option>
@@ -56,7 +56,7 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
     <button class="khbl-btn khbl-btn--outline pg-ds__homnay" type="button"
             hx-get="{% url 'pos:ban_ds' %}" hx-target="#modal-root">↺ Hôm nay</button>
   </form>
-
+  <div id="ds-kq">{# gõ ô Khách chỉ thay khối này (hx-select) — ô đang gõ đứng yên, không giật (09/09) #}
   {% if loi %}
     <div class="khbl-alert khbl-alert--do">Không đọc được danh sách: {{ loi }}</div>
   {% endif %}
@@ -97,4 +97,5 @@ popup trong #modal-root (form đổi là lọc ngay, không cần nút).
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% endblock %}
