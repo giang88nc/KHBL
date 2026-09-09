@@ -379,6 +379,11 @@ class Command(BaseCommand):
                 # Ảnh chỉ gắn vào phiếu khi THANH TOÁN; trước đó nằm ở thau_anh_tam theo phiên. Trước đây mọi lối
                 # 'trắng trang' xóa âm thầm → GĐ mất ảnh Hình 1/Hình 2 (log 08–09/09: 36 lần tải, không lần nào kịp thanh toán).
                 web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                web.post("/banle/thau-vao/dat/", {"cust_id": cust}); web.post("/banle/thau-vao/dat/", {"emp": emp})
+                web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "100", "tl_hot": "0", "gia": "", "kieu": "thau"})
+                web.post("/banle/thau-vao/thanh-toan/", {})
+                nhom_c = ThauNhom.objects.order_by("-pk").first()              # đơn đã chốt, KHÔNG ảnh — để thử mở/sửa/hủy giữ ảnh chờ
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 web.post("/banle/thau-vao/anh/len/", {"anh_hinh1": anh("red"), "anh_hinh2": anh("blue")})
                 con = lambda: set(ThauAnhTam.objects.filter(session_key=sk).values_list("slot", flat=True))
                 self._ok("tải Hình 1 + Hình 2 vào phiếu NHÁP → nằm ở bảng tạm thau_anh_tam", {"hinh1", "hinh2"} <= con(), str(con()))
@@ -387,14 +392,22 @@ class Command(BaseCommand):
                 self._ok("＋ PHIẾU MỚI khi còn ảnh tạm → popup hỏi (không xóa), ảnh CÒN NGUYÊN",
                          'id="modal-root"' in b and "chưa gắn phiếu" in b and "Hình 1" in b and {"hinh1", "hinh2"} <= con(), b[:120].replace("\n", " "))
                 self._ok("popup có nút Bỏ ảnh gửi lại chính lệnh kèm bo_anh=1", "bo_anh" in b and "thau-vao/moi/" in b and "Ở LẠI PHIẾU" in b)
-                r = web.post("/banle/thau-vao/mo/", {"trn_id": t0 if 't0' in dir() else nhom3.trn_ids[0]})
-                self._ok("MỞ đơn khác khi còn ảnh tạm → cũng hỏi trước, ảnh CÒN NGUYÊN",
-                         "chưa gắn phiếu" in r.content.decode() and {"hinh1", "hinh2"} <= con())
-                web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "100", "tl_hot": "0", "gia": "", "kieu": "thau"})
-                r = web.get("/banle/thau-vao/xac-nhan/xoa_nhap/")
-                self._ok("popup XÓA nháp liệt kê số ảnh chờ sẽ mất", "ảnh đang chờ chưa gắn phiếu" in r.content.decode())
+                # GĐ chốt 09/09 chiều: MỌI thao tác khác (mở đơn · SỬA · hủy TT · hủy HĐ · xóa nháp) KHÔNG xóa ảnh chờ, không hỏi
+                r = web.post("/banle/thau-vao/mo/", {"trn_id": nhom_c.trn_ids[0]})
+                b = r.content.decode().replace("&amp;", "&")
+                g = web.session.get(TC.KEY)
+                self._ok("MỞ đơn khác khi còn ảnh chờ → mở NGAY không hỏi, ảnh chờ GIỮ và đè lên ô (nhãn chờ)",
+                         g.get("nhom_id") == str(nhom_c.pk) and "chưa gắn phiếu" not in b and {"hinh1", "hinh2"} <= con()
+                         and "slot=hinh1&v=" in b and "· chờ" in b, b[:120].replace("\n", " "))
+                web.post("/banle/thau-vao/thuc-hien/huy_tt/", {"passcode": "SMOKE"})    # HỦY TT áp lên đơn đang chốt (C)
+                self._ok("HỦY THANH TOÁN đơn chốt → ảnh chờ vẫn còn", {"hinh1", "hinh2"} <= con() and not (web.session.get(TC.KEY) or {}).get("trn_ids"), str(con()))
+                web.post("/banle/thau-vao/mo/", {"trn_id": nhom_c.trn_ids[0]})
+                b = web.get("/banle/thau-vao/xac-nhan/xoa_nhap/").content.decode()
+                web.post("/banle/thau-vao/thuc-hien/xoa_nhap/", {})
+                self._ok("XÓA nháp (KK sạch) → ảnh chờ vẫn còn, popup xóa không còn dọa mất ảnh",
+                         {"hinh1", "hinh2"} <= con() and "ảnh đang chờ chưa gắn phiếu" not in b and not B.phieu_thau(nhom_c.trn_ids[0], c), str(con()))
                 web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
-                self._ok("bấm 'Bỏ ảnh' (bo_anh=1) → ảnh tạm mới bị xóa", not con(), str(con()))
+                self._ok("chỉ ＋ PHIẾU MỚI (bo_anh=1) mới dọn ảnh chờ", not con(), str(con()))
 
                 # ── 9. (08/09 tối) QR chuyển khoản: quét ảnh VietQR → điền form CK · bỏ THẺ · Tạo QR · mở lại đơn xóa ảnh tạm ──
                 import segno
@@ -456,10 +469,15 @@ class Command(BaseCommand):
                 nhom4 = ThauNhom.objects.order_by("-pk").first()
                 web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 web.post("/banle/thau-vao/anh/len/", {"anh_hinh2": anh("gray")})
-                r = web.post("/banle/thau-vao/mo/", {"trn_id": nhom4.trn_ids[0], "bo_anh": "1"})
+                r = web.post("/banle/thau-vao/mo/", {"trn_id": nhom4.trn_ids[0]})
                 b = r.content.decode().replace("&amp;", "&")
-                self._ok("MỞ lại đơn → ảnh chờ xóa, hiện Hình 1 của NHÓM (nhom=<id>), không hiện Hình 2 chờ",
-                         not ThauAnhTam.objects.filter(session_key=sk).exists() and f"slot=hinh1&nhom={nhom4.pk}" in b and "slot=hinh2" not in b.split("pg-ck__khung")[4] if b.count("pg-ck__khung") >= 5 else False, b.count("pg-ck__khung"))
+                self._ok("MỞ lại đơn → Hình 1 đọc từ NHÓM (nhom=<id>), Hình 2 chờ GIỮ và hiện đè (chờ THANH TOÁN)",
+                         ThauAnhTam.objects.filter(session_key=sk, slot="hinh2").exists() and f"slot=hinh1&nhom={nhom4.pk}" in b and "slot=hinh2&v=" in b, b.count("pg-ck__khung"))
+                r = web.post("/banle/thau-vao/thuc-hien/sua/", {"passcode": "SMOKE"})
+                r = web.post("/banle/thau-vao/thanh-toan/", {})
+                nhom4b = ThauNhom.objects.order_by("-pk").first()
+                self._ok("SỬA → THANH TOÁN lại → Hình 2 chờ ghi vào nhóm mới, Hình 1 kế thừa, ảnh chờ tiêu thụ xong",
+                         nhom4b.pk != nhom4.pk and nhom4b.anh_hinh2 and nhom4b.anh_hinh1 and not ThauAnhTam.objects.filter(session_key=sk).exists())
                 web.post("/banle/thau-vao/thuc-hien/huy_hd/", {"passcode": "SMOKE"})
                 self._ok("dọn đơn QR/ảnh → KK sạch, két về ban đầu", not any(B.phieu_thau(x, c) for x in nhomq.trn_ids + nhom4.trn_ids)
                          and bal("D18K") == bal0["D18K"] and bal("VND") == bal0["VND"])

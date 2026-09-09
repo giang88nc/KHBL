@@ -1,6 +1,6 @@
 {% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
-CẢNH BÁO MẤT ẢNH TẠM (GĐ chốt 09/09/2026 — phương án 1). Ảnh tải lên khi phiếu CHƯA thanh toán chỉ nằm ở bảng tạm
-`thau_anh_tam` theo PHIÊN, chưa gắn phiếu nào; ＋ PHIẾU MỚI / MỞ đơn khác xóa sạch chúng. Popup này chặn lại: Ở LẠI PHIẾU
+CẢNH BÁO MẤT ẢNH CHỜ (GĐ chốt 09/09/2026 — phương án 1; chiều 09/09 chốt thêm: CHỈ ＋ PHIẾU MỚI mới dọn ảnh chờ, mọi thao
+tác khác giữ nguyên). Ảnh chờ nằm ở `thau_anh_tam` theo PHIÊN; ＋ PHIẾU MỚI xóa sạch. Popup này chặn lại: Ở LẠI PHIẾU
 (đóng, ảnh còn nguyên) hoặc Bỏ ảnh · <việc> (gửi lại chính lệnh đó kèm bo_anh=1 → server mới cho phép xóa).
 {% endcomment %}
 {% block modal_style %}width:min(500px,94vw){% endblock %}

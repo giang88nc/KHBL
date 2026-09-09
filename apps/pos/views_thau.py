@@ -734,21 +734,14 @@ def _rows_cua(trn_id, c=None):
 
 @require_POST
 def thau_mo(request):
+    """MỞ đơn từ DANH SÁCH. GĐ chốt 09/09 chiều: KHÔNG đụng ảnh chờ — ảnh chờ đè lên ảnh đơn vừa mở, THANH TOÁN mới ghi."""
     trn = (request.POST.get("trn_id") or "").strip()
-    from django.urls import reverse
-    vals = {"trn_id": trn}
-    if request.POST.get("from_list_page") == "1":
-        vals["from_list_page"] = "1"
-    chan = _chan_mat_anh(request, "Mở phiếu khác", reverse("pos:thau_mo"), vals)   # ảnh tạm sẽ mất → hỏi trước
-    if chan is not None:
-        return chan
     try:
         rows, nhom = _rows_cua(trn)
     except Exception as exc:
         return _loi(request, "Không mở được phiếu: " + S.error_message(exc), {"dong_modal": True})
     if not rows:
         return _loi(request, f"Không thấy phiếu {trn}", {"dong_modal": True})
-    ThauAnhTam.objects.filter(session_key=_skey(request)).delete()     # 08/09 tối: mở lại đơn → bỏ ảnh tạm, hiện ảnh đã lưu của đơn
     g = TC.nap(request, rows, nhom)
     ma = ", ".join(g["bill_codes"])
     if request.POST.get('from_list_page') == '1':
@@ -940,6 +933,7 @@ def thau_thanh_toan(request):
         if "tin" in extra:
             extra["tin"] = extra["tin"] + " · đang in phiếu — form đã trắng cho khách kế"
         TC.clear(request, giu_nv=True)
+        ThauAnhTam.objects.filter(session_key=_skey(request)).delete()   # form trắng cho KHÁCH KẾ = đơn mới → dọn ảnh chờ còn sót
     else:
         g2 = TC.nap(request, rows, nhom, emp=g["emp"])
         g2["kieu_ui"] = g.get("kieu_ui") or "thau"
@@ -955,7 +949,7 @@ def _xn_ctx(request, hanh_dong, loi=""):
         hop_le = g.get("status") != B.CHOT_ROI and bool(g["lines"] or g.get("trn_ids"))
     else:
         hop_le = g.get("status") == B.CHOT_ROI and bool(hd)
-    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi, "khoa": hop_le, "anh_cho": _anh_tam_nhan(request),
+    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi, "khoa": hop_le,
             "nguoi": request.user.first_name or request.user.username, "username": request.user.username,
             "luc": datetime.datetime.now()}
 
@@ -979,8 +973,7 @@ def _xoa_nhap(request):
     if ids:
         gateway.canh_bao("thau_xoa", f"XÓA phiếu thâu CHỜ {', '.join(ids)}; người: {request.user.username}")
         GoldBill.objects.filter(trn_id__in=ids).update(is_del=True)
-    ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
-    cache.delete("khbl:thau_treo")
+    cache.delete("khbl:thau_treo")                        # ảnh chờ GIỮ (GĐ chốt 09/09 chiều)
     TC.clear(request, giu_nv=False)
     return _oob(request, {"tin": "Đã xóa phiếu nháp." if not ids else f"Đã xóa {len(ids)} dòng chờ trên máy KK.", "dong_modal": True})
 
@@ -1029,14 +1022,12 @@ def thau_thuc_hien(request, hanh_dong):
         g2["sua_lai"] = True
         TC.save(request, g2)
         tin = f"Đã mở {ma} về CHỜ để sửa — sửa xong bấm THANH TOÁN lại."
-    elif hanh_dong == "huy_tt":
-        ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
+    elif hanh_dong == "huy_tt":                       # ảnh chờ GIỮ (GĐ chốt 09/09 chiều) — chỉ ＋ PHIẾU MỚI mới dọn
         TC.clear(request, giu_nv=False)
         tin = f"Đã HỦY THANH TOÁN {ma} — phiếu về DANH SÁCH CHỜ."
     else:
         GoldBill.objects.filter(trn_id__in=ids).update(is_del=True)
-        ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
-        TC.clear(request, giu_nv=False)
+        TC.clear(request, giu_nv=False)                   # ảnh chờ GIỮ
         tin = f"Đã XÓA phiếu thâu {ma}."
     return _oob(request, {"tin": tin, "dong_modal": True})
 
