@@ -292,6 +292,15 @@ class Command(BaseCommand):
                 t0 = g["lines"][0]["trn_id"]
                 r = web.post("/banle/thau-vao/xoa-dong/", {"i": "0"})
                 g = web.session.get(TC.KEY)
+                # GĐ chốt 09/09: bill ĐẦU (đang giữ ảnh) bị xóa → ảnh TỰ DỜI sang bill đầu tiếp theo, không mất
+                t_con = g["trn_ids"][0] if g.get("trn_ids") else ""
+                gb_cu, gb_moi = GoldBill.objects.filter(trn_id=t0).first(), GoldBill.objects.filter(trn_id=t_con).first()
+                m1b = mau_tb(gb_moi.anh_hinh1) if gb_moi and gb_moi.anh_hinh1 else None
+                self._ok("xóa bill ĐẦU đang giữ ảnh → ảnh dời sang bill kế, đúng ô, bill cũ hết ảnh",
+                         bool(gb_moi) and bool(gb_moi.anh_cccd1) and m1b is not None and m1b[1] > m1b[0] and m1b[1] > m1b[2]
+                         and not (gb_cu and gb_cu.anh_hinh1) and "chuyển sang" in r.content.decode(), f"bill kế={t_con} h1={m1b}")
+                b_ke = web.get("/banle/thau-vao/").content.decode()
+                self._ok("trang sau khi xóa bill đầu → ô ảnh trỏ vào bill kế", f"slot=hinh1&trn_id={t_con}" in b_ke)
                 self._ok("× dòng đã lưu chờ → xóa hẳn trên KK + bỏ khỏi giỏ", not B.phieu_thau(t0, c) and len(g["lines"]) == 1
                          and t0 not in g["trn_ids"] and "xóa hẳn" in r.content.decode(), r.content.decode()[:80])
                 r = web.post("/banle/thau-vao/thuc-hien/xoa_nhap/", {})

@@ -90,10 +90,50 @@ def _skey(request):
     return request.session.session_key
 
 
+def _trn_giu_anh(g):
+    """TrnID của phiếu đang GIỮ ẢNH = bill ĐẦU TIÊN trong nhóm có ít nhất 1 ảnh; chưa bill nào có ảnh → bill đầu (nơi sẽ ghi).
+    GĐ chốt 09/09/2026: ảnh nằm ở bill đầu, bill đầu bị xóa thì dời sang bill kế — hàm này để ĐỌC/GHI luôn trúng bill đang giữ.
+    Đếm bằng OCTET_LENGTH (MySQL) nên không tải hàng MB ảnh chỉ để biết bill nào có."""
+    ids = list(g.get("trn_ids") or [])
+    if len(ids) < 2:
+        return ids[0] if ids else ""
+    from django.db.models.expressions import RawSQL
+    tong = "+".join(f"COALESCE(OCTET_LENGTH({c}),0)" for c in ANH_COT.values())
+    co = dict(GoldBill.objects.filter(trn_id__in=ids).annotate(n_anh=RawSQL(tong, [])).values_list("trn_id", "n_anh"))
+    for t in ids:
+        if co.get(t):
+            return t
+    return ids[0]
+
+
+def _chuyen_anh_sang_bill(tu_trn, sang_trn, bill_code=""):
+    """DỜI cả 5 ô ảnh từ bill bị xóa sang bill còn lại (GĐ chốt 09/09/2026). Bill đích chưa có dòng gold_bill thì tạo
+    theo dòng nguồn (đổi mã bill, bỏ cờ is_del). Trả TrnID đích nếu có dời, "" nếu bill nguồn không giữ ảnh."""
+    nguon = GoldBill.objects.filter(trn_id=tu_trn).first()
+    if not nguon or not any(getattr(nguon, c) for c in ANH_COT.values()):
+        return ""
+    dich = GoldBill.objects.filter(trn_id=sang_trn).first()
+    if dich is None:
+        d = {f.name: getattr(nguon, f.name) for f in GoldBill._meta.fields
+             if f.name not in ("id", "trn_id", "created_at", "updated_at")}
+        d["bill_code"] = bill_code or sang_trn
+        d["is_del"] = False
+        GoldBill.objects.create(trn_id=sang_trn, **d)          # đã kèm sẵn 5 cột ảnh của bill nguồn
+    else:
+        for c in ANH_COT.values():
+            setattr(dich, c, getattr(nguon, c))
+        dich.save(update_fields=list(ANH_COT.values()) + ["updated_at"])
+    for c in ANH_COT.values():
+        setattr(nguon, c, None)
+    nguon.save(update_fields=list(ANH_COT.values()) + ["updated_at"])
+    logger.info("Ảnh phiếu thâu dời %s → %s (bill đầu đã xóa)", tu_trn, sang_trn)
+    return sang_trn
+
+
 def _anh_slots(request, g):
     """Trạng thái 5 slot ảnh: phiếu đã lưu → đọc gold_bill của TrnID đầu; đang nhập → ảnh tạm theo phiên."""
     co = {}
-    trn = (g.get("trn_ids") or [""])[0]
+    trn = _trn_giu_anh(g)
     if trn:
         gb = GoldBill.objects.filter(trn_id=trn).only(*ANH_COT.values()).first()
         if gb:
@@ -191,7 +231,7 @@ def _tin_anh(tin, canh_bao_kh):
 def _luu_anh_slot(request, g, slot, data, canh_bao_kh):
     """Ghi 1 ảnh (bytes JPEG đã nén) vào slot: phiếu đã lưu → gold_bill; đang nhập → ThauAnhTam.
     Ảnh CCCD + đang chọn khách → UPDATE luôn hồ sơ khách (I_CUSTOMER_Upd chỉ đổi ảnh) — GĐ chốt 08/09 tối."""
-    trn = (g.get("trn_ids") or [""])[0]
+    trn = _trn_giu_anh(g)                       # ghi vào ĐÚNG bill đang giữ ảnh (bill đầu, hoặc bill kế nếu bill đầu đã xóa)
     cot = ANH_COT[slot]
     if trn:
         gb, _ = GoldBill.objects.get_or_create(trn_id=trn, defaults=_gb_mac_dinh(g, trn))
@@ -213,7 +253,7 @@ def _luu_anh_slot(request, g, slot, data, canh_bao_kh):
 
 def _anh_slot_data(request, g, slot):
     """Bytes ảnh hiện có của slot: gold_bill (phiếu đã lưu) → ảnh tạm phiên → ảnh CCCD trong hồ sơ khách (chỉ cccd1/2)."""
-    trn = (g.get("trn_ids") or [""])[0]
+    trn = _trn_giu_anh(g)
     cot = ANH_COT[slot]
     if trn:
         gb = GoldBill.objects.filter(trn_id=trn).only(cot).first()
@@ -544,6 +584,9 @@ def thau_xoa_dong(request):
         tin = f"Đã xóa hẳn dòng {x.get('bill_code') or x['trn_id']} trên máy KK"
     g["lines"].pop(i)
     TC.save(request, g)
+    if x.get("trn_id") and g.get("trn_ids"):    # xóa đúng bill đang giữ ảnh → dời ngay sang bill đầu còn lại
+        if _chuyen_anh_sang_bill(x["trn_id"], g["trn_ids"][0], (g.get("bill_codes") or [""])[0]):
+            tin += f" · ảnh của phiếu đã chuyển sang {(g.get('bill_codes') or [g['trn_ids'][0]])[0]}"
     return _oob(request, {"tin": tin} if tin else None)
 
 
@@ -669,6 +712,9 @@ def _rows_cua(trn_id, c=None):
     ids = list(nhom.trn_ids) if nhom else [trn_id]
     rows = [B.phieu_thau(t, c) for t in ids]
     rows = [r for r in rows if r and str(r.get("IsDel")) == "0"]
+    con = [r["TrnID"] for r in rows]
+    if con and ids and ids[0] not in con:       # bill đầu đã bị xóa (kể cả xóa thẳng trên máy KK) → dời ảnh sang bill kế
+        _chuyen_anh_sang_bill(ids[0], con[0], rows[0].get("BillCode") or "")
     return rows, nhom
 
 
