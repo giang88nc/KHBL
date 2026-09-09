@@ -246,7 +246,13 @@ class Command(BaseCommand):
                 from django.core.files.uploadedfile import SimpleUploadedFile
                 def anh(mau):
                     out = BytesIO(); Image.new("RGB", (900, 600), mau).save(out, "PNG"); return SimpleUploadedFile("a.png", out.getvalue(), content_type="image/png")
-                r = web.post("/banle/thau-vao/anh/len/", {"anh_cccd1": anh("red"), "anh_qr": anh("blue")})
+                def mau_tb(data):
+                    """Màu trung bình của ảnh đã lưu — dùng để biết ô nào giữ ảnh nào (đảo ô là lộ ngay)."""
+                    im = Image.open(BytesIO(bytes(data))).convert("RGB").resize((8, 8))
+                    px = list(im.getdata())
+                    return tuple(sum(q[i] for q in px) // len(px) for i in range(3))
+                r = web.post("/banle/thau-vao/anh/len/", {"anh_cccd1": anh("red"), "anh_qr": anh("blue"),
+                                                         "anh_hinh1": anh("#14C814"), "anh_hinh2": anh("#1414C8")})
                 sk = web.session.session_key
                 b = r.content.decode()
                 self._ok("tải CCCD mới khi có khách → cố cập nhật hồ sơ khách (sandbox tắt OLE → báo 'CHƯA cập nhật', ảnh vẫn lưu phiếu)",
@@ -254,18 +260,26 @@ class Command(BaseCommand):
                 kh_anh = c.query("SELECT ImagePathMatSau FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID=?", (cust,))[0]["ImagePathMatSau"]
                 self._ok("ô CCCD sau: khách có ảnh sẵn → hiện ảnh hồ sơ (👤) / không có → 'Chưa có'",
                          ("khach-hang/" + cust + "/anh/mat-sau/" in b) if kh_anh else ("khach-hang/" + cust + "/anh/mat-sau/" not in b))
-                self._ok("tải 2 ảnh (CCCD1 + QR) → ảnh tạm theo phiên, OOB hiện ảnh", r.status_code == 200
-                         and ThauAnhTam.objects.filter(session_key=sk).count() == 2 and 'slot=cccd1' in r.content.decode())
+                self._ok("tải 4 ảnh (CCCD1 · QR · Hình 1 · Hình 2) → ảnh tạm theo phiên, OOB hiện ảnh", r.status_code == 200
+                         and ThauAnhTam.objects.filter(session_key=sk).count() == 4 and 'slot=cccd1' in r.content.decode())
                 r = web.get("/banle/thau-vao/anh/?slot=qr")
                 self._ok("GET ảnh tạm QR → image/jpeg", r.status_code == 200 and r["Content-Type"] == "image/jpeg")
                 web.post("/banle/thau-vao/anh/xoa/", {"slot": "qr"})
-                self._ok("bỏ ảnh QR tạm", ThauAnhTam.objects.filter(session_key=sk).count() == 1)
+                self._ok("bỏ ảnh QR tạm", ThauAnhTam.objects.filter(session_key=sk).count() == 3)
                 r = web.post("/banle/thau-vao/thanh-toan/", {})
                 nhom3 = ThauNhom.objects.order_by("-pk").first()
                 gb = GoldBill.objects.filter(trn_id=nhom3.trn_ids[0]).first()
                 self._ok("THANH TOÁN → ảnh chuyển sang gold_bill(TrnID đầu).anh_cccd1, ảnh tạm xóa, gold_bill có tổng/loại thâu",
                          gb is not None and gb.anh_cccd1 and not gb.anh_qr and not ThauAnhTam.objects.filter(session_key=sk).exists()
                          and gb.status == "C" and gb.tong > 0 and gb.doi and gb.doi[0]["vang"] == "D18K", str(gb and gb.tong))
+                # GĐ yêu cầu 09/09: ảnh tạm vào bill phải ĐÚNG THỨ TỰ Ô — Hình 1 (lục) sang anh_hinh1, Hình 2 (lam) sang anh_hinh2
+                m1, m2, mc = mau_tb(gb.anh_hinh1), mau_tb(gb.anh_hinh2), mau_tb(gb.anh_cccd1)
+                self._ok("THANH TOÁN → Hình 1 vào cột anh_hinh1, Hình 2 vào cột anh_hinh2 (không đảo, không lẫn CCCD)",
+                         m1[1] > m1[0] and m1[1] > m1[2] and m2[2] > m2[0] and m2[2] > m2[1] and mc[0] > mc[1]
+                         and bytes(gb.anh_hinh1) != bytes(gb.anh_hinh2), f"h1={m1} h2={m2} cccd1={mc}")
+                b_tt = web.get("/banle/thau-vao/").content.decode()
+                self._ok("mở trang sau THANH TOÁN → 3 ô ảnh đều trỏ vào bill vừa chốt (kèm trn_id)",
+                         all(f"slot={s2}&trn_id={nhom3.trn_ids[0]}" in b_tt for s2 in ("cccd1", "hinh1", "hinh2")))
                 r = web.post("/banle/thau-vao/anh/len/", {"anh_hinh2": anh("black")})
                 self._ok("đơn KHÓA → tải ảnh bị chặn + form 5 ảnh disabled", "KHÓA" in r.content.decode() and 'fieldset disabled class="pg-khoa-fs" title="Phiếu đang KHÓA — 🔓' in r.content.decode())
                 r = web.get(f"/banle/thau-vao/anh/?slot=cccd1&trn_id={nhom3.trn_ids[0]}")
