@@ -206,6 +206,12 @@ class Command(BaseCommand):
                 self._ok("trang thâu không còn JS giữ-ô inline (dùng module khblGiuO trong khbl.js), khbl.js đổi cache-buster",
                          "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=20260909.giu-o" in b_page
                          and "khblGiuO = true" in (R_JS := open("static/js/khbl.js", encoding="utf-8").read()) and "htmx:beforeSwap" in R_JS)
+                # GĐ 09/09: gõ SĐT ở ô Khách, lọc không ra → ＋ mở popup Thêm khách với SĐT điền sẵn #f-dt (nút ＋ hx-include #o-khach)
+                self._ok("＋ Thêm khách mang SĐT đang gõ sang #f-dt (0912345678 · +84 912-345-678 → 0912345678 · chữ → trống)",
+                         'id="f-dt" value="0912345678"' in web.get("/banle/khach-hang/them/?q=0912345678").content.decode()
+                         and 'id="f-dt" value="0912345678"' in web.get("/banle/khach-hang/them/?q=%2B84%20912-345-678").content.decode()
+                         and 'id="f-dt" value=""' in web.get("/banle/khach-hang/them/?q=Nguyen%20Van").content.decode()
+                         and 'hx-include="#o-khach"' in b_page)
                 self._ok("popup DANH SÁCH 80vw có 2 dòng nhóm ⧉ 2", r.status_code == 200 and "⧉ 2" in r.content.decode())
                 r = web.post("/banle/thau-vao/mo/", {"trn_id": trn})
                 g = web.session.get(TC.KEY)

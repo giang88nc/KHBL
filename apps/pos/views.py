@@ -1282,10 +1282,22 @@ def khach_chi_tiet(request, cust_id):
         "k": S.khach_theo_id(cust_id), "ls": S.lich_su_khach(cust_id)})
 
 
+def _so_dt_tu(q):
+    """Chuỗi đang gõ ở ô tìm khách có phải SỐ ĐIỆN THOẠI VN không → trả số chuẩn 0xxxxxxxxx (9–11 số), không phải → ''."""
+    s = re.sub(r"[\s.\-()]", "", str(q or ""))
+    if s.startswith("+84"):
+        s = "0" + s[3:]
+    elif s.startswith("84") and len(s) >= 11:
+        s = "0" + s[2:]
+    return s if s.isdigit() and 9 <= len(s) <= 11 else ""
+
+
 def khach_form(request, cust_id=None):
-    """Popup THÊM / SỬA khách hàng — UI đầy đủ, có ô quét QR thẻ CCCD."""
+    """Popup THÊM / SỬA khách hàng — UI đầy đủ, có ô quét QR thẻ CCCD.
+    GĐ 09/09/2026: gõ SĐT ở ô tìm khách mà lọc không ra → bấm ＋ → popup mở sẵn SĐT đó ở ô Điện thoại (nút ＋ hx-include #o-khach → ?q=)."""
     return render(request, "pos/_khach_form.html", {
         "k": S.khach_theo_id(cust_id) if cust_id else None,
+        "goi_y_dt": "" if cust_id else _so_dt_tu(request.GET.get("q")),
         "loai_ds": S.CUST_TYPES, "duong_dan_anh": S.DUONG_DAN_ANH,
         "save_token": secrets.token_urlsafe(24),
     })
@@ -1693,7 +1705,7 @@ def gdb_mau(request):
         ctx, trn = _gdb_ctx_mau(), ""
     layout = GL.load()
     ctx.update({
-        "nav_active": "hoadon", "trn_mau": trn, "loai_mau": ctx.get("loai") or "BAN",
+        "nav_active": "hethong", "trn_mau": trn, "loai_mau": ctx.get("loai") or "BAN",
         "blocks": GL.BLOCKS, "layout_json": json.dumps(layout), "mac_dinh_json": json.dumps(GL.mac_dinh()),
         "canh_phai_json": json.dumps(sorted(GL.CANH_PHAI)), "kho_json": json.dumps(GL.IN_KHO),
         "sel_json": json.dumps({b["key"]: b["sel"] for b in GL.BLOCKS}),

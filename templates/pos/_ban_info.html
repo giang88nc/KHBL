@@ -73,7 +73,7 @@ Khách hàng (kèm nút +THÊM gắn liền input) · DANH SÁCH. BỎ nút CLEA
                hx-target="#khach-goiy" name="q">
         <button class="khbl-btn khbl-btn--outline pg-inb__btn" type="button"
                 title="Thêm khách hàng mới"
-                hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋<span class="pg-btn-noi__t">👥</span></button>
+                hx-get="{% url 'pos:khach_them' %}" hx-include="#o-khach" hx-target="#modal-root">＋<span class="pg-btn-noi__t">👥</span></button>
       </div>
       <div id="khach-goiy" class="pg-goiy"></div>
     {% endif %}

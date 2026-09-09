@@ -46,7 +46,7 @@ THÔNG TIN phiếu thâu — 1 DÒNG như màn bán: ＋ PHIẾU MỚI · Ngày 
                placeholder="tên · số điện thoại · CCCD · quét QR thẻ CCCD (trống = khách lẻ)" {% if phieu_chot %}disabled title="Phiếu đang khóa"{% endif %}
                hx-get="{% url 'pos:thau_tim' %}?kind=khach" hx-trigger="keyup changed delay:220ms" hx-target="#khach-goiy">
         <button class="khbl-btn khbl-btn--outline pg-inb__btn" type="button" title="Thêm khách hàng mới"
-                hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">＋<span class="pg-btn-noi__t">👥</span></button>
+                hx-get="{% url 'pos:khach_them' %}" hx-include="#o-khach" hx-target="#modal-root">＋<span class="pg-btn-noi__t">👥</span></button>
       </div>
       <div id="khach-goiy" class="pg-goiy"></div>
     {% endif %}

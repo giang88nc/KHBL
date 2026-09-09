@@ -36,7 +36,7 @@
 
     <div class="khbl-field">
       <label>Điện thoại</label>
-      <input class="khbl-input mono" name="Phone" id="f-dt" value="{{ k.Phone|default:'' }}" inputmode="tel" autocomplete="off">
+      <input class="khbl-input mono" name="Phone" id="f-dt" value="{% if k %}{{ k.Phone|default:'' }}{% else %}{{ goi_y_dt|default:'' }}{% endif %}" inputmode="tel" autocomplete="off"{% if goi_y_dt %} title="SĐT lấy từ ô tìm khách"{% endif %}>
     </div>
     <div class="khbl-field">
       <label>CCCD / CMND</label>
