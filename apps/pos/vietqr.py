@@ -176,8 +176,9 @@ def doc_anh(data):
     if img is None:
         return ""
     det = cv2.QRCodeDetector()
-    ung_vien = [img]
     h, w = img.shape[:2]
+    vien = max(8, int(0.12 * max(h, w)))                  # đệm TRẮNG quanh ảnh: mã in/lưu sát mép thiếu vùng trắng → OpenCV bỏ qua
+    ung_vien = [img, cv2.copyMakeBorder(img, vien, vien, vien, vien, cv2.BORDER_CONSTANT, value=(255, 255, 255))]
     if max(h, w) < 900:
         ung_vien.append(cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC))
     xam = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

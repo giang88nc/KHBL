@@ -52,9 +52,11 @@ quad = AC.tim_the(img_bgr)               # ndarray BGR → 4 điểm float32 (tl
    JS trong `_thau_cat_modal.html` (pointer events, hít 0/90/180/270 trong ±6°, nhãn độ, nút ↺/↻ 90° + Đặt lại, hidden
    `goc`; 4 tay cầm `.th-cat__tay` cắt bớt từng cạnh → hidden `cat_t/r/b/l`, kéo quy về hệ tọa độ ảnh bằng quay −goc);
    nút ✓ LƯU dùng `hx-include="#th-cat-form"` + `hx-swap="none"`.
-3. **View LƯU** (POST): `AC.cat_cccd(data, _goc_xoay(request.POST.get("goc")))` → nén `_nen_anh(kq, canh=AC.CHUAN_W,
-   chat_luong=88)` → ghi đè đúng ô + cập nhật hồ sơ (khách: `customer.cap_nhat_anh` trong `SAVE_LOCK`; nhân viên: cột
-   tương ứng) → trả OOB làm mới ô ảnh + `dong_modal`.
+3. **View LƯU** (POST): `AC.cat_cccd(data, _goc_xoay(request.POST.get("goc")), _phan_cat(request))` → nén `_nen_anh(kq,
+   canh=AC.CHUAN_W, chat_luong=88)` → **chỉ ghi ẢNH CHỜ** (`_luu_anh_slot` → `thau_anh_tam`, GĐ chốt 09/09: mọi thay đổi ảnh đi qua
+   THANH TOÁN) → trả OOB làm mới ô ảnh + `dong_modal`. Ghi thật ở THANH TOÁN (`_chot_anh`): CCCD → `customer.cap_nhat_anh`
+   trong `SAVE_LOCK` (I_CUSTOMER_Upd, ghi đè) + file `media/cccd/<CustID>/MT|MS_<lúc>.jpg` trên máy chủ; nhân viên (module sau):
+   cột tương ứng + file cùng kiểu. CCCD đòi ĐÃ CHỌN khách — chưa chọn thì ô khóa 'chọn khách hàng'.
 4. **Nút ✂ trên ô ảnh**: chỉ bật khi ô có ảnh và phiếu/hồ sơ không khóa; thêm `hx-disabled-elt="this"` +
    `hx-on::before-request="khblCatLoading(label)"` (hàm + template `#th-cat-loading` ở trang chứa — popup LOADING hiện
    NGAY vì server mất 1–12 s, chống bấm nhiều lần); **phải khai tường minh

@@ -304,12 +304,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .khbl-empty b{font-size:15px;font-weight:600;color:var(--ink-600)}
 .khbl-empty span{font-size:12.5px;color:var(--ink-400)}
 
-/* thanh phím chân màn */
-.khbl-keys{background:var(--paper-2);border-top:1px solid var(--line);display:flex;align-items:center;
-  gap:13px;padding:0 14px;font-size:11.5px;color:var(--ink-600);overflow:hidden}
-.khbl-keys kbd{font-family:var(--f-mono);font-size:11px;background:var(--white);border:1px solid var(--line-2);
-  border-bottom-width:2px;border-radius:var(--r-sm);padding:1px 6px;margin-right:5px;color:var(--ink-900)}
-
 /* popup */
 .khbl-modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px}
 .khbl-modal__veil{position:absolute;inset:0;background:rgba(18,16,14,.55)}
@@ -420,7 +414,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-ck__item>b{margin-bottom:4px;font-size:11px}
 .pg-ck__khung{height:auto;aspect-ratio:4/3;max-height:clamp(64px,13vh,150px);width:100%;background:#F3F1EC;overflow:hidden}
 .pg-ck__khung span{font-size:11px;color:var(--ink-400)}
-.pg-ck__khung img{width:100%;height:100%;object-fit:contain;background:#1C1917;cursor:zoom-in;transition:transform .15s}
+.pg-ck__khung img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;transition:transform .15s}
+.pg-ck__cho{font-weight:400;font-size:10px;color:var(--ink-600);font-style:normal}
+.pg-khoa-fs{border:0;margin:0;padding:0;min-width:0}
 .pg-ck__khung img:hover{transform:scale(1.03)}
 .th-lb{position:fixed;inset:0;z-index:90;display:grid;grid-template-columns:56px 1fr 56px;align-items:center;background:rgba(18,16,14,.86)}
 .th-lb[hidden]{display:none}
@@ -559,7 +555,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .kh-anh{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .kh-anh__item{min-width:0;padding:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .kh-anh__item>b{display:block;margin-bottom:6px;font-size:12px;color:var(--ink-600)}
-.kh-anh__khung{height:200px;border:1.5px dashed var(--line-2);border-radius:var(--r);
+.kh-anh__khung{height:100px;border:1.5px dashed var(--line-2);border-radius:var(--r);
   display:grid;place-items:center;background:#FAF7F0;color:var(--ink-400);font-size:12px;
   overflow:hidden;transition:border-color var(--dur) var(--ease)}
 .kh-anh__khung img{width:100%;height:100%;object-fit:cover}
@@ -656,7 +652,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* ─────────────────────────── ⑥ IN ─────────────────────────── */
 @media print{
-  .khbl-top,.khbl-strip,.khbl-keys,.khbl-bar,.khbl-toast,.no-print{display:none!important}
+  .khbl-top,.khbl-strip,.khbl-bar,.khbl-toast,.no-print{display:none!important}
   html,body{height:auto;overflow:visible;background:#fff}
   .khbl-shell{display:block}
   .khbl-main{display:block;height:auto;overflow:visible}
@@ -669,7 +665,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ═══════════════ MÀN BÁN HÀNG (thiết kế lại 03/09/2026) ═══════════════
    Khung: THÔNG TIN (full) · thân 2 cột (trái: vàng bán + vàng đổi · phải: tính tổng)
    · chân nút. Cả khung cao đúng màn hình, chỉ thân bảng cuộn.                     */
-.pg-ban{display:grid;grid-template-rows:minmax(0,1fr) auto auto;min-height:0;height:100%}
+.pg-ban{display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0;height:100%}
 #pos-foot{display:contents}
 .pg-ban__body{display:grid;grid-template-columns:minmax(0,1fr) 340px;
   grid-template-rows:minmax(0,1fr);gap:10px;padding:10px 12px;min-height:0}
@@ -898,7 +894,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-doi-nhap .khbl-input,.pg-doi-nhap .khbl-select{width:104px;padding:5px 8px;font-size:13px}
 .pg-doi-nhap .khbl-select{width:136px}
 .pg-doi-nhap .r{text-align:right}
-.pg-doi-nhap__dv{position:absolute;right:7px;bottom:6px;font-size:9.5px;color:var(--ink-400);font-style:normal}
+.pg-doi-nhap__dv{position:absolute;right:7px;bottom:6px;font-size:9.5px;color:#4CAF50;font-style:normal}
 .pg-ro{display:block;width:104px;padding:5px 8px;font-size:13px;text-align:right;
   border:1px dashed var(--line);border-radius:var(--r);background:var(--white);color:var(--ink-600)}
 .pg-ro--tien{font-weight:700;color:var(--gold-700);border-color:var(--gold-300)}

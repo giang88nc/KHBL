@@ -1,12 +1,16 @@
 {% load pos_extras %}{% comment %}
-THÔNG TIN CHUYỂN KHOẢN (GĐ chốt 08/09/2026 tối) — 5 ô ảnh: CCCD trước · CCCD sau · Hình 1 · Hình 2 · QR chuyển khoản.
-Mỗi ô 2 icon 📷 chụp / 📁 chọn; chọn xong tự tải lên (form hx-trigger change, multipart) → phiếu đang nhập: ThauAnhTam theo
-phiên · phiếu đã lưu: gold_bill.anh_*. Camera dùng lại dialog #kh-camera + bindAnh của khbl.js (cần .kh-anh trong CÙNG form).
+THÔNG TIN CHUYỂN KHOẢN — 5 ô ảnh, LUỒNG GĐ chốt 09/09/2026:
+· CCCD trước / sau THEO KHÁCH: hiện từ hồ sơ khách trên máy KK; chưa chọn khách → ô KHÓA "chọn khách hàng";
+· Hình 1 · Hình 2 · QR THEO NHÓM ĐƠN (thau_nhom.anh_*);
+· Chụp / chọn / ✂ chỉ tạo ẢNH CHỜ (thau_anh_tam theo phiên, nhãn "· chờ") đè lên hiển thị; bấm THANH TOÁN mới ghi:
+  Hình/QR → nhóm đơn, CCCD → hồ sơ khách (máy KK) + file media/cccd/ trên máy chủ; nút LƯU trong popup Tạo QR ghi thẳng nhóm;
+· Đơn KHÓA → chỉ disable nút (fieldset disabled), KHÔNG tô màu; × chỉ có ở ảnh chờ.
+Camera dùng lại dialog #kh-camera + bindAnh của khbl.js (cần .kh-anh trong CÙNG form).
 {% endcomment %}
-<section class="pg-box pg-box--ck{% if phieu_chot %} pg-box--khoa{% endif %}">
-  <header class="pg-box__head"><h3>THÔNG TIN CHUYỂN KHOẢN <i>· ảnh CCCD · hình vàng · QR — lưu kèm phiếu</i></h3>
-    <span class="pg-ck__note">{% if g.trn_ids %}gắn vào <b class="mono">{{ g.bill_codes.0 }}</b>{% else %}ảnh chờ, gắn vào phiếu khi THANH TOÁN{% endif %}</span></header>
-    
+<section class="pg-box pg-box--ck">
+  <header class="pg-box__head"><h3>THÔNG TIN CHUYỂN KHOẢN <i>· CCCD theo khách · hình vàng, QR theo nhóm đơn</i></h3>
+    <span class="pg-ck__note">{% if g.nhom_id %}nhóm đơn <b class="mono">{{ g.bill_codes|join:", " }}</b>{% else %}ảnh chờ — ghi khi THANH TOÁN{% endif %}</span></header>
+
   <form class="pg-ck" hx-post="{% url 'pos:thau_anh_len' %}" hx-encoding="multipart/form-data" hx-swap="none"
         hx-trigger="khbl:anh" hx-sync="this:queue last" data-nen>
     {% csrf_token %}
@@ -14,17 +18,18 @@ phiên · phiếu đã lưu: gold_bill.anh_*. Camera dùng lại dialog #kh-came
     <div class="kh-anh pg-ck__anh">
       {% for a in anh %}
       <div class="kh-anh__item pg-ck__item" data-photo data-label="{{ a.label }}" data-facing="{{ a.facing }}">
-        <b>{{ a.label }}</b>
+        <b>{{ a.label }}{% if a.tam %} <i class="pg-ck__cho" title="Ảnh chờ — ghi vào phiếu / hồ sơ khách khi THANH TOÁN">· chờ</i>{% endif %}</b>
         <div class="kh-anh__khung pg-ck__khung" data-xem>
-          {% if a.co %}<img src="{% if a.src %}{{ a.src }}?v={% now 'His' %}{% else %}{% url 'pos:thau_anh' %}?slot={{ a.slot }}{% if a.trn %}&trn_id={{ a.trn }}{% endif %}&v={% now 'His' %}{% endif %}" alt="{{ a.label }}" data-lb="{{ a.label }}{% if a.cua_khach %} (hồ sơ khách){% endif %}" title="{% if a.cua_khach %}Ảnh trong hồ sơ khách — chụp/chọn ảnh mới để thay. {% endif %}Bấm để phóng to">{% else %}<span>Chưa có</span>{% endif %}
+          {% if a.khoa %}<span>chọn khách hàng</span>
+          {% elif a.co %}<img src="{{ a.src }}" alt="{{ a.label }}" data-lb="{{ a.label }}{% if a.nguon == 'khach' %} (hồ sơ khách){% elif a.tam %} (chờ THANH TOÁN){% endif %}" title="Bấm để phóng to">
+          {% else %}<span>Chưa có</span>{% endif %}
         </div>
         <div class="kh-anh__actions pg-ck__actions">
-          <button class="pg-ck__ico" type="button" data-chup title="Chụp {{ a.label|lower }}" {% if phieu_chot %}disabled{% endif %}>📷</button>
-          <label class="pg-ck__ico{% if phieu_chot %} pg-ck__ico--off{% endif %}" title="Chọn tệp {{ a.label|lower }}">📁<input type="file" name="anh_{{ a.slot }}" accept="image/*" data-photo-input hidden {% if phieu_chot %}disabled{% endif %}></label>
-          {% if a.co and not a.cua_khach %}<button class="pg-ck__ico pg-ck__ico--x" type="button" title="Bỏ ảnh" {% if phieu_chot %}disabled{% else %}hx-post="{% url 'pos:thau_anh_xoa' %}" hx-vals='{"slot": "{{ a.slot }}"}' hx-swap="none"{% endif %}>×</button>{% endif %}
-          {% if a.cua_khach %}<span class="pg-ck__tag" title="Ảnh đang lưu trong hồ sơ khách (máy KK)">👤</span>{% endif %}
+          <button class="pg-ck__ico" type="button" data-chup title="Chụp {{ a.label|lower }}" {% if phieu_chot or a.khoa %}disabled{% endif %}>📷</button>
+          <label class="pg-ck__ico{% if phieu_chot or a.khoa %} pg-ck__ico--off{% endif %}" title="Chọn tệp {{ a.label|lower }}">📁<input type="file" name="anh_{{ a.slot }}" accept="image/*" data-photo-input hidden {% if phieu_chot or a.khoa %}disabled{% endif %}></label>
+          {% if a.tam %}<button class="pg-ck__ico pg-ck__ico--x" type="button" title="Bỏ ảnh chờ" {% if phieu_chot %}disabled{% else %}hx-post="{% url 'pos:thau_anh_xoa' %}" hx-vals='{"slot": "{{ a.slot }}"}' hx-swap="none"{% endif %}>×</button>{% endif %}
           {% if a.slot == "cccd1" or a.slot == "cccd2" %}<button class="pg-ck__ico pg-ck__ico--cat" type="button" {% if not a.co or phieu_chot %}disabled{% endif %}
-                  title="✂ Tách thẻ: OpenCV tự tìm thẻ trong ảnh → cắt, nắn phối cảnh, khổ chuẩn 1170×738, kéo xoay bằng con trỏ — xem trước rồi LƯU"
+                  title="✂ Tách thẻ: OpenCV tự tìm thẻ trong ảnh → cắt, nắn phối cảnh, khổ chuẩn 1170×738, kéo xoay bằng con trỏ — xem trước rồi LƯU (thành ảnh chờ)"
                   hx-get="{% url 'pos:thau_anh_cat' %}?slot={{ a.slot }}" hx-target="#modal-root" hx-swap="innerHTML"
                   hx-disabled-elt="this" hx-on::before-request="khblCatLoading('{{ a.label }}')">✂</button>{% endif %}
           {# ⚠ hx-swap="innerHTML" BẮT BUỘC: form cha .pg-ck có hx-swap="none" và htmx KẾ THỪA hx-swap → popup trả về bị bỏ (bẫy 08/09 tối) #}

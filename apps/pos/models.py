@@ -19,6 +19,28 @@ class BankReconcileState(models.Model):
         db_table = "bank_reconcile_state"
 
 
+class ThauPaymentLink(models.Model):
+    """Bank evidence, retained after revocation; unique active bank transaction."""
+    order_key = models.CharField(max_length=64, db_index=True)
+    trn_ids = models.JSONField(default=list)
+    notification_id = models.BigIntegerField(db_index=True)
+    active_notification_id = models.BigIntegerField(unique=True, null=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    snapshot = models.JSONField(default=dict)
+    bank_snapshot = models.JSONField(default=dict)
+    mode = models.CharField(max_length=10)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
+    username = models.CharField(max_length=150, default='')
+    reason = models.CharField(max_length=500, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True)
+    revoked_by = models.CharField(max_length=150, default='')
+    revoke_reason = models.CharField(max_length=500, default='')
+
+    class Meta:
+        db_table = 'thau_payment_link'
+
+
 class PriceDisplay(models.Model):
     gold_type = models.CharField(max_length=50, unique=True)
     pinned = models.BooleanField(default=False)
@@ -198,6 +220,11 @@ class ThauNhom(models.Model):
     ck_stk = models.CharField(max_length=40, blank=True, default="")
     ck_nd = models.CharField(max_length=60, blank=True, default="")
     ck_ten = models.CharField("Tên chủ TK", max_length=100, blank=True, default="")
+    # ẢNH CỦA NHÓM ĐƠN (GĐ chốt 09/09/2026 — "dọn sang nhà mới" từ gold_bill.anh_*): Hình 1 · Hình 2 · QR chuyển khoản.
+    # CCCD KHÔNG ở đây — thuộc hồ sơ KHÁCH (I_CUSTOMER trên máy KK + file media/cccd/ trên máy chủ).
+    anh_hinh1 = models.BinaryField("Hình 1", null=True, blank=True, editable=False)
+    anh_hinh2 = models.BinaryField("Hình 2", null=True, blank=True, editable=False)
+    anh_qr = models.BinaryField("QR chuyển khoản", null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
 
