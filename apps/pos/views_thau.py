@@ -7,6 +7,7 @@ TRN_RT_BUYGOLD_CompleteMore 'A@B@' → [CARDPAY_Ins từng dòng có CK] → T_T
 (models.ThauNhom) để mở lại / in 1 tờ 110mm. Bù/bớt gắn vào dòng lớn nhất, CK rót tuần tự (thau_cart.phan_bo).
 """
 import datetime
+import json
 import logging
 
 from django.core.cache import cache
@@ -383,6 +384,28 @@ def _chuyen_anh_tam(request, g, trn, rows):
         logger.exception("gold_bill thâu: không ghi được %s", trn)
 
 
+def _anh_tam_nhan(request):
+    """Nhãn các ô ảnh đang giữ TẠM theo phiên (chưa gắn phiếu nào), theo thứ tự 5 ô."""
+    co = set(ThauAnhTam.objects.filter(session_key=_skey(request)).values_list("slot", flat=True))
+    return [nhan for s, nhan, _ in ANH_SLOTS if s in co]
+
+
+def _chan_mat_anh(request, viec, url, vals=None):
+    """GĐ chốt 09/09/2026 (phương án 1): còn ảnh TẠM mà rời phiếu → HỎI TRƯỚC bằng popup, không xóa âm thầm.
+    Ảnh chỉ gắn vào phiếu khi THANH TOÁN; trước đó nằm ở thau_anh_tam theo phiên nên mọi lối 'trắng trang' đều mất.
+    Trả None khi không có ảnh tạm hoặc người dùng đã bấm 'Bỏ ảnh' (bo_anh=1); ngược lại trả popup OOB vào #modal-root
+    (nút gọi thường có hx-swap="none" nên phải đi đường OOB)."""
+    if request.POST.get("bo_anh") == "1":
+        return None
+    nhan = _anh_tam_nhan(request)
+    if not nhan:
+        return None
+    html = render_to_string("pos/_thau_anh_mat_modal.html",
+                            {"anh_cho": nhan, "viec": viec, "url": url,
+                             "vals": json.dumps(dict(vals or {}, bo_anh="1"), ensure_ascii=False)}, request=request)
+    return HttpResponse('<div id="modal-root" hx-swap-oob="true">' + html + "</div>")
+
+
 def _oob(request, extra=None):
     return render(request, "pos/_thau_oob.html", _ctx(request, extra))
 
@@ -404,11 +427,19 @@ def thau(request):
 
 @require_POST
 def thau_moi(request):
-    """＋ PHIẾU MỚI: xóa trắng TẤT CẢ kể cả nhân viên thâu (GĐ chốt 08/09 tối) + ảnh tạm; dọn ảnh tạm cũ >2 ngày."""
+    """＋ PHIẾU MỚI: xóa trắng TẤT CẢ kể cả nhân viên thâu (GĐ chốt 08/09 tối) + ảnh tạm; dọn ảnh tạm cũ >2 ngày.
+    Còn ảnh tạm chưa gắn phiếu → hỏi trước (GĐ chốt 09/09)."""
+    from django.urls import reverse
+    chan = _chan_mat_anh(request, "Phiếu mới", reverse("pos:thau_moi"))
+    if chan is not None:
+        return chan
     TC.clear(request, giu_nv=False)
     ThauAnhTam.objects.filter(session_key=_skey(request)).delete()
     ThauAnhTam.objects.filter(created_at__lt=timezone.now() - datetime.timedelta(days=2)).delete()
-    return _oob(request, {"tin": "Phiếu thâu mới"})
+    tin = {"tin": "Phiếu thâu mới"}
+    if request.POST.get("bo_anh") == "1":
+        tin["dong_modal"] = True                                   # đóng popup cảnh báo vừa bấm "Bỏ ảnh"
+    return _oob(request, tin)
 
 
 @require_POST
@@ -593,7 +624,7 @@ def _ngay(v, mac_dinh):
 
 
 @require_GET
-def thau_ds(request):
+def thau_ds(request, standalone=False):
     """Popup DANH SÁCH phiếu thâu (80vw, cùng kiểu Bán hàng): khoảng ngày · NV · khách · trạng thái + thống kê."""
     hom_nay = datetime.date.today().isoformat()
     d1, d2 = _ngay(request.GET.get("d1"), hom_nay), _ngay(request.GET.get("d2"), hom_nay)
@@ -626,6 +657,8 @@ def thau_ds(request):
         r["nhom"] = n.pk if n else ""
         r["nhom_n"] = len(n.trn_ids) if n else 1
     return render(request, "pos/_thau_ds.html", {
+        "standalone": standalone, "nav_active": "thau",
+        "ds_base": "pos/_thau_ds_page.html" if standalone else "partials/modal_shell.html",
         "ds": ds, "tk": tk, "d1": d1, "d2": d2, "hom_nay": hom_nay, "loc": loc, "nvs": S.nhan_vien_ban(),
         "nhieu_ngay": d1 != d2, "loi": loi, "nguon_hist": not live})
 
@@ -642,6 +675,13 @@ def _rows_cua(trn_id, c=None):
 @require_POST
 def thau_mo(request):
     trn = (request.POST.get("trn_id") or "").strip()
+    from django.urls import reverse
+    vals = {"trn_id": trn}
+    if request.POST.get("from_list_page") == "1":
+        vals["from_list_page"] = "1"
+    chan = _chan_mat_anh(request, "Mở phiếu khác", reverse("pos:thau_mo"), vals)   # ảnh tạm sẽ mất → hỏi trước
+    if chan is not None:
+        return chan
     try:
         rows, nhom = _rows_cua(trn)
     except Exception as exc:
@@ -651,6 +691,11 @@ def thau_mo(request):
     ThauAnhTam.objects.filter(session_key=_skey(request)).delete()     # 08/09 tối: mở lại đơn → bỏ ảnh tạm, hiện ảnh đã lưu của đơn
     g = TC.nap(request, rows, nhom)
     ma = ", ".join(g["bill_codes"])
+    if request.POST.get('from_list_page') == '1':
+        response = HttpResponse(status=204)
+        from django.urls import reverse
+        response['HX-Redirect'] = reverse('pos:thau')
+        return response
     return _oob(request, {"tin": f"Đã mở {ma}" + (" (đã chốt — chỉ xem, 🔓 SỬA để đổi)" if g["status"] == B.CHOT_ROI else ""),
                           "dong_modal": True})
 
@@ -855,7 +900,7 @@ def _xn_ctx(request, hanh_dong, loi=""):
         hop_le = g.get("status") != B.CHOT_ROI and bool(g["lines"] or g.get("trn_ids"))
     else:
         hop_le = g.get("status") == B.CHOT_ROI and bool(hd)
-    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi, "khoa": hop_le,
+    return {"g": g, "hd": hd, "hanh_dong": hanh_dong, "loi": loi, "khoa": hop_le, "anh_cho": _anh_tam_nhan(request),
             "nguoi": request.user.first_name or request.user.username, "username": request.user.username,
             "luc": datetime.datetime.now()}
 

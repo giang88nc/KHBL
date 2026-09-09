@@ -162,7 +162,7 @@ class Command(BaseCommand):
             if not ph["till_id"]:
                 self._ok("admin có két PMV (sys_users)", False, "thiếu till_id → bỏ phần view")
             else:
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 web.post("/banle/thau-vao/dat/", {"cust_id": cust})
                 web.post("/banle/thau-vao/dat/", {"emp": emp})
                 r = web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "500", "tl_hot": "10", "gia": "", "kieu": "thau"})
@@ -229,7 +229,7 @@ class Command(BaseCommand):
                 # ── 8. (08/09 tối) PHIẾU MỚI xóa cả NV · TÍNH LẠI gộp dòng · ảnh chuyển khoản → gold_bill · × dòng đã lưu = xóa KK ──
                 from apps.pos.models import GoldBill, ThauAnhTam
                 web.post("/banle/thau-vao/dat/", {"emp": emp})
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 g = web.session.get(TC.KEY)
                 self._ok("PHIẾU MỚI xóa trắng cả nhân viên thâu", not g.get("emp") and not g["lines"])
                 web.post("/banle/thau-vao/dat/", {"cust_id": cust}); web.post("/banle/thau-vao/dat/", {"emp": emp})
@@ -285,7 +285,7 @@ class Command(BaseCommand):
                          and bal("D18K") == bal0["D18K"] and bal("VND") == bal0["VND"] and GoldBill.objects.get(trn_id=nhom3.trn_ids[0]).is_del)
                 # ── 8b. (08/09 tối) ✂ TÁCH THẺ CCCD bằng OpenCV: ảnh giả lập thẻ xoay 12° lệch góc + vật tạp ──
                 from apps.pos import anh_cccd as AC
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 png_the = AC.anh_thu_nghiem(goc=12)
                 r = web.post("/banle/thau-vao/anh/len/", {"anh_cccd2": SimpleUploadedFile("the.png", png_the, content_type="image/png")})
                 b = r.content.decode()
@@ -333,12 +333,32 @@ class Command(BaseCommand):
                 except AC.KhongThayThe:
                     self._ok("ảnh không có thẻ → báo không tìm thấy", True)
                 self._ok("✂ ở ô không phải CCCD → 400", web.get("/banle/thau-vao/anh/cat/?slot=qr").status_code == 400)
-                web.post("/banle/thau-vao/moi/")
+
+                # ── 8c. (09/09/2026, GĐ chốt PHƯƠNG ÁN 1) còn ẢNH TẠM chưa gắn phiếu → ＋ PHIẾU MỚI / MỞ đơn phải HỎI TRƯỚC ──
+                # Ảnh chỉ gắn vào phiếu khi THANH TOÁN; trước đó nằm ở thau_anh_tam theo phiên. Trước đây mọi lối
+                # 'trắng trang' xóa âm thầm → GĐ mất ảnh Hình 1/Hình 2 (log 08–09/09: 36 lần tải, không lần nào kịp thanh toán).
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                web.post("/banle/thau-vao/anh/len/", {"anh_hinh1": anh("red"), "anh_hinh2": anh("blue")})
+                con = lambda: set(ThauAnhTam.objects.filter(session_key=sk).values_list("slot", flat=True))
+                self._ok("tải Hình 1 + Hình 2 vào phiếu NHÁP → nằm ở bảng tạm thau_anh_tam", {"hinh1", "hinh2"} <= con(), str(con()))
+                r = web.post("/banle/thau-vao/moi/")
+                b = r.content.decode()
+                self._ok("＋ PHIẾU MỚI khi còn ảnh tạm → popup hỏi (không xóa), ảnh CÒN NGUYÊN",
+                         'id="modal-root"' in b and "chưa gắn phiếu" in b and "Hình 1" in b and {"hinh1", "hinh2"} <= con(), b[:120].replace("\n", " "))
+                self._ok("popup có nút Bỏ ảnh gửi lại chính lệnh kèm bo_anh=1", "bo_anh" in b and "thau-vao/moi/" in b and "Ở LẠI PHIẾU" in b)
+                r = web.post("/banle/thau-vao/mo/", {"trn_id": t0 if 't0' in dir() else nhom3.trn_ids[0]})
+                self._ok("MỞ đơn khác khi còn ảnh tạm → cũng hỏi trước, ảnh CÒN NGUYÊN",
+                         "chưa gắn phiếu" in r.content.decode() and {"hinh1", "hinh2"} <= con())
+                web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "100", "tl_hot": "0", "gia": "", "kieu": "thau"})
+                r = web.get("/banle/thau-vao/xac-nhan/xoa_nhap/")
+                self._ok("popup XÓA nháp liệt kê số ảnh chờ sẽ mất", "ảnh đang chờ chưa gắn phiếu" in r.content.decode())
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                self._ok("bấm 'Bỏ ảnh' (bo_anh=1) → ảnh tạm mới bị xóa", not con(), str(con()))
 
                 # ── 9. (08/09 tối) QR chuyển khoản: quét ảnh VietQR → điền form CK · bỏ THẺ · Tạo QR · mở lại đơn xóa ảnh tạm ──
                 import segno
                 from apps.pos import vietqr as QRv
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 web.post("/banle/thau-vao/dat/", {"cust_id": cust}); web.post("/banle/thau-vao/dat/", {"emp": emp})
                 web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "300", "tl_hot": "0", "gia": "", "kieu": "thau"})
                 png = BytesIO(); segno.make(QRv.payload("ACB", "123456789", 0, "ABC"), error="m").save(png, kind="png", scale=6, border=3)
@@ -391,16 +411,16 @@ class Command(BaseCommand):
                 web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "100", "tl_hot": "0", "gia": "", "kieu": "thau"})
                 web.post("/banle/thau-vao/thanh-toan/", {})
                 nhom4 = ThauNhom.objects.order_by("-pk").first()
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 web.post("/banle/thau-vao/anh/len/", {"anh_hinh2": anh("gray")})
-                r = web.post("/banle/thau-vao/mo/", {"trn_id": nhom4.trn_ids[0]})
+                r = web.post("/banle/thau-vao/mo/", {"trn_id": nhom4.trn_ids[0], "bo_anh": "1"})
                 b = r.content.decode()
                 self._ok("MỞ lại đơn → ảnh tạm xóa, hiện ảnh hình 1 của đơn (gold_bill), không hiện hình 2 tạm",
                          not ThauAnhTam.objects.filter(session_key=sk).exists() and f"slot=hinh1&trn_id={nhom4.trn_ids[0]}" in b and "slot=hinh2" not in b.split("pg-ck__khung")[4] if b.count("pg-ck__khung") >= 5 else False, b.count("pg-ck__khung"))
                 web.post("/banle/thau-vao/thuc-hien/huy_hd/", {"passcode": "SMOKE"})
                 self._ok("dọn đơn QR/ảnh → KK sạch, két về ban đầu", not any(B.phieu_thau(x, c) for x in nhomq.trn_ids + nhom4.trn_ids)
                          and bal("D18K") == bal0["D18K"] and bal("VND") == bal0["VND"])
-                web.post("/banle/thau-vao/moi/")
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
                 # phiếu nháp: thêm dòng rồi XÓA nháp (không passcode), không đụng KK
                 web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "50", "tl_hot": "0", "gia": "", "kieu": "thau"})
                 n0 = c.query("SELECT COUNT(*) n FROM TRN_RT_BUYGOLD WITH (NOLOCK)")[0]["n"]

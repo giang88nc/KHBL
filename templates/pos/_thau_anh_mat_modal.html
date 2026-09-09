@@ -1,0 +1,20 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
+CẢNH BÁO MẤT ẢNH TẠM (GĐ chốt 09/09/2026 — phương án 1). Ảnh tải lên khi phiếu CHƯA thanh toán chỉ nằm ở bảng tạm
+`thau_anh_tam` theo PHIÊN, chưa gắn phiếu nào; ＋ PHIẾU MỚI / MỞ đơn khác xóa sạch chúng. Popup này chặn lại: Ở LẠI PHIẾU
+(đóng, ảnh còn nguyên) hoặc Bỏ ảnh · <việc> (gửi lại chính lệnh đó kèm bo_anh=1 → server mới cho phép xóa).
+{% endcomment %}
+{% block modal_style %}width:min(500px,94vw){% endblock %}
+{% block modal_title %}⚠ Còn {{ anh_cho|length }} ảnh chưa gắn phiếu{% endblock %}
+{% block modal_body %}
+  <div class="khbl-alert khbl-alert--do">{% icon "hethong" 16 %}<div><b>{{ viec }} sẽ XÓA các ảnh đang chờ</b>
+    Ảnh chụp / chọn khi phiếu chưa thanh toán chỉ được giữ TẠM theo phiên làm việc. Ảnh chỉ gắn vào phiếu và lưu lâu dài
+    sau khi bấm <b>THANH TOÁN</b>.</div></div>
+  <ul style="margin:10px 0 0;padding-left:20px;font-size:13px">{% for n in anh_cho %}<li><b>{{ n }}</b></li>{% endfor %}</ul>
+  <p class="dim" style="margin:10px 0 0;font-size:12px">Muốn GIỮ ảnh: bấm <b>Ở LẠI PHIẾU</b>, hoàn tất THANH TOÁN cho phiếu
+    đang mở, rồi hãy làm phiếu khác.</p>
+{% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--gold" type="button" onclick="closeKhblModal()">← Ở LẠI PHIẾU</button>
+  <button class="khbl-btn khbl-btn--nguy" type="button" title="Xóa ảnh đang chờ rồi thực hiện tiếp"
+          hx-post="{{ url }}" hx-vals='{{ vals }}' hx-swap="none" hx-disabled-elt="this">Bỏ ảnh · {{ viec }}</button>
+{% endblock %}

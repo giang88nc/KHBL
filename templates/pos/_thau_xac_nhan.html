@@ -16,7 +16,8 @@ hanh_dong = sua | huy_tt | huy_hd | xoa_nhap (không passcode).
       <span>Khách</span><b>{{ g.cust.name|default:"Khách lẻ" }}</b>
       <span>Người thao tác</span><b>{{ nguoi }} <i class="mono dim">({{ username }})</i> · {{ luc|date:"H:i d/m/Y" }}</b>
     </div>
-    <div class="xn__hq{% if hd.nguy %} xn__hq--nguy{% endif %}"><b>Hậu quả khi xác nhận:</b><ul>{% for h in hd.hau_qua %}<li>{{ h }}</li>{% endfor %}</ul></div>
+    <div class="xn__hq{% if hd.nguy %} xn__hq--nguy{% endif %}"><b>Hậu quả khi xác nhận:</b><ul>{% for h in hd.hau_qua %}<li>{{ h }}</li>{% endfor %}
+      {% if anh_cho %}<li><b>XÓA {{ anh_cho|length }} ảnh đang chờ chưa gắn phiếu: {{ anh_cho|join:" · " }}</b> (ảnh chỉ được lưu lâu dài sau khi THANH TOÁN)</li>{% endif %}</ul></div>
     {% if loi %}<div class="khbl-alert khbl-alert--do" style="margin:0 0 10px">{{ loi }}</div>{% endif %}
     {% if hd.nhap %}
     <p class="dim" style="margin:0;font-size:11.5px">Phiếu nháp không cần passcode — bấm XÁC NHẬN (hoặc Enter).</p>
