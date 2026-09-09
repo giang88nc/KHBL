@@ -444,9 +444,10 @@
       try {
         var transfer = new DataTransfer(); transfer.items.add(file); target.files = transfer.files;
       } catch (_) { /* sự kiện formdata phía trên sẽ bổ sung tệp */ }
-      showFile(target, file); closeCamera();
+      var inp = target;                       // GIỮ tham chiếu: closeCamera() đặt target = null → dispatch lên null bị nuốt im (bẫy 09/09)
+      showFile(inp, file); closeCamera();
       // 08/09 tối (thâu): form ảnh tự tải lên theo 'change' — gán files bằng code không bắn sự kiện → bắn tay
-      try { target.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
+      try { inp.dispatchEvent(new Event("change", { bubbles: true })); } catch (_) {}
     });
   }
 

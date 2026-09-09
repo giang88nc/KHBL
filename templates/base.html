@@ -6,17 +6,17 @@
 <title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260908.nav-led1">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260909.no-keys">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/vn_text.js' %}?v=20260905.qr5"></script>
   <script defer src="{% static 'js/cccd.js' %}?v=20260905.qr5"></script>
-  <script defer src="{% static 'js/khbl.js' %}?v=20260908.price-alert2"></script>
+  <script defer src="{% static 'js/khbl.js' %}?v=20260909.camera-change"></script>
 {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {# KHUNG CHUNG TOÀN HỆ: topbar (logo + menu ngang + tài khoản) · nội dung · chân trang #}
 <div class="khbl-shell">
-  {% include "partials/topbar.html" %}
+  {% block topbar %}{% include "partials/topbar.html" %}{% endblock %}
   {# băng ĐÍCH DỮ LIỆU riêng đã BỎ (07/09/2026) — trạng thái đích nay nằm ở chân trang (footer.html) #}
 
   <main class="khbl-main{% block main_mod %}{% endblock %}">
@@ -39,7 +39,7 @@
     {% endblock %}
   </main>
 
-  {% include "partials/footer.html" %}
+  {% block footer %}{% include "partials/footer.html" %}{% endblock %}
 </div>
 
 <div id="modal-root"></div>

@@ -144,4 +144,7 @@ trên KK (`customer.saved_image`, CHỈ ĐỌC) — đo IoU bằng `AC.iou_quad`
 9. Chèn helper vào giữa decorator `@require_GET` và `def thau_anh_cat` → helper bị bọc → 500 `'str' has no attribute
    'method'`. Decorator phải đứng ngay trên view.
 10. Thư viện: `opencv-python-headless==5.0.0.93` + `numpy>=2.0` trong `requirements.txt` — chỉ server cần, PC LAN không (SIFT có sẵn trong bản chính, không cần contrib).
-11. Hệ số 'bố cục màu' (quốc huy đỏ / chip vàng đúng chỗ, v2.16–2.17) tưởng hay nhưng trong tiệm vàng đỏ nhung + vàng trang sức khắp nơi → điểm thẻ thật 0,4–0,7 lẫn với mảnh sai 0,3–0,5 → đã bỏ, dùng SIFT.
+11. 📷 CHỤP không tải lên dù preview hiện: `khbl.js` đóng camera (`target = null`) trước khi bắn `change` → phải giữ tham chiếu
+    input trước khi `closeCamera()`. Đường CHỌN tệp không dính (change gốc). Smoke server không bắt được — thử JS bằng
+    `getUserMedia` giả (canvas.captureStream) trên trang render qua test client.
+12. Hệ số 'bố cục màu' (quốc huy đỏ / chip vàng đúng chỗ, v2.16–2.17) tưởng hay nhưng trong tiệm vàng đỏ nhung + vàng trang sức khắp nơi → điểm thẻ thật 0,4–0,7 lẫn với mảnh sai 0,3–0,5 → đã bỏ, dùng SIFT.
