@@ -649,7 +649,7 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 |---|---|
 | `TURN_ON_KHBL.bat` | Bật **4 tiến trình ẩn**: waitress `127.0.0.1:8101` · **Caddy HTTPS `*:8100`** · scheduler · watchdog. Chờ MySQL80, chống bật trùng từng tiến trình |
 | `TURN_OFF_KHBL.bat` | Tắt watchdog TRƯỚC rồi Caddy KHBL (nhận diện qua CommandLine chứa `PYTHON\KHBL` — KHÔNG đụng Caddy KIMHANH) + mọi listener :8100/:8101 + scheduler |
-| `LAN_HTTPS_KIT\CAI_HTTPS_PC_LAN.bat` | Chạy 1 lần trên mỗi PC LAN (tự xin UAC): ghi `hosts` `192.168.1.6 tiemvangkimhanh2` + nạp CA + mở `https://tiemvangkimhanh2:8100`. Copy NGUYÊN thư mục `LAN_HTTPS_KIT` sang PC |
+| `LAN_HTTPS_KIT\CAI_HTTPS_PC_LAN.bat` | Chạy 1 lần trên mỗi PC LAN (tự xin UAC): ghi `hosts` `192.168.1.6 tiemvangkimhanh2` + nạp CA + mở `https://tiemvangkimhanh2:8100`. Copy NGUYÊN thư mục `LAN_HTTPS_KIT` sang PC. ⚠ 09/09/2026 PC LAN nổ `Set-Content : Stream was not readable` khi ghi hosts (PS 5.1 mở được file nhưng luồng không đọc được — file bị tiến trình khác/diệt virus giữ hoặc đặt thuộc tính) → script đổi sang `[IO.File]::WriteAllText` (đã đo: vẫn ghi được khi tiến trình khác giữ file share Write/ReadWrite mà Set-Content thất bại), bỏ tạm thuộc tính Hidden/ReadOnly/System rồi trả lại, thử lại 4 lần, lỗi thì báo rõ tắt 'bảo vệ hosts' của diệt virus (Bkav/Kaspersky/Avast) |
 
 **HTTPS LAN — GĐ chốt 08/09/2026 (A: Caddy riêng + dùng chung CA KIMHANH · B: IP tĩnh 192.168.1.6)**
 - URL chuẩn: **`https://tiemvangkimhanh2:8100`** (= `https://localhost:8100` = `https://192.168.1.6:8100` = `https://mrgiang:8100`).

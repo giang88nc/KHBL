@@ -25,7 +25,28 @@ $lines = @()
 if (Test-Path -LiteralPath $hosts) { $lines = Get-Content -LiteralPath $hosts -ErrorAction Stop }
 $kept = @($lines | Where-Object { $_ -notmatch ("^\s*\S+\s+" + [regex]::Escape($Domain) + "\s*(#.*)?$") })
 $kept += ("{0}`t{1}" -f $ServerIp, $Domain)
-Set-Content -LiteralPath $hosts -Value $kept -Encoding ASCII
+# Ghi hosts bang .NET, bo tam thuoc tinh Hidden/ReadOnly/System roi tra lai:
+# PS 5.1 Set-Content len file Hidden/ReadOnly no "Stream was not readable" (loi da gap 09/09/2026 tren PC LAN -
+# thuong do phan mem diet virus dat thuoc tinh 'bao ve hosts').
+$thuocTinhCu = $null
+if (Test-Path -LiteralPath $hosts) {
+    $thuocTinhCu = (Get-Item -LiteralPath $hosts -Force).Attributes
+    [IO.File]::SetAttributes($hosts, [IO.FileAttributes]::Normal)
+}
+try {
+    $ok = $false
+    for ($lan = 1; $lan -le 4 -and -not $ok; $lan++) {
+        try { [IO.File]::WriteAllText($hosts, (($kept -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII); $ok = $true }
+        catch { if ($lan -eq 4) { throw }; Start-Sleep -Milliseconds 700 }   # file dang bi diet virus giu tam -> thu lai
+    }
+} catch {
+    throw ("Khong ghi duoc file hosts ({0}). Neu may co phan mem diet virus (Bkav/Kaspersky/Avast...) dang 'bao ve hosts', " +
+           "tam tat bao ve hoac them ngoai le cho PowerShell roi chay lai. Chi tiet: {1}") -f $hosts, $_.Exception.Message
+} finally {
+    if ($null -ne $thuocTinhCu) {
+        try { [IO.File]::SetAttributes($hosts, $thuocTinhCu) } catch {}
+    }
+}
 ipconfig /flushdns | Out-Null
 Write-Host ("[1/3] hosts: {0} -> {1}" -f $Domain, $ServerIp) -ForegroundColor Green
 
