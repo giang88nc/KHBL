@@ -6,10 +6,31 @@ description: >-
   1170×738, xoay tự do theo góc người dùng kéo. Dùng skill này BẤT CỨ KHI NÀO đụng đến: cắt/tách/crop ảnh CCCD, ảnh
   hồ sơ KHÁCH HÀNG hay NHÂN VIÊN có mặt trước/mặt sau thẻ, nút ✂ trên phiếu thâu, popup kéo xoay ảnh thẻ, chất lượng
   cắt (lẹm viền, xiên, không thấy thẻ), hay muốn thêm nút "tách thẻ" ở màn hình mới — kể cả khi người dùng không gọi
-  đúng các thuật ngữ trên.
+  đúng các thuật ngữ trên. **BẮT BUỘC đọc skill này khi làm BẤT KỲ màn hình nào có ô ảnh CCCD mặt trước/mặt sau**
+  (khách hàng, nhân viên, hồ sơ, phiếu…): GĐ chốt 10/09/2026 nút ✂ tách thẻ LUÔN đi kèm ô ảnh CCCD, mọi trang, không
+  có ngoại lệ.
 ---
 
 # CẮT ẢNH CCCD — thuật toán dùng chung (KHBL)
+
+## ⛔ QUY TẮC BẮT BUỘC (GĐ chốt 10/09/2026)
+
+> "Tool cắt hình này **luôn đi chung** với ô hình chứa CCCD trước & sau, **mọi trang** nếu trong hệ thống."
+
+**Ô ảnh CCCD mặt trước / mặt sau ở BẤT KỲ màn hình nào (khách hàng · nhân viên · hồ sơ · phiếu · module sau này)
+PHẢI có nút ✂ tách thẻ ngay cạnh ô** — không cần GĐ nhắc lại, không hỏi lại. Làm mới một màn hình có ô CCCD mà
+quên ✂ = thiếu, phải bổ sung trước khi báo xong. Ô CHỈ-XEM (không có đường ghi ảnh) thì không cần, nhưng nếu màn
+hình đó có nút "Đổi / Sửa ảnh" thì đường sửa ấy phải dẫn tới ô có ✂.
+
+**Bảng kiểm hiện trạng** (cập nhật mỗi lần thêm màn hình có ô CCCD):
+
+| Hệ | Màn hình | Ô CCCD trước/sau | ✂ |
+|---|---|---|---|
+| KHBL | `/thau-vao/` — form ảnh phiếu (`_thau_ck.html`, slot cccd1/cccd2) | nhập được | ✅ 08/09/2026 |
+| KHBL | `/khach-hang/` + mọi nơi mở popup Thêm/Sửa khách (`_khach_form.html`) | nhập được | ✅ 10/09/2026 |
+| KHBL | popup XEM khách (`_khach_modal.html`) | chỉ xem (đổi ảnh qua nút Sửa → popup có ✂) | — không cần |
+| KHJ (HR) | popup Thêm/Sửa hồ sơ NV (`_employee_form_modal.html`: `id_card_front` / `id_card_back`) | nhập được | ❌ **CÒN THIẾU** — cần cài `opencv-python-headless` + `numpy` vào venv KHJ, mang `anh_cccd.py` + `cccd_mau/*.npz` sang, rồi làm y công thức "Tích hợp lần 2" |
+| KHJ (HR) | `employee_detail.html` + portal quản lý (chỉ hiển thị ảnh) | chỉ xem | — không cần |
 
 ## Nguồn sự thật
 

@@ -591,6 +591,10 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
+0. **Ô ẢNH CCCD ⇒ LUÔN CÓ NÚT ✂ TÁCH THẺ** (GĐ chốt 10/09/2026: "tool cắt hình này luôn đi chung với ô hình chứa
+   CCCD trước & sau, mọi trang nếu trong hệ thống"). Màn hình nào có ô nhập ảnh CCCD mặt trước/mặt sau — khách hàng,
+   nhân viên, hồ sơ, phiếu, module sau này — đều phải kèm ✂ gọi `AC.cat_cccd`; **KHÔNG sửa thuật toán, chỉ gọi lại**.
+   Công thức tích hợp + bảng kiểm hiện trạng: skill `.claude/skills/cat-anh-cccd/` (đọc TRƯỚC khi làm màn hình có CCCD).
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy
    nhất: `_restore_sandbox` trong backup_pmv — server LOCAL). Muốn lệnh mới → thêm vào
    allowlist gateway kèm lý do, không "đi tắt".
