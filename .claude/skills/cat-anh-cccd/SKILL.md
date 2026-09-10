@@ -58,12 +58,40 @@ quad = AC.tim_the(img_bgr)               # ndarray BGR → 4 điểm float32 (tl
    trong `SAVE_LOCK` (I_CUSTOMER_Upd, ghi đè) + file `media/cccd/<CustID>/MT|MS_<lúc>.jpg` trên máy chủ; nhân viên (module sau):
    cột tương ứng + file cùng kiểu. CCCD đòi ĐÃ CHỌN khách — chưa chọn thì ô khóa 'chọn khách hàng'.
 4. **Nút ✂ trên ô ảnh**: chỉ bật khi ô có ảnh và phiếu/hồ sơ không khóa; thêm `hx-disabled-elt="this"` +
-   `hx-on::before-request="khblCatLoading(label)"` (hàm + template `#th-cat-loading` ở trang chứa — popup LOADING hiện
-   NGAY vì server mất 1–12 s, chống bấm nhiều lần); **phải khai tường minh
+   `hx-on::before-request="khblCatLoading(label, rootId)"` (hàm DÙNG CHUNG trong `khbl.js` từ 10/09 — dựng popup LOADING
+   bằng JS vào `rootId` ("modal-root" mặc định), hiện NGAY vì server mất 1–12 s, chống bấm nhiều lần); **phải khai tường minh
    `hx-target="#modal-root" hx-swap="innerHTML"`** — htmx KẾ THỪA `hx-swap="none"` từ form cha nên nút từng bấm không
    thấy gì.
 5. Thêm 3–4 kịch bản smoke như mục 8b `smoke_thau` (ảnh giả `AC.anh_thu_nghiem(goc=12)`, so độ sáng với
    `AC._the_gia()`; LƯU goc 90 → (738, 1170); ảnh xám trơn → `KhongThayThe`).
+
+### Tích hợp lần 2 — popup THÊM/SỬA KHÁCH `/khach-hang/` (10/09/2026, GĐ: "không sửa thuật toán, chỉ gọi lại")
+
+Mẫu để tái dùng cho NHÂN VIÊN hay bất kỳ FORM nào có ô tệp ảnh — khác luồng thâu ở chỗ ảnh chưa nằm trên server:
+
+- **Nguồn ảnh = tệp đang chọn trong ô** (chưa upload) → nút ✂ là phần tử htmx trong form: `hx-post` + `hx-encoding=
+  "multipart/form-data"` + **`hx-params="anh_truoc,CustID,mat"`** (chỉ gửi ô đó + mã khách, KHÔNG kéo cả biểu mẫu) +
+  `hx-vals='{"mat":"truoc"}'` + `hx-target="#kh-cat-root" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="this"`
+  + `hx-on::before-request="khblCatLoading('CCCD mặt trước','kh-cat-root')"` + `hx-on::response-error="khblKhCatDong()"`.
+  Ảnh CHỤP (bindAnh gán `files` bằng DataTransfer, dự phòng `_capturedFile` qua sự kiện `formdata`) đi kèm y như chọn tệp.
+  Ô chưa chọn tệp → server lấy ảnh ĐÃ LƯU của khách (`customer.saved_image(CustID, kind)`).
+- **View xem trước** `khach_anh_cat` (POST): `_nen_anh(upload, canh=1600, chat_luong=92)` (xoay EXIF, gọn cho SIFT) →
+  `AC.cat_cccd(data, 0.0)` → **giữ ảnh gốc 30' trong `cache` theo mã ngẫu nhiên `nguon`** (LocMem, waitress 1 tiến trình)
+  → popup `_khach_cat_modal.html` **extends `_thau_cat_modal.html`** (kế thừa trọn JS kéo xoay + 4 tay cầm; điểm nối =
+  block `cat_form_extra` (hidden nguon/mat) · `cat_ghi_chu` · `cat_dong` (JS đóng) · `cat_luu` (nút ✓) ·
+  `cat_script_extra`). Đừng copy JS lần nữa — extend.
+- **Popup LỒNG**: form khách đã chiếm `#modal-root` → popup ✂ vào `#kh-cat-root` đặt NGOÀI `<form>` (để yêu cầu ✓ không
+  kéo theo biểu mẫu) nhưng trong body popup khách; CSS `#kh-cat-root .khbl-modal{z-index:70}`; Đóng/×/màn mờ/Esc gọi
+  `khblKhCatDong()` (khbl.js: Esc ưu tiên popup lồng; `bindModal` gắn veil trong `#kh-cat-root` vào khblKhCatDong; × do
+  script `cat_script_extra` đổi onclick vì modal_shell ghi cứng closeKhblModal).
+- **View ✓** `khach_anh_cat_luu` (POST nguon/mat/goc/cat_*): `AC.cat_cccd(cache[nguon], _goc_xoay, _phan_cat)` → **trả
+  JSON** `{mat, ten, b64, w, h}` (410 hết hạn · 422 không tách được) — KHÔNG ghi gì. Nút ✓ `hx-swap="none"` +
+  `hx-on::after-request="khblKhCatNhan(event)"` → JS dựng `File` JPEG, gán vào ô (`DataTransfer`, dự phòng
+  `_capturedFile`), bắn `khbl:anh-dat` để bindAnh xem trước + ghi chú "✂ đã tách 1170×738 — bấm LƯU KHÁCH để ghi";
+  ảnh chỉ lên KK khi LƯU biểu mẫu (`khach_luu` → `prepare_images` như ảnh chọn tay). Lỗi → báo đỏ ngay trong popup,
+  không alert.
+- Smoke: mục 8d `smoke_thau` (nút ✂ + hx-params, popup lồng, ✓ goc 90 → 738×1170 JSON, cat_r=0,3 khác ảnh không cắt,
+  nguon lạ → 410, ảnh đã lưu / chưa có ảnh không nổ). Sandbox TẮT OLE nên không ghi được ảnh khách trong smoke.
 
 ## Đường CHÍNH v3 — so khớp SIFT với mẫu thẻ (09/09/2026)
 
@@ -148,3 +176,8 @@ trên KK (`customer.saved_image`, CHỈ ĐỌC) — đo IoU bằng `AC.iou_quad`
     input trước khi `closeCamera()`. Đường CHỌN tệp không dính (change gốc). Smoke server không bắt được — thử JS bằng
     `getUserMedia` giả (canvas.captureStream) trên trang render qua test client.
 12. Hệ số 'bố cục màu' (quốc huy đỏ / chip vàng đúng chỗ, v2.16–2.17) tưởng hay nhưng trong tiệm vàng đỏ nhung + vàng trang sức khắp nơi → điểm thẻ thật 0,4–0,7 lẫn với mảnh sai 0,3–0,5 → đã bỏ, dùng SIFT.
+13. (10/09) Bẫy 9 sửa dở: `@require_GET` bị chuyển sang HELPER `_phan_cat(request)` → gọi từ view POST nhận
+    `HttpResponseNotAllowed` thay tuple; `cat_cccd` duyệt `any(float(v or 0) for v in cat)` trên chunk bytes rỗng → 0
+    → **4 tay cầm cắt bớt bị bỏ qua ÂM THẦM, không lỗi**. Smoke 8b từng "pass" vì so 2 lần LƯU liên tiếp trên ảnh ĐÃ
+    CẮT (ô bị ghi đè sau LƯU lần 1 — `thau_anh_cat_luu` đọc ảnh HIỆN TẠI của ô). Quy tắc: helper KHÔNG mang decorator
+    view; smoke muốn so "cắt / không cắt" phải tải lại ảnh GỐC trước mỗi LƯU.

@@ -204,7 +204,7 @@ class Command(BaseCommand):
                          'id="ds-kq"' in b and 'hx-target="#ds-kq" hx-select="#ds-kq" hx-swap="outerHTML"' in b)
                 b_page = web.get("/banle/thau-vao/").content.decode()
                 self._ok("trang thâu không còn JS giữ-ô inline (dùng module khblGiuO trong khbl.js), khbl.js đổi cache-buster",
-                         "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=20260909.giu-o" in b_page
+                         "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=20260910.kh-cat" in b_page
                          and "khblGiuO = true" in (R_JS := open("static/js/khbl.js", encoding="utf-8").read()) and "htmx:beforeSwap" in R_JS)
                 # GĐ 09/09: gõ SĐT ở ô Khách, lọc không ra → ＋ mở popup Thêm khách với SĐT điền sẵn #f-dt (nút ＋ hx-include #o-khach)
                 self._ok("＋ Thêm khách mang SĐT đang gõ sang #f-dt (0912345678 · +84 912-345-678 → 0912345678 · chữ → trống)",
@@ -370,23 +370,76 @@ class Command(BaseCommand):
                 sang = _sang(im)
                 self._ok("LƯU với góc lẻ 187,5° (phẩy VN) → ngang 1170×738 (xoay 180 + 7,5° cắt nội tiếp), sáng ≥90% thẻ giả",
                          im.size == (1170, 738) and sang >= 0.9 * sang_the, f"{im.size} sáng={sang:.2f}/{sang_the:.2f}")
-                kq0 = bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)
+                # LƯU đọc ảnh HIỆN TẠI của ô (sau LƯU lần 1 ô đã là thẻ cắt) → tải lại ảnh GỐC trước mỗi lần để so cùng nguồn (10/09)
+                web.post("/banle/thau-vao/anh/len/", {"anh_cccd2": SimpleUploadedFile("the.png", png_the, content_type="image/png")})
                 r = web.post("/banle/thau-vao/anh/cat/luu/", {"slot": "cccd2", "goc": "180", "cat_t": "0", "cat_r": "0,3", "cat_b": "0", "cat_l": "0"})
                 im2 = _Im.open(BytesIO(bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)))
+                web.post("/banle/thau-vao/anh/len/", {"anh_cccd2": SimpleUploadedFile("the.png", png_the, content_type="image/png")})
                 r0 = web.post("/banle/thau-vao/anh/cat/luu/", {"slot": "cccd2", "goc": "180"})
                 im0 = _Im.open(BytesIO(bytes(ThauAnhTam.objects.filter(session_key=sk, slot="cccd2").first().data)))
                 a2 = im2.convert("L").resize((16, 10)).getdata(); a0 = im0.convert("L").resize((16, 10)).getdata()
                 self._ok("LƯU cắt bớt cạnh phải 30% (cat_r=0,3 phẩy VN) → vẫn 1170×738, nội dung khác ảnh không cắt (cạnh thẻ dịch trước khi nắn)",
                          im2.size == (1170, 738) and list(a2) != list(a0) and r.status_code == 200 and r0.status_code == 200, str(im2.size))
                 b_ck = web.get("/banle/thau-vao/").content.decode()
-                self._ok("nút ✂ mở popup LOADING ngay + disable (hx-on::before-request khblCatLoading, template #th-cat-loading)",
-                         "khblCatLoading(" in b_ck and 'id="th-cat-loading"' in b_ck and 'hx-disabled-elt="this" hx-on::before-request' in b_ck)
+                self._ok("nút ✂ mở popup LOADING ngay + disable (hx-on::before-request khblCatLoading dùng chung trong khbl.js — 10/09)",
+                         "khblCatLoading(" in b_ck and 'id="th-cat-loading"' not in b_ck and 'hx-disabled-elt="this" hx-on::before-request' in b_ck
+                         and "window.khblCatLoading = function (label, rootId)" in open("static/js/khbl.js", encoding="utf-8").read())
                 try:
                     AC.cat_cccd(anh("gray").read(), 0)
                     self._ok("ảnh không có thẻ → báo không tìm thấy", False)
                 except AC.KhongThayThe:
                     self._ok("ảnh không có thẻ → báo không tìm thấy", True)
                 self._ok("✂ ở ô không phải CCCD → 400", web.get("/banle/thau-vao/anh/cat/?slot=qr").status_code == 400)
+
+                # ── 8d. (10/09/2026, GĐ) ✂ TÁCH THẺ trong popup THÊM/SỬA KHÁCH (/khach-hang/) — tái dùng AC.cat_cccd, popup lồng ──
+                import base64 as _b64
+                import re as _re
+                from apps.pos import customer as _C
+                b_kh = web.get("/banle/khach-hang/them/").content.decode()
+                self._ok("popup khách: 2 ô CCCD có nút ✂ (hx-post khach_anh_cat, multipart, hx-params chỉ ô đó), có #kh-cat-root ngoài form, loading vào kh-cat-root",
+                         b_kh.count('hx-post="/banle/khach-hang/anh/cat/"') == 2 and 'hx-params="anh_truoc,CustID,mat"' in b_kh
+                         and 'hx-params="anh_sau,CustID,mat"' in b_kh and b_kh.count('hx-target="#kh-cat-root"') == 2
+                         and '</form>\n<div id="kh-cat-root"></div>' in b_kh and "khblCatLoading('CCCD mặt sau','kh-cat-root')" in b_kh)
+                r = web.post("/banle/khach-hang/anh/cat/", {"mat": "truoc"})
+                self._ok("✂ khách chưa có ảnh (không tệp, không CustID) → popup báo 'chưa có ảnh', 200 không nổ",
+                         r.status_code == 200 and "chưa có ảnh" in r.content.decode() and "khblKhCatDong()" in r.content.decode())
+                self._ok("✂ khách mat lạ → 400", web.post("/banle/khach-hang/anh/cat/", {"mat": "qr"}).status_code == 400)
+                r = web.post("/banle/khach-hang/anh/cat/", {"mat": "sau", "anh_sau": SimpleUploadedFile("the.png", png_the, content_type="image/png")})
+                b = r.content.decode()
+                m_nguon = _re.search(r'name="nguon" value="([^"]+)"', b)
+                self._ok("✂ khách với tệp đang chọn → popup lồng: ảnh gốc + thẻ đã tách, mã nguồn, ✓ gọi khach_anh_cat_luu + khblKhCatNhan, Đóng = khblKhCatDong",
+                         r.status_code == 200 and b.count("data:image/jpeg") == 2 and bool(m_nguon) and 'hx-post="/banle/khach-hang/anh/cat/luu/"' in b
+                         and "khblKhCatNhan(event)" in b and 'onclick="khblKhCatDong()"' in b and 'name="mat" value="sau"' in b and "LƯU KHÁCH" in b)
+                nguon = m_nguon.group(1) if m_nguon else "x" * 20
+                r = web.post("/banle/khach-hang/anh/cat/luu/", {"mat": "sau", "nguon": nguon, "goc": "90"})
+                j = r.json()
+                im = _Im.open(BytesIO(_b64.b64decode(j.get("b64", ""))))
+                self._ok("✓ DÙNG thẻ (góc 90) → JSON b64 JPEG dọc 738×1170, tên cccd_sau_*.jpg, mat=sau",
+                         r.status_code == 200 and im.size == (738, 1170) and j["ten"].startswith("cccd_sau_") and j["mat"] == "sau" and j["w"] == 738, str(im.size))
+                r0 = web.post("/banle/khach-hang/anh/cat/luu/", {"mat": "sau", "nguon": nguon, "goc": "0"})
+                r2 = web.post("/banle/khach-hang/anh/cat/luu/", {"mat": "sau", "nguon": nguon, "goc": "0", "cat_r": "0,3"})
+                a0 = list(_Im.open(BytesIO(_b64.b64decode(r0.json()["b64"]))).convert("L").resize((16, 10)).getdata())
+                a2 = list(_Im.open(BytesIO(_b64.b64decode(r2.json()["b64"]))).convert("L").resize((16, 10)).getdata())
+                self._ok("✓ DÙNG với cat_r=0,3 → nội dung KHÁC ảnh không cắt (helper _phan_cat trả tuple qua POST — trước 10/09 mang nhầm @require_GET → 405 âm thầm)",
+                         r0.status_code == 200 and r2.status_code == 200 and a0 != a2 and isinstance(VT._phan_cat(r0.wsgi_request), tuple))
+                r = web.post("/banle/khach-hang/anh/cat/luu/", {"mat": "sau", "nguon": "hethanroi_" + "x" * 12, "goc": "0"})
+                self._ok("mã nguồn lạ / hết hạn 30' → 410 + lỗi JSON 'hết hạn'", r.status_code == 410 and "hết hạn" in r.json()["loi"])
+                # ảnh ĐÃ LƯU trên KK (không chọn tệp mới): sandbox TẮT OLE nên không ghi ảnh khách được → tìm khách sẵn có ảnh
+                # CCCD trước đọc được (file nằm trên máy này); không có thì chỉ kiểm nhánh 'không đọc được' không nổ 500
+                kh_anh = None
+                for row in c.query("SELECT TOP 20 CustID FROM I_CUSTOMER WITH (NOLOCK) WHERE ImagePathMatTruoc IS NOT NULL AND ImagePathMatTruoc<>'' ORDER BY CustID DESC"):
+                    try:
+                        _C.saved_image(row["CustID"], "mat-truoc"); kh_anh = row["CustID"]; break
+                    except Exception:
+                        continue
+                r = web.post("/banle/khach-hang/anh/cat/", {"mat": "truoc", "CustID": kh_anh or cust})
+                b = r.content.decode()
+                if kh_anh:
+                    self._ok("✂ khách KHÔNG chọn tệp mới → đọc ảnh ĐÃ LƯU trên KK (CustID) → popup 200 (tách được hoặc báo 'không tìm thấy thẻ' tùy ảnh thật)",
+                             r.status_code == 200 and (b.count("data:image/jpeg") == 2 or "Chưa tách được" in b), b[:100])
+                else:
+                    self._ok("✂ khách KHÔNG chọn tệp mới, khách chưa có ảnh đọc được → popup báo lỗi nguồn/chưa có ảnh (200, không nổ)",
+                             r.status_code == 200 and ("Chưa tách được" in b), b[:100])
 
                 # ── 8c. (09/09/2026, GĐ chốt PHƯƠNG ÁN 1) còn ẢNH TẠM chưa gắn phiếu → ＋ PHIẾU MỚI / MỞ đơn phải HỎI TRƯỚC ──
                 # Ảnh chỉ gắn vào phiếu khi THANH TOÁN; trước đó nằm ở thau_anh_tam theo phiên. Trước đây mọi lối

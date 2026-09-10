@@ -251,7 +251,6 @@ def _goc_xoay(raw):
     return round(goc % 360.0, 1)
 
 
-@require_GET
 def _phan_cat(request):
     """4 tỉ lệ cắt bớt cạnh (trên, phải, dưới, trái) từ tay cầm popup — phần cạnh, chấp nhận phẩy VN, kẹp [−0,3; 0,45]."""
     out = []
@@ -266,6 +265,7 @@ def _phan_cat(request):
     return tuple(out)
 
 
+@require_GET
 def thau_anh_cat(request):
     """Popup ✂: OpenCV tìm thẻ CCCD trong ảnh ô cccd1/cccd2 → cắt + nắn phối cảnh + khổ chuẩn 1170×738; xem trước ở 0°,
     người dùng KÉO XOAY bằng con trỏ trên ảnh kết quả (JS), ✓ LƯU gửi góc → thau_anh_cat_luu."""
@@ -320,6 +320,83 @@ def thau_anh_cat_luu(request):
     kq_tin = _tin_anh("Đã lưu thẻ đã tách", canh_bao_kh)
     kq_tin["dong_modal"] = True
     return _oob(request, kq_tin)
+
+
+KH_CAT_MAT = {"truoc": ("anh_truoc", "mat-truoc", "CCCD mặt trước"), "sau": ("anh_sau", "mat-sau", "CCCD mặt sau")}
+KH_CAT_TTL = 30 * 60            # ảnh gốc giữ trong cache 30 phút cho bước ✓ DÙNG
+
+
+@require_POST
+def khach_anh_cat(request):
+    """✂ TÁCH THẺ trong popup THÊM/SỬA KHÁCH (/khach-hang/ — GĐ 10/09/2026): TÁI DÙNG y nguyên thuật toán AC.cat_cccd của
+    trang Thâu vào (không sửa thuật toán). Nguồn ảnh: tệp đang chọn/chụp ở ô (multipart — nút ✂ hx-params chỉ gửi ô đó);
+    ô chưa chọn tệp → lấy ảnh ĐÃ LƯU của khách trên KK theo CustID. Ảnh gốc (xoay đúng EXIF, ≤1600 px) giữ 30 phút trong
+    cache theo mã ngẫu nhiên `nguon` để bước ✓ tính lại đúng cùng nguồn với xem trước. Popup LỒNG vào #kh-cat-root (nằm
+    trong popup khách) — Đóng/×/màn mờ/Esc chỉ đóng popup lồng (khblKhCatDong), popup khách còn nguyên."""
+    import base64
+    import secrets
+    mat = (request.POST.get("mat") or "").strip()
+    cau_hinh = KH_CAT_MAT.get(mat)
+    if not cau_hinh:
+        return HttpResponse("Chỉ tách thẻ cho CCCD mặt trước / mặt sau.", status=400)
+    field, kind, label = cau_hinh
+    tpl = "pos/_khach_cat_modal.html"
+    ctx = {"mat": mat, "label": label, "slot": "kh_" + mat}
+    upload = request.FILES.get(field)
+    data = None
+    try:
+        if upload:
+            data = _nen_anh(upload, canh=1600, chat_luong=92)
+        else:
+            cust_id = (request.POST.get("CustID") or "").strip()
+            if cust_id:
+                da_luu, _ct = C.saved_image(cust_id, kind)
+                data = _nen_anh(bytes(da_luu), canh=1600, chat_luong=92)
+    except Exception as exc:
+        logger.warning("✂ khách: không đọc được ảnh nguồn (%s): %s", mat, exc)
+        return render(request, tpl, {**ctx, "loi": "Không đọc được ảnh nguồn: " + str(exc)[:120]})
+    if not data:
+        return render(request, tpl, {**ctx, "loi": "Ô này chưa có ảnh — chọn tệp / chụp ảnh trước (khách đã lưu ảnh thì bấm ✂ được ngay)."})
+    try:
+        kq = AC.cat_cccd(data, 0.0)
+    except AC.KhongThayThe as exc:
+        return render(request, tpl, {**ctx, "loi": str(exc)})
+    except Exception as exc:
+        logger.exception("Tách CCCD (popup khách) lỗi")
+        return render(request, tpl, {**ctx, "loi": "Lỗi xử lý ảnh: " + str(exc)[:120]})
+    nguon = secrets.token_urlsafe(18)
+    cache.set("khbl:khcat:" + nguon, data, KH_CAT_TTL)
+    goc = _nen_anh(data, canh=900, chat_luong=70)
+    xem = _nen_anh(kq, canh=900, chat_luong=80)
+    ctx.update({"nguon": nguon, "anh_goc": "data:image/jpeg;base64," + base64.b64encode(goc).decode("ascii"),
+                "anh_kq": "data:image/jpeg;base64," + base64.b64encode(xem).decode("ascii"), "w": AC.CHUAN_W, "h": AC.CHUAN_H})
+    return render(request, tpl, ctx)
+
+
+@require_POST
+def khach_anh_cat_luu(request):
+    """✓ DÙNG thẻ đã tách (popup khách): tính lại từ ảnh gốc trong cache + góc xoay + 4 cạnh cắt bớt (cùng AC.cat_cccd) →
+    trả JSON base64 JPEG (1170×738 ngang hay 738×1170 dọc) để JS (khblKhCatNhan) đặt vào ô tệp của biểu mẫu; ảnh chỉ ghi
+    lên KK khi bấm LƯU KHÁCH (khach_luu → prepare_images như mọi ảnh chọn tay)."""
+    import base64
+    from io import BytesIO
+    from django.http import JsonResponse
+    from PIL import Image
+    mat = (request.POST.get("mat") or "").strip()
+    nguon = (request.POST.get("nguon") or "").strip()
+    if mat not in KH_CAT_MAT or not re.fullmatch(r"[A-Za-z0-9_-]{16,40}", nguon):
+        return JsonResponse({"loi": "Yêu cầu không hợp lệ"}, status=400)
+    data = cache.get("khbl:khcat:" + nguon)
+    if not data:
+        return JsonResponse({"loi": "Ảnh gốc đã hết hạn (30 phút) — đóng popup rồi bấm ✂ lại."}, status=410)
+    try:
+        kq = AC.cat_cccd(data, _goc_xoay(request.POST.get("goc")), _phan_cat(request))
+    except Exception as exc:
+        return JsonResponse({"loi": str(exc)[:160]}, status=422)
+    jpg = _nen_anh(kq, canh=AC.CHUAN_W, chat_luong=88)
+    w, h = Image.open(BytesIO(jpg)).size
+    return JsonResponse({"mat": mat, "ten": f"cccd_{mat}_{timezone.localtime():%Y%m%d_%H%M%S}.jpg", "w": w, "h": h,
+                         "b64": base64.b64encode(jpg).decode("ascii")})
 
 
 @require_POST

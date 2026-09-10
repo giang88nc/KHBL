@@ -112,7 +112,13 @@
             <input type="file" name="anh_truoc" accept="image/*" data-photo-input hidden>
           </label>
           <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+          <button class="khbl-btn khbl-btn--outline kh-anh__btn kh-anh__btn--cat" type="button"
+                  title="Tự tìm & tách thẻ CCCD trong ảnh đang chọn (hoặc ảnh đã lưu) — kéo xoay, cắt bớt cạnh; cùng thuật toán trang Thâu vào"
+                  hx-post="{% url 'pos:khach_anh_cat' %}" hx-encoding="multipart/form-data" hx-params="anh_truoc,CustID,mat" hx-vals='{"mat":"truoc"}'
+                  hx-target="#kh-cat-root" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="this"
+                  hx-on::before-request="khblCatLoading('CCCD mặt trước','kh-cat-root')" hx-on::response-error="khblKhCatDong()">✂</button>
         </div>
+        <small class="kh-anh__tt" data-cat-tt></small>
       </div>
       <div class="kh-anh__item" data-photo data-label="CCCD mặt sau" data-facing="environment">
         <b>CCCD mặt sau</b>
@@ -122,7 +128,13 @@
             <input type="file" name="anh_sau" accept="image/*" data-photo-input hidden>
           </label>
           <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+          <button class="khbl-btn khbl-btn--outline kh-anh__btn kh-anh__btn--cat" type="button"
+                  title="Tự tìm & tách thẻ CCCD trong ảnh đang chọn (hoặc ảnh đã lưu) — kéo xoay, cắt bớt cạnh; cùng thuật toán trang Thâu vào"
+                  hx-post="{% url 'pos:khach_anh_cat' %}" hx-encoding="multipart/form-data" hx-params="anh_sau,CustID,mat" hx-vals='{"mat":"sau"}'
+                  hx-target="#kh-cat-root" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="this"
+                  hx-on::before-request="khblCatLoading('CCCD mặt sau','kh-cat-root')" hx-on::response-error="khblKhCatDong()">✂</button>
         </div>
+        <small class="kh-anh__tt" data-cat-tt></small>
       </div>
     </div>
     <p class="dim" style="font-size:11.5px;margin:6px 0 0">
@@ -152,6 +164,7 @@
 
   <div id="kh-luu-kq"></div>
 </form>
+<div id="kh-cat-root"></div>{# popup ✂ tách thẻ CCCD LỒNG (10/09) — ngoài form để yêu cầu ✓ không kéo theo cả biểu mẫu #}
 {% endblock %}
 
 {% block modal_foot %}

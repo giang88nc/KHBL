@@ -1,0 +1,16 @@
+{% extends "pos/_thau_cat_modal.html" %}{% comment %}
+✂ TÁCH THẺ CCCD trong popup THÊM/SỬA KHÁCH (/khach-hang/ — GĐ 10/09/2026): KẾ THỪA trọn popup + JS kéo xoay / 4 tay cầm
+của trang Thâu vào (_thau_cat_modal.html) — thuật toán KHÔNG sửa, chỉ gọi AC.cat_cccd. Khác biệt: nguồn ảnh = mã `nguon`
+trong cache (thay slot phiên thâu); nút ✓ gọi khach_anh_cat_luu trả JSON → khblKhCatNhan (khbl.js) đặt tệp JPEG vào ô
+của biểu mẫu (xem trước ngay; ảnh chỉ lên KK khi bấm LƯU KHÁCH); popup LỒNG trong #kh-cat-root nên Đóng / × / màn mờ /
+Esc dùng khblKhCatDong — popup khách phía dưới còn nguyên.
+{% endcomment %}
+{% block cat_form_extra %}<input type="hidden" name="nguon" value="{{ nguon }}"><input type="hidden" name="mat" value="{{ mat }}">{% endblock %}
+{% block cat_ghi_chu %}<p class="dim" style="margin:8px 0 0;font-size:12px">Thẻ đã tách sẽ THAY ảnh ở ô {{ label|lower }} của biểu mẫu (xem trước ngay, khổ 1170×738). Ảnh chỉ ghi vào hồ sơ khách trên KK khi bấm <b>LƯU KHÁCH</b>.</p>{% endblock %}
+{% block cat_dong %}khblKhCatDong(){% endblock %}
+{% block cat_luu %}
+  <button class="khbl-btn khbl-btn--gold" type="button" title="Đặt thẻ đã tách (theo góc xoay + cắt bớt đang chọn) vào ô {{ label|lower }} của biểu mẫu"
+          hx-post="{% url 'pos:khach_anh_cat_luu' %}" hx-include="#th-cat-form" hx-swap="none" hx-disabled-elt="this"
+          hx-on::after-request="khblKhCatNhan(event)">✓ DÙNG thẻ đã tách</button>
+{% endblock %}
+{% block cat_script_extra %}<script>(function(){ var r=document.getElementById('kh-cat-root'), x=r&&r.querySelector('.khbl-modal__x'); if(x) x.setAttribute('onclick','khblKhCatDong()'); })();</script>{% endblock %}

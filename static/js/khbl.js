@@ -57,8 +57,15 @@
     var r = document.getElementById("modal-root");
     if (r) r.innerHTML = "";
   };
+  /* popup ✂ LỒNG trong popup khách (#kh-cat-root, 10/09/2026): đóng riêng, popup khách phía dưới còn nguyên */
+  window.khblKhCatDong = function () {
+    var r = document.getElementById("kh-cat-root");
+    if (r) r.innerHTML = "";
+  };
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
+      var k = document.getElementById("kh-cat-root");
+      if (k && k.innerHTML.trim()) { e.stopPropagation(); window.khblKhCatDong(); return; }
       var r = document.getElementById("modal-root");
       if (r && r.innerHTML.trim()) { e.stopPropagation(); window.closeKhblModal(); }
     }
@@ -66,9 +73,47 @@
   function bindModal(root) {
     root.querySelectorAll(".khbl-modal__veil:not([data-veil])").forEach(function (v) {
       v.dataset.veil = "1";
-      v.addEventListener("click", window.closeKhblModal);
+      v.addEventListener("click", v.closest("#kh-cat-root") ? window.khblKhCatDong : window.closeKhblModal);
     });
   }
+  /* ✂ tách thẻ CCCD: popup LOADING hiện NGAY khi bấm (server 1–12 s), nút đã hx-disabled-elt nên không bấm trùng.
+     rootId: "modal-root" (trang Thâu vào) hay "kh-cat-root" (popup khách, lồng). Trước 10/09 nằm inline ở thau.html. */
+  window.khblCatLoading = function (label, rootId) {
+    var mr = document.getElementById(rootId || "modal-root");
+    if (!mr) return;
+    var h = document.createElement("h2"); h.textContent = "✂ Đang tách thẻ" + (label ? " " + label : "") + "…";
+    mr.innerHTML = '<div class="khbl-modal" role="dialog" aria-modal="true"><div class="khbl-modal__veil" data-veil="1"></div>' +
+      '<div class="khbl-modal__box" style="width:min(420px,92vw)"><div class="khbl-modal__head"></div>' +
+      '<div class="khbl-modal__body th-cat__cho"><span class="th-cat__quay"></span><div><b>Đang tìm và tách thẻ CCCD</b><br>' +
+      '<span class="dim">Mất vài giây (ảnh nhiều chi tiết tới ~10 s). Vui lòng chờ, không bấm lại.</span></div></div></div></div>';
+    mr.querySelector(".khbl-modal__head").appendChild(h);
+  };
+  /* ✓ DÙNG thẻ đã tách (popup khách): server trả JSON {mat, ten, b64, w, h} → dựng File JPEG đặt vào ô tệp của biểu mẫu
+     (DataTransfer; trình duyệt không cho gán thì sự kiện formdata của bindAnh vẫn gửi _capturedFile) → xem trước + ghi chú;
+     ảnh chỉ lên KK khi bấm LƯU KHÁCH. Lỗi (410 hết hạn / 422 không tách được) → báo đỏ ngay trong popup, không alert. */
+  window.khblKhCatNhan = function (e) {
+    var xhr = e && e.detail && e.detail.xhr, kq = null;
+    try { kq = JSON.parse(xhr.responseText); } catch (_) {}
+    if (!xhr || xhr.status !== 200 || !kq || kq.loi || !kq.b64) {
+      var body = document.querySelector("#kh-cat-root .khbl-modal__body");
+      if (body) {
+        var cu = body.querySelector("[data-cat-loi]"); if (cu) cu.remove();
+        var d = document.createElement("div"); d.className = "khbl-alert khbl-alert--do"; d.dataset.catLoi = "1"; d.style.marginBottom = "10px";
+        d.textContent = (kq && kq.loi) || ("Không nhận được thẻ đã tách (" + (xhr ? xhr.status : "?") + ") — bấm ✂ lại.");
+        body.prepend(d);
+      }
+      return;
+    }
+    var inp = document.querySelector("#kh-form [name='anh_" + kq.mat + "']");
+    if (!inp) return;
+    var bin = atob(kq.b64), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    var file = new File([arr], kq.ten, { type: "image/jpeg", lastModified: Date.now() });
+    inp._capturedFile = file;
+    try { var dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files; } catch (_) { /* formdata của bindAnh bổ sung */ }
+    inp.dispatchEvent(new CustomEvent("khbl:anh-dat", { bubbles: true, detail: { file: file, ghi_chu: "✂ đã tách " + kq.w + "×" + kq.h + " — bấm LƯU KHÁCH để ghi" } }));
+    window.khblKhCatDong();
+  };
 
   /* ---------- lưu khách: trạng thái gửi, đóng popup, tải lại danh sách, toast ---------- */
   function customerFormFromEvent(e) {
@@ -358,14 +403,24 @@
       img.alt = "Xem trước " + (card.dataset.label || "ảnh").toLowerCase();
       img.src = url; box.replaceChildren(img);
     }
+    function ghiChu(inp, text) {
+      var card = inp.closest("[data-photo]"), tt = card && card.querySelector("[data-cat-tt]");
+      if (tt) tt.textContent = text || "";
+    }
     area.querySelectorAll("[data-photo-input]").forEach(function (inp) {
       inp.dataset.anh = "1";
       inp.addEventListener("change", function () {
         var f = inp.files && inp.files[0];
         if (!f) return;
-        if (!inp._capturedFile || inp._capturedFile.name !== f.name) inp._capturedFile = null;
+        if (!inp._capturedFile || inp._capturedFile.name !== f.name) { inp._capturedFile = null; ghiChu(inp, ""); }
         showFile(inp, f);
       });
+    });
+    // ✂ thẻ đã tách (khblKhCatNhan) đặt tệp bằng code → không có 'change' → nhận qua sự kiện riêng: xem trước + ghi chú
+    area.addEventListener("khbl:anh-dat", function (e) {
+      var inp = e.target, f = e.detail && e.detail.file;
+      if (!f || !inp.matches || !inp.matches("[data-photo-input]")) return;
+      showFile(inp, f); ghiChu(inp, e.detail.ghi_chu);
     });
 
     // Dự phòng cho trình duyệt không cho gán FileList: vẫn đưa ảnh chụp vào FormData.
