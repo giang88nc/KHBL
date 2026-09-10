@@ -29,7 +29,7 @@ hình đó có nút "Đổi / Sửa ảnh" thì đường sửa ấy phải dẫ
 | KHBL | `/thau-vao/` — form ảnh phiếu (`_thau_ck.html`, slot cccd1/cccd2) | nhập được | ✅ 08/09/2026 |
 | KHBL | `/khach-hang/` + mọi nơi mở popup Thêm/Sửa khách (`_khach_form.html`) | nhập được | ✅ 10/09/2026 |
 | KHBL | popup XEM khách (`_khach_modal.html`) | chỉ xem (đổi ảnh qua nút Sửa → popup có ✂) | — không cần |
-| KHJ (HR) | popup Thêm/Sửa hồ sơ NV (`_employee_form_modal.html`: `id_card_front` / `id_card_back`) | nhập được | ❌ **CÒN THIẾU** — cần cài `opencv-python-headless` + `numpy` vào venv KHJ, mang `anh_cccd.py` + `cccd_mau/*.npz` sang, rồi làm y công thức "Tích hợp lần 2" |
+| KHJ (HR) | popup Thêm/Sửa hồ sơ NV (`_employee_form_modal.html` → partial `_cccd_field.html`) | nhập được | ✅ 10/09/2026 — xem "Mang sang KHJ" bên dưới |
 | KHJ (HR) | `employee_detail.html` + portal quản lý (chỉ hiển thị ảnh) | chỉ xem | — không cần |
 
 ## Nguồn sự thật
@@ -113,6 +113,26 @@ Mẫu để tái dùng cho NHÂN VIÊN hay bất kỳ FORM nào có ô tệp ả
   không alert.
 - Smoke: mục 8d `smoke_thau` (nút ✂ + hx-params, popup lồng, ✓ goc 90 → 738×1170 JSON, cat_r=0,3 khác ảnh không cắt,
   nguon lạ → 410, ảnh đã lưu / chưa có ảnh không nổ). Sandbox TẮT OLE nên không ghi được ảnh khách trong smoke.
+
+### Mang sang dự án khác — KHJ (HR), popup hồ sơ nhân viên (10/09/2026)
+
+Hai dự án chạy venv riêng nên thuật toán được **COPY, không import chéo** (không cột KHJ vào đường dẫn của KHBL):
+
+| Ở KHBL (gốc) | Bản sao ở KHJ |
+|---|---|
+| `apps/pos/anh_cccd.py` | `apps/common/anh_cccd.py` — **byte-identical, KHÔNG sửa** |
+| `apps/pos/cccd_mau/*.npz` | `apps/common/cccd_mau/*.npz` |
+| phần web nằm trong `views_thau.py` | tách riêng `apps/common/cccd_web.py` (nén nguồn · `goc_xoay` · `phan_cat` · cache 30' · `cat_theo_yeu_cau`) |
+
+- **Sửa thuật toán = sửa ở KHBL rồi chép lại CẢ module lẫn thư mục mẫu.** `manage.py smoke_cccd` (KHJ) so sha256 hai
+  bản và FAIL nếu lệch — đừng tắt kịch bản đó.
+- Thư viện: thêm `opencv-python-headless==5.0.0.93` + `numpy>=2.0` vào venv + `requirements.txt` của dự án nhận.
+- KHJ dùng **Tailwind ĐÃ BUILD, không có pipeline npm** → class Tailwind mới (kể cả `z-[60]`) vô tác dụng: popup ✂
+  chỉ dùng class có sẵn, phần riêng để trong `<style>` prefix `.khjc-`, z-index đặt bằng `style=`.
+- Popup lồng: KHJ `partials/modal_shell.html` ghi CỨNG `onclick="closeKhjModal()"` ở lớp phủ + nút ✕ → popup ✂
+  **không extend** khung chung, tự dựng khung và đóng bằng `khjCatDong()`; nếu không, bấm ra ngoài đóng luôn popup hồ sơ.
+- URL mới ở KHJ **phải khai vào `apps/accounts/permissions.py` TREE** (mục `employees`), nếu không chỉ chịu gate role cũ.
+- Bẫy test: `ALLOWED_HOSTS` của KHJ không có `testserver` → `Client(SERVER_NAME="localhost")`, không thì 400 HTML.
 
 ## Đường CHÍNH v3 — so khớp SIFT với mẫu thẻ (09/09/2026)
 
