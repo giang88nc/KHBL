@@ -10,6 +10,7 @@ bao giờ ghi ra cổng (nhánh mới cũng không đấu chân 3 nên về mặ
     manage.py doc_can --cong COM3               # nghe 15 giây ở 9600 8N1 (mặc định của hầu hết cân)
     manage.py doc_can --cong COM3 --do-baud     # không biết tốc độ → dò lần lượt 9600/4800/2400/19200/1200
     manage.py doc_can --cong COM3 --baud 4800 --giay 30 --tho
+    manage.py doc_can --tcp 192.168.1.60:8899   # khi nhánh mới đi qua bộ chuyển RS232 sang mạng LAN
 
 Đọc kết quả:
   · Ra chữ đọc được kèm số nhảy theo vật đặt lên cân → ĐÚNG cổng, đúng baud. Ghi lại dòng "GỢI Ý CẤU HÌNH" ở cuối.
@@ -37,12 +38,15 @@ class Command(BaseCommand):
     def add_arguments(self, p):
         p.add_argument("--liet-ke", action="store_true", help="Liệt kê cổng COM máy đang thấy rồi thoát")
         p.add_argument("--cong", help="Tên cổng, ví dụ COM3")
+        p.add_argument("--tcp", help="Đọc qua mạng LAN khi dùng bộ chuyển RS232 sang Ethernet, dạng IP:cổng")
         p.add_argument("--baud", type=int, default=9600, help="Tốc độ, mặc định 9600")
         p.add_argument("--do-baud", action="store_true", help="Dò lần lượt các tốc độ thường gặp")
         p.add_argument("--giay", type=int, default=15, help="Nghe bao nhiêu giây, mặc định 15")
         p.add_argument("--tho", action="store_true", help="In thêm nguyên văn từng dòng dạng byte")
 
     def handle(self, *args, **o):
+        if o.get("tcp"):
+            return self._nghe_tcp(o["tcp"], max(3, o["giay"]), o["tho"])
         try:
             import serial
             from serial.tools import list_ports
@@ -69,6 +73,60 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(
             "\nKhông nhận được gì đọc hiểu được. Xem lại: dây chân 2 (thử đổi sang chân 3), ốc chân 5, "
             "và xem cân có đang ở chế độ chỉ gửi khi bấm PRINT không."))
+
+    # ── nghe qua mạng LAN (bộ chuyển RS232 sang Ethernet chạy chế độ TCP Server) ─────────
+    def _nghe_tcp(self, dia_chi, giay, tho):
+        import socket
+
+        try:
+            ip, cong = dia_chi.rsplit(":", 1)
+            cong = int(cong)
+        except ValueError:
+            raise CommandError("Địa chỉ phải có dạng IP:cổng, ví dụ 192.168.1.60:8899")
+        self.stdout.write(f"\n— Nối tới {ip}:{cong} và nghe {giay}s. Đặt và nhấc vật trên cân vài lần —")
+        try:
+            with socket.create_connection((ip, cong), timeout=5) as s:
+                s.settimeout(0.5)
+                het, dem, doc_duoc, mau, du = time.time() + giay, 0, 0, [], b""
+                while time.time() < het:
+                    try:
+                        goi = s.recv(4096)
+                    except socket.timeout:
+                        continue
+                    if not goi:
+                        break
+                    du += goi
+                    while b"\n" in du or len(du) > 512:
+                        dong, _, du = du.partition(b"\n") if b"\n" in du else (du, b"", b"")
+                        dem += 1
+                        van = dong.decode("ascii", "replace").strip()
+                        if tho:
+                            self.stdout.write(f"    tho: {dong!r}")
+                        if not van or van.count("�") > len(van) / 3:
+                            continue
+                        so = SO.findall(van.replace("�", ""))
+                        if not so:
+                            continue
+                        doc_duoc += 1
+                        dv = DON_VI.search(van)
+                        co = "ổn định" if ON_DINH.search(van) else ("đang nhảy" if CHUA_ON.search(van) else "")
+                        if len(mau) < 40:
+                            mau.append(van)
+                        self.stdout.write(f"    {van:<34} → số {so[-1]}"
+                                          + (f" {dv.group(0)}" if dv else "") + (f" · {co}" if co else ""))
+        except OSError as exc:
+            self.stdout.write(self.style.ERROR(f"  Không nối được {ip}:{cong} — {exc}"))
+            self.stdout.write("  Xem lại: bộ chuyển đã cắm nguồn và dây mạng chưa, IP đặt đúng dải của tiệm chưa, "
+                              "chế độ có đang để TCP Server không.")
+            return
+        if doc_duoc:
+            self.stdout.write(self.style.SUCCESS(f"\n  ĐỌC ĐƯỢC {doc_duoc}/{dem} dòng qua mạng LAN."))
+            self.stdout.write(f"  GỢI Ý CẤU HÌNH: tcp={ip}:{cong} khuon_mau={mau[0]!r}")
+            self.stdout.write("  Gửi nguyên dòng này cho Claude để nối số cân vào ô TỔNG TL của trang Thâu vào.")
+        else:
+            self.stdout.write(self.style.WARNING(
+                "  Nối được nhưng không có số. Xem lại tốc độ baud đặt trong bộ chuyển có khớp cân không "
+                "(thường 9600 8-N-1), và dây chân 2 với chân 5 đã bắt đúng chưa."))
 
     # ── nghe một tốc độ ──────────────────────────────────────────────────────
     def _nghe(self, cong, baud, giay, tho):
