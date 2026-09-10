@@ -31,7 +31,7 @@
       matchStatus.textContent = result.status === 'error' ? result.message :
         `Đối soát: ${result.matched || 0} khớp mới · ${result.pending || 0} khoản RA chưa đối soát` +
         (result.needs_review ? ` · ${result.needs_review} cần kiểm tra. ` + (result.issues || []).map(x => `#${x.id}: ${x.message}`).join(' · ') : '');
-      if (result.matched) await refresh(null, false);
+      if (result.matched || result.classified) await refresh(null, false);
     } catch (_) {
       if (!document.hidden && !leaving && isToday()) matchStatus.textContent = 'Đối soát tạm gián đoạn. Sẽ thử lại; bảng ngân hàng vẫn xem được.';
     } finally {

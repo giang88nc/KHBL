@@ -10,3 +10,5 @@ segno==1.6.6
 opencv-python-headless==5.0.0.93   # 08/09/2026: doc QR chuyen khoan tu anh (thau)
 numpy>=2.0
 pyserial>=3.5                      # 10/09/2026: doc can vang qua cong COM (nhanh che tin hieu tu PC KK)
+openpyxl>=3.1                      # 10/09/2026: xuat danh sach khach (NCC) tu trang thau-vao-2
+python-docx>=1.1                   # 10/09/2026: xuat file Word anh CCCD co that

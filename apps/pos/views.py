@@ -11,6 +11,7 @@ import logging
 import re
 import secrets
 
+from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.db import DatabaseError
@@ -1345,6 +1346,9 @@ def khach_xoa(request, cust_id):
     return response
 
 
+# GĐ chốt 10/09/2026: ảnh CCCD khách mở cùng popup chi tiết của trang /thau-vao-2/.
+# ⚠ Hệ quả: ai trong mạng tiệm biết mã khách đều tải được ảnh căn cước của khách đó.
+@login_not_required
 @require_GET
 def khach_anh(request, cust_id, kind):
     """Phục vụ ảnh PMV theo mã khách; URL không bao giờ nhận đường dẫn đĩa."""
@@ -1356,6 +1360,22 @@ def khach_anh(request, cust_id, kind):
     response = HttpResponse(data, content_type=content_type)
     response["Cache-Control"] = "private, max-age=300"
     response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@require_POST
+def khach_qr_phan_tich(request):
+    """Phân tích RAW trong bộ nhớ; không đọc/ghi PMV và không lưu dữ liệu quét."""
+    if len(request.body) > 60_000:
+        return JsonResponse({"loi": ["Dữ liệu quét quá dài."]}, status=400)
+    try:
+        payload = json.loads(request.body)
+        scans = payload.get("scans") if isinstance(payload, dict) else None
+        result = cccd.normalize_cccd_group(scans)
+    except (ValueError, TypeError):
+        return JsonResponse({"loi": ["Dữ liệu quét không hợp lệ."]}, status=400)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "private, no-store"
     return response
 
 

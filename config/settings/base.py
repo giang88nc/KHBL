@@ -98,6 +98,13 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+# Bản sao ảnh hồ sơ khách do web quản lý. Đây là kho RIÊNG, không phải MEDIA_URL
+# và không được web server public trực tiếp: CCCD chỉ đi ra qua view đã đăng nhập.
+# Tên tệp mirror chính xác ImagePath* trên PMV; chỉ khác thư mục gốc trên máy Giang.
+CUSTOMER_IMAGE_ARCHIVE_ROOT = Path(env(
+    "CUSTOMER_IMAGE_ARCHIVE_ROOT", default=str(BASE_DIR / "media" / "cccd")
+))
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- PMV: SQL Server 2005 Express @ PC KK — dữ liệu THẬT của phần mềm bán vàng ---

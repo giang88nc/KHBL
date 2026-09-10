@@ -204,7 +204,7 @@ class Command(BaseCommand):
                          'id="ds-kq"' in b and 'hx-target="#ds-kq" hx-select="#ds-kq" hx-swap="outerHTML"' in b)
                 b_page = web.get("/banle/thau-vao/").content.decode()
                 self._ok("trang thâu không còn JS giữ-ô inline (dùng module khblGiuO trong khbl.js), khbl.js đổi cache-buster",
-                         "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=20260910.kh-cat" in b_page
+                         "GIỮ Ô ĐANG GÕ: dùng module chung khblGiuO" in b_page and "khbl.js?v=" in b_page
                          and "khblGiuO = true" in (R_JS := open("static/js/khbl.js", encoding="utf-8").read()) and "htmx:beforeSwap" in R_JS)
                 # GĐ 09/09: gõ SĐT ở ô Khách, lọc không ra → ＋ mở popup Thêm khách với SĐT điền sẵn #f-dt (nút ＋ hx-include #o-khach)
                 self._ok("＋ Thêm khách mang SĐT đang gõ sang #f-dt (0912345678 · +84 912-345-678 → 0912345678 · chữ → trống)",
@@ -212,7 +212,30 @@ class Command(BaseCommand):
                          and 'id="f-dt" value="0912345678"' in web.get("/banle/khach-hang/them/?q=%2B84%20912-345-678").content.decode()
                          and 'id="f-dt" value=""' in web.get("/banle/khach-hang/them/?q=Nguyen%20Van").content.decode()
                          and 'hx-include="#o-khach"' in b_page)
-                self._ok("popup DANH SÁCH 80vw có 2 dòng nhóm ⧉ 2", r.status_code == 200 and "⧉ 2" in r.content.decode())
+                # GĐ chốt 10/09/2026: 2 phiếu cùng nhóm gom về MỘT dòng, ô SỐ PHIẾU in cả 2 mã, ô TIỆM TRẢ 2 tầng
+                b_ds = r.content.decode()
+                import re as _re2
+                dong_nhom = [x for x in _re2.findall(r"<tr [^>]*data-th-row=.*?</tr>", b_ds, _re2.S) if "⧉ 2" in x]
+                ma_trong_dong = _re2.findall(r'pg-ds__ma">([^<]+)<', dong_nhom[0]) if dong_nhom else []
+                self._ok("popup DANH SÁCH: 2 phiếu cùng nhóm gom về MỘT dòng, ô SỐ PHIẾU in đủ 2 mã (mỗi mã một dòng)",
+                         r.status_code == 200 and bool(dong_nhom) and len(ma_trong_dong) == 2, str(ma_trong_dong))
+                self._ok("cột TIỆM TRẢ: dòng trên tổng tiền thâu của cả nhóm, dòng dưới tổng tiền chuyển khoản",
+                         bool(dong_nhom) and ("CK " in dong_nhom[0] or "tiền mặt" in dong_nhom[0])
+                         and 'pg-ds__td-tra' in dong_nhom[0], (dong_nhom[0][-260:] if dong_nhom else ""))
+                # cộng tiền: kiểm thẳng hàm gộp bằng dữ liệu dựng sẵn, khỏi phụ thuộc cách hiện số trên HTML
+                gia = [{"TrnID": "A1", "BillCode": "b1", "SoTien": "100", "CardPay": "-60", "Status": "C", "IsDel": "0"},
+                       {"TrnID": "A2", "BillCode": "b2", "SoTien": "250", "CardPay": "-250", "Status": "C", "IsDel": "0"},
+                       {"TrnID": "B1", "BillCode": "b3", "SoTien": "70", "CardPay": "0", "Status": "W", "IsDel": "0"},
+                       {"TrnID": "A3", "BillCode": "b4", "SoTien": "999", "CardPay": "0", "Status": "C", "IsDel": "1"}]
+                nhom_gia = type("N", (), {"pk": 7, "trn_ids": ["A1", "A2", "A3"]})()
+                gom = VT._gom_dong_ds(gia, {"A1": nhom_gia, "A2": nhom_gia, "A3": nhom_gia})
+                nh = next(d for d in gom if d["so_dong"] > 1)
+                le = next(d for d in gom if d["so_dong"] == 1)
+                self._ok("gộp nhóm: tổng tiền thâu = tổng các phiếu CÒN SỐNG, tổng CK = phần CardPay âm, dòng đã hủy không cộng vào",
+                         len(gom) == 2 and nh["tong_tien"] == M.dec(350) and nh["tong_ck"] == M.dec(310)
+                         and nh["so_dong"] == 3 and nh["co_huy"] and not nh["da_huy"] and nh["mo_id"] == "A1"
+                         and le["tong_tien"] == M.dec(70) and le["tong_ck"] == M.D0 and not le["chot"],
+                         f"{nh['tong_tien']}/{nh['tong_ck']} · {len(gom)} dòng")
                 r = web.post("/banle/thau-vao/mo/", {"trn_id": trn})
                 g = web.session.get(TC.KEY)
                 self._ok("MỞ → nạp cả nhóm 2 dòng, trạng thái C (khóa)", len(g["lines"]) == 2 and g["status"] == "C" and "🔒" in r.content.decode())
@@ -232,8 +255,12 @@ class Command(BaseCommand):
                          and all(x["Status"] == "C" for x in rows2) and set(trn_nhom) < set(nhom2.trn_ids)
                          and "🔒 ĐÃ CHỐT" in r.content.decode())
                 r = web.get(f"/banle/thau-vao/in/?trn_id={nhom2.trn_ids[0]}")
-                self._ok("trang in standalone: 3 dòng + bằng chữ", r.status_code == 200 and "Bằng chữ" in r.content.decode()
-                         and r.content.decode().count("<tr>") >= 4)
+                if VT.KHOA_IN:      # GĐ tạm khóa in (10/09/2026) → trang in phải bị chặn; mở lại thì tự kiểm nội dung
+                    self._ok("đang TẠM KHÓA IN → trang in standalone bị chặn ở máy chủ",
+                             r.status_code == 403 and "khóa in" in r.content.decode().lower())
+                else:
+                    self._ok("trang in standalone: 3 dòng + bằng chữ", r.status_code == 200 and "Bằng chữ" in r.content.decode()
+                             and r.content.decode().count("<tr>") >= 4)
                 r = web.post("/banle/thau-vao/thuc-hien/huy_hd/", {"passcode": "SMOKE"})
                 self._ok("XÓA PHIẾU (passcode) → 3 dòng mất, két về ban đầu", r.status_code == 200
                          and not any(B.phieu_thau(x, c) for x in nhom2.trn_ids) and bal("D18K") == bal0["D18K"] and bal("VND") == bal0["VND"],
@@ -332,6 +359,142 @@ class Command(BaseCommand):
                 r = web.post("/banle/thau-vao/thuc-hien/huy_hd/", {"passcode": "SMOKE"})
                 self._ok("XÓA phiếu phần còn lại → KK sạch, két về ban đầu", not any(B.phieu_thau(x, c) for x in nhom3.trn_ids)
                          and bal("D18K") == bal0["D18K"] and bal("VND") == bal0["VND"] and GoldBill.objects.get(trn_id=nhom3.trn_ids[0]).is_del)
+                # ── 8a-bis. (10/09/2026, GĐ) popup CHI TIẾT trang /thau-vao-2/: khóa QR khi đã xác nhận CK + đối chiếu tên
+                import re as _re_ds
+                from apps.pos import thau_list as TL
+                from apps.pos import thau_xuat as TX
+                from apps.pos.models import ThauPaymentLink
+                self._ok("đối chiếu tên chủ thẻ với tên khách: bỏ dấu + bỏ xưng hô rồi so, thiếu tên thì không kết luận",
+                         TL.doi_chieu_ten("TRAN THI TRANG", "Trần Thị Trang") is True
+                         and TL.doi_chieu_ten("CHI TRANG", "Chị Trang") is True
+                         and TL.doi_chieu_ten("NGUYEN VAN A", "Chị Trang") is False
+                         and TL.doi_chieu_ten("", "Chị Trang") is None and TL.doi_chieu_ten("TRAN A", "") is None)
+                self._ok("phiếu chưa có liên kết CK / phiếu trả tiền mặt → chưa coi là đã xác nhận",
+                         TL.da_xac_nhan_ck(["TBG_KHONG_TON_TAI"], 1000)[0] is False
+                         and TL.da_xac_nhan_ck(["TBG_KHONG_TON_TAI"], 0)[0] is False)
+                lk = ThauPaymentLink.objects.filter(active_notification_id__isnull=False).order_by("-pk").first()
+                if lk:
+                    self._ok("có liên kết CK còn hiệu lực, đủ tiền → coi là ĐÃ XÁC NHẬN (đọc bảng thau_payment_link)",
+                             TL.da_xac_nhan_ck(lk.trn_ids, lk.amount)[0] is True
+                             and TL.da_xac_nhan_ck(lk.trn_ids, lk.amount * 2)[0] is False)
+                    # tìm nhóm ĐÃ xác nhận mà CÓ ảnh QR (nhóm không có QR thì không có gì để phủ nhãn)
+                    b_ct, o_qr = "", None
+                    for l2 in ThauPaymentLink.objects.filter(active_notification_id__isnull=False).order_by("-pk")[:15]:
+                        thu = web.get("/banle/thau-vao-2/xem/?trn_id=" + l2.trn_ids[0]).content.decode()
+                        if "th2-bank-qr--xong" in thu:
+                            b_ct = thu
+                            o_qr = _re_ds.search(r'<div class="th2-bank-qr[^>]*>(.*?)</div>', thu, _re_ds.S)
+                            break
+                    self._ok("popup chi tiết của nhóm ĐÃ xác nhận (có ảnh QR): QR bị phủ nhãn xanh ĐÃ XONG và KHÔNG còn bấm mở được",
+                             (not b_ct) or ("ĐÃ XONG" in b_ct and bool(o_qr) and "<a " not in o_qr.group(1)),
+                             "không nhóm nào vừa đã xác nhận vừa có ảnh QR" if not b_ct else "")
+                # Khung xem ảnh là markup + JS tĩnh của template: kiểm thẳng tệp, khỏi phải có phiếu thật trên KK
+                # (nhóm mới nhất trong smoke là nhóm sandbox, popup chi tiết đọc KK thật nên không mở được).
+                tpl_xem = open("templates/pos/_thau2_detail.html", encoding="utf-8").read()
+                js_khbl = open("static/js/khbl.js", encoding="utf-8").read()
+                self._ok("popup chi tiết: ảnh mở NGAY TRONG khung popup — có khung xem ảnh, bộ slide, nút chuyển và mức phóng",
+                         'id="th2-xem"' in tpl_xem and "data-th2-anh" in tpl_xem and "data-truoc" in tpl_xem
+                         and "data-sau" in tpl_xem and "data-ti-le" in tpl_xem
+                         and "position:absolute" in open("static/css/thau2.css", encoding="utf-8").read().split(".th2-xem{")[1][:80])
+                self._ok("khung xem ảnh khai là LỚP CON: Esc chỉ đóng nó, popup chi tiết còn nguyên (khbl.js nhường + chặn hẳn)",
+                         "data-khbl-lop-con" in tpl_xem and "data-khbl-lop-con" in js_khbl
+                         and "stopImmediatePropagation" in tpl_xem)
+                # GĐ chốt 10/09/2026: TẠM KHÓA IN + đơn đã xác nhận CK thì popup DANH SÁCH chỉ cho XEM
+                r_in = web.get("/banle/thau-vao/in/?oob=1")
+                self._ok("mọi nút IN bị khóa và view in chặn thẳng ở máy chủ (gọi đường dẫn cũng không in được)",
+                         r_in.status_code == 403 and "khóa in" in r_in.content.decode().lower()
+                         and web.get("/banle/thau-vao/").content.decode().count("Tạm khóa in phiếu") == 2)
+                b_ds2 = web.get("/banle/thau-vao/danh-sach/").content.decode()
+                self._ok("popup DANH SÁCH: nút 🖨 của từng dòng cũng bị khóa, không còn gọi được đường dẫn in",
+                         "Tạm khóa in phiếu" in b_ds2 and "thau-vao/in/" not in b_ds2)
+                nhom_xn = ThauNhom.objects.order_by("-pk").first()
+                lk_gia = ThauPaymentLink.objects.create(
+                    order_key="smoke", trn_ids=list(nhom_xn.trn_ids), notification_id=999999999,
+                    active_notification_id=999999999, amount=nhom_xn.tien_ck or 1, snapshot={}, bank_snapshot={},
+                    mode="manual", username="smoke", reason="smoke")
+                try:
+                    b_xn = web.get("/banle/thau-vao/danh-sach/").content.decode()
+                    dong_xn = [x for x in _re_ds.findall(r"<tr [^>]*data-th-row=.*?</tr>", b_xn, _re_ds.S)
+                               if nhom_xn.trn_ids[0] in x or (nhom_xn.bill_codes and nhom_xn.bill_codes[0] in x)]
+                    co_ck = bool(nhom_xn.tien_ck)
+                    self._ok("đơn ĐÃ xác nhận CK: nút MỞ đổi thành XEM, mở popup chi tiết chỉ-xem của trang 2",
+                             (not co_ck) or (bool(dong_xn) and ">XEM<" in dong_xn[0] and ">MỞ<" not in dong_xn[0]
+                                             and "thau-vao-2/xem/" in dong_xn[0] and "đã xác nhận CK" in dong_xn[0]),
+                             f"tien_ck={nhom_xn.tien_ck} dong={len(dong_xn)}")
+                finally:
+                    lk_gia.delete()
+                b_sau = web.get("/banle/thau-vao/danh-sach/").content.decode()
+                dong_sau = [x for x in _re_ds.findall(r"<tr [^>]*data-th-row=.*?</tr>", b_sau, _re_ds.S)
+                            if nhom_xn.trn_ids[0] in x or (nhom_xn.bill_codes and nhom_xn.bill_codes[0] in x)]
+                self._ok("gỡ liên kết CK → dòng đó quay lại nút MỞ (sửa được như cũ), không kẹt ở chế độ chỉ xem",
+                         not dong_sau or ">XEM<" not in dong_sau[0])
+                # GĐ chốt 10/09/2026: trang /thau-vao-2/ MỞ CÔNG KHAI trong mạng tiệm (gồm ảnh + 2 nút xuất tệp),
+                # nút "Đối soát CK" bỏ đi vì máy chủ tự soát mỗi 5 phút; các trang NHẬP LIỆU vẫn phải đăng nhập.
+                hom_nay = datetime.date.today().isoformat()
+                khach_la = Client(SERVER_NAME="localhost")     # phiên CHƯA đăng nhập
+                mo = {u: khach_la.get(u).status_code for u in (
+                    "/banle/thau-vao-2/", f"/banle/thau-vao-2/xuat-ncc/?d1={hom_nay}&d2={hom_nay}",
+                    f"/banle/thau-vao-2/in-cccd/?d1={hom_nay}&d2={hom_nay}")}
+                self._ok("chưa đăng nhập vẫn mở được trang thâu 2 + hai nút xuất tệp (GĐ chốt mở công khai trong LAN)",
+                         all(v == 200 for v in mo.values()), str(mo))
+                chan = {u: khach_la.get(u).status_code for u in ("/banle/thau-vao/", "/banle/khach-hang/", "/banle/hoa-don/")}
+                self._ok("các trang NHẬP LIỆU vẫn bắt đăng nhập như cũ (chỉ mở đúng trang xem)",
+                         all(v == 302 for v in chan.values()), str(chan))
+                b_ds3 = khach_la.get("/banle/thau-vao-2/").content.decode()
+                self._ok("trang thâu 2 KHÔNG còn nút Đối soát CK và dòng chú thích — máy chủ tự soát bằng lệnh doi_soat_ck",
+                         "data-payment-scan" not in b_ds3 and "Tự kiểm tra mỗi 5 giây" not in b_ds3
+                         and 'data-can-manage="0"' in b_ds3
+                         and "doi_soat_ck" in open("config/scheduler.py", encoding="utf-8").read())
+
+                # ⬇ XUẤT EXCEL + 🪪 IN CCCD (GĐ chốt 10/09/2026) — đúng khuôn tệp mẫu NCC_NHAP_CHUAN_KH2.xlsx
+                hom_nay_iso = hom_nay
+                b_tr2 = web.get("/banle/thau-vao-2/").content.decode()
+                self._ok("trang thâu 2: 2 nút tải tệp đứng TRƯỚC nút Đối soát CK, giữ nguyên bộ lọc đang xem",
+                         "XUẤT EXCEL" in b_tr2 and "IN CCCD" in b_tr2
+                         and b_tr2.index("XUẤT EXCEL") < b_tr2.index("Đối soát CK")
+                         and "xuat-ncc/?d1=" in b_tr2 and "in-cccd/?d1=" in b_tr2)
+                r_xl = web.get(f"/banle/thau-vao-2/xuat-ncc/?d1={hom_nay_iso}&d2={hom_nay_iso}&method=all")
+                from io import BytesIO as _B
+                import openpyxl as _xl
+                ws = _xl.load_workbook(_B(r_xl.content)).active
+                cot = [c.value for c in ws[1]]
+                self._ok("xuất Excel: đúng 11 cột theo tệp mẫu, sheet NCC, tên tệp kèm khoảng ngày",
+                         r_xl.status_code == 200 and ws.title == "NCC" and cot == list(TX.COT)
+                         and f"NCC_NHAP_CHUAN_KH2_{datetime.date.today():%Y%m%d}.xlsx" in r_xl.get("Content-Disposition", ""),
+                         r_xl.get("Content-Disposition", ""))
+                dong2 = [c.value for c in ws[2]] if ws.max_row >= 2 else []
+                self._ok("mỗi khách một dòng: Loại NCC = Cá nhân, tên in hoa, Ghi chú = TIỀN CK CHIA 1000 (đúng như mẫu)",
+                         (not dong2) or (dong2[3] == "Cá nhân" and str(dong2[2]) == str(dong2[2]).upper()
+                                         and (dong2[9] is None or isinstance(dong2[9], int))), str(dong2[:4]))
+                self._ok("cột STT · Mã NCC · Email · Mã số thuế để TRỐNG như mẫu (phần mềm bên kia tự sinh)",
+                         (not dong2) or all(dong2[i] in ("", None) for i in (0, 1, 6, 7)))
+                r_w = web.get(f"/banle/thau-vao-2/in-cccd/?d1={hom_nay_iso}&d2={hom_nay_iso}&method=all")
+                import re as _re_w
+                kt = _re_w.findall(r'<wp:extent cx="(\d+)" cy="(\d+)"', r_w.content.decode("latin-1", "ignore"))
+                self._ok("in CCCD: tệp Word khổ A4, ảnh đặt ĐÚNG CỠ THẬT 85,6 × 53,98 mm để in ra trùng khít thẻ",
+                         r_w.status_code == 200 and f"CCCD_{datetime.date.today():%Y%m%d}.docx" in r_w.get("Content-Disposition", "")
+                         and (not kt or (abs(int(kt[0][0]) / 36000 - 85.6) < 0.2 and abs(int(kt[0][1]) / 36000 - 53.98) < 0.2)),
+                         (f"{int(kt[0][0])/36000:.1f}x{int(kt[0][1])/36000:.1f}mm" if kt else "chưa có ảnh CCCD trong kỳ"))
+                from docx import Document as _Doc
+                dw = _Doc(_B(r_w.content))
+                so_ngat = dw.element.xml.count('w:type="page"')
+                dong_ten = [x.text for x in dw.paragraphs if x.text and "CCCD KHÁCH BÁN VÀNG" not in x.text]
+                self._ok("in CCCD: mỗi trang đúng 4 khách rồi tự sang trang mới",
+                         so_ngat == max(0, (len(dw.tables) - 1) // TX.KHACH_MOI_TRANG),
+                         f"{len(dw.tables)} khách · {so_ngat} lần ngắt trang")
+                self._ok("in CCCD: dòng chữ mỗi khách chỉ gồm TÊN · CCCD (không kèm số điện thoại, không kèm tiền)",
+                         (not dong_ten) or all("·" not in t.split("CCCD")[0].replace(t.split("·")[0], "", 1)
+                                               and "₫" not in t for t in dong_ten),
+                         dong_ten[0] if dong_ten else "")
+                r_dai = web.get(f"/banle/thau-vao-2/xuat-ncc/?d1=2026-01-01&d2={hom_nay_iso}")
+                self._ok("chọn khoảng quá 31 ngày → từ chối gọn, không dựng tệp khổng lồ", r_dai.status_code == 400)
+
+                self._ok("popup chi tiết TỰ mang bảng kiểu của nó — mở từ trang /thau-vao/ (không có sẵn thau2.css) vẫn đúng giao diện",
+                         "css/thau2.css" in tpl_xem and "thau2.css" not in open("templates/pos/thau.html", encoding="utf-8").read())
+                self._ok("lăn chuột giữa để phóng to quanh con trỏ, kéo để di chuyển, chặn cuộn nền",
+                         'addEventListener("wheel"' in tpl_xem and "passive: false" in tpl_xem
+                         and "pointermove" in tpl_xem and "dblclick" in tpl_xem)
+
                 # ── 8b. (08/09 tối) ✂ TÁCH THẺ CCCD bằng OpenCV: ảnh giả lập thẻ xoay 12° lệch góc + vật tạp ──
                 from apps.pos import anh_cccd as AC
                 web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
@@ -501,6 +664,47 @@ class Command(BaseCommand):
                 self._ok("ô SCAN máy quét (chuỗi VietQR) → VCB/0011223344", g["ck_bank"] == "VCB" and g["ck_stk"] == "0011223344")
                 r = web.post("/banle/thau-vao/qr/quet/", {"chuoi": "000201xxx"})
                 self._ok("scan chuỗi rác → báo lỗi, không đổi", "checksum" in r.content.decode().lower() or "không" in r.content.decode().lower())
+                # TÊN CHỦ TK khi quét QR (GĐ chốt 10/09/2026): tag 59 trong QR → ô Tên chủ TK
+                r = web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("ACB", "999888777", 0, "", "Trần Thị Bích Hạnh")})
+                g = web.session.get(TC.KEY)
+                b_tr = web.get("/banle/thau-vao/").content.decode()
+                self._ok("quét QR có tên chủ TK (tag 59) → điền ô Tên chủ TK (bỏ dấu, in hoa) + báo trên toast",
+                         g["ck_ten"] == "TRAN THI BICH HANH" and 'id="o-ckten"' in b_tr and "TRAN THI BICH HANH" in b_tr
+                         and "TRAN THI BICH HANH" in r.content.decode(), g.get("ck_ten"))
+                nhom_ten = ThauNhom.objects.create(trn_ids=["TBG_SMOKE_TEN"], bill_codes=["x"], kieu=["thau"], cust_id="",
+                                                   cust_name="", emp_id="", pay_method="bank", tien_mat=0, tien_ck=0, bu=0, bot=0,
+                                                   ck_bank="VCB", ck_stk="0011223344", ck_ten="LE VAN KHACH QUEN", ck_nd="")
+                try:
+                    web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                    web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("VCB", "0011223344")})
+                    self._ok("QR không ghi tên → lấy tên đã dùng cho chính số TK đó ở phiếu thâu cũ",
+                             (web.session.get(TC.KEY) or {}).get("ck_ten") == "LE VAN KHACH QUEN")
+                    web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                    web.post("/banle/thau-vao/dat/", {"ck_ten": "GO TAY TRUOC"})
+                    web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("MB", "5555000111")})
+                    self._ok("QR không tên + số TK lạ → GIỮ tên đang gõ tay, không xóa",
+                             (web.session.get(TC.KEY) or {}).get("ck_ten") == "GO TAY TRUOC")
+                    # lớp cuối (GĐ chốt 10/09/2026, sau khi tra ra không có dịch vụ tra tên nào miễn phí):
+                    # ô vẫn trống thì GỢI Ý tên khách của phiếu, toast nói rõ để nhân viên kiểm lại
+                    web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                    web.post("/banle/thau-vao/dat/", {"cust_id": cust})
+                    ten_kh = QRv.khong_dau(((web.session.get(TC.KEY) or {}).get("cust") or {}).get("name") or "")
+                    r_gy = web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("MB", "5555000111")})
+                    self._ok("QR không tên + số TK lạ + ô trống → gợi ý tên KHÁCH của phiếu (bỏ dấu), toast ghi rõ là gợi ý",
+                             bool(ten_kh) and (web.session.get(TC.KEY) or {}).get("ck_ten") == ten_kh
+                             and "kiểm lại" in r_gy.content.decode(), ten_kh)
+                    web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                    web.post("/banle/thau-vao/dat/", {"cust_id": cust})
+                    web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("MB", "5555000111", 0, "", "Nguyễn Thị Chủ Thẻ")})
+                    self._ok("QR CÓ tên → dùng tên trong QR, không lấy tên khách",
+                             (web.session.get(TC.KEY) or {}).get("ck_ten") == "NGUYEN THI CHU THE")
+                finally:
+                    nhom_ten.delete()
+                # dựng lại ĐÚNG trạng thái trước khối này: ảnh QR chờ + khách + NV + dòng vàng (phần sau dùng tiếp)
+                web.post("/banle/thau-vao/moi/", {"bo_anh": "1"})
+                web.post("/banle/thau-vao/dat/", {"cust_id": cust}); web.post("/banle/thau-vao/dat/", {"emp": emp})
+                web.post("/banle/thau-vao/them/", {"gold": "D18K", "tong_tl": "300", "tl_hot": "0", "gia": "", "kieu": "thau"})
+                web.post("/banle/thau-vao/anh/len/", {"anh_qr": SimpleUploadedFile("qr.png", png.getvalue(), content_type="image/png")})
                 web.post("/banle/thau-vao/dat/", {"ck_ten": "NGUYEN VAN A"})
                 web.post("/banle/thau-vao/qr/quet/", {"chuoi": QRv.payload("ACB", "123456789", 0, "ABC")})
                 b = web.post("/banle/thau-vao/dat/", {"pay_method": "bank"}).content.decode()
@@ -510,12 +714,21 @@ class Command(BaseCommand):
                 r = web.post("/banle/thau-vao/thanh-toan/", {})
                 nhomq = ThauNhom.objects.order_by("-pk").first()
                 g = web.session.get(TC.KEY)
-                self._ok("THANH TOÁN → nhóm lưu NH/STK, nội dung CK = mã phiếu", nhomq.ck_bank == "ACB" and nhomq.ck_stk == "123456789"
-                         and nhomq.ck_nd == nhomq.bill_codes[0] and g["ck_nd"] == nhomq.bill_codes[0], f"{nhomq.ck_nd} vs {nhomq.bill_codes}")
+                nd_chuan = TC.noi_dung_ck({"trn_ids": nhomq.trn_ids})       # "THANH TOAN TIEN VANG {4 số cuối mã phiếu}"
+                self._ok("THANH TOÁN → nhóm lưu NH/STK, nội dung CK theo form chuẩn 'THANH TOAN TIEN VANG {4 số cuối mã phiếu}' (GĐ chốt 10/09/2026)",
+                         nhomq.ck_bank == "ACB" and nhomq.ck_stk == "123456789" and nhomq.ck_nd == nd_chuan
+                         and g["ck_nd"] == nd_chuan and nd_chuan.endswith(nhomq.trn_ids[0][-4:]) and len(nd_chuan) <= 25,
+                         f"{nhomq.ck_nd} vs {nd_chuan}")
+                from apps.pos import thau_payments as TPay
+                self._ok("nội dung ấy đối soát đọc lại ĐÚNG phiếu (kể cả khi ngân hàng nối đuôi ngày giờ)",
+                         TPay.code_match({"ids": nhomq.trn_ids, "members": [{"BillCode": nhomq.bill_codes[0]}]},
+                                         {"description": nd_chuan + "-100926-10:47:17 6253ASCB", "bill_code_raw": ""})
+                         and not TPay.code_match({"ids": nhomq.trn_ids, "members": [{"BillCode": nhomq.bill_codes[0]}]},
+                                                 {"description": "THANH TOAN TIEN VANG-100926-10:47:17", "bill_code_raw": ""}))
                 r = web.get("/banle/thau-vao/qr/tao/")
                 b = r.content.decode()
                 self._ok("Tạo QR cho khách (đã chốt): popup có QR + ACB + STK + tên chủ TK + nội dung mã phiếu + nút LƯU", r.status_code == 200 and "data:image/png" in b
-                         and "ACB" in b and "123456789" in b and nhomq.bill_codes[0] in b and "NGUYEN VAN A" in b and "qr/luu/" in b)
+                         and "ACB" in b and "123456789" in b and nd_chuan in b and "NGUYEN VAN A" in b and "qr/luu/" in b)
                 self._ok("đã chốt + đủ TT → nút Tạo QR bật", 'hx-get="/banle/thau-vao/qr/tao/"' in web.post("/banle/thau-vao/dat/", {}).content.decode() or True)
                 qr_tai = bytes(nhomq.anh_qr or b"")
                 self._ok("THANH TOÁN → ảnh QR chờ (tải lên) vào thau_nhom.anh_qr", bool(qr_tai))

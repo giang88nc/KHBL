@@ -25,7 +25,22 @@ logger = logging.getLogger(__name__)
 LOCK = 'khbl:bank-reconcile:v1'
 LAST_RUN = 'bank_reconcile_last_run'
 BATCH = 30
-FIELDS = 'id, bank_number, transaction_time, trans_amount, direction, bill_code_raw, is_check, updated_at'
+FIELDS = 'id, bank_number, transaction_time, trans_amount, direction, bill_code_raw, is_check, updated_at, description'
+CD_PATTERN = '%THANH TOAN TIEN VANG 1%'
+
+
+def classify_cd(start=None, end=None):
+    """Explicit content rule; retain is_check and prior reconciliation audit."""
+    sql = ('UPDATE bank_notifications SET bill_code_raw = %s '
+           "WHERE UPPER(COALESCE(description, '')) LIKE %s "
+           "AND COALESCE(bill_code_raw, '') <> %s")
+    params = ['chi CĐ', CD_PATTERN, 'chi CĐ']
+    if start is not None and end is not None:
+        sql += ' AND transaction_time >= %s AND transaction_time < %s'
+        params += [start, end]
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        return cur.rowcount
 
 
 @contextmanager
@@ -42,7 +57,7 @@ def single_run():
 
 
 def fingerprint(row):
-    values = [row.get(k) for k in ('bank_number', 'transaction_time', 'trans_amount', 'direction', 'bill_code_raw', 'is_check')]
+    values = [row.get(k) for k in ('bank_number', 'transaction_time', 'trans_amount', 'direction', 'bill_code_raw', 'is_check', 'description')]
     return hashlib.sha256(json.dumps(values, default=str).encode()).hexdigest()
 
 
@@ -79,6 +94,11 @@ def defer(row, status, message, now):
 def save_match(row, trn_id, created_date):
     """Giữ reservation unique và cập nhật nguồn trong cùng transaction ngắn."""
     with transaction.atomic():
+        from .models import ThauPaymentLink
+        active_links = ThauPaymentLink.objects.filter(active_notification_id__isnull=False)
+        if active_links.filter(active_notification_id=row['id']).exists() or any(
+                trn_id in ids for ids in active_links.values_list('trn_ids', flat=True)):
+            return False
         suffix = ' FOR UPDATE' if connection.vendor == 'mysql' else ''
         fresh = query(f'SELECT {FIELDS} FROM bank_notifications WHERE id = %s' + suffix, [row['id']])
         if not fresh or fingerprint(fresh[0]) != fingerprint(row) or fresh[0]['updated_at'] != row['updated_at']:
@@ -90,8 +110,9 @@ def save_match(row, trn_id, created_date):
         # Một UPSERT khác có thể đến SAU lúc lấy danh sách đầu lượt.
         day = bank_time(row).date()
         rivals = query("SELECT id, transaction_time FROM bank_notifications WHERE direction = 'out' AND is_check = 0 "
+                       "AND UPPER(COALESCE(description, '')) NOT LIKE %s "
                        'AND trans_amount = %s AND id <> %s AND transaction_time >= %s AND transaction_time < %s',
-                       [row['trans_amount'], row['id'], day.isoformat(), (day + dt.timedelta(days=1)).isoformat()])
+                       [CD_PATTERN, row['trans_amount'], row['id'], day.isoformat(), (day + dt.timedelta(days=1)).isoformat()])
         if any(bank_time(r) is not None and created_date <= bank_time(r) <= created_date + dt.timedelta(minutes=30) for r in rivals):
             return False
         state, _ = BankReconcileState.objects.get_or_create(notification_id=row['id'])
@@ -124,10 +145,15 @@ def reconcile(today):
         return dict(status='busy', matched=0)
     PmvState.set(LAST_RUN, now.timestamp())
     start, end = today.isoformat(), (today + dt.timedelta(days=1)).isoformat()
+    classified = classify_cd(start, end)
     rows = query(f'SELECT {FIELDS} FROM bank_notifications '
                  "WHERE direction = 'out' AND is_check = 0 AND trans_amount > 0 "
-                 'AND transaction_time >= %s AND transaction_time < %s ORDER BY id', [start, end])
+                 "AND UPPER(COALESCE(description, '')) NOT LIKE %s "
+                 'AND transaction_time >= %s AND transaction_time < %s ORDER BY id', [CD_PATTERN, start, end])
     states = BankReconcileState.objects.in_bulk([r['id'] for r in rows])
+    from .models import ThauPaymentLink
+    reserved = set(ThauPaymentLink.objects.filter(active_notification_id__isnull=False).values_list('active_notification_id', flat=True))
+    rows = [r for r in rows if r['id'] not in reserved]
     for row in rows:
         state = states.get(row['id'])
         if state and state.trn_id and state.status != 'conflict':
@@ -141,7 +167,7 @@ def reconcile(today):
     for row in due:
         if bank_time(row) is None:
             defer(row, 'invalid', 'Thời gian giao dịch không hợp lệ.', now)
-    result = dict(status='ok', matched=0, pending=len(rows), reviewed=len(due))
+    result = dict(status='ok', matched=0, classified=classified, pending=len(rows), reviewed=len(due))
     if not valid:
         return report(result, rows)
     lower = min(bank_time(r) for r in valid) - dt.timedelta(minutes=30)

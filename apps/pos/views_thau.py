@@ -10,9 +10,7 @@ import datetime
 import json
 import logging
 import re
-from pathlib import Path
-
-from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -25,7 +23,7 @@ from apps.pmv import gateway, money as M
 from apps.pmv.client import PmvProcError
 
 from . import anh_cccd as AC, bill as B, customer as C, services as S, thau_cart as TC, vietqr as QR
-from .models import GoldBill, ThauAnhTam, ThauNhom
+from .models import GoldBill, ThauAnhTam, ThauNhom, ThauPaymentLink
 
 # 5 slot ảnh chuyển khoản (GĐ chốt 08/09/2026 tối): CCCD 2 mặt · 2 hình · QR chuyển khoản → cột gold_bill.anh_*
 ANH_SLOTS = (("cccd1", "CCCD mặt trước", "environment"), ("cccd2", "CCCD mặt sau", "environment"),
@@ -36,13 +34,16 @@ ANH_COT = {s: f"anh_{s}" for s, _, _ in ANH_SLOTS}          # tên ô ảnh (5 �
 NHOM_COT = {"hinh1": "anh_hinh1", "hinh2": "anh_hinh2", "qr": "anh_qr"}
 CCCD_SLOT = {"cccd1": ("ImagePathMatTruoc", "mat-truoc", "p_ImageDataMatTruoc", "p_ImagePathMatTruoc", "MT", "CCCD mặt trước"),
              "cccd2": ("ImagePathMatSau", "mat-sau", "p_ImageDataMatSau", "p_ImagePathMatSau", "MS", "CCCD mặt sau")}
-CCCD_DIR = Path(settings.BASE_DIR) / "media" / "cccd"     # file CCCD trên máy chủ này (GĐ chốt 09/09): media/cccd/<CustID>/MT|MS_<lúc>.jpg
 ANH_MAX = 12 * 1024 * 1024
 from .views import (PC_SAI_TOI_DA, _co_fullcontrol_hoa_don, _loi_goi, _passcode_dung, _passcode_khoa, _phien,
                     _so, _so_tl, _tien_bang_chu)
 
 logger = logging.getLogger(__name__)
 KHOA_MSG = "Phiếu thâu đang KHÓA 🔒 (đã thanh toán) — bấm 🔓 SỬA (passcode) để mở"
+# GĐ chốt 10/09/2026: TẠM KHÓA IN phiếu thâu — mọi nút in bị vô hiệu và view in cũng chặn ở máy chủ để không ai
+# gọi thẳng đường dẫn. Mở lại: đổi hằng này về False (không cần sửa gì thêm, nút và view cùng đọc một chỗ).
+KHOA_IN = True
+KHOA_IN_MSG = "Tạm khóa in phiếu thâu"
 
 HANH_DONG = {
     "sua":    {"ten": "SỬA PHIẾU", "icon": "🔓", "hau_qua": [
@@ -88,7 +89,8 @@ def _ctx(request, extra=None):
     ctx["khoa_ngay_cu"] = ctx["phieu_chot"] and not ctx["don_hom_nay"]
     ctx["anh"] = _anh_slots(request, g)
     ctx["banks_vn"] = QR.BANKS
-    ctx["ck_nd_mac_dinh"] = (g.get("bill_codes") or [""])[0] or "thau vang"
+    ctx["khoa_in"], ctx["khoa_in_msg"] = KHOA_IN, KHOA_IN_MSG
+    ctx["ck_nd_mac_dinh"] = TC.ck_nd_day_du(g)         # "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" (GĐ chốt 10/09/2026)
     ctx["tao_qr_duoc"] = ctx["phieu_chot"] and bool(g.get("ck_bank") and g.get("ck_stk"))
     ctx.update(extra or {})
     return ctx
@@ -413,6 +415,9 @@ def thau_anh_xoa(request):
     return _oob(request, {"tin": "Đã bỏ ảnh chờ"})
 
 
+# GĐ chốt 10/09/2026: ảnh của phiếu xem được không cần đăng nhập, vì popup chi tiết trang /thau-vao-2/
+# đã mở tự do — chặn ở đây thì popup chỉ còn khung trắng.
+@login_not_required
 @require_GET
 def thau_anh(request):
     """Phục vụ ảnh theo ô: ?slot=&nhom=<id> → thau_nhom.anh_* (Hình 1/2/QR); không có nhom → ảnh chờ của phiên.
@@ -461,20 +466,10 @@ def _ghi_gold_bill(request, g, trn, rows):
         logger.exception("gold_bill thâu: không ghi được %s", trn)
 
 
-def _luu_file_cccd(cust_id, slot, data):
-    """GĐ chốt 09/09/2026: ngoài hồ sơ khách trên máy KK, ảnh CCCD còn lưu FILE trên máy chủ này —
-    media/cccd/<CustID>/MT|MS_<yyyymmdd_HHMMSS>.jpg (mỗi lần cập nhật thêm 1 file, không đè — giữ lịch sử)."""
-    tm = CCCD_DIR / (re.sub(r"[^A-Za-z0-9_-]", "", cust_id or "") or "khong_ro")
-    tm.mkdir(parents=True, exist_ok=True)
-    p = tm / f"{CCCD_SLOT[slot][4]}_{timezone.localtime().strftime('%Y%m%d_%H%M%S')}.jpg"
-    p.write_bytes(bytes(data))
-    return p
-
-
 def _chot_anh(request, g, nhom, nhom_cu_id):
     """THANH TOÁN (GĐ chốt 09/09/2026) — ghi ẢNH CHỜ vào nhà thật:
     · nhóm cũ (🔓 SỬA → thanh toán lại tạo nhóm MỚI) → chép 3 ảnh sang nhóm mới trước, rồi ảnh chờ Hình 1/2/QR đè lên (bóp MIN);
-    · CCCD chờ → hồ sơ KHÁCH trên máy KK (I_CUSTOMER_Upd, ghi đè nếu khách đã có) + FILE trên máy chủ này;
+    · CCCD chờ → hồ sơ KHÁCH trên máy KK (I_CUSTOMER_Upd, ghi đè nếu khách đã có) + kho private web;
     · ô nào ghi xong mới xóa ảnh chờ; CCCD ghi hồ sơ khách thất bại thì GIỮ chờ (🔓 SỬA rồi THANH TOÁN lại). Trả list cảnh báo."""
     sk = _skey(request)
     canh_bao, xong = [], []
@@ -503,11 +498,6 @@ def _chot_anh(request, g, nhom, nhom_cu_id):
             canh_bao.append(f"{nhan} CHƯA lưu: phiếu không chọn khách")
             continue
         data = bytes(t.data)
-        try:
-            _luu_file_cccd(cust_id, t.slot, data)
-        except Exception as exc:
-            logger.warning("Không lưu file CCCD %s: %s", cust_id, exc)
-            canh_bao.append(f"{nhan}: CHƯA lưu được file trên máy chủ ({str(exc)[:60]})")
         try:
             with C.SAVE_LOCK:
                 C.cap_nhat_anh(cust_id, {dp: data, pp: ".jpg"}, client=S.client("khach_anh_upd"))
@@ -760,6 +750,61 @@ def _ngay(v, mac_dinh):
         return mac_dinh
 
 
+def _gom_dong_ds(ds, nhom):
+    """GỘP các phiếu cùng MỘT nhóm thành MỘT dòng của popup DANH SÁCH (GĐ chốt 10/09/2026).
+
+    Trước đây mỗi dòng TRN_RT_BUYGOLD là một dòng bảng, nên một lần thâu nhiều loại vàng nằm rải ra nhiều dòng
+    trùng khách trùng giờ. Nay gom theo ThauNhom; phiếu không thuộc nhóm nào vẫn đứng riêng một dòng.
+
+    Mỗi dòng gộp mang thêm:
+      · ma_phieu  — danh sách mã, template in mỗi mã một dòng;
+      · tong_tien — tổng tiền tiệm trả của cả nhóm;
+      · tong_ck   — tổng tiền chuyển khoản (CardPay âm trên PMV, đổi dấu cho dễ đọc);
+      · so_dong / da_huy / co_huy / chot — để vẽ badge trạng thái chung.
+    Tiền tính trên các dòng CÒN SỐNG; nhóm bị hủy sạch thì tính trên chính các dòng đã hủy để vẫn thấy con số.
+    """
+    dong, chi_muc = [], {}
+    for r in ds:
+        n = nhom.get(r["TrnID"])
+        khoa = f"nhom-{n.pk}" if n else f"phieu-{r['TrnID']}"
+        d = chi_muc.get(khoa)
+        if d is None:
+            d = dict(r)                       # phiếu ĐẦU đại diện: ngày giờ, khách, nhân viên
+            d["rows"] = []
+            chi_muc[khoa] = d
+            dong.append(d)
+        d["rows"].append(r)
+    for d in dong:
+        rows = d["rows"]
+        song = [r for r in rows if str(r.get("IsDel")) == "0"]
+        tinh = song or rows
+        d["ma_phieu"] = [r.get("BillCode") or r["TrnID"] for r in rows]
+        d["tong_tien"] = sum((M.dec(r.get("SoTien")) for r in tinh), M.D0)
+        d["tong_ck"] = sum((-M.dec(r.get("CardPay")) for r in tinh if M.dec(r.get("CardPay")) < 0), M.D0)
+        d["so_dong"] = len(rows)
+        d["da_huy"] = not song
+        d["co_huy"] = len(song) != len(rows)
+        d["chot"] = bool(song) and all(r.get("Status") == "C" for r in song)
+        d["mo_id"] = (song or rows)[0]["TrnID"]         # MỞ / IN dùng phiếu đầu còn sống, thau_mo tự nạp cả nhóm
+    return dong
+
+
+def _danh_dau_xac_nhan(dong):
+    """Gắn cờ da_xac_nhan cho từng dòng của popup DANH SÁCH: nhóm đã được đối soát đủ tiền chuyển khoản
+    (bảng thau_payment_link) thì trang thâu chỉ cho XEM, không cho mở ra sửa nữa (GĐ chốt 10/09/2026).
+
+    Đọc MỘT lần toàn bộ liên kết còn hiệu lực rồi ghép trong bộ nhớ — bảng này mỗi phiếu một dòng nên rất nhỏ,
+    làm vậy tránh bắn mỗi dòng một truy vấn."""
+    from decimal import Decimal
+
+    lk = list(ThauPaymentLink.objects.filter(active_notification_id__isnull=False).values("trn_ids", "amount"))
+    for d in dong:
+        ids = {r["TrnID"] for r in d["rows"]}
+        da_tra = sum((l["amount"] for l in lk if ids & set(l["trn_ids"])), Decimal(0))
+        d["da_tra_ck"] = da_tra
+        d["da_xac_nhan"] = bool(d["tong_ck"]) and da_tra >= d["tong_ck"]
+
+
 @require_GET
 def thau_ds(request, standalone=False):
     """Popup DANH SÁCH phiếu thâu (80vw, cùng kiểu Bán hàng): khoảng ngày · NV · khách · trạng thái + thống kê."""
@@ -793,10 +838,13 @@ def thau_ds(request, standalone=False):
         n = nhom.get(r["TrnID"])
         r["nhom"] = n.pk if n else ""
         r["nhom_n"] = len(n.trn_ids) if n else 1
+    ds = _gom_dong_ds(ds, nhom)
+    _danh_dau_xac_nhan(ds)
     return render(request, "pos/_thau_ds.html", {
         "standalone": standalone, "nav_active": "thau",
         "ds_base": "pos/_thau_ds_page.html" if standalone else "partials/modal_shell.html",
         "ds": ds, "tk": tk, "d1": d1, "d2": d2, "hom_nay": hom_nay, "loc": loc, "nvs": S.nhan_vien_ban(),
+        "khoa_in": KHOA_IN, "khoa_in_msg": KHOA_IN_MSG,
         "nhieu_ngay": d1 != d2, "loi": loi, "nguon_hist": not live})
 
 
@@ -830,6 +878,20 @@ def thau_mo(request):
                           "dong_modal": True})
 
 
+def _ten_tk_da_biet(bank, stk):
+    """Tên chủ tài khoản đã dùng cho SỐ TK này ở phiếu thâu gần nhất. Dùng khi QR của khách không ghi tên:
+    khách quen chuyển lại cùng tài khoản thì khỏi gõ tay. Chỉ đọc dữ liệu của chính tiệm, không gọi ra ngoài."""
+    stk = (stk or "").strip()
+    if not stk:
+        return ""
+    qs = ThauNhom.objects.filter(ck_stk=stk).exclude(ck_ten="").order_by("-pk")
+    if bank:
+        qs = qs.filter(ck_bank=bank) | ThauNhom.objects.filter(ck_stk=stk, ck_bank="").exclude(ck_ten="")
+        qs = qs.order_by("-pk")
+    nhom = qs.first()
+    return (nhom.ck_ten or "").strip() if nhom else ""
+
+
 @require_POST
 def thau_qr_quet(request):
     """Quét mã QR trong ảnh ô 'QR chuyển khoản' (chỉ nhận VietQR/NAPAS chuyển khoản tới tài khoản) → điền ngân hàng · số TK ·
@@ -852,10 +914,25 @@ def thau_qr_quet(request):
     if not kq["hop_le"]:
         return _loi(request, kq["loi"] or "QR không hợp lệ", {"loi_o": "#o-ckscan"})
     g["ck_bank"], g["ck_stk"] = kq["bank_code"], kq["account"]
-    g["ck_nd"] = (g.get("bill_codes") or [""])[0] or g.get("ck_nd") or ""
+    g["ck_nd"] = TC.noi_dung_ck(g)
+    # TÊN CHỦ TK — 4 lớp, dừng ở lớp đầu tiên có kết quả (GĐ chốt 10/09/2026):
+    #   1. tên ghi sẵn trong QR (EMVCo tag 59). Nhiều QR tĩnh in ra không có trường này nên thường trượt.
+    #   2. tên đã dùng cho chính số TK đó ở phiếu thâu cũ — khách quen chuyển lại thì khỏi gõ.
+    #   3. tên nhân viên đang gõ dở — không bao giờ đè lên.
+    #   4. GỢI Ý theo tên khách của phiếu: khách bán vàng phần lớn nhận vào tài khoản của chính họ.
+    #      Chỉ là gợi ý nên toast nói rõ để nhân viên liếc lại; tên này không quyết định tiền đi đâu, số TK mới quyết.
+    # (Không tra tên qua mạng: VietQR đã ngừng dịch vụ, SePay không có, các bên còn lại đều tính phí theo lượt.)
+    goi_y = ""
+    ten_qr = kq["ten"] or _ten_tk_da_biet(kq["bank_code"], kq["account"])
+    if not ten_qr and not (g.get("ck_ten") or "").strip():
+        goi_y = QR.khong_dau((g.get("cust") or {}).get("name") or "")[:100]
+    g["ck_ten"] = ten_qr or (g.get("ck_ten") or "") or goi_y
     g["pay_method"] = "bank"
     TC.save(request, g)
-    return _oob(request, {"tin": f"QR: {kq['bank_ten']} · {kq['account']}" + (f" · nội dung QR: {kq['info']}" if kq["info"] else "")})
+    tin = f"QR: {kq['bank_ten']} · {kq['account']}"
+    if g["ck_ten"]:
+        tin += f" · {g['ck_ten']}" + (" (tên khách — kiểm lại)" if goi_y and g["ck_ten"] == goi_y else "")
+    return _oob(request, {"tin": tin + (f" · nội dung QR: {kq['info']}" if kq["info"] else "")})
 
 
 @require_GET
@@ -866,10 +943,10 @@ def thau_qr_tao(request):
         return render(request, "pos/_qr_modal.html", {"loi": "Phiếu chưa THANH TOÁN — chốt xong (có mã phiếu) mới tạo QR."})
     t = TC.tong_cua(g)
     bank, stk = (g.get("ck_bank") or "").strip(), (g.get("ck_stk") or "").strip()
-    nd = (g.get("ck_nd") or "").strip() or (g.get("bill_codes") or [""])[0]
+    nd = TC.ck_nd_day_du(g)
     amount = t["tien_ck"]
     try:
-        chuoi = QR.payload(bank, stk, amount, nd)
+        chuoi = QR.payload(bank, stk, amount, nd, g.get("ck_ten") or "")
     except ValueError as exc:
         return render(request, "pos/_qr_modal.html", {"loi": str(exc)})
     return render(request, "pos/_qr_modal.html", {
@@ -897,7 +974,7 @@ def thau_qr_luu(request):
     if g.get("status") != B.CHOT_ROI or nhom is None:
         return _loi(request, "Phiếu chưa THANH TOÁN — không có nhóm đơn để gắn hình QR", {"dong_modal": True})
     t = TC.tong_cua(g)
-    nd = (g.get("ck_nd") or "").strip() or (g.get("bill_codes") or [""])[0]
+    nd = TC.ck_nd_day_du(g)
     try:
         chuoi = QR.payload(g.get("ck_bank"), g.get("ck_stk"), t["tien_ck"], nd)
     except ValueError as exc:
@@ -995,7 +1072,7 @@ def thau_thanh_toan(request):
                                    pay_method=g.get("pay_method") or "cash", tien_mat=t["tien_mat"], tien_ck=t["tien_ck"],
                                    bu=t["bu"], bot=t["bot"], ghi_chu=g.get("ghi_chu") or "", kieu=[x["kieu"] for x in g["lines"]],
                                    ck_bank=g.get("ck_bank") or "", ck_stk=g.get("ck_stk") or "",
-                                   ck_nd=(g.get("ck_nd") or rows[0].get("BillCode") or ids[0]) if t["tien_ck"] else "",
+                                   ck_nd=TC.ck_nd_day_du(g, ids[0]) if t["tien_ck"] else "",
                                    ck_ten=g.get("ck_ten") or "")
     gateway.canh_bao("thau_tt", f"THÂU {', '.join(nhom.bill_codes)} — tiệm trả {M.money_vn(t['khach_tra'])} "
                                 f"(CK {M.money_vn(t['tien_ck'])}); người: {request.user.username}")
@@ -1113,6 +1190,8 @@ def thau_thuc_hien(request, hanh_dong):
 @require_GET
 def thau_in(request):
     """In phiếu thâu 110mm cho cả nhóm: ?oob=1 → nhét #pos-in in THẲNG từ cửa sổ; mặc định trang standalone (auto=1 tự in)."""
+    if KHOA_IN:
+        return HttpResponse(KHOA_IN_MSG, status=403)
     trn = (request.GET.get("trn_id") or "").strip() or ((TC.get(request).get("trn_ids") or [""])[0])
     try:
         rows, nhom = _rows_cua(trn) if trn else ([], None)

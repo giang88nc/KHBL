@@ -2,6 +2,8 @@
 from io import BytesIO
 import json
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -90,14 +92,47 @@ class CustomerUpsertTests(unittest.TestCase):
         client.query.side_effect = [[], [{"CustID": "CU_TEST"}]]
         jpeg = BytesIO(); Image.new("RGB", (20, 20), "white").save(jpeg, "JPEG")
         client.image_file.return_value = jpeg.getvalue()
-        result = customer.upsert(data, {"p_ImageData": b"jpg", "p_ImagePath": ".jpg"},
-                                 client=client)
+        with tempfile.TemporaryDirectory() as temp, \
+             patch("apps.pos.customer._archive_root", return_value=Path(temp)):
+            result = customer.upsert(data, {"p_ImageData": jpeg.getvalue(), "p_ImagePath": ".jpg"},
+                                     client=client)
         self.assertTrue(result["created"])
         self.assertTrue(result["complete"])
         self.assertEqual([c.args[0] for c in client.call.call_args_list],
                          ["I_CUSTOMER_Ins", "I_DiemTichLuy_InsFromGT", "I_CUSTOMER_Upd"])
         self.assertIsNone(client.call.call_args_list[0].kwargs["p_ImageData"])
-        self.assertEqual(client.call.call_args_list[2].kwargs["p_ImageData"], b"jpg")
+        self.assertEqual(client.call.call_args_list[2].kwargs["p_ImageData"], jpeg.getvalue())
+
+    @patch("apps.pos.customer._current")
+    def test_archive_uses_customer_name_and_read_first(self, current):
+        jpeg = BytesIO(); Image.new("RGB", (20, 20), "white").save(jpeg, "JPEG")
+        pmv_path = r"D:\PHANMEMVANG\HINHANHKH\Khach_Thu_MT.jpg"
+        current.return_value = {"CustID": "CU_TEST", "CustName": "Nguyễn Văn A",
+                                "ImagePathMatTruoc": pmv_path}
+        client = Mock(target="kk")
+        client.image_file.return_value = jpeg.getvalue()
+        with tempfile.TemporaryDirectory() as temp, \
+             patch("apps.pos.customer._archive_root", return_value=Path(temp)):
+            customer.archive_images({"p_ImageDataMatTruoc": jpeg.getvalue()}, current.return_value, client)
+            data, content_type = customer.saved_image("CU_TEST", "mat-truoc", client=client)
+            self.assertTrue(data.startswith(b"\xff\xd8"))
+            self.assertEqual(content_type, "image/jpeg")
+            self.assertTrue((Path(temp) / "CU_TEST_nguyen_van_a_MT.jpg").is_file())
+
+    @patch("apps.pos.customer._current")
+    def test_legacy_pmv_image_is_cached_on_first_read(self, current):
+        jpeg = BytesIO(); Image.new("RGB", (20, 20), "white").save(jpeg, "JPEG")
+        current.return_value = {"CustID": "CU_TEST", "CustName": "Khách Cũ",
+                                "ImagePathMatTruoc": r"D:\\PHANMEMVANG\\HINHANHKH\\legacy.jpg"}
+        client = Mock(target="kk")
+        client.image_file.return_value = jpeg.getvalue()
+        with tempfile.TemporaryDirectory() as temp, \
+             patch("apps.pos.customer._archive_root", return_value=Path(temp)):
+            self.assertTrue(customer.saved_image("CU_TEST", "mat-truoc", client=client)[0].startswith(b"\xff\xd8"))
+            self.assertTrue((Path(temp) / "CU_TEST_khach_cu_MT.jpg").is_file())
+            cached_client = Mock(target="kk")
+            self.assertTrue(customer.saved_image("CU_TEST", "mat-truoc", client=cached_client)[0].startswith(b"\xff\xd8"))
+            cached_client.query.assert_not_called()
 
     @patch("apps.pos.customer._current", return_value=None)
     @patch("apps.pos.customer.duplicate_errors", return_value=[])

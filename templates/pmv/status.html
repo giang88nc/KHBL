@@ -1,13 +1,12 @@
-{% load l10n %}<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KHBL — Trạng thái hệ thống</title>
-<style>
-  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+{% extends "pmv/base.html" %}
+{% load l10n %}
+{% block title %}Trạng thái hệ thống{% endblock %}
+{% block system_head %}<style>
+@scope (.sys-content) {
+
+  
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro", "Segoe UI", sans-serif; }
+  
   .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
   h1 { font-family: "Cormorant Garamond", Georgia, serif; color: var(--gold-700); margin: 0 0 4px; }
   .sub { color:#78716c; margin-bottom:20px; }
@@ -56,27 +55,15 @@
           font-weight:700; border:1px solid; }
   .chip-do { border-color:#B3402A; color:#B3402A; background:#FDF2F0; }
   .chip-xanh { border-color:#2E7D46; color:#1E5B32; background:#EDF6F0; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>KHBL — Bán lẻ Kim Hạnh 2</h1>
-  <div class="sub">GĐ0 · Gateway PMV + backup đêm · song song PMVGoldRT</div>
-  <div style="margin-bottom:16px">
-    <a href="{% url 'pmv:status' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px;font-weight:700;border-bottom:2px solid var(--gold-500)">Trạng thái</a>
-    <a href="{% url 'pmv:diff' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">So sánh SQL</a>
-    <a href="{% url 'pmv:behavior' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Hành vi PMV</a>
-    <a href="{% url 'pmv:quy_trinh' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Quy trình</a>
-    <a href="{% url 'pmv:hist' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Kho lịch sử</a>
-    <a href="{% url 'pos:gdb_mau' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px" title="Kéo-thả khối, chỉnh cỡ chữ tờ Giấy đảm bảo A5">Mẫu in GĐB</a>
-    {% if request.user.is_superuser %}<a href="{% url 'pmv:user_list' %}" style="color:var(--gold-700);text-decoration:none;margin-right:14px">Người dùng &amp; quyền</a>{% endif %}
-    <a href="{% url 'pos:dashboard' %}" style="color:var(--gold-700);text-decoration:none;font-weight:600" title="Về màn hình bán lẻ">← Về Tổng quan</a>
-    <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
-  </div>
 
-  {% if messages %}{% for m in messages %}
-  <div class="msg msg-{{ m.tags|default:'success' }}">{{ m }}</div>
-  {% endfor %}{% endif %}
+}
+</style>{% endblock %}
+{% block system_content %}
+
+<div class="wrap">
+  
+
+  
 
   {% comment %}
   CÔNG TẮC ĐÍCH DỮ LIỆU (GĐ chốt 03/09/2026) — đổi được NGAY, không phải sửa .env + RESET.
@@ -95,8 +82,8 @@
         {% else %}
           Mọi màn bán lẻ đang đọc/ghi bản sao trên máy này. Ghi sai thì bấm ⟳ SYNC lấy lại bản sạch.
         {% endif %}
-        <br>Mặc định trong <span class="mono">.env</span>: <b>{{ dich_env }}</b>{% if dich_do_cong_tac %} · đang bị công tắc này ghi đè{% endif %}.
-        Chốt ghi máy KK chỉ đổi được trong <span class="mono">.env</span> (<span class="mono">PMV_GHI_KK</span>), không đổi được từ web.
+        <details class="sys-technical"><summary>Chi tiết cấu hình</summary>Mặc định trong <span class="mono">.env</span>: <b>{{ dich_env }}</b>{% if dich_do_cong_tac %} · đang bị công tắc này ghi đè{% endif %}.
+        Chốt ghi máy KK chỉ đổi được trong <span class="mono">.env</span> (<span class="mono">PMV_GHI_KK</span>), không đổi được từ web.</details>
       </div>
     </div>
     <div class="dich__nut">
@@ -133,7 +120,7 @@ Ghi vẫn bị cổng chặn.{% endif %}');">
   <div class="banner">⛔ pmv_write_lock đang BẬT — vendor vừa đổi version DB PMV, khóa mọi hướng ghi cho tới khi kiểm tra lại (skill pmv-proc-map).</div>
   {% endif %}
 
-  <div class="cards">
+  <div class="sys-section-title"><h2>Sao lưu & kiểm tra</h2><span>Tình trạng vận hành gần nhất</span></div><div class="cards">
     <div class="card"><div class="lbl">Backup PMV gần nhất</div>
       <div class="val">{{ state.pmv_last_backup|default:"— chưa chạy" }}</div></div>
     <div class="card"><div class="lbl">Kiểm tra PMV gần nhất</div>
@@ -153,7 +140,7 @@ Ghi vẫn bị cổng chặn.{% endif %}');">
       <div class="val {% if so_canhbao %}warn{% else %}ok{% endif %}">{{ so_canhbao }} dòng</div></div>
   </div>
 
-  <table>
+  <div class="sys-section-title"><h2>Nhật ký hệ thống</h2><span>30 hoạt động gần nhất</span></div><div class="sys-table-scroll"><table>
     <thead><tr><th style="width:135px">Thời điểm</th><th style="width:90px">Loại</th><th style="width:110px">Nghiệp vụ</th><th>Lệnh / nội dung</th><th style="width:70px">KQ</th></tr></thead>
     <tbody>
       {% for a in audits %}
@@ -168,7 +155,7 @@ Ghi vẫn bị cổng chặn.{% endif %}');">
       <tr><td colspan="5">Chưa có nhật ký nào.</td></tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
 </div>
-</body>
-</html>
+
+{% endblock %}

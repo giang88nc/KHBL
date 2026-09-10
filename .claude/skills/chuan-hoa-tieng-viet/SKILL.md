@@ -5,7 +5,71 @@ description: Chuẩn hóa chữ TIẾNG VIỆT bị hỏng mã về đúng dấu
 
 # CHUẨN HÓA CHỮ TIẾNG VIỆT BỊ HỎNG MÃ
 
-Hai bản CÙNG một thuật toán, phải sửa SONG SONG khi thay đổi:
+## QR CCCD: định tuyến theo RAW
+
+Dùng `apps/pos/cccd.py::normalize_cccd_group(scans, trusted_context=None)` với 1–5
+RAW cùng thẻ. Engine nhận dạng Unicode, UTF-8 mojibake, byte đặc biệt, mã số
+Unicode, OEM và HTML/percent; giải mã từng từ rồi xét ngữ cảnh cả câu; trả kết quả,
+gợi ý từng trường và bằng chứng nguồn.
+Đọc [quy tắc QR và mở rộng profile](references/cccd-qr-normalization.md) khi gặp
+kiểu lỗi mới. Không tạo normalizer riêng cho mỗi hãng máy.
+
+Popup dùng `CCCD.analyze()` gọi POST `banle/khach-hang/qr/phan-tich/`. **Máy chủ là
+nơi xếp hạng duy nhất**. JavaScript giữ RAW, chống phản hồi cũ và hiển thị gợi ý;
+không tự dùng helper offline `CCCD.parse()` thay kết quả server khi mất kết nối.
+
+### Công cụ dạy thêm mẫu ngay trên web
+
+Mở `/banle/khach-hang/qr/cong-cu/` hoặc bấm **Dạy bộ đọc QR** ở trang khách hàng/
+popup. Nhập **RAW → kết quả đúng → Áp dụng — học mẫu** là phê duyệt lưu cặp đó
+vào kho dùng chung `var/private/qr/learned_rules.json`, có hiệu lực ở lượt quét
+tiếp theo, không cần sửa SKILL.md hay khởi động web. `Xem thử` không ghi. Có Sửa,
+Tạm tắt/Bật lại, kiểm tra phiên bản đồng thời, lịch sử thay đổi và chống lưu trùng.
+
+- Đây là học mẫu được người dùng dạy rõ ràng, không tự huấn luyện từ mọi lượt quét.
+- `apps/pos/cccd_learning.py` giữ một nguồn quy tắc cho engine, công cụ và CLI của
+  skill. Luôn dùng engine này; không chỉ đọc bảng mã trong Markdown để bỏ qua mẫu mới.
+- Cụm chữ khớp nguyên từ/cụm trong tên/địa chỉ, có chọn phạm vi; ưu tiên cụm dài.
+  Thay đúng một lần trên RAW gốc; kết quả được dạy không đưa qua giải mã lại.
+- Toàn QR chỉ khớp mẫu đầy đủ; số CCCD/CMND/ngày được khóa khi học. Không tự mở
+  rộng một hiệu chỉnh nội dung thành quy tắc bảng mã chung.
+- Người dùng đã duyệt bốn cặp: `KhaV259nC226n → Kha Vạn Cân`,
+  `ñp Tríi L≥n → Ấp Trại Lớn`, `Phan Minh Ngh)a → Phan Minh Nghĩa`,
+  `Ph░íng, Sαi, Ph432417ng S417n → Phương Sài, Phường Tây`.
+  Cặp cuối đổi nội dung theo chỉ định: chỉ áp nguyên cụm RAW đó, không đổi mọi
+  `Phương Sơn` thành `Phường Tây`. Quy tắc học có nguồn riêng, ưu tiên hơn giải mã.
+- Chỉ tài khoản quản trị được ghi mẫu chung. Khi dùng nút Áp dụng để dạy, RAW và
+  output được lưu có chủ đích trong file private (ngoài Git); lượt quét thường vẫn
+  không lưu RAW. Khi chuyển máy phải chuyển cả hai file model và learned_rules.
+
+- Điểm gợi ý là điểm quy tắc, không phải xác suất chính xác. Dữ liệu mã hóa cần
+  đối chiếu trước khi áp dụng; phân tích QR không gọi UPSERT.
+- `í` OEM có thể xuất phát từ `ơ` hoặc `ạ`. Giữ các khả năng khi chưa đủ bằng chứng.
+- Người dùng đã xác nhận **cột D trong `mã CCCD.xlsx` là đáp án đúng**. Dùng D để
+  đo khớp toàn QR, từng trường và cập nhật ngữ cảnh đã duyệt; không tự hạ D xuống
+  dữ liệu tham khảo. Các nguồn khác vẫn cần xác nhận trước khi dùng làm đáp án.
+- Phân biệt giải mã ký tự với hiệu chỉnh theo mẫu đã duyệt: `Thơi → Thới`,
+  `Lòn → Lớn` không phải phép đổi bảng mã. Chỉ áp hiệu chỉnh mẫu khi fingerprint
+  **tất cả trường RAW** khớp; không tra khách theo tên/CCCD riêng rồi ghi đè.
+- Không đếm `|` để quyết định QR hợp lệ. Dùng CCCD, CMND cũ, ngày sinh, giới tính,
+  ngày cấp làm mốc; giữ trường mở rộng, báo khi ranh giới không đủ bằng chứng.
+- RAW quét thường chỉ ở bộ nhớ/request. Model được duyệt ở `var/private/qr/approved_context.json`
+  gồm hash toàn trường RAW, đáp án và từ/cụm từ, được loại khỏi Git. Không tự học
+  từ lượt quét chưa duyệt; fixture mới dùng dữ liệu giả.
+- Dùng CLI gọi cùng engine, không sao chép thuật toán:
+  `python .claude/skills/chuan-hoa-tieng-viet/scripts/normalize_cccd_qr.py --xlsx <file.xlsx> --summary`.
+- Đo khớp D bằng `--benchmark --leave-one-out`. Báo riêng kết quả giải mã khi bỏ
+  đáp án của thẻ đang thử khỏi ngữ cảnh và kết quả có đối chiếu mẫu đã duyệt.
+  Không dùng tỷ lệ tra đúng mẫu có sẵn để khẳng định chính xác trên thẻ mới.
+- Kiểm thử `python -m unittest tests.test_cccd tests.test_customer` và
+  `node --test tests/qr.test.cjs`. Không chạy `smoke_ui` cho tác vụ chỉ phân tích:
+  bộ kiểm thử đó có thể thao tác đơn hàng thật.
+- Khi sửa công cụ học, chạy thêm `tests.test_qr_learning` và `tests/qr_learning.test.cjs`;
+  kiểm tra cặp mới có hiệu lực trong popup đang mở ở tab khác.
+
+## Văn bản rời và các helper hiện có
+
+Hai bản helper văn bản CÙNG một thuật toán, phải sửa SONG SONG khi thay đổi:
 - Máy chủ: `apps/pos/vn_text.py` — `chuan_hoa(s)` → `(text, canh_bao)`
 - Trình duyệt: `static/js/vn_text.js` — `VNText.chuanHoa(s)` → `{text, canhBao}`
 
@@ -41,19 +105,22 @@ Gom lại thành byte rồi `bytes.decode("utf-8")`.
 - Byte 0x80–0x9F **CÓ** ký tự trong CP1252 → **bị nuốt** (0x83 của `ă` → `ƒ` → mất)
 - Byte **KHÔNG** có (0x81 0x8D 0x8F 0x90 0x9D) → **sống sót** thành số (0x8D của `ọ`)
 
-Khớp 100% mẫu thật. `sua_byte_mat()` điền lại **KHI VÀ CHỈ KHI còn đúng MỘT khả năng**:
+Đây là giả thuyết phù hợp bộ mẫu cũ, không phải quy luật chung cho mọi máy.
+`sua_byte_mat()` đề xuất khi còn một khả năng trong tập giả định của helper:
 lọc ứng viên theo hoa/thường của chữ liền kề, và theo vị trí (kẹp giữa 2 phụ âm ⇒ phải là
-nguyên âm). `N?m` → chỉ còn `ă` → `Năm`. Từ 2 khả năng trở lên thì **giữ `?`**.
+nguyên âm). Việc dựng lại byte vẫn phải cảnh báo đối chiếu. Từ 2 khả năng trở lên
+thì giữ ký tự chưa rõ và đưa gợi ý, không tuyên bố đã giải mã chắc chắn.
 
 ## LUẬT
 
-1. **KHÔNG BỊA.** Còn từ 2 khả năng thì để `?` và báo qua `canh_bao` — tên/địa chỉ khách
-   sai còn tệ hơn thiếu dấu.
+1. **KHÔNG BỊA.** Byte không phục hồi được thì giữ dấu thiếu và cảnh báo. Khi có
+   nhiều ứng viên, QR trả gợi ý xếp hạng cùng phương án khác và yêu cầu đối chiếu;
+   không tuyên bố gợi ý có xác suất chính xác tuyệt đối.
 2. **Luôn hiện `canh_bao` cho người dùng** (popup khách hàng in dưới ô quét màu cam).
 3. **Chấm điểm mojibake phải TRỪ ký tự rác.** Bản hỏng cũng chứa sẵn `á â`, nếu chỉ cộng
    điểm chữ có dấu thì hai bản hòa nhau và không sửa gì — lỗi này đã dính một lần.
-4. **Gốc rễ**: quét THẲNG vào ô nhập của web thì không hỏng gì cả (trình duyệt nhận
-   Unicode đúng). Hỏng là do đi vòng qua clipboard/Excel. Nhắc người dùng quét thẳng.
+4. Máy quét kiểu bàn phím có thể hỏng ngay khi quét vào web. Code page, chế độ xuất
+   và phần mềm nhận đều có thể ảnh hưởng; không khẳng định clipboard là nguyên nhân duy nhất.
 5. Sửa `vn_text.py` thì phải sửa `vn_text.js` y hệt, rồi chạy lại bộ thử.
 
 ## Bộ thử (chạy trước khi commit)
@@ -72,7 +139,9 @@ Bắt buộc có trong bộ thử: chuỗi **vốn đã đúng** phải trả v�
 
 ## Định dạng mã QR thẻ CCCD gắn chip
 
-7 trường ngăn bằng `|`:
+Lược đồ nghiệp vụ có 7 trường (dạng thông thường dùng 6 dấu `|`):
 `số CCCD | số CMND cũ | họ tên | ngày sinh ddmmyyyy | giới tính | địa chỉ | ngày cấp ddmmyyyy`
-Đọc bằng `apps/pos/cccd.py::parse()` (đã tự gọi `chuan_hoa`). Quy ước dự án: ô `CMND` của
+Máy có thể thiếu/lặp dấu phân cách, ký tự hỏng có thể chứa pipe và QR có thể có
+trường mở rộng. `split_raw()` phân tích theo mốc, không cố định số pipe.
+Đọc bằng `apps/pos/cccd.py::parse()` hoặc `normalize_cccd_group()`. Quy ước dự án: ô `CMND` của
 `I_CUSTOMER` lưu **số CCCD 12 số** (GĐ chốt 03/09/2026).

@@ -1,0 +1,26 @@
+.qrl-layout{max-width:1180px;margin:auto;display:grid;gap:20px}
+.qrl-card{padding:22px;border:1px solid var(--gold-300);border-radius:14px;background:var(--white);box-shadow:0 4px 20px #30241008}
+.qrl-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}
+.qrl-heading h2{font-size:18px;margin:0;color:var(--ink-900)}
+.qrl-badge{padding:5px 10px;border-radius:20px;background:var(--gold-100);color:var(--gold-700);font-size:12px;white-space:nowrap}
+.qrl-pair,.qrl-comparison{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.qrl-pair textarea{width:100%;min-height:140px;resize:vertical;line-height:1.6}
+.qrl-pair #qrl-raw{font-family:var(--f-mono)}
+.qrl-scope{max-width:480px;margin-top:16px}
+.qrl-note{font-size:13px;line-height:1.6;color:var(--ink-600);margin:12px 0}
+.qrl-actions{display:flex;gap:9px;flex-wrap:wrap}
+.qrl-status{font-size:14px;line-height:1.6;color:var(--jade-500);margin:14px 0 0;white-space:pre-wrap}
+.qrl-status.is-error{color:var(--flame-500)}
+.qrl-comparison{border-top:1px solid var(--gold-300);padding-top:15px;margin-top:18px}
+.qrl-comparison[hidden]{display:none}
+.qrl-comparison h3{font-size:12px;color:var(--ink-600);margin:0 0 7px}
+.qrl-comparison pre{font-family:inherit;margin:0;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.qrl-count{font-size:13px;font-weight:400;color:var(--ink-600)}
+.qrl-rule{border-top:1px solid var(--gold-300);padding:16px 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:16px;align-items:start}
+.qrl-rule:first-child{border-top:0;padding-top:0}
+.qrl-rule p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6}
+.qrl-rule small{display:block;color:var(--ink-600);font-size:12px;margin-bottom:5px}
+.qrl-rule.is-off{opacity:.62}
+.qrl-rule-actions{display:flex;gap:8px;flex-wrap:wrap}
+.qrl-empty{color:var(--ink-600);padding:10px 0}
+@media(max-width:720px){.qrl-card{padding:16px}.qrl-pair,.qrl-comparison,.qrl-rule{grid-template-columns:minmax(0,1fr)}.qrl-heading{align-items:flex-start;flex-wrap:wrap}.qrl-actions .khbl-btn{flex:1}.qrl-rule{gap:10px}}

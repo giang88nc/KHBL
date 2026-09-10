@@ -433,7 +433,7 @@ def loai_vang_thau():
 
 # ─────────────────────────── HÓA ĐƠN TRONG NGÀY ───────────────────────────
 
-def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=500):
+def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=500, force_live=False):
     """Danh sách hóa đơn có lọc.
 
     Quy ước vận hành (GĐ chốt 07/09/2026, chung toàn hệ `hist_read.la_qua_khu(d1, d2)`):
@@ -442,7 +442,7 @@ def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=50
     ``loai`` là BAN / BAN_DOI / THAU.
     """
     from apps.pmv import hist_read as HR
-    live = not HR.la_qua_khu(d1, d2)
+    live = force_live or not HR.la_qua_khu(d1, d2)
     c = PmvClient("kk" if live else "hist", tag="hd_kk" if live else "hd_hist")
     key = (khach or "").strip()
     loai, emp_id, trang_thai = (loai or "").strip(), (emp_id or "").strip(), (trang_thai or "").strip().upper()

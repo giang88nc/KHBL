@@ -551,7 +551,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .kh-qr-review th{background:var(--gold-100);color:var(--gold-700)}
 .kh-qr-review th:first-child{width:20%}
 #kh-qr-discard{margin-bottom:12px}
-#kh-qr-discard[hidden]{display:none}
+#kh-qr-discard[hidden],#kh-qr-more[hidden]{display:none}
 .kh-anh{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .kh-anh__item{min-width:0;padding:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
 .kh-anh__item>b{display:block;margin-bottom:6px;font-size:12px;color:var(--ink-600)}
@@ -872,6 +872,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pg-tb--ds thead th:last-child{border-top-right-radius:6px}
 .pg-tb--ds thead th.pg-ds__th-tra{background:var(--gold-300);color:var(--ink-900)}
 .pg-tb--ds td.pg-ds__td-tra{background:#FDFAF0;line-height:1.25}
+.pg-ds__da-ck{color:#166534!important;font-weight:700}
+.pg-ds__ma{display:block}                      /* mỗi mã phiếu một dòng trong ô SỐ PHIẾU (gộp nhóm 10/09/2026) */
+.pg-ds__ma + .pg-ds__ma{margin-top:1px}
 /* 08/09 chiều: dòng 2 cột KHÁCH TRẢ = ⚡ phần thẻ/CK (CardPay KK); 0 thì mờ */
 .pg-ds__the{display:block;font-size:10.5px;font-weight:600;white-space:nowrap}
 .pg-ds__the--du{color:#1E5B32}.pg-ds__the--lech{color:#B3402A}

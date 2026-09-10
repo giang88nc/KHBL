@@ -1,4 +1,4 @@
-/* Bộ đọc QR thuần dữ liệu; cùng quy tắc với apps/pos/cccd.py. Không sửa DOM / gửi mạng. */
+/* API transport for the canonical server engine; parse() is a legacy offline helper. */
 (function (g) {
   "use strict";
   function ngay(s) {
@@ -12,9 +12,10 @@
   function parse(raw) {
     var loi = [], cb = [], thieu = [], p = String(raw || "").trim().split("|").map(function (v) { return v.trim(); });
     var result = { data: null, loi: loi, canh_bao: cb, thieu: thieu };
-    if (String(raw || "").length > 8192 || p.length !== 7) {
-      loi.push("Chuỗi quét cần đúng 7 trường ngăn bằng dấu |. Hãy quét lại đầy đủ."); return result;
+    if (String(raw || "").length > 8192 || p.length < 7) {
+      loi.push("Cần phân tích trên máy chủ để xác định các trường của chuỗi quét này."); return result;
     }
+    if (p.slice(7).some(function (value) { return !!value; })) cb.push("QR có trường mở rộng sau ngày cấp; đối chiếu dữ liệu trên máy chủ.");
     if (!/^[0-9]{12}$/.test(p[0])) loi.push("Số CCCD trong QR phải gồm đúng 12 chữ số.");
     if (p[1] && !/^[0-9]{9}$/.test(p[1])) loi.push("Số CMND cũ phải gồm 9 chữ số hoặc để trống.");
     function text(value, label) {
@@ -42,5 +43,18 @@
       ngay_sinh: sinh, gioi_tinh: gt, dia_chi: dc, ngay_cap: cap, canh_bao: cb };
     return result;
   }
-  g.CCCD = { parse: parse, ngay: ngay };
+  // Ranked normalization has one authoritative engine on the server. This
+  // transport sends RAW untouched; parse() remains the legacy offline helper.
+  async function analyze(url, scans, csrf) {
+    var response = await g.fetch(url, {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
+      body: JSON.stringify({scans: scans})
+    });
+    if (response.redirected || response.status === 401 || response.status === 403)
+      throw new Error("Phiên đăng nhập đã hết hoặc không hợp lệ. Tải lại trang và đăng nhập rồi quét lại.");
+    if (!response.ok) throw new Error("Chưa phân tích được mã quét. Kiểm tra kết nối và thử lại.");
+    return response.json();
+  }
+  g.CCCD = { parse: parse, ngay: ngay, analyze: analyze };
 })(window);

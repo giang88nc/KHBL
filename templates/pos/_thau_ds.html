@@ -1,6 +1,8 @@
 {% extends ds_base|default:"partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
 Popup DANH SÁCH phiếu thâu — cùng kiểu popup Hóa đơn bán (80vw · lọc d1→d2/NV/khách/trạng thái · thống kê đầu popup).
-Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (ThauNhom). MỞ → nạp cả nhóm lên form.
+GĐ chốt 10/09/2026: mỗi dòng = MỘT NHÓM phiếu (các dòng vàng thâu cùng lượt gom lại), phiếu lẻ đứng riêng.
+Cột SỐ PHIẾU in mỗi mã một dòng; cột TIỆM TRẢ dòng trên là tổng tiền thâu, dòng dưới là tổng tiền chuyển khoản.
+MỞ → nạp cả nhóm lên form.
 {% endcomment %}
 {% block modal_style %}width:80vw;max-width:80vw{% endblock %}
 {% block modal_title %}<span class="pg-ds__ttl"><em>Phiếu thâu vàng</em></span>{% endblock %}
@@ -9,7 +11,7 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
   <b>{% if nhieu_ngay %}{{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }} → {{ d2|slice:"8:10" }}/{{ d2|slice:"5:7" }}/{{ d2|slice:":4" }}{% else %}Ngày {{ d1|slice:"8:10" }}/{{ d1|slice:"5:7" }}/{{ d1|slice:":4" }}{% endif %}</b>
   {% if loc.emp_id or loc.khach or loc.trang_thai %}<span class="pg-ds__nguon">đang lọc</span>{% endif %}
   {% if nguon_hist %}<span class="pg-ds__nguon">📚 kho lịch sử</span>{% else %}<span class="pg-ds__nguon pg-ds__nguon--live">● trực tiếp máy KK</span>{% endif %}
-  <i>{{ tk.so }} phiếu</i>
+  <i>{{ tk.so }} phiếu{% if ds|length != tk.so %} · {{ ds|length }} lượt thâu{% endif %}</i>
 </span>
 {% if not standalone %}<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>{% endif %}
 {% endblock %}
@@ -44,22 +46,28 @@ Mỗi dòng = 1 TRN_RT_BUYGOLD; cột NHÓM = số dòng cùng phiếu web (Thau
     </tr></thead>
     <tbody>
       {% for b in ds %}
-      <tr {% if b.IsDel != "0" %}class="hd-row--cancelled"{% endif %} data-th-row="{{ b.TrnID }}">
+      <tr {% if b.da_huy %}class="hd-row--cancelled"{% endif %} data-th-row="{{ b.mo_id }}">
         <td class="mono">{% if nhieu_ngay %}<span class="dim">{{ b.TrnDate|date:"d/m" }}</span> {% endif %}{{ b.TrnTime|slice:":5" }}</td>
-        <td class="mono b">{{ b.BillCode|default:b.TrnID }}</td>
+        <td class="mono b">{% for ma in b.ma_phieu %}<span class="pg-ds__ma">{{ ma }}</span>{% endfor %}</td>
         <td>{{ b.CustName|default:"Khách lẻ" }}{% if b.Phone %} <i class="pg-tb__phu">{{ b.Phone }}</i>{% endif %}</td>
         <td>{{ b.EmpName|default:"—" }}</td>
-        <td class="dim">{% if b.nhom %}<span title="Phiếu web #{{ b.nhom }} gồm {{ b.nhom_n }} dòng">⧉ {{ b.nhom_n }}</span>{% else %}—{% endif %}</td>
-        <td class="r mono b pg-ds__td-tra">{{ b.SoTien|tien_tran }}</td>
-        <td>{% if b.IsDel != "0" %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>{% elif b.Status == "C" %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
+        <td class="dim">{% if b.so_dong > 1 %}<span title="Gồm {{ b.so_dong }} dòng vàng thâu cùng lượt">⧉ {{ b.so_dong }}</span>{% else %}—{% endif %}</td>
+        <td class="r mono b pg-ds__td-tra">{{ b.tong_tien|tien_tran }}
+          {% if b.tong_ck %}<i class="pg-tb__phu">CK {{ b.tong_ck|tien_tran }}</i>{% else %}<i class="pg-tb__phu">tiền mặt</i>{% endif %}</td>
+        <td>{% if b.da_huy %}<span class="khbl-badge khbl-badge--do">Đã hủy</span>{% elif b.chot %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}
+          {% if b.co_huy and not b.da_huy %}<i class="pg-tb__phu">có dòng đã hủy</i>{% endif %}
+          {% if b.da_xac_nhan %}<i class="pg-tb__phu pg-ds__da-ck">✓ đã xác nhận CK</i>{% endif %}</td>
         <td class="r">
-          {% if b.IsDel == "0" %}
+          {% if not b.da_huy %}
+          {% if b.da_xac_nhan %}
+          {# Đã đối soát đủ tiền chuyển khoản → chỉ cho XEM, không mở ra sửa nữa (GĐ chốt 10/09/2026) #}
+          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Đã xác nhận chuyển khoản — chỉ xem, không sửa được nữa"
+                  hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ b.mo_id }}" hx-target="#modal-root" hx-swap="innerHTML">XEM</button>
+          {% else %}
           <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Mở lên form (cả nhóm dòng)"
-                  hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.TrnID }}"{% if standalone %}, "from_list_page": "1"{% endif %}}' hx-swap="none">MỞ</button>
-          {% if b.Status == "C" %}
-          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="In phiếu 110mm"
-                  hx-get="{% url 'pos:thau_in' %}?trn_id={{ b.TrnID }}&oob=1" hx-swap="none" hx-on::after-request="closeKhblModal()">🖨</button>
+                  hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.mo_id }}"{% if standalone %}, "from_list_page": "1"{% endif %}}' hx-swap="none">MỞ</button>
           {% endif %}
+          {% if b.chot %}<button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" disabled title="{{ khoa_in_msg }}">🖨</button>{% endif %}
           {% endif %}
         </td>
       </tr>

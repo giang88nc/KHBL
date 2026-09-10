@@ -1,11 +1,21 @@
 from django.urls import path
 
 from . import views
+from . import qr_learning_views
+from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
 
 app_name = "pos"
 
 urlpatterns = [
+    path("banle/khach-hang/qr/cong-cu/", qr_learning_views.tool, name="qr_learning"),
+    path("banle/khach-hang/qr/hoc/xem-thu/", qr_learning_views.preview, name="qr_learning_preview"),
+    path("banle/khach-hang/qr/hoc/ap-dung/", qr_learning_views.save, name="qr_learning_save"),
+    path("banle/thau-vao-2/", thau_list.listing, name="thau_vao_2"),
+    path("banle/thau-vao-2/xem/", thau_list.detail, name="thau_vao_2_xem"),
+    path("banle/thau-vao-2/doi-soat/", thau_payments.action, name="thau_vao_2_payment"),
+    path("banle/thau-vao-2/xuat-ncc/", thau_xuat.xuat_ncc, name="thau_vao_2_xuat_ncc"),      # ⬇ Excel danh mục NCC (10/09)
+    path("banle/thau-vao-2/in-cccd/", thau_xuat.in_cccd, name="thau_vao_2_in_cccd"),         # 🪪 Word ảnh CCCD cỡ thật
     path("banle/chuyen-khoan/doi-soat/", bank_reconcile.reconcile_view, name="chuyen_khoan_doi_soat"),
     path("banle/canh-bao/<str:key>/", dashboard_alerts.detail_view, name="dashboard_alert_detail"),
     path("banle/chuyen-khoan/", transfers.transfers, name="chuyen_khoan"),
@@ -89,6 +99,7 @@ urlpatterns = [
     path("banle/khach-hang/", views.khach_hang, name="khach_hang"),
     path("banle/khach-hang/them/", views.khach_form, name="khach_them"),
     path("banle/khach-hang/luu/", views.khach_luu, name="khach_luu"),
+    path("banle/khach-hang/qr/phan-tich/", views.khach_qr_phan_tich, name="khach_qr_phan_tich"),
     path("banle/khach-hang/anh/cat/", VT.khach_anh_cat, name="khach_anh_cat"),            # ✂ popup khách (10/09) — tái dùng AC.cat_cccd
     path("banle/khach-hang/anh/cat/luu/", VT.khach_anh_cat_luu, name="khach_anh_cat_luu"),
     path("banle/khach-hang/<str:cust_id>/anh/<str:kind>/", views.khach_anh, name="khach_anh"),

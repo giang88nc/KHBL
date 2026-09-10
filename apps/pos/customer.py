@@ -6,9 +6,13 @@ UPSERT bị từ chối do trùng hoặc sai dữ liệu không thể để lạ
 """
 from io import BytesIO
 from collections import OrderedDict
+import logging
+import os
+from pathlib import Path
 import re
 import threading
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -16,6 +20,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from apps.pmv.client import PmvClient, PmvProcError
 
 from .vn_text import KY_TU_HONG, bo_dau, chuan_hoa, hoa_dau_tu
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerSaveError(Exception):
@@ -43,6 +49,12 @@ IMAGE_PARAM_PATHS = {
     "p_ImageDataMatTruoc": ("ImagePathMatTruoc", "CCCD mặt trước"),
     "p_ImageDataMatSau": ("ImagePathMatSau", "CCCD mặt sau"),
 }
+ARCHIVE_IMAGE_PARAMS = {
+    "p_ImageData": "dai-dien",
+    "p_ImageDataMatTruoc": "mat-truoc",
+    "p_ImageDataMatSau": "mat-sau",
+}
+LOCAL_IMAGE_SUFFIX = {"dai-dien": "DD", "mat-truoc": "MT", "mat-sau": "MS"}
 MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PIXELS = 25_000_000
 
@@ -239,6 +251,7 @@ def upsert(data, images, shop_id="", client=None):
                 if not path:
                     raise CustomerSaveError(f"{label}: PMV chưa ghi đường dẫn tệp ảnh")
                 _validated_image(client, path)
+            archive_images(images, after_image, client)
         except Exception as exc:
             incomplete.append("Chưa lưu/kiểm tra được ảnh: " + error_message(exc))
 
@@ -316,42 +329,166 @@ def cap_nhat_anh(cust_id, images, client=None):
         raise CustomerSaveError(_proc_error(exc)) from exc
     after = _current(client, cust_id) or {}
     for data_param, (path_field, label) in IMAGE_PARAM_PATHS.items():
-        if data_param in images and not after.get(path_field):
-            raise CustomerSaveError(f"{label}: PMV chưa ghi đường dẫn tệp ảnh")
+        if data_param in images:
+            if not after.get(path_field):
+                raise CustomerSaveError(f"{label}: PMV chưa ghi đường dẫn tệp ảnh")
+            _validated_image(client, after[path_field])
+    archive_images(images, after, client)
     return after
 
 
 def saved_image(cust_id, kind, client=None):
-    """Đọc và kiểm tra một ảnh đã lưu, không nhận đường dẫn từ phía trình duyệt."""
+    """Đọc ảnh hồ sơ theo thứ tự: kho riêng web → PMV hiện hành → máy KK.
+
+    Tuyệt đối không dùng ``ImagePath*`` PMV như một đường dẫn local: nó là đường
+    dẫn vật lý của máy KK và vẫn giữ nguyên khi đồng bộ PMV về máy Giang.
+    """
     if kind not in SAVED_IMAGE_FIELDS:
         raise CustomerSaveError("Loại ảnh không hợp lệ")
     client = client or PmvClient(tag="khach_anh")
-    current = _current(client, cust_id)
-    if not current:
-        raise CustomerSaveError("Không tìm thấy khách hàng")
-    field, label = SAVED_IMAGE_FIELDS[kind]
-    path = current.get(field)
-    if not path:
-        raise CustomerSaveError(f"{label}: chưa có ảnh đã lưu")
-    return _validated_image(client, path)
+    clients = [client]
+    # Dữ liệu sandbox có thể là bản đồng bộ từ KK nhưng chỉ chứa ImagePath KK.
+    # Lần rơi này đọc thẳng KK để dữ liệu cũ vẫn xem được trước khi được lưu lại.
+    if client.target != "kk":
+        clients.append(PmvClient("kk", tag="khach_anh_kk"))
+    errors = []
+    for source in clients:
+        try:
+            current = _current(source, cust_id)
+            if not current:
+                raise CustomerSaveError("Không tìm thấy khách hàng")
+            field, label = SAVED_IMAGE_FIELDS[kind]
+            path = current.get(field)
+            if not path:
+                raise CustomerSaveError(f"{label}: chưa có ảnh đã lưu")
+            local = _archive_current(current, kind)
+            if local:
+                return local
+            image = _validated_image(source, path)
+            # Di trú lười dữ liệu đã có: bản PMV cũ chỉ có đường dẫn vật lý KK.
+            # Lỗi ghi cache không được chặn việc xem ảnh hợp lệ từ PMV.
+            try:
+                _archive_one(current, kind, image[0])
+            except Exception:
+                logger.exception("Không cache được ảnh PMV %s/%s vào kho private", cust_id, kind)
+            return image
+        except CustomerSaveError as exc:
+            errors.append(str(exc))
+    raise CustomerSaveError(errors[-1] if errors else "Không đọc được ảnh đã lưu")
 
 
-def _validated_image(client, path):
-    data = client.image_file(path)
+def archive_images(images, current, client):
+    """Ghi bản local sau khi UPSERT PMV đã được đọc kiểm.
+
+    CCCD local luôn có tên ``CustID_ten_khong_dau_MT|MS.jpg`` ở ``media/cccd``;
+    không có thư mục mã khách. PMV vẫn độc lập, giữ đường dẫn/tên vendor của nó.
+    """
+    for data_param, kind in ARCHIVE_IMAGE_PARAMS.items():
+        if data_param not in images:
+            continue
+        try:
+            path_field, _ = IMAGE_PARAM_PATHS[data_param]
+            pmv_path = current.get(path_field)
+            if not pmv_path:
+                raise CustomerSaveError("PMV chưa trả đường dẫn ảnh")
+            data, _ = _validated_image(client, pmv_path)
+            _archive_one(current, kind, data)
+        except Exception as exc:
+            raise CustomerSaveError(f"{SAVED_IMAGE_FIELDS[kind][1]}: không lưu được bản sao web ({error_message(exc)})") from exc
+
+
+def _archive_root():
+    return Path(settings.CUSTOMER_IMAGE_ARCHIVE_ROOT)
+
+
+def _archive_name(current, kind):
+    """Tên local ổn định: CustID_ten_khong_dau_MT|MS|DD.jpg."""
+    cust_id = re.sub(r"[^A-Za-z0-9_-]", "", str((current or {}).get("CustID") or ""))
+    raw_name = bo_dau(str((current or {}).get("CustName") or "")).lower()
+    cust_name = re.sub(r"[^a-z0-9]+", "_", raw_name).strip("_")[:100]
+    if not cust_id or not cust_name or kind not in LOCAL_IMAGE_SUFFIX:
+        raise CustomerSaveError("Không đủ mã hoặc tên khách để đặt tên ảnh local")
+    return f"{cust_id}_{cust_name}_{LOCAL_IMAGE_SUFFIX[kind]}.jpg"
+
+
+def _atomic_write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _archive_one(current, kind, data):
+    """Nén JPEG local, giữ ảnh rõ để đọc CCCD nhưng tránh lưu bản PMV quá lớn."""
+    _validated_bytes(data)
+    _atomic_write(_archive_root() / _archive_name(current, kind), _compress_archive_image(data, kind))
+
+
+def _archive_current(current, kind):
+    try:
+        return _validated_bytes((_archive_root() / _archive_name(current, kind)).read_bytes())
+    except (OSError, CustomerSaveError):
+        return None
+
+
+def _compress_archive_image(data, kind):
+    """Ảnh CCCD: ưu tiên đọc rõ, rồi giảm cạnh/quality tới mức nhỏ nhất hợp lý."""
+    limits = {
+        "dai-dien": (1000, 140_000),
+        "mat-truoc": (1600, 320_000),
+        "mat-sau": (1600, 320_000),
+    }
+    max_edge, target = limits[kind]
+    with Image.open(BytesIO(data)) as source:
+        source.load()
+        source = ImageOps.exif_transpose(source).convert("RGB")
+        best = None
+        for edge in (max_edge, min(max_edge, 1400), min(max_edge, 1200), 1000):
+            image = source.copy()
+            image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
+            for quality in (80, 76, 72, 68, 64, 60, 56):
+                out = BytesIO()
+                image.save(out, "JPEG", quality=quality, optimize=True, progressive=True, subsampling="4:2:0")
+                encoded = out.getvalue()
+                if best is None or len(encoded) < len(best):
+                    best = encoded
+                if len(encoded) <= target:
+                    return encoded
+    return best
+
+
+def _validated_bytes(data):
     if not data:
-        raise CustomerSaveError("Tệp ảnh rỗng hoặc không tồn tại trên máy PMV")
+        raise CustomerSaveError("Tệp ảnh rỗng hoặc không tồn tại")
     if len(data) > MAX_UPLOAD:
-        raise CustomerSaveError("Tệp ảnh đã lưu lớn quá 15 MB")
+        raise CustomerSaveError("Tệp ảnh lớn quá 15 MB")
     try:
         with Image.open(BytesIO(data)) as image:
             fmt = (image.format or "").upper()
             image.verify()
     except (UnidentifiedImageError, OSError, ValueError) as exc:
-        raise CustomerSaveError("Tệp trên máy PMV không phải ảnh hợp lệ") from exc
+        raise CustomerSaveError("Tệp ảnh không phải ảnh hợp lệ") from exc
     content_type = {"JPEG": "image/jpeg", "PNG": "image/png"}.get(fmt)
     if not content_type:
-        raise CustomerSaveError(f"Định dạng ảnh đã lưu không được hỗ trợ ({fmt or 'không xác định'})")
+        raise CustomerSaveError(f"Định dạng ảnh không được hỗ trợ ({fmt or 'không xác định'})")
     return data, content_type
+
+
+def _validated_image(client, path):
+    data = client.image_file(path)
+    try:
+        return _validated_bytes(data)
+    except CustomerSaveError as exc:
+        raise CustomerSaveError("Tệp ảnh trên máy PMV: " + str(exc)) from exc
 
 
 def _has_points(client, cust_id):

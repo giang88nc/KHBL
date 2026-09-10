@@ -57,7 +57,7 @@ gợi ý BỚT LẺ; phương thức tiền mặt / chuyển khoản / thẻ v�
         <label class="pg-tong__r pg-tong__r--nhap"><span>Tên chủ TK</span>
           <input name="ck_ten" id="o-ckten" class="khbl-input r" maxlength="100" autocomplete="off" value="{{ g.ck_ten }}" placeholder="tên trên tài khoản"></label>
         <label class="pg-tong__r pg-tong__r--nhap"><span>Nội dung</span>
-          <input name="ck_nd" id="o-cknd" class="khbl-input mono r" maxlength="25" autocomplete="off" value="{{ g.ck_nd|default:ck_nd_mac_dinh }}" placeholder="mã phiếu"></label>
+          <input name="ck_nd" id="o-cknd" class="khbl-input mono r" maxlength="25" autocomplete="off" value="{{ ck_nd_mac_dinh }}" placeholder="THANH TOAN TIEN VANG …"></label>
       </div>
       {% else %}
       <input type="hidden" name="tien_mat" value="">

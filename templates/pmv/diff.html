@@ -1,13 +1,12 @@
-{% load l10n %}<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KHBL — So sánh 2 SQL</title>
-<style>
-  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+{% extends "pmv/base.html" %}
+{% load l10n %}
+{% block title %}So sánh 2 SQL{% endblock %}
+{% block system_head %}<style>
+@scope (.sys-content) {
+
+  
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  
   .wrap { max-width:1100px; margin:0 auto; padding:24px 16px; }
   h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0 0 2px; }
   .nav { margin-bottom:16px; }
@@ -42,21 +41,16 @@
   .snaps { margin-top:22px; }
   .snaps table td { font-size:12px; }
   .muted { color:#a8a29e; }
-</style>
-</head>
-<body>
+
+}
+</style>{% endblock %}
+{% block system_content %}
+
 <div class="wrap">
   <h1>So sánh 2 SQL</h1>
-  <div class="nav">
-    <a href="{% url 'pmv:status' %}">Trạng thái</a>
-    <a href="{% url 'pmv:diff' %}" class="active">So sánh SQL</a>
-    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
-    <a href="{% url 'pmv:quy_trinh' %}">Quy trình</a>
-    <a href="{% url 'pmv:hist' %}">Kho lịch sử</a>
-    <span style="float:right;font-size:12px;color:#78716c">{{ request.user.first_name|default:request.user.username }} · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="background:none;border:0;color:var(--gold-700);cursor:pointer;padding:0;font-size:12px">Đăng xuất</button></form></span>
-  </div>
+  
 
-  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  
 
   <form method="post" action="{% url 'pmv:sync_now' %}" class="bar" style="border-top:3px solid var(--gold-500)"
         onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='⟳ Đang SYNC… (~1 phút, đừng tắt trang)'; return true;">
@@ -172,5 +166,5 @@
     </table>
   </div>
 </div>
-</body>
-</html>
+
+{% endblock %}

@@ -1,13 +1,12 @@
-{% load static %}<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KHBL — Kho lịch sử</title>
-<style>
-  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; }
+{% extends "pmv/base.html" %}
+{% load static %}
+{% block title %}Kho lịch sử{% endblock %}
+{% block system_head %}<style>
+@scope (.sys-content) {
+
+  
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--surface); color:var(--ink); font:14px/1.5 "Be Vietnam Pro", "Segoe UI", sans-serif; }
+  
   .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px; }
   h1 { font-family: "Cormorant Garamond", Georgia, serif; color: var(--gold-700); margin: 0 0 4px; }
   .sub { color:#78716c; margin-bottom:14px; }
@@ -40,25 +39,20 @@
   .msg-error   { border-color:#B3402A; background:#FDF2F0; color:#B3402A; }
   .log { background:#1C1917; color:#E4C56A; font:12px/1.45 Consolas,monospace; border-radius:8px; padding:10px 12px; max-height:260px; overflow:auto; white-space:pre-wrap; margin-bottom:12px; }
   .dim { color:#78716c; }
-</style>
-<script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
-</head>
-<body>
+
+}
+</style>{% endblock %}
+{% block system_content %}
+
 <div class="wrap">
   <h1>Kho lịch sử <span class="mono" style="font-size:16px">{{ hist_db }}</span></h1>
   <div class="sub">Bản sao ĐẦY ĐỦ từ máy KK (KK có thể dọn dữ liệu cũ — kho giữ mãi) · {{ hist_host }} ·
     tự đồng bộ <b>09:00 &amp; 21:00</b> · cửa sổ phát hiện đơn hủy (void) <b>{{ void_days }} ngày</b> ·
     KK chỉ ĐỌC, mọi ghi vào kho này.</div>
 
-  <div class="nav">
-    <a href="{% url 'pmv:status' %}">Trạng thái</a>
-    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
-    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
-    <a href="{% url 'pmv:quy_trinh' %}">Quy trình</a>
-    <a href="{% url 'pmv:hist' %}" class="active">Kho lịch sử</a>
-  </div>
+  
 
-  {% for m in messages %}<div class="msg msg-{{ m.tags }}">{{ m }}</div>{% endfor %}
+  
 
   <form method="post" action="{% url 'pmv:hist_action' %}" class="acts">
     {% csrf_token %}
@@ -71,5 +65,5 @@
 
   {% include "pmv/_hist_bang.html" %}
 </div>
-</body>
-</html>
+
+{% endblock %}

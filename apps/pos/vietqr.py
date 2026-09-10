@@ -132,7 +132,8 @@ def parse(chuoi):
     """Phân tích chuỗi VietQR (EMVCo). Trả dict {bin, bank_code, bank_ten, account, amount, info, hop_le, loi}.
     Chỉ nhận QR CHUYỂN KHOẢN chuẩn NAPAS: tag 38 chứa GUID A000000727 (QRIBFTTA) — QR khác → hop_le=False."""
     s = str(chuoi or "").strip()
-    kq = {"bin": "", "bank_code": "", "bank_ten": "", "account": "", "amount": 0, "info": "", "hop_le": False, "loi": ""}
+    kq = {"bin": "", "bank_code": "", "bank_ten": "", "account": "", "amount": 0, "info": "", "ten": "",
+          "hop_le": False, "loi": ""}
     if not s.startswith("000201"):
         kq["loi"] = "Không phải mã QR thanh toán EMVCo"
         return kq
@@ -152,6 +153,10 @@ def parse(chuoi):
                 kq["amount"] = int(float(val))
             except ValueError:
                 pass
+        elif idx == "59":
+            # EMVCo tag 59 = tên người thụ hưởng. App ngân hàng sinh QR cá nhân thường ghi sẵn tên chủ tài khoản
+            # (không dấu, tối đa 25 ký tự); QR tĩnh in ra cũng vậy. Có QR bỏ trống tag này nên đừng coi là bắt buộc.
+            kq["ten"] = " ".join(str(val or "").split())[:100]
         elif idx == "62":
             kq["info"] = dict(_tach_tlv(val)).get("08", "")
     if not kq["bin"] or not kq["account"]:
@@ -194,9 +199,18 @@ def doc_anh(data):
     return ""
 
 
-def payload(bank_code, account_no, amount=0, info=""):
+def khong_dau(s):
+    """Tên cho tag 59: bỏ dấu tiếng Việt, chỉ giữ chữ/số/khoảng trắng — QR chuẩn NAPAS dùng ASCII."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", str(s or "")).replace("đ", "d").replace("Đ", "D")
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return " ".join("".join(c if c.isalnum() or c == " " else " " for c in s).split()).upper()
+
+
+def payload(bank_code, account_no, amount=0, info="", ten=""):
     """Chuỗi VietQR chuyển khoản TỚI TÀI KHOẢN. amount ≤ 0 → QR không kèm số tiền
-    (người chuyển tự nhập). Ném ValueError nếu thiếu BIN/số tài khoản."""
+    (người chuyển tự nhập). ten = tên chủ tài khoản, ghi vào tag 59 để app ngân hàng hiện sẵn khi quét.
+    Ném ValueError nếu thiếu BIN/số tài khoản."""
     bin_ = bank_bin(bank_code)
     account_no = "".join(ch for ch in str(account_no or "") if ch.isalnum())
     if not bin_:
@@ -215,6 +229,9 @@ def payload(bank_code, account_no, amount=0, info=""):
     if amt:
         body += _tlv("54", str(amt))
     body += _tlv("58", "VN")
+    ten = khong_dau(ten)[:25]
+    if ten:
+        body += _tlv("59", ten)
     info = "".join(c for c in str(info or "") if c.isalnum() or c in " -").strip()[:25]   # 08/09: giữ '-' cho mã phiếu 26-09-08-000167
     if info:
         body += _tlv("62", _tlv("08", info))

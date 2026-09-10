@@ -595,6 +595,12 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
    CCCD trước & sau, mọi trang nếu trong hệ thống"). Màn hình nào có ô nhập ảnh CCCD mặt trước/mặt sau — khách hàng,
    nhân viên, hồ sơ, phiếu, module sau này — đều phải kèm ✂ gọi `AC.cat_cccd`; **KHÔNG sửa thuật toán, chỉ gọi lại**.
    Công thức tích hợp + bảng kiểm hiện trạng: skill `.claude/skills/cat-anh-cccd/` (đọc TRƯỚC khi làm màn hình có CCCD).
+0b. **TRANG MỞ CÔNG KHAI TRONG LAN — DANH SÁCH ĐÓNG** (GĐ chốt 10/09/2026, sau khi được nêu rõ dữ liệu bị lộ):
+   chỉ 6 đường sau bỏ đăng nhập (`@login_not_required`), phục vụ máy quầy xem nhanh: `pos:thau_vao_2` ·
+   `pos:thau_vao_2_xem` · `pos:thau_vao_2_xuat_ncc` · `pos:thau_vao_2_in_cccd` · `pos:thau_anh` · `pos:khach_anh`.
+   ⚠ Hệ quả GĐ đã chấp nhận: ai vào được mạng tiệm đều xem/tải được tên · SĐT · số CCCD · ẢNH hai mặt CCCD · số tiền
+   của khách bán vàng, không cần tài khoản. **Mọi trang NHẬP LIỆU và mọi thao tác GHI vẫn bắt đăng nhập** — thêm
+   `@login_not_required` cho đường khác phải hỏi GĐ trước. Nếu sau này mở KHBL ra internet thì phải xét lại mục này.
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy
    nhất: `_restore_sandbox` trong backup_pmv — server LOCAL). Muốn lệnh mới → thêm vào
    allowlist gateway kèm lý do, không "đi tắt".

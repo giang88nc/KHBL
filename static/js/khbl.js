@@ -64,6 +64,9 @@
   };
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
+      // Lớp CON đang mở bên trong popup (xem ảnh, khung phụ…) tự lo phím Esc của nó — đừng đóng luôn popup cha.
+      // Lớp con chỉ cần gắn thuộc tính data-khbl-lop-con và tự ẩn mình khi nhận Esc.
+      if (document.querySelector("[data-khbl-lop-con]:not([hidden])")) return;
       var k = document.getElementById("kh-cat-root");
       if (k && k.innerHTML.trim()) { e.stopPropagation(); window.khblKhCatDong(); return; }
       var r = document.getElementById("modal-root");
@@ -275,11 +278,23 @@
     var form = el.closest("form"), modal = el.closest(".khbl-modal");
     var msg = form.querySelector("#kh-qr-msg"), preview = form.querySelector("#kh-qr-preview");
     var btn = form.querySelector("#kh-qr-btn"), discard = form.querySelector("#kh-qr-discard");
+    var more = form.querySelector("#kh-qr-more");
     var save = modal.querySelector('button[type="submit"][form="kh-form"]');
     var fields = [["f-ten", "ho_ten", "Họ tên"], ["f-cccd", "cmnd", "CCCD"],
       ["f-sinh", "ngay_sinh", "Ngày sinh"], ["f-gt", "gioi_tinh", "Giới tính"],
       ["f-dc", "dia_chi", "Địa chỉ"], ["f-cap", "ngay_cap", "Ngày cấp"]];
     var t = null, pending = null, unresolved = false, lastRaw = "", lastValues = "";
+    var requestSerial = 0, scanGroup = [], compareMode = false;
+    if (window.addEventListener) {
+      var learnedChanged = function (event) {
+        if (event.key !== 'khbl-qr-learning-revision') return;
+        if (!el.isConnected) { window.removeEventListener('storage', learnedChanged); return; }
+        requestSerial++; lastRaw = ''; lastValues = ''; stopTimer(); clearPreview();
+        block(!!el.value.trim());
+        message('Bộ mẫu QR vừa được cập nhật. Bấm Điền vào biểu mẫu để phân tích lại theo mẫu mới.', 'warn');
+      };
+      window.addEventListener('storage', learnedChanged);
+    }
     function values() { return JSON.stringify(fields.map(function (f) { return form.querySelector("#" + f[0]).value; })); }
     function stopTimer() { if (t !== null) clearTimeout(t); t = null; }
     function block(value) { unresolved = value; if (save) save.disabled = value; discard.hidden = !value; }
@@ -304,12 +319,40 @@
       function row(items, header) {
         var tr = document.createElement("tr");
         items.forEach(function (value) { var cell = document.createElement(header ? "th" : "td"); cell.textContent = value; tr.appendChild(cell); });
-        table.appendChild(tr);
+        table.appendChild(tr); return tr;
       }
       row(["Thông tin", "Đang có", "Từ thẻ mới"], true);
-      fields.forEach(function (f) { row([f[2], display(f[1], form.querySelector("#" + f[0]).value), display(f[1], r.data[f[1]])]); });
+      var proposed = Object.assign({}, r.data);
+      fields.forEach(function (f) {
+        var tr = row([f[2], display(f[1], form.querySelector("#" + f[0]).value), display(f[1], proposed[f[1]])]);
+        var choices = r.suggestions && r.suggestions[f[1]];
+        if (choices && choices.length > 1 && (f[1] === "ho_ten" || f[1] === "dia_chi")) {
+          var cell = tr.children[2], select = document.createElement("select");
+          select.className = "khbl-input";
+          select.setAttribute("aria-label", "Gợi ý " + f[2]);
+          choices.forEach(function (c, index) {
+            var option = document.createElement("option"); option.value = c.value;
+            option.textContent = (index === 0 ? "Ưu tiên: " : "Khả năng khác: ") + c.value;
+            select.appendChild(option);
+          });
+          select.value = proposed[f[1]];
+          select.addEventListener("change", function () { proposed[f[1]] = select.value; });
+          cell.textContent = ""; cell.appendChild(select);
+        }
+      });
       preview.appendChild(table);
-      pending = { data: r.data, raw: raw, values: values() };
+      if (r.profiles) {
+        var explanation = document.createElement("p");
+        explanation.textContent = "Nhận diện: " + r.profiles.map(function (p) {
+          return "lượt " + p.scan + " — " + p.labels.join(", ");
+        }).join("; ") + ". Gợi ý ưu tiên được xếp theo bằng chứng giải mã và đối chiếu, không phải tỷ lệ chính xác.";
+        preview.appendChild(explanation);
+        var details = document.createElement("details"), summary = document.createElement("summary"), rawText = document.createElement("pre");
+        summary.textContent = "Xem dữ liệu quét gốc"; rawText.textContent = (r.raw_scans || [raw]).join("\n\n");
+        rawText.style.whiteSpace = "pre-wrap"; rawText.style.wordBreak = "break-all";
+        details.appendChild(summary); details.appendChild(rawText); preview.appendChild(details);
+      }
+      pending = { data: proposed, raw: raw, values: values() };
       btn.textContent = "Áp dụng thông tin đã kiểm tra";
       message((r.thieu.length ? "Đọc được một phần. " : "Đã đọc thẻ, chưa thay đổi biểu mẫu. ") +
         "Đối chiếu thông tin bên dưới; ô trống sẽ xóa giá trị đang có. " + r.canh_bao.join(" · "), "warn");
@@ -321,19 +364,36 @@
       if (raw === lastRaw && values() === lastValues) { block(false); return; }
       block(true);
       if (!window.CCCD || !window.VNText) { message("Chưa tải được bộ đọc thẻ. Tải lại trang rồi thử lại.", "flame"); return; }
-      var r = window.CCCD.parse(raw);
-      if (!r.data) { clearPreview(); message(r.loi.join(" "), "flame"); return; }
-      var conflict = fields.some(function (f) { var old = form.querySelector("#" + f[0]).value; return old && old !== r.data[f[1]]; });
-      if (final && !conflict && !r.canh_bao.length) apply(r.data, raw);
-      else showPreview(r, raw);
+      function accept(r) {
+        if (!r.data) { clearPreview(); message(r.loi.join(" "), "flame"); return; }
+        if (r.raw_scans) scanGroup = r.raw_scans;
+        if (more) more.hidden = false;
+        var conflict = fields.some(function (f) { var old = form.querySelector("#" + f[0]).value; return old && old !== r.data[f[1]]; });
+        if (final && !conflict && !r.canh_bao.length) apply(r.data, raw);
+        else showPreview(r, raw);
+      }
+      if (!el.dataset.analyzeUrl) { accept(window.CCCD.parse(raw)); return; }
+      var serial = ++requestSerial, before = values();
+      var scans = compareMode ? scanGroup.concat([raw]).filter(function (s, i, a) { return a.indexOf(s) === i; }) : [raw];
+      var csrf = form.querySelector('[name="csrfmiddlewaretoken"]');
+      message("Đang phân tích dữ liệu quét và xếp hạng gợi ý…", "warn");
+      window.CCCD.analyze(el.dataset.analyzeUrl, scans, csrf ? csrf.value : "").then(function (r) {
+        if (serial !== requestSerial || !el.isConnected || el.value.trim() !== raw) return;
+        if (before !== values()) { clearPreview(); message("Biểu mẫu vừa thay đổi. Bấm phân tích lại để đối chiếu.", "warn"); return; }
+        accept(r);
+      }).catch(function (err) {
+        if (serial !== requestSerial || !el.isConnected) return;
+        clearPreview(); message(err.message, "flame");
+      });
     }
     el.addEventListener("input", function (e) {
+      requestSerial++;
       stopTimer(); clearPreview(); block(!!el.value.trim());
       message(el.value.trim() ? "Đang nhận dữ liệu. Quét xong hãy nhấn Enter hoặc bấm Điền vào biểu mẫu." : "", "warn");
       if (e.isComposing) return;
-      // Chỉ xem trước khi đủ cấu trúc và ngày cấp; không chọn toàn bộ / ghi form khi đầu đọc đang gửi.
-      var parts = el.value.trim().split("|");
-      if (parts.length === 7 && /^[0-9]{8}$/.test(parts[6].trim()))
+      // Framing belongs to the server: separators may be missing/repeated and
+      // extension fields may follow the issue date. Idle processing only previews.
+      if (/^[0-9]{12}/.test(el.value.trim()) && /[0-9]{8}/.test(el.value.trim().slice(12)))
         t = setTimeout(function () { process(false); }, 400);
     });
     el.addEventListener("keydown", function (e) {
@@ -348,14 +408,21 @@
       else process(true);
     });
     discard.addEventListener("click", function () {
+      requestSerial++; scanGroup = []; compareMode = false;
+      if (more) more.hidden = true;
       stopTimer(); clearPreview(); el.value = ""; block(false);
       message("Đã bỏ kết quả quét; biểu mẫu giữ nguyên.", "warn"); el.focus();
+    });
+    if (more) more.addEventListener("click", function () {
+      requestSerial++; stopTimer(); clearPreview(); compareMode = true;
+      el.value = ""; block(true); el.focus();
+      message("Quét thêm đúng thẻ này bằng máy khác. Hệ thống sẽ đối chiếu các lượt quét.", "warn");
     });
     form.addEventListener("submit", function (e) {
       if (unresolved) { e.preventDefault(); e.stopImmediatePropagation(); message("Hãy áp dụng hoặc bỏ kết quả quét trước khi lưu.", "flame"); }
     }, true);
     form.addEventListener("input", function (e) {
-      if (e.target !== el && pending) {
+      if (e.target !== el && pending && fields.some(function (f) { return e.target === form.querySelector("#" + f[0]); })) {
         clearPreview(); message("Biểu mẫu vừa thay đổi. Bấm Điền vào biểu mẫu để đối chiếu lại thẻ.", "warn");
       }
     });

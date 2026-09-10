@@ -1,0 +1,3 @@
+{% if r.bank.ck_bank or r.bank.ck_stk %}<b>{{ r.bank.ck_bank }}{% if r.bank.ck_stk %} · {{ r.bank.ck_stk }}{% endif %}</b>{% endif %}
+{% if r.bank.ck_ten %}<small>{{ r.bank.ck_ten }}</small>{% endif %}
+{% if r.bank.ck_nd %}<small>{{ r.bank.ck_nd }}</small>{% elif not r.bank.ck_stk %}<span class="dim">—</span>{% endif %}

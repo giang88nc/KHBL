@@ -5,6 +5,7 @@ KHÔNG nhúng vào web (nguyên tắc kế thừa KHJ: job không bao giờ ch�
 - 02:00 hằng đêm : backup_pmv  (backup COPY_ONLY DB PMV trên PC KK + verify + dọn bản cũ)
   (KHJ HR backup lúc 01:30 cùng máy — né giờ nhau)
 - 30 phút/lần    : check_pmv   (kiểm kết nối + vân tay version DB vendor → cảnh báo đổi schema)
+- 5 phút/lần     : doi_soat_ck (đối soát tiền CK phiếu thâu với thông báo ngân hàng — thay cho nút bấm tay)
 """
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -35,6 +36,12 @@ def _job_sync_gold_bill():
     call_command("sync_gold_bill")
 
 
+def _job_doi_soat_ck():
+    # Đối soát tiền CK của phiếu thâu với thông báo ngân hàng — GĐ chốt 10/09/2026: BỎ nút trên trang, máy chủ tự làm.
+    # Soát 3 ngày gần nhất để bắt cả khoản chuyển trễ; luật nối vẫn y như bấm tay, không nới lỏng.
+    call_command("doi_soat_ck", ngay=3)
+
+
 def _job_sync_hist():
     # Đồng bộ KK → kho lịch sử PMV_KH2_HIST (incremental) — 09:00 & 21:00 (GĐ chốt 06/09/2026)
     call_command("sync_hist", sync=True)
@@ -56,8 +63,11 @@ def start():
     #                   max_instances=1, coalesce=True)
     scheduler.add_job(_job_sync_hist, CronTrigger(hour="9,21", minute=0), name="Sync kho lịch sử 09:00 & 21:00",
                       max_instances=1, coalesce=True)
+    scheduler.add_job(_job_doi_soat_ck, IntervalTrigger(minutes=5), name="Đối soát CK phiếu thâu 5 phút",
+                      max_instances=1, coalesce=True)
     # flush=True: stdout đổ vào logs/scheduler.log bị block-buffer, BlockingScheduler không bao giờ thoát
     # → banner nằm kẹt trong buffer, nhìn log tưởng chưa nạp job mới (đã dính 06/09/2026).
-    print("KHBL scheduler khởi động: sync lịch sử 09:00/21:00 + backup PMV+kho 09:30/21:30 (bù 1h) + check KK 60'. "
+    print("KHBL scheduler khởi động: sync lịch sử 09:00/21:00 + backup PMV+kho 09:30/21:30 (bù 1h) + check KK 60' "
+          "+ đối soát CK phiếu thâu 5'. "
           "(Thu thập hành vi 2' đã tắt — dùng ĐÁNH DẤU tay.) Ctrl+C để dừng.", flush=True)
     scheduler.start()

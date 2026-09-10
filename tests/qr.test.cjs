@@ -43,15 +43,18 @@ class Element {
   focus() { this.focused=true; }
   select() { this.selected++; }
   querySelectorAll() { return []; }
+  setAttribute(name, value) { this[name] = value; }
 }
 function ui() {
   const ctx=parser(), ids={}, timers=new Map(); let clock=0;
-  for (const id of ['kh-qr-in','kh-qr-msg','kh-qr-preview','kh-qr-btn','kh-qr-discard','f-ten','f-cccd','f-sinh','f-gt','f-dc','f-cap']) ids[id]=new Element();
+  const windowEvents={};ctx.window.addEventListener=(name,fn)=>{windowEvents[name]=fn;};
+  ctx.window.removeEventListener=name=>{delete windowEvents[name];};ctx.windowEvents=windowEvents;
+  for (const id of ['kh-qr-in','kh-qr-msg','kh-qr-preview','kh-qr-btn','kh-qr-discard','kh-qr-more','f-ten','f-cccd','f-sinh','f-gt','f-dc','f-cap']) ids[id]=new Element();
   const form=new Element('form'), modal=new Element(), save=new Element('button');
   form.querySelector=s=>ids[s.slice(1)] || null;
   modal.querySelector=()=>save;
   ids['kh-qr-in'].closest=s=>s==='form'?form:modal;
-  ctx.document={addEventListener(){},createElement:tag=>new Element(tag)};
+  ctx.document={addEventListener(){},getElementById(){return null;},createElement:tag=>new Element(tag)};
   ctx.setTimeout=fn=>{timers.set(++clock,fn);return clock;}; ctx.clearTimeout=id=>timers.delete(id);
   vm.runInContext(fs.readFileSync(path.join(root,'static/js/khbl.js'),'utf8'),ctx);
   const host=new Element(); host.querySelector=s=>s==='#kh-qr-in'?ids['kh-qr-in']:null;
@@ -99,4 +102,73 @@ test('Thay đổi form sau xem trước phải đối chiếu lại',()=>{
   const u=ui();u.input(valid);u.flush();u.ids['f-ten'].value='Khách đang sửa';
   u.form.fire('input',{target:u.ids['f-ten']});u.ids['kh-qr-btn'].fire('click');
   assert.equal(u.ids['f-ten'].value,'Khách đang sửa');assert.equal(u.save.disabled,true);
+});
+
+test('RAW gửi tới server, kết quả cũ không đè lượt quét mới',async()=>{
+  const u=ui(), replies=[];
+  u.ids['kh-qr-in'].dataset.analyzeUrl='/banle/khach-hang/qr/phan-tich/';
+  u.ctx.window.CCCD.analyze=(url,scans)=>new Promise(resolve=>replies.push({scans,resolve}));
+  u.input(valid);u.enter();
+  const next=valid.replace('NGUYEN VAN A','NGUYEN VAN B');u.input(next);u.enter();
+  replies[0].resolve(u.ctx.window.CCCD.parse(valid));await Promise.resolve();
+  assert.equal(u.ids['f-ten'].value,'');
+  replies[1].resolve(u.ctx.window.CCCD.parse(next));await Promise.resolve();
+  assert.equal(u.ids['f-ten'].value,'Nguyen Van B');
+});
+test('Lỗi kết nối giữ form và chặn lưu, không tự rơi về suy đoán cục bộ',async()=>{
+  const u=ui();u.ids['kh-qr-in'].dataset.analyzeUrl='/analyze';
+  u.ctx.window.CCCD.analyze=()=>Promise.reject(new Error('Không kết nối'));
+  u.input(valid);u.enter();await Promise.resolve();await Promise.resolve();
+  assert.equal(u.ids['f-ten'].value,'');assert.equal(u.save.disabled,true);
+  assert.match(u.ids['kh-qr-msg'].textContent,/Không kết nối/);
+});
+test('Quét thêm gửi nguyên cả hai RAW, gợi ý chỉ áp dụng sau đối chiếu',async()=>{
+  const u=ui(), sent=[];u.ids['kh-qr-in'].dataset.analyzeUrl='/analyze';
+  const next=valid.replace('NGUYEN VAN A','Nguyễn Văn A');
+  u.ctx.window.CCCD.analyze=async(url,scans)=>{
+    sent.push(scans);const result=u.ctx.window.CCCD.parse(scans[scans.length-1]);
+    result.raw_scans=scans;result.canh_bao=['Cần đối chiếu'];result.data.canh_bao=result.canh_bao;
+    return result;
+  };
+  u.input(valid);u.enter();await Promise.resolve();
+  u.ids['kh-qr-more'].fire('click');u.input(next);u.enter();await Promise.resolve();
+  assert.equal(sent[1].length,2);assert.equal(sent[1][0],valid);assert.equal(sent[1][1],next);
+  assert.equal(u.ids['f-ten'].value,'');u.ids['kh-qr-btn'].fire('click');
+  assert.equal(u.ids['f-ten'].value,'Nguyễn Văn A');
+});
+
+test('Thiếu pipe hoặc có trường mở rộng vẫn gửi RAW tới engine sau khi ngừng quét',async()=>{
+  for (const raw of [valid.replaceAll('|',''), valid+'|||scanner-3|extension']) {
+    const u=ui(), sent=[];u.ids['kh-qr-in'].dataset.analyzeUrl='/analyze';
+    u.ctx.window.CCCD.analyze=async(url,scans)=>{
+      sent.push(scans[0]);const r=u.ctx.window.CCCD.parse(valid);
+      r.canh_bao=['Đã phục hồi ranh giới'];r.data.canh_bao=r.canh_bao;return r;
+    };
+    u.input(raw);u.flush();await Promise.resolve();
+    assert.equal(sent[0],raw);assert.equal(u.ids['f-ten'].value,'');
+    assert.equal(u.save.disabled,true);
+    u.ids['kh-qr-btn'].fire('click');assert.equal(u.ids['f-ten'].value,'Nguyen Van A');
+  }
+});
+
+test('Gợi ý theo mẫu đã duyệt đứng đầu; đổi lựa chọn chỉ có hiệu lực sau Áp dụng',async()=>{
+  const u=ui();u.ids['kh-qr-in'].dataset.analyzeUrl='/analyze';
+  u.ctx.window.CCCD.analyze=async()=>{
+    const r=u.ctx.window.CCCD.parse(valid);r.data.ho_ten='Tên đã duyệt';
+    r.canh_bao=['Khớp mẫu cột D'];r.data.canh_bao=r.canh_bao;
+    r.suggestions={ho_ten:[{value:'Tên đã duyệt'},{value:'Phương án khác'}]};return r;
+  };
+  u.input(valid);u.enter();await Promise.resolve();
+  const select=u.ids['kh-qr-preview'].children[0].children[1].children[2].children[0];
+  assert.equal(select.value,'Tên đã duyệt');assert.equal(u.ids['f-ten'].value,'');
+  select.value='Phương án khác';select.fire('change');assert.equal(u.ids['f-ten'].value,'');
+  u.ids['kh-qr-btn'].fire('click');assert.equal(u.ids['f-ten'].value,'Phương án khác');
+});
+
+test('Dạy mẫu ở tab khác làm mất hiệu lực kết quả cũ và cho phép phân tích cùng RAW lại',async()=>{
+  const u=ui();let calls=0;u.ids['kh-qr-in'].dataset.analyzeUrl='/analyze';
+  u.ctx.window.CCCD.analyze=async()=>{calls++;return u.ctx.window.CCCD.parse(valid);};
+  u.input(valid);u.enter();await Promise.resolve();assert.equal(calls,1);assert.equal(u.save.disabled,false);
+  u.ctx.windowEvents.storage({key:'khbl-qr-learning-revision'});assert.equal(u.save.disabled,true);
+  u.enter();await Promise.resolve();assert.equal(calls,2);
 });

@@ -1,10 +1,12 @@
 from django.urls import path
 
 from . import views
+from apps.pos.views import gdb_mau
 
 app_name = "pmv"
 
 urlpatterns = [
+    path("mau-in-gdb/", gdb_mau, name="gdb_mau"),
     path("", views.status, name="status"),
     path("nguoi-dung/", views.user_list, name="user_list"),
     path("nguoi-dung/them/", views.user_form, name="user_create"),

@@ -1,0 +1,14 @@
+{% with route=request.resolver_match.url_name %}
+<nav class="sys-nav" aria-label="Danh mục hệ thống">
+<a href="{% url 'pmv:status' %}" {% if route == 'status' %}aria-current="page"{% endif %}>Trạng thái</a>
+{% if request.user.is_superuser %}<a href="{% url 'pmv:user_list' %}" {% if route == 'user_list' or route == 'user_create' or route == 'user_edit' %}aria-current="page"{% endif %}>Người dùng & quyền</a>{% endif %}
+<a href="{% url 'pmv:hist' %}" {% if route == 'hist' %}aria-current="page"{% endif %}>Kho lịch sử</a>
+<a href="{% url 'pmv:gdb_mau' %}" {% if route == 'gdb_mau' %}aria-current="page"{% endif %}>Mẫu in GĐB</a>
+<details class="sys-nav-tools" {% if route == 'diff' or route == 'behavior' or route == 'quy_trinh' or route == 'quy_trinh_detail' or route == 'qr_learning' %}data-active="true"{% endif %}>
+<summary>Công cụ kỹ thuật</summary><div>
+<a href="{% url 'pos:qr_learning' %}" {% if route == 'qr_learning' %}aria-current="page"{% endif %}>QR CCCC</a>
+<a href="{% url 'pmv:diff' %}" {% if route == 'diff' %}aria-current="page"{% endif %}>So sánh SQL</a>
+<a href="{% url 'pmv:behavior' %}" {% if route == 'behavior' %}aria-current="page"{% endif %}>Hành vi PMV</a>
+<a href="{% url 'pmv:quy_trinh' %}" {% if route == 'quy_trinh' or route == 'quy_trinh_detail' %}aria-current="page"{% endif %}>Quy trình</a>
+</div></details>
+</nav>{% endwith %}

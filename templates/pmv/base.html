@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load static %}
+{% block extra_head %}{% block system_head %}{% endblock %}<link rel="stylesheet" href="{% static 'css/system.css' %}?v=20260908.gdb3">{% endblock %}
+{% block chrome %}
+<div class="sys-heading"><div><span>QUẢN TRỊ</span><h1>Hệ thống</h1></div><p>Cấu hình, dữ liệu và quản lý vận hành</p></div>
+{% include "pmv/_nav.html" %}
+{% endblock %}
+{% block main_mod %} sys-main{% endblock %}
+{% block body %}<div class="sys-content">{% block system_content %}
+<div class="khbl-page__head"><div><div class="khbl-page__title">{% block page_title %}{% endblock %}</div><div class="khbl-page__sub">{% block page_sub %}{% endblock %}</div></div><div class="khbl-page__tools">{% block page_tools %}{% endblock %}</div></div>
+{% block content %}{% endblock %}
+{% endblock %}</div>{% endblock %}

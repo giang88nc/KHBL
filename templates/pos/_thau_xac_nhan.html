@@ -16,16 +16,15 @@ hanh_dong = sua | huy_tt | huy_hd | xoa_nhap (không passcode).
       <span>Khách</span><b>{{ g.cust.name|default:"Khách lẻ" }}</b>
       <span>Người thao tác</span><b>{{ nguoi }} <i class="mono dim">({{ username }})</i> · {{ luc|date:"H:i d/m/Y" }}</b>
     </div>
-    <div class="xn__hq{% if hd.nguy %} xn__hq--nguy{% endif %}"><b>Hậu quả khi xác nhận:</b><ul>{% for h in hd.hau_qua %}<li>{{ h }}</li>{% endfor %}
-</ul></div>
+    <div class="xn__hq"></div>
     {% if loi %}<div class="khbl-alert khbl-alert--do" style="margin:0 0 10px">{{ loi }}</div>{% endif %}
     {% if hd.nhap %}
     <p class="dim" style="margin:0;font-size:11.5px">Phiếu nháp không cần passcode — bấm XÁC NHẬN (hoặc Enter).</p>
     {% else %}
-    <label class="khbl-field"><span class="xn__lb">PASSCODE CỦA BẠN</span>
+    <label class="khbl-field"><span class="xn__lb"></span>
       <input class="khbl-input mono" type="password" name="passcode" id="xn-passcode" required autofocus inputmode="numeric"
              placeholder="nhập passcode rồi Enter" style="font-size:18px;letter-spacing:.2em;text-align:center"></label>
-    <p class="dim" style="margin:8px 0 0;font-size:11.5px">Sai passcode thì không có gì thay đổi trên máy KK. Hành động được ghi vào nhật ký.</p>
+             
     {% endif %}
   </form>
   <script>(function(){var i=document.getElementById("xn-passcode")||document.getElementById("xn-ok");if(i)setTimeout(function(){i.focus()},30)})();</script>

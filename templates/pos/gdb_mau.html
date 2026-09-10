@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load pos_extras %}
+{% extends "pmv/base.html" %}{% load pos_extras %}
 {% block title %}Mẫu in Giấy đảm bảo{% endblock %}
 {% block page_title %}Mẫu in Giấy đảm bảo (A5){% endblock %}
 {% block page_sub %}Kéo-thả từng khối trên tờ giấy hoặc nhập số · vị trí theo % tờ giấy, cỡ chữ theo <b>pt</b> · tờ xem trước rộng đúng 148 mm nên <b>nhìn sao in vậy</b>{% if trn_mau %} · đang xem phiếu <b class="mono">{{ r.BillCode|default:trn_mau }}</b>{% else %} · đang xem <b>dữ liệu mẫu</b>{% endif %}{% endblock %}
@@ -166,7 +166,7 @@
   /* lưu / đặt lại / in thử */
   function toast(t, tone) { var r = document.getElementById("toast-root"); if (!r) return; var d = document.createElement("div"); d.className = tone || "success"; d.textContent = t; r.appendChild(d); setTimeout(function () { d.remove(); }, 5000); }
   function post(payload) {
-    return fetch("{% url 'pos:gdb_mau' %}", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify(payload) })
+    return fetch("{% url 'pmv:gdb_mau' %}", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify(payload) })
       .then(function (r) { return r.json(); });
   }
   function luu() {

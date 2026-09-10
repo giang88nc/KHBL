@@ -3,6 +3,7 @@
 {% block page_title %}Khách hàng{% endblock %}
 {% block page_sub %}{{ tong|sokhong }} khách trong máy KK · xếp theo hoạt động gần nhất · rê chuột lên dòng để XEM · SỬA · XÓA{% endblock %}
 {% block page_tools %}
+  <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:qr_learning' %}">Dạy bộ đọc QR</a>
   <button class="khbl-btn khbl-btn--gold" type="button"
           hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">+ THÊM KHÁCH</button>
 {% endblock %}

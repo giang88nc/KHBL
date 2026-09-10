@@ -8,11 +8,40 @@ một lệnh CompleteMore 'A@B@' (app cũng gọi 2 mã một lúc). Nhóm ghi �
 Mọi giá trị ép về CHUỖI (session đi qua JSON). Dòng: gold · desc · unit · tong_tl · tl_hot · tl_vang · gia
 (nghìn/chỉ hoặc nghìn/g theo unit) · kieu ('thau' = giá thâu vào · 'ban' = giá bán ra) · tien · trn_id · bill_code · upd.
 """
+import re
 from decimal import Decimal
 
 from apps.pmv import money as M
 
 KEY = "phieu_thau"
+
+
+
+CK_ND_CHU = "THANH TOAN TIEN VANG"
+
+
+def noi_dung_ck(g=None, ma=""):
+    """Nội dung chuyển khoản CHUẨN khi tiệm TRẢ tiền thâu (GĐ chốt 10/09/2026):
+    "THANH TOAN TIEN VANG {4 số cuối MÃ PHIẾU}" — phiếu TBG260900001445 → "THANH TOAN TIEN VANG 1445".
+
+    · Lấy 4 số cuối của MÃ PHIẾU (TrnID), không phải số hóa đơn: hai mã có đuôi khác nhau.
+    · Nhóm nhiều phiếu thì lấy phiếu ĐẦU, vì khách đứng tên phiếu đó nhận tiền cho cả nhóm.
+    · Phiếu chưa THANH TOÁN thì chưa có mã, trả về phần chữ; chốt xong ô tự hiện đủ số.
+    Đối soát đọc lại đúng form này ở thau_payments.code_match — sửa một bên phải sửa bên kia.
+    """
+    so = re.sub(r"\D", "", ma or ((g or {}).get("trn_ids") or [""])[0])[-4:]
+    return f"{CK_ND_CHU} {so}" if so else CK_ND_CHU
+
+
+def ck_nd_day_du(g, ma=""):
+    """Nội dung ĐANG hiện trong phiếu, tự bổ sung 4 số ngay khi phiếu có mã.
+
+    Cần thiết vì lúc chưa THANH TOÁN phiếu chưa có mã, ô chỉ mang phần chữ; giá trị đó theo form gửi lên và
+    được lưu lại, nên nếu chỉ dựa vào "rỗng thì lấy mặc định" thì chốt xong ô vẫn thiếu 4 số. Người dùng gõ
+    nội dung riêng thì giữ nguyên, không đụng tới.
+    """
+    nd = ((g or {}).get("ck_nd") or "").strip()
+    return noi_dung_ck(g, ma) if not nd or nd == CK_ND_CHU else nd
 
 
 def _chuoi(v):
@@ -146,7 +175,8 @@ def nap(request, rows, nhom=None, emp=""):
     if nhom is not None:
         g["nhom_id"] = str(nhom.pk)
         g["pay_method"] = nhom.pay_method or g["pay_method"]
-        g["ck_bank"], g["ck_stk"], g["ck_nd"] = nhom.ck_bank or "", nhom.ck_stk or "", nhom.ck_nd or g["bill_codes"][0]
+        g["ck_bank"], g["ck_stk"] = nhom.ck_bank or "", nhom.ck_stk or ""
+        g["ck_nd"] = nhom.ck_nd or noi_dung_ck(g)
         g["ck_ten"] = nhom.ck_ten or ""
         for i, kieu in enumerate(nhom.kieu or []):
             if i < len(g["lines"]):

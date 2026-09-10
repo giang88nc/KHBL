@@ -7,7 +7,7 @@
   {"name":"Không bỏ chữ trong ngày","raw":"000000000001||NGUYEN VAN A|07x041988|Nam|Đường A|15092023","invalid":true},
   {"name":"Ngày cấp trước ngày sinh","raw":"000000000001||NGUYEN VAN A|07041988|Nam|Đường A|15091980","invalid":true},
   {"name":"Thiếu một trường","raw":"000000000001||NGUYEN VAN A|07041988|Nam|Đường A","invalid":true},
-  {"name":"Thừa một trường","raw":"000000000001||NGUYEN VAN A|07041988|Nam|Đường A|15092023|extra","invalid":true},
+  {"name":"Trường mở rộng sau ngày cấp","raw":"000000000001||NGUYEN VAN A|07041988|Nam|Đường A|15092023|extra","expect":{"ho_ten":"Nguyen Van A","dia_chi":"Đường A","ngay_cap":"2023-09-15"},"warning":true},
   {"name":"Không nhận CCCD 10 số","raw":"0000000000||NGUYEN VAN A|07041988|Nam|Đường A|15092023","invalid":true},
   {"name":"Không nhận CCCD 11 số","raw":"00000000000||NGUYEN VAN A|07041988|Nam|Đường A|15092023","invalid":true},
   {"name":"Không nhận số Unicode","raw":"０００００００００００１||NGUYEN VAN A|07041988|Nam|Đường A|15092023","invalid":true},

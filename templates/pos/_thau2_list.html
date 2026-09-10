@@ -1,0 +1,35 @@
+{% load pos_extras %}
+<section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0"{# GĐ chốt 10/09/2026: máy chủ tự đối soát 5 phút/lần, trang KHÔNG tự gọi nữa.
+   Cờ này chỉ điều khiển vòng tự gọi trong thau2_payments.js; nút xác nhận/gỡ trong popup chi tiết vẫn dùng
+   quyền thật ở máy chủ nên không bị ảnh hưởng. #}>
+<header class="th2-head"><h1>PHIẾU THÂU VÀO</h1><span>{{ rows|length }} đơn / nhóm · {% if source == 'hist' %}Kho lịch sử{% else %}Dữ liệu KK{% endif %}</span></header>
+<form class="th2-filter" hx-get="{% url 'pos:thau_vao_2' %}" hx-target="#thau2-list" hx-swap="outerHTML" hx-trigger="change, submit" hx-sync="this:replace">
+<label>Từ ngày<input class="khbl-input" type="date" name="d1" value="{{ d1 }}"></label>
+<label>Đến ngày<input class="khbl-input" type="date" name="d2" value="{{ d2 }}"></label>
+<label>Phương thức<select class="khbl-select" name="method"><option value="all" {% if method == 'all' %}selected{% endif %}>Tất cả</option><option value="cash" {% if method == 'cash' %}selected{% endif %}>Tiền mặt</option><option value="bank" {% if method == 'bank' %}selected{% endif %}>Chuyển khoản</option></select></label>
+<label class="th2-customer">Khách hàng<input class="khbl-input" name="khach" value="{{ khach }}" placeholder="Tên · SĐT · CCCD"></label>
+<label>Trạng thái<select class="khbl-select" name="trang_thai"><option value="">Tất cả</option><option value="C" {% if trang_thai == 'C' %}selected{% endif %}>Đã chốt</option><option value="W" {% if trang_thai == 'W' %}selected{% endif %}>Còn chờ</option></select></label>
+<button class="khbl-btn" type="submit">Lọc</button>
+<label>Xác nhận CK<select class="khbl-select" name="payment_status"><option value="">Tất cả</option>{% for value,label in payment_labels %}<option value="{{ value }}" {% if payment_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<a class="khbl-btn khbl-btn--outline" href="{% url 'pos:thau_vao_2' %}">Hôm nay</a>
+</form>
+<div class="th2-xuat">{# GĐ chốt 10/09/2026: 2 nút tải tệp, đứng TRƯỚC nút Đối soát CK; giữ nguyên bộ lọc đang xem #}
+  <a class="khbl-btn khbl-btn--outline" title="Tải danh sách khách trong khoảng ngày đang xem, đúng khuôn nhập nhà cung cấp (Ghi chú = tiền CK theo nghìn đồng)"
+     href="{% url 'pos:thau_vao_2_xuat_ncc' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">⬇ XUẤT EXCEL</a>
+  <a class="khbl-btn khbl-btn--outline" title="Tải tệp Word ảnh CCCD hai mặt của các khách trên, in ra đúng cỡ thật 85,6 × 53,98 mm"
+     href="{% url 'pos:thau_vao_2_in_cccd' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">🪪 IN CCCD</a>
+</div>
+
+{% if error %}<p class="khbl-alert khbl-alert--do">{{ error }}</p>{% endif %}
+<div class="th2-table"><table class="pg-tb"><thead><tr><th>MÃ PHIẾU</th><th>GIỜ</th><th>KHÁCH</th><th>NỘI DUNG</th><th>HÌNH ẢNH</th><th class="r">TỔNG TIỀN</th><th class="r">CHUYỂN KHOẢN</th><th>TRẠNG THÁI</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr>
+<td>{% for m in r.members %}<b class="th2-code">{{ m.BillCode|default:m.TrnID }}</b>{% endfor %}{% if r.partial_group %}<small>{{ r.members|length }}/{{ r.group_size }} phiếu trong khoảng ngày</small>{% endif %}</td>
+<td>{{ r.TrnTime|slice:":5" }}{% if d1 != d2 %}<small>{{ r.TrnDate|date:"d/m/Y" }}</small>{% endif %}</td>
+<td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
+<td>{% include 'pos/_thau2_bank.html' %}</td>
+<td><div class="th2-thumbs">{% for im in r.images %}<button type="button" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{{ im.label }}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy"></button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
+<td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small></td>
+<td>{% if r.mixed_status %}Nhiều trạng thái{% elif r.IsDel != '0' %}Đã hủy{% elif r.Status == 'C' %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
+<td><button class="khbl-btn khbl-btn--sm khbl-btn--outline" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root">XEM</button></td>
+</tr>{% empty %}<tr><td colspan="9" class="pg-tb__trong">Không có phiếu phù hợp với bộ lọc.</td></tr>{% endfor %}
+</tbody></table></div></section>

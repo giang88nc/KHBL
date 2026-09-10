@@ -1,0 +1,18 @@
+{% load pos_extras %}
+<section class="th2-detail-section th2-payment" data-detail-url="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID|urlencode }}&d1={{ d1 }}&d2={{ d2 }}">
+<h3>Xác nhận chuyển khoản</h3>
+{% if payment %}
+<span class="th2-pay-state th2-pay-state--{{ payment.payment_status }}">{{ payment.payment_label }}</span>
+<div class="th2-pay-totals"><div>Cần CK<strong>{{ payment.required|tien_tran }} ₫</strong></div><div>Đã liên kết<strong>{{ payment.paid|tien_tran }} ₫</strong></div><div>Còn thiếu<strong>{{ payment.remaining|tien_tran }} ₫</strong></div></div>
+{% for problem in payment.problems %}<p class="th2-pay-warning">{{ problem }}</p>{% endfor %}
+<p class="dim">Đã chốt phiếu không đồng nghĩa đã chuyển tiền. Đối chiếu thêm người nhận trước khi xác nhận thủ công.</p>
+<div class="th2-pay-message" role="status"></div>
+{% for link in payment.links %}
+<article class="th2-pay-entry"><b>{% if link.active_notification_id %}Đang liên kết{% else %}Đã gỡ{% endif %} · {{ link.amount|tien_tran }} ₫</b><p>{{ link.bank_snapshot.bank_number }} · {{ link.bank_snapshot.ref_code }} · {{ link.bank_snapshot.transaction_time }}</p><p>{{ link.bank_snapshot.description }}</p><small>{{ link.username }} · {{ link.created_at|date:'d/m/Y H:i' }} · {{ link.reason }}</small>
+{% if link.revoked_at %}<p>Gỡ bởi {{ link.revoked_by }} · {{ link.revoked_at|date:'d/m/Y H:i' }} · {{ link.revoke_reason }}</p>{% endif %}
+{% if can_manage and link.active_notification_id %}<form class="th2-payment-form" action="{% url 'pos:thau_vao_2_payment' %}" method="post">{% csrf_token %}<input type="hidden" name="action" value="unlink"><input type="hidden" name="link_id" value="{{ link.pk }}"><input type="hidden" name="d1" value="{{ d1 }}"><input type="hidden" name="d2" value="{{ d2 }}"><input class="khbl-input" name="reason" required maxlength="500" placeholder="Lý do gỡ liên kết"><input class="khbl-input" type="password" name="passcode" required placeholder="Passcode" autocomplete="off"><button class="khbl-btn khbl-btn--outline">Gỡ liên kết</button></form>{% endif %}</article>
+{% endfor %}
+{% for bank in payment.candidates %}<article class="th2-pay-entry"><b>{{ bank.trans_amount|tien_tran }} ₫ · {{ bank.transaction_time }}</b><p>{{ bank.bank_name }} - {{ bank.bank_number }} · {{ bank.ref_code }}</p><p>{{ bank.description }}</p><small>{% if bank.exact %}Có mã phiếu trong nội dung{% else %}Gợi ý theo số tiền và 30 phút{% endif %}{% if bank.ambiguous %} · Có nhiều nhóm phù hợp{% endif %}{% if bank.conflict %} · Trùng hoặc đã dành cho phiếu khác{% endif %}</small>
+{% if can_manage and bank.can_link %}<form class="th2-payment-form" action="{% url 'pos:thau_vao_2_payment' %}" method="post">{% csrf_token %}<input type="hidden" name="action" value="link"><input type="hidden" name="order_key" value="{{ payment.order_key }}"><input type="hidden" name="bank_id" value="{{ bank.id }}"><input type="hidden" name="token" value="{{ bank.token }}"><input type="hidden" name="d1" value="{{ d1 }}"><input type="hidden" name="d2" value="{{ d2 }}"><input class="khbl-input" name="reason" required maxlength="500" placeholder="Căn cứ xác nhận đúng người nhận / phiếu"><input class="khbl-input" type="password" name="passcode" required placeholder="Passcode" autocomplete="off"><button class="khbl-btn">Xác nhận đã CK</button></form>{% endif %}</article>{% endfor %}
+{% else %}<p>Không đủ dữ liệu nhóm trong khoảng ngày để đối soát.</p>{% endif %}
+</section>

@@ -21,7 +21,7 @@ class BankReconcileTests(TransactionTestCase):
         with connection.cursor() as c:
             c.execute('CREATE TABLE bank_notifications (id integer primary key, bank_number varchar(100), '
                       'transaction_time varchar(50), trans_amount decimal, direction varchar(10), '
-                      'bill_code_raw varchar(100), is_check integer, updated_at datetime)')
+                      'bill_code_raw varchar(100), is_check integer, updated_at datetime, description varchar(500))')
         self.user = get_user_model().objects.create_user('reconcile-test')
         self.client.force_login(self.user)
 
@@ -29,10 +29,10 @@ class BankReconcileTests(TransactionTestCase):
         with connection.cursor() as c:
             c.execute('DROP TABLE bank_notifications')
 
-    def bank(self, id=1, when='2026-09-08 12:00:00', amount=100, direction='out', checked=0, code=''):
+    def bank(self, id=1, when='2026-09-08 12:00:00', amount=100, direction='out', checked=0, code='', description=''):
         with connection.cursor() as c:
-            c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
-                      [id, '001', when, amount, direction, code, checked, '2026-09-08 12:00:01'])
+            c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                      [id, '001', when, amount, direction, code, checked, '2026-09-08 12:00:01', description])
 
     def bill(self, trn='TBG260900000001', when='2026-09-08 11:45:00', amount=-100, status='C', deleted='0'):
         return dict(TrnID=trn, CardPay=Decimal(amount), CreatedDate=dt.datetime.fromisoformat(when), Status=status, IsDel=deleted)
@@ -171,3 +171,17 @@ class BankReconcileTests(TransactionTestCase):
         self.assertEqual(protected.post(url, {'d2':self.today.isoformat()}).status_code, 403)
         self.client.logout()
         self.assertEqual(self.client.post(url, {'d2':self.today.isoformat()}).status_code, 302)
+
+    def test_cd_content_overrides_code_and_skips_matching(self):
+        self.bank(description='ABC THANH TOAN TIEN VANG 1-080926-16:35:44 XYZ', code='old', checked=1)
+        self.bank(id=2, description='THANH TOAN TIEN VANG 1 suffix')
+        self.bank(id=3, description='THANH TOAN TIEN VANG 2')
+        result, pmv = self.run_match([self.bill()])
+        self.assertEqual(result['classified'], 2)
+        rows = query('SELECT id,bill_code_raw,is_check FROM bank_notifications ORDER BY id')
+        self.assertEqual(rows[0]['bill_code_raw'], 'chi CĐ')
+        self.assertEqual(rows[0]['is_check'], 1)
+        self.assertEqual(rows[1]['bill_code_raw'], 'chi CĐ')
+        self.assertEqual(rows[1]['is_check'], 0)
+        self.assertEqual(rows[2]['bill_code_raw'], 'TBG260900000001')
+        self.assertEqual(R.classify_cd(), 0)

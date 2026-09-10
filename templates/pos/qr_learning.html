@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Dạy bộ đọc QR CCCD{% endblock %}
+{% block page_title %}Dạy bộ đọc QR CCCD{% endblock %}
+{% block page_sub %}Nhập RAW → kết quả đúng. Áp dụng một lần, dùng ngay cho các lượt quét tiếp theo.{% endblock %}
+{% block page_tools %}<a class="khbl-btn khbl-btn--outline" href="{% url 'pos:khach_hang' %}">Về khách hàng</a>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/qr_learning.css' %}?v=1">{% endblock %}
+{% block content %}
+<div class="qrl-layout" id="qr-learning" data-can-teach="{{ can_teach|yesno:'1,0' }}">
+  <section class="qrl-card">
+    <div class="qrl-heading"><h2 id="qrl-form-title">Thêm mẫu mới</h2><span class="qrl-badge">SKILL · Tiếng Việt</span></div>
+    <form id="qrl-form" data-preview-url="{% url 'pos:qr_learning_preview' %}" data-save-url="{% url 'pos:qr_learning_save' %}" data-list-url="{% url 'pos:qr_learning' %}?format=json">
+      {% csrf_token %}
+      <div class="qrl-pair">
+        <div class="khbl-field"><label for="qrl-raw">RAW từ máy quét</label>
+          <textarea id="qrl-raw" class="khbl-input" rows="5" maxlength="8192" required autocomplete="off" spellcheck="false" placeholder="Dán cụm chữ bị lỗi hoặc toàn bộ chuỗi QR…"></textarea></div>
+        <div class="khbl-field"><label for="qrl-output">Kết quả đúng</label>
+          <textarea id="qrl-output" class="khbl-input" rows="5" maxlength="8192" required autocomplete="off" spellcheck="false" placeholder="Nhập chính xác chữ tiếng Việt cần trả về…"></textarea></div>
+      </div>
+      <div class="khbl-field qrl-scope"><label for="qrl-scope">Áp dụng ở</label><select id="qrl-scope" class="khbl-input">
+        <option value="auto">Tự nhận diện — cụm chữ hoặc toàn QR</option>
+        {% for key,label in scopes.items %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select></div>
+      <p class="qrl-note">Cụm chữ được thay khi khớp nguyên từ/cụm trong phạm vi đã chọn. Với toàn QR, số căn cước và ngày phải giữ nguyên.</p>
+      <div class="qrl-actions">
+        <button type="submit" class="khbl-btn khbl-btn--gold" id="qrl-apply" {% if not can_teach %}disabled{% endif %}>Áp dụng — học mẫu</button>
+        <button type="button" class="khbl-btn khbl-btn--outline" id="qrl-preview">Xem thử</button>
+        <button type="button" class="khbl-btn khbl-btn--ghost" id="qrl-new">Mẫu mới</button>
+      </div>
+      {% if not can_teach %}<p class="qrl-note">Bạn có thể xem thử. Cập nhật mẫu dùng chung cần tài khoản quản trị.</p>{% endif %}
+      <p id="qrl-status" role="status" aria-live="polite" class="qrl-status{% if learning_error %} is-error{% endif %}">{{ learning_error }}</p>
+      <div id="qrl-comparison" class="qrl-comparison" hidden>
+        <div><h3>Trước khi áp dụng</h3><pre id="qrl-before"></pre></div>
+        <div><h3>Sau khi áp dụng</h3><pre id="qrl-after"></pre></div>
+      </div>
+    </form>
+  </section>
+  <section class="qrl-card">
+    <div class="qrl-heading"><h2>Mẫu đã học <span id="qrl-count" class="qrl-count"></span></h2>
+      <button class="khbl-btn khbl-btn--ghost" type="button" id="qrl-reload">Tải lại danh sách</button></div>
+    <p class="qrl-note">Mẫu đã lưu có hiệu lực ngay. Dùng Sửa để đổi kết quả, hoặc Tạm tắt để ngừng áp dụng.</p>
+    <div id="qrl-rules" class="qrl-rules"></div>
+  </section>
+</div>
+{{ learning_state|json_script:"qrl-initial-state" }}
+{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/qr_learning.js' %}?v=1"></script>{% endblock %}

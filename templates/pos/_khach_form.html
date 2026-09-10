@@ -15,7 +15,7 @@
     {% icon "khach" 20 %}
     <div class="khbl-field" style="flex:1">
       <label for="kh-qr-in"><small id="kh-qr-help"></small> Quét mã QR trên thẻ căn cước</label>
-      <input class="khbl-input" id="kh-qr-in" placeholder="Đặt con trỏ vào đây rồi quét thẻ…" autocomplete="off" maxlength="8192" aria-describedby="kh-qr-help kh-qr-msg">
+      <input class="khbl-input" id="kh-qr-in" data-analyze-url="{% url 'pos:khach_qr_phan_tich' %}" placeholder="Đặt con trỏ vào đây rồi quét thẻ…" autocomplete="off" maxlength="8192" aria-describedby="kh-qr-help kh-qr-msg">
       
     </div>
     <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-btn">Điền vào biểu mẫu</button>
@@ -23,6 +23,8 @@
   <div id="kh-qr-msg" role="status" aria-live="polite" style="margin:0 0 12px;font-size:12.5px"></div>
   <div id="kh-qr-preview" style="overflow:auto;max-height:260px"></div>
   <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-discard" hidden>Bỏ kết quả quét</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-more" hidden>Quét thêm để đối chiếu cùng thẻ</button>
+  <a class="khbl-btn khbl-btn--ghost" href="{% url 'pos:qr_learning' %}" target="_blank" rel="noopener">Dạy bộ đọc QR</a>
 
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px">
     <div class="khbl-field" style="grid-column:span 2">
@@ -108,10 +110,10 @@
         <b>CCCD mặt trước</b>
         <div class="kh-anh__khung" data-xem>{% if k.ImagePathMatTruoc %}<img src="{% url 'pos:khach_anh' k.CustID 'mat-truoc' %}" alt="CCCD mặt trước đã lưu">{% else %}<span>Chưa có ảnh</span>{% endif %}</div>
         <div class="kh-anh__actions">
-          <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
+          <label class="khbl-btn khbl-btn--outline kh-anh__btn">📁
             <input type="file" name="anh_truoc" accept="image/*" data-photo-input hidden>
           </label>
-          <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+          <button class="khbl-btn kh-anh__btn" type="button" data-chup>📷</button>
           <button class="khbl-btn khbl-btn--outline kh-anh__btn kh-anh__btn--cat" type="button"
                   title="Tự tìm & tách thẻ CCCD trong ảnh đang chọn (hoặc ảnh đã lưu) — kéo xoay, cắt bớt cạnh; cùng thuật toán trang Thâu vào"
                   hx-post="{% url 'pos:khach_anh_cat' %}" hx-encoding="multipart/form-data" hx-params="anh_truoc,CustID,mat" hx-vals='{"mat":"truoc"}'
@@ -124,10 +126,10 @@
         <b>CCCD mặt sau</b>
         <div class="kh-anh__khung" data-xem>{% if k.ImagePathMatSau %}<img src="{% url 'pos:khach_anh' k.CustID 'mat-sau' %}" alt="CCCD mặt sau đã lưu">{% else %}<span>Chưa có ảnh</span>{% endif %}</div>
         <div class="kh-anh__actions">
-          <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn tệp
+          <label class="khbl-btn khbl-btn--outline kh-anh__btn">📁
             <input type="file" name="anh_sau" accept="image/*" data-photo-input hidden>
           </label>
-          <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp ảnh</button>
+          <button class="khbl-btn kh-anh__btn" type="button" data-chup>📷</button>
           <button class="khbl-btn khbl-btn--outline kh-anh__btn kh-anh__btn--cat" type="button"
                   title="Tự tìm & tách thẻ CCCD trong ảnh đang chọn (hoặc ảnh đã lưu) — kéo xoay, cắt bớt cạnh; cùng thuật toán trang Thâu vào"
                   hx-post="{% url 'pos:khach_anh_cat' %}" hx-encoding="multipart/form-data" hx-params="anh_sau,CustID,mat" hx-vals='{"mat":"sau"}'

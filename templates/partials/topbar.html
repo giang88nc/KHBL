@@ -1,7 +1,7 @@
 {% load static pos_extras %}<header class="khbl-top">
   <a class="khbl-top__brand" href="{% url 'pos:dashboard' %}" title="Về trang tổng quan">
     <img src="{% static 'img/logo_icon.png' %}" alt="Kim Hạnh 2" width="50" height="50">
-    <span><b>KIM HẠNH 2</b><i>Bán lẻ vàng</i></span>
+    <span><b>BÁN LẺ</b><i>KIM HẠNH 2</i></span>
   </a>
 
   <nav class="khbl-top__nav" aria-label="Chức năng chính">
@@ -19,7 +19,7 @@
       {% icon_anh "hoadon" 50 %}<span>HÓA ĐƠN</span></a>
     <a class="khbl-top__i{% if nav_active == 'chuyenkhoan' %} is-on{% endif %}" href="{% url 'pos:chuyen_khoan' %}">
       {% icon_anh "chuyenkhoan" 50 %}<span>CHUYỂN KHOẢN</span></a>
-    <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
+    <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' or request.resolver_match.namespace == 'pmv' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
       {% icon_anh "hethong" 50 %}<span>HỆ THỐNG</span></a>
   </nav>
 

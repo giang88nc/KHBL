@@ -9,7 +9,7 @@
   ⚠ if phải nằm TRONG block — Django bỏ qua if bao quanh block ở template con. Chú thích nhiều dòng
   PHẢI dùng comment-block, {# #} chỉ 1 dòng (từng in nguyên văn ra chân popup).{% endcomment %}
   <span class="dim" style="margin-right:auto;font-size:11.5px">Bấm IN: in thẳng (trình duyệt nhớ máy in), popup tự đóng và mở phiếu trắng cho khách kế ·
-    <a href="{% url 'pos:gdb_mau' %}?trn_id={{ r.TrnID }}&loai={{ loai }}" target="_blank" title="Kéo-thả khối, chỉnh cỡ chữ từng phần trên tờ giấy">⚙ Chỉnh mẫu in</a></span>
+    <a href="{% url 'pmv:gdb_mau' %}?trn_id={{ r.TrnID }}&loai={{ loai }}" target="_blank" title="Kéo-thả khối, chỉnh cỡ chữ từng phần trên tờ giấy">⚙ Chỉnh mẫu in</a></span>
   <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
   <button class="khbl-btn khbl-btn--gold" type="button"
           hx-post="{% url 'pos:ban_in_thang' %}" hx-vals='{"trn_id": "{{ r.TrnID }}", "loai": "{{ loai }}"}' hx-swap="none">🖨 IN</button>

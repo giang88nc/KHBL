@@ -1,13 +1,12 @@
-{% load l10n %}<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KHBL — Quy trình {{ p.code }}</title>
-<style>
-  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; --tim:#7C3AED; }
+{% extends "pmv/base.html" %}
+{% load l10n %}
+{% block title %}Quy trình {{ p.code }}{% endblock %}
+{% block system_head %}<style>
+@scope (.sys-content) {
+
+  
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  
   .wrap { max-width:1320px; margin:0 auto; padding:20px 16px; }
   h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--gold-700); margin:0; font-size:24px; }
   .nav { margin-bottom:12px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
@@ -62,18 +61,14 @@
   input, select, textarea { padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; background:#fff; font-family:inherit; width:100%; }
   textarea { min-height:56px; }
   .dlg-f { padding:10px 16px 14px; display:flex; justify-content:flex-end; gap:8px; }
-</style>
-</head>
-<body>
+
+}
+</style>{% endblock %}
+{% block system_content %}
+
 <div class="wrap">
-  <div class="nav">
-    <a href="{% url 'pmv:status' %}">Trạng thái</a>
-    <a href="{% url 'pmv:diff' %}">So sánh SQL</a>
-    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
-    <a href="{% url 'pmv:quy_trinh' %}" class="active">Quy trình</a>
-    <a href="{% url 'pmv:hist' %}">Kho lịch sử</a>
-  </div>
-  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  
+  
 
   <div class="head">
     <div style="flex:1;min-width:320px">
@@ -216,5 +211,5 @@
   }
   function moQT() { document.getElementById("dlg-qt").showModal(); }
 </script>
-</body>
-</html>
+
+{% endblock %}

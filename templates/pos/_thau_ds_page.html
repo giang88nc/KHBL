@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Danh sách phiếu thâu{% endblock %}
+{% block page_head %}{% endblock %}
+{% block extra_head %}<style>
+.thau2-card{border:1px solid var(--line);border-radius:10px;background:var(--white);overflow:hidden}.thau2-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}.thau2-head h1{font-size:20px;margin:0}.thau2-body{padding:14px 18px;overflow:auto}.thau2-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap}.thau2-body .pg-tb{min-width:850px}.thau2-body .pg-ds__loc{flex-wrap:wrap}.thau2-head .pg-ds__tk{margin-left:auto}@media(max-width:650px){.thau2-body,.thau2-head,.thau2-foot{padding:12px}.thau2-head .pg-ds__tk{margin-left:0}}
+</style>{% endblock %}
+{% block content %}<section class="thau2-card" id="thau2-list">
+<header class="thau2-head"><h1>{% block modal_title %}{% endblock %}</h1>{% block modal_head_extra %}{% endblock %}</header>
+<div class="thau2-body">{% block modal_body %}{% endblock %}</div>
+<footer class="thau2-foot">{% block modal_foot %}{% endblock %}</footer>
+</section>{% endblock %}

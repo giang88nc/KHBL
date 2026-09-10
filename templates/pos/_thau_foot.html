@@ -21,8 +21,9 @@ Chân trang thâu — mảnh OOB #pos-foot, cùng luật màn bán: trắng → 
 
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Phiếu đã thanh toán{% else %}Chưa có dòng vàng{% endif %}"{% endif %}
           hx-post="{% url 'pos:thau_thanh_toan' %}" hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN</button>
-  <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Phiếu đã thanh toán{% else %}Chưa có dòng vàng{% endif %}"{% else %}title="Chốt, in phiếu 110mm ngay rồi mở phiếu trắng cho khách kế"{% endif %}
-          hx-post="{% url 'pos:thau_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN &amp; IN</button>
-  <button class="khbl-btn khbl-btn--outline" type="button" {% if not phieu_chot %}disabled title="Thanh toán xong mới in phiếu"{% else %}title="In phiếu thâu 110mm (in thẳng từ cửa sổ này)"
+  {# GĐ chốt 10/09/2026: TẠM KHÓA IN — hai nút dưới bị vô hiệu, view in cũng chặn ở máy chủ. Mở lại: KHOA_IN = False #}
+  <button class="khbl-btn khbl-btn--gold" type="button" {% if khoa_in %}disabled title="{{ khoa_in_msg }} — dùng nút THANH TOÁN"{% elif phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Phiếu đã thanh toán{% else %}Chưa có dòng vàng{% endif %}"{% else %}title="Chốt, in phiếu 110mm ngay rồi mở phiếu trắng cho khách kế"
+          hx-post="{% url 'pos:thau_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this"{% endif %}>💰 THANH TOÁN &amp; IN</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_in %}disabled title="{{ khoa_in_msg }}"{% elif not phieu_chot %}disabled title="Thanh toán xong mới in phiếu"{% else %}title="In phiếu thâu 110mm (in thẳng từ cửa sổ này)"
           hx-get="{% url 'pos:thau_in' %}?oob=1" hx-swap="none"{% endif %}>🖨 IN PHIẾU</button>
 </footer>

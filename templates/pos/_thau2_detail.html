@@ -1,0 +1,139 @@
+{% extends 'partials/modal_shell.html' %}{% load static %}{% comment %}
+Popup mở được từ HAI nơi: trang /thau-vao-2/ (có sẵn thau2.css) và nút XEM trong popup DANH SÁCH của trang
+/thau-vao/ (KHÔNG có thau2.css → trước 10/09/2026 popup mở ở đó bị vỡ giao diện). Vì vậy popup TỰ mang theo
+bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại từ bộ nhớ đệm nên mở lần sau không tốn thêm.
+{% endcomment %}
+{% block modal_title %}CHI TIẾT PHIẾU THÂU{% endblock %}
+{% block modal_style %}width:min(1050px,96vw);max-width:96vw;max-height:94vh{% endblock %}
+{% block modal_body %}<link rel="stylesheet" href="{% static 'css/thau2.css' %}?v=4">
+<div class="th2-detail">
+<div>{% for item in items %}<p>{{ item.BillCode|default:item.TrnID }} · {% if item.IsDel != '0' %}Đã hủy{% elif item.Status == 'C' %}Đã chốt{% else %}Còn chờ{% endif %}</p>{% endfor %}{% include 'pos/_thau_phieu.html' %}</div>
+<div class="th2-detail-right">
+  <section class="th2-detail-section">
+    <div class="th2-bank-grid">
+      {# Đã xác nhận CK: phủ nhãn xanh lên mã QR và BỎ thẻ liên kết, để không ai quét lại mã của khoản đã trả (GĐ chốt 10/09/2026) #}
+      <div class="th2-bank-qr{% if r.da_xac_nhan and r.qr_image %} th2-bank-qr--xong{% endif %}"
+           {% if r.da_xac_nhan and r.qr_image %}title="Đã xác nhận chuyển khoản — mã QR khóa lại, không quét nữa"{% endif %}>
+        {% if r.qr_image %}
+          {% if r.da_xac_nhan %}<img src="{{ r.qr_image.url }}" alt="QR chuyển khoản (đã dùng xong)"><span class="th2-qr-xong">✓ ĐÃ XONG</span>
+          {% else %}<a href="{{ r.qr_image.url }}" target="_blank" rel="noopener" title="Bấm để xem lớn mã QR" data-th2-anh="Mã QR chuyển khoản"><img src="{{ r.qr_image.url }}" alt="QR chuyển khoản"></a>{% endif %}
+        {% else %}<span>Chưa có mã QR</span>{% endif %}
+      </div>
+      <dl class="th2-bank-fields">
+        <div><dt>Ngân hàng:</dt><dd>{{ r.bank.ck_bank|default:"—" }}</dd></div>
+        <div><dt>Số TK:</dt><dd class="mono">{{ r.bank.ck_stk|default:"—" }}</dd></div>
+        <div><dt>Chủ thẻ:</dt><dd>{{ r.bank.ck_ten|default:"—" }}{% if r.ten_khop is True %}
+          <span class="th2-ten-ok" title="Chủ thẻ trùng tên khách hàng của phiếu">✓</span>{% elif r.ten_khop is False %}
+          <span class="th2-ten-lech" title="Chủ thẻ KHÁC tên khách hàng của phiếu — kiểm lại xem có nhờ người nhận hộ không">✕</span>{% endif %}</dd></div>
+        <div><dt>Nội dung:</dt><dd>{{ r.bank.ck_nd|default:"—" }}</dd></div>
+      </dl>
+    </div>
+  </section>
+  <section class="th2-detail-section">
+    <div class="th2-photo-grid{% if r.photo_grid|length == 1 %} th2-photo-grid--single{% endif %}">{% for im in r.photo_grid %}
+      {% include 'pos/_thau2_photo.html' %}
+    {% empty %}<div class="th2-photo-empty th2-photo-none">Chưa có hình giao dịch</div>
+    {% endfor %}</div>
+    {% if r.cccd_error %}<p class="dim">{{ r.cccd_error }}</p>{% endif %}
+    <div class="th2-photo-grid th2-cccd-grid">{% for im in r.cccd_images %}
+      {% include 'pos/_thau2_photo.html' %}
+    {% endfor %}</div>
+  </section>
+</div>
+
+{# XEM ẢNH ngay trong khung popup (GĐ chốt 10/09/2026): bấm ảnh mở lớp phủ nằm gọn trong popup, lăn chuột để phóng to #}
+<div class="th2-xem" id="th2-xem" data-khbl-lop-con hidden>
+  <div class="th2-xem__thanh">
+    <b data-nhan></b><span class="th2-xem__dem" data-dem></span>
+    <span class="th2-xem__zoom">
+      <button type="button" data-nho title="Thu nhỏ">−</button>
+      <i data-ti-le>100%</i>
+      <button type="button" data-to title="Phóng to">+</button>
+    </span>
+    <button type="button" class="th2-xem__dong" data-dong title="Đóng (Esc)">✕</button>
+  </div>
+  <button type="button" class="th2-xem__nut th2-xem__nut--truoc" data-truoc title="Ảnh trước (←)">‹</button>
+  <div class="th2-xem__khung" data-khung><img data-anh alt="" draggable="false"></div>
+  <button type="button" class="th2-xem__nut th2-xem__nut--sau" data-sau title="Ảnh sau (→)">›</button>
+  <p class="th2-xem__nhac">Lăn chuột giữa để phóng to · kéo để di chuyển · bấm đúp để về cỡ vừa</p>
+</div>
+</div>
+<script>
+(function () {
+  var lop = document.getElementById("th2-xem");
+  if (!lop || lop.dataset.san) return;
+  lop.dataset.san = "1";
+  var goc = lop.closest(".khbl-modal__box") || lop.parentNode;
+  var anh = lop.querySelector("[data-anh]"), khung = lop.querySelector("[data-khung]");
+  var nhan = lop.querySelector("[data-nhan]"), dem = lop.querySelector("[data-dem]"), tiLe = lop.querySelector("[data-ti-le]");
+  var ds = [].slice.call(goc.querySelectorAll("a[data-th2-anh]"));   // QR đã xác nhận không có thẻ a nên không vào bộ
+  if (!ds.length) return;
+  var i = 0, s = 1, x = 0, y = 0, keo = null;
+
+  function ve() {
+    anh.style.transform = "translate(" + x + "px," + y + "px) scale(" + s + ")";
+    tiLe.textContent = Math.round(s * 100) + "%";
+    khung.classList.toggle("dang-to", s > 1);
+  }
+  function dat(n) {
+    i = (n + ds.length) % ds.length;
+    anh.src = ds[i].getAttribute("href");
+    anh.alt = ds[i].dataset.th2Anh || "";
+    nhan.textContent = ds[i].dataset.th2Anh || "";
+    dem.textContent = (i + 1) + "/" + ds.length;
+    s = 1; x = 0; y = 0; ve();
+  }
+  function mo(n) { lop.hidden = false; dat(n); }
+  function dong() { lop.hidden = true; anh.removeAttribute("src"); }
+  function zoom(muc, tamX, tamY) {
+    var cu = s;
+    s = Math.min(8, Math.max(1, +(s * muc).toFixed(3)));
+    if (s === cu) return;
+    var k = s / cu;
+    x = tamX - (tamX - x) * k;
+    y = tamY - (tamY - y) * k;
+    if (s === 1) { x = 0; y = 0; }
+    ve();
+  }
+
+  ds.forEach(function (a, n) {
+    a.addEventListener("click", function (e) { e.preventDefault(); mo(n); });
+  });
+  lop.querySelector("[data-dong]").addEventListener("click", dong);
+  lop.querySelector("[data-truoc]").addEventListener("click", function () { dat(i - 1); });
+  lop.querySelector("[data-sau]").addEventListener("click", function () { dat(i + 1); });
+  lop.querySelector("[data-to]").addEventListener("click", function () { zoom(1.25, 0, 0); });
+  lop.querySelector("[data-nho]").addEventListener("click", function () { zoom(0.8, 0, 0); });
+  lop.addEventListener("click", function (e) { if (e.target === lop) dong(); });
+
+  // lăn chuột giữa = phóng to quanh vị trí con trỏ; chặn cuộn nền phía sau
+  khung.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var o = khung.getBoundingClientRect();
+    zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - o.left - o.width / 2, e.clientY - o.top - o.height / 2);
+  }, { passive: false });
+  khung.addEventListener("dblclick", function () { s = 1; x = 0; y = 0; ve(); });
+  khung.addEventListener("pointerdown", function (e) {
+    if (s <= 1) return;
+    e.preventDefault(); keo = { x: e.clientX - x, y: e.clientY - y };
+    try { khung.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  khung.addEventListener("pointermove", function (e) {
+    if (!keo) return;
+    x = e.clientX - keo.x; y = e.clientY - keo.y; ve();
+  });
+  ["pointerup", "pointercancel"].forEach(function (t) { khung.addEventListener(t, function () { keo = null; }); });
+
+  // Esc đóng lớp xem ảnh TRƯỚC, không đóng luôn popup chi tiết đang mở
+  document.addEventListener("keydown", function (e) {
+    if (lop.hidden || !document.body.contains(lop)) return;
+    // stopImmediatePropagation chứ không phải stopPropagation: bộ đóng popup của khbl.js cũng nghe keydown
+    // capture trên document, và thứ tự chạy phụ thuộc script nào đăng ký trước (khbl.js dùng defer nên khi popup
+    // nạp qua htmx thì nó trước, còn khi popup có sẵn trong HTML thì nó sau). Chặn hẳn thì đúng ở cả hai chiều.
+    if (e.key === "Escape") { e.stopImmediatePropagation(); dong(); }
+    else if (e.key === "ArrowLeft") { e.stopImmediatePropagation(); dat(i - 1); }
+    else if (e.key === "ArrowRight") { e.stopImmediatePropagation(); dat(i + 1); }
+  }, true);
+})();
+</script>
+{% endblock %}

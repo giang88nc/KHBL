@@ -1,13 +1,12 @@
-{% load l10n %}<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KHBL — Báo cáo đánh dấu TRƯỚC/SAU</title>
-<style>
-  :root { --gold-700:#8C6A1D; --gold-500:#C9A02C; --gold-100:#F7EFD8; --ink:#1C1917; --line:#EAE4D6; --surface:#FDFCF9; --tim:#7C3AED; }
+{% extends "pmv/base.html" %}
+{% load l10n %}
+{% block title %}Báo cáo đánh dấu TRƯỚC/SAU{% endblock %}
+{% block system_head %}<style>
+@scope (.sys-content) {
+
+  
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--surface); color:var(--ink); font:13px/1.5 "Be Vietnam Pro","Segoe UI",sans-serif; }
+  
   .wrap { max-width:1280px; margin:0 auto; padding:20px 16px; }
   h1 { font-family:"Cormorant Garamond",Georgia,serif; color:var(--tim); margin:0 0 2px; font-size:26px; }
   .nav { margin-bottom:14px; } .nav a { color:var(--gold-700); text-decoration:none; margin-right:14px; }
@@ -25,16 +24,14 @@
   .muted { color:#a8a29e; }
   details summary { cursor:pointer; color:var(--gold-700); font-size:11px; }
   .file { background:#fff; border:1px dashed var(--line); border-radius:8px; padding:8px 12px; font-size:12px; }
-</style>
-</head>
-<body>
+
+}
+</style>{% endblock %}
+{% block system_content %}
+
 <div class="wrap">
   <h1>Báo cáo đánh dấu TRƯỚC → SAU</h1>
-  <div class="nav">
-    <a href="{% url 'pmv:status' %}">Trạng thái</a>
-    <a href="{% url 'pmv:diff' %}">← So sánh SQL</a>
-    <a href="{% url 'pmv:behavior' %}">Hành vi PMV</a>
-  </div>
+  
 
   <div class="chips">
     <div class="chip">Khung: <b>{{ ws|date:"H:i:s" }} → {{ we|date:"H:i:s" }}</b> ({{ ws|date:"d/m/Y" }})</div>
@@ -101,5 +98,5 @@
     </details>
   {% empty %}<p class="muted">Không bảng đổi nào có cột mốc thời gian để kéo dòng.</p>{% endfor %}
 </div>
-</body>
-</html>
+
+{% endblock %}

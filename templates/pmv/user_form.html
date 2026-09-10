@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "pmv/base.html" %}
+{% load static %}
 
 {% block title %}{% if target_user %}Sửa {{ target_user.username }}{% else %}Thêm người dùng{% endif %}{% endblock %}
 {% block page_title %}{% if target_user %}Chỉnh sửa người dùng{% else %}Thêm người dùng{% endif %}{% endblock %}
