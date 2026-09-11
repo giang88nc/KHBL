@@ -447,6 +447,15 @@ class Command(BaseCommand):
                 b_sach = web.get(f"/banle/thau-vao-2/?d1={nay}&d2={nay}").content.decode()
                 # Cột HÌNH ẢNH (GĐ chốt 11/09/2026): ảnh QR mang ✔️ khi đã xác nhận CK, ❌ khi hết hạn mà chưa xác nhận
                 tpl_l = open("templates/pos/_thau2_list.html", encoding="utf-8").read()
+                # GĐ bắt lỗi 11/09/2026: dấu ✓ sau Tên chủ thẻ mới có ở popup, DANH SÁCH thì không — nay cả hai
+                import inspect as _ins
+                self._ok("dấu ✓ sau Tên chủ thẻ và Nội dung được gắn cho CẢ danh sách lẫn popup chi tiết",
+                         "ten_khop" in _ins.getsource(TL.enrich) and "ten_khop" in _ins.getsource(TL.detail)
+                         and "nd_khop" in _ins.getsource(TL.enrich))
+                self._ok("so tên bỏ dấu: 'Nguyễn Hoàng Gia Bảo' = 'NGUYEN HOANG GIA BAO' → khớp",
+                         TL.doi_chieu_ten("NGUYEN HOANG GIA BAO", "Nguyễn Hoàng Gia Bảo") is True
+                         and TL.doi_chieu_ten("NGUYEN HOANG GIA BAO", "Nguyễn Hoàng Gia Bao") is True
+                         and TL.doi_chieu_ten("LE VAN C", "Nguyễn Hoàng Gia Bảo") is False)
                 self._ok("cột HÌNH ẢNH: ảnh QR có dấu ✔️ khi đã xác nhận, ❌ khi hết hạn mà chưa xác nhận",
                          "th2-qr-dau--ok" in tpl_l and "th2-qr-dau--loi" in tpl_l
                          and "{% if r.gd_khop %}" in tpl_l and "{% elif r.qr_het_han %}" in tpl_l

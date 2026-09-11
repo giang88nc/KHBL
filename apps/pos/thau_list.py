@@ -35,6 +35,9 @@ def enrich(rows, membership):
         row['qr_image'] = by_slot.get('qr')
         row['photo_grid'] = [im for im in row['images'] if im['slot'] != 'qr']
         ids = [m['TrnID'] for m in row.get('members', [])] or [row['TrnID']]
+        # dấu ✓ sau Tên chủ thẻ cũng phải có ở DANH SÁCH, không riêng popup chi tiết (GĐ bắt lỗi 11/09/2026)
+        ten_kh = row.get('CustName') or (row.get('members') or [{}])[0].get('CustName')
+        row['ten_khop'] = doi_chieu_ten(getattr(group, 'ck_ten', ''), ten_kh)
         row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), ids)
         row['qr_het_han'] = not qr_con_han(row.get('TrnDate') or (row.get('members') or [{}])[0].get('CreatedDate'))
         row['gd_khop'] = giao_dich_da_khop(ids)
