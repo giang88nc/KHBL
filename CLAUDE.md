@@ -803,8 +803,10 @@ nhúng thẳng. Bản dùng thật nằm ở **`static/img/ico/<key>.png` 96px (
 gốc bằng System.Drawing của Windows (dự án KHÔNG có Pillow, cũng không cần thêm).
 
 Key ↔ ảnh gốc: `tong`←tong-quan · `ban`←ban-hang · `thau`←thau-vao · `gia`←gia-vang ·
-`khach`←khach-hang · `hoadon`←hoa-don · `hethong`←he-thong. **Giữ ảnh gốc trong `static/img/`**
-(nguồn để sinh lại). Sinh lại bằng PowerShell:
+`khach`←khach-hang · `hoadon`←hoa-don · `hethong`←he-thong · `chuyenkhoan` · `datcoc` (GĐ đưa
+11/09/2026, đã sẵn 96px). **Giữ ảnh gốc trong `static/img/`** (nguồn để sinh lại). ⚠ Thêm icon mới
+phải khai key vào **`_ICON_ANH`** trong `pos_extras.py`, thiếu là thẻ lặng lẽ rơi về icon SVG.
+Sinh lại bằng PowerShell:
 
 ```powershell
 Add-Type -AssemblyName System.Drawing

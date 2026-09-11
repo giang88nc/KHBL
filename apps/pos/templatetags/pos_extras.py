@@ -53,7 +53,7 @@ def icon(key, size=18):
 # sinh từ ảnh gốc 1254px bằng System.Drawing — gốc GIỮ NGUYÊN trong static/img/, đừng xóa.
 # Muốn sinh lại sau khi đổi ảnh: xem CLAUDE.md mục "Icon topbar".
 # {% icon %} (SVG nét, ăn theo currentColor) vẫn dùng cho mọi chỗ khác trong app.
-_ICON_ANH = {"tong", "ban", "thau", "gia", "khach", "hoadon", "hethong", "chuyenkhoan"}
+_ICON_ANH = {"tong", "ban", "thau", "gia", "khach", "hoadon", "hethong", "chuyenkhoan", "datcoc"}
 
 
 @register.simple_tag

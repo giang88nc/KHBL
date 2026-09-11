@@ -23,6 +23,8 @@ class DepositOrderState(models.Model):
     quote_status = models.CharField(max_length=12, default='estimate')
     quote_amount = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
     quote_terms = models.CharField(max_length=1000, blank=True)
+    pricing = models.JSONField(default=dict)
+    payment_plan = models.JSONField(default=dict)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -96,7 +96,7 @@ def classify(rows, today=None, now=None):
         row['active'] = row['fulfilment'] not in ('delivered', 'cancelled')
         if row['active']:
             for item in row['items']:
-                if item['ProductCode']:
+                if item['ProductCode'] and item['Mode']=='stock':
                     codes[item['ProductCode'].casefold()].add(row['TrnID'])
     for row in rows:
         promise = row['promise_date']
@@ -106,7 +106,7 @@ def classify(rows, today=None, now=None):
         row['needs_call'] = row['active'] and row['fulfilment'] == 'ready' and not row['contacted']
         row['needs_money'] = not row['money_confirmed']
         row['hold_conflict'] = row['hold_conflict'] or (row['active'] and any(
-            len(codes[i['ProductCode'].casefold()]) > 1 for i in row['items'] if i['ProductCode']))
+            len(codes[i['ProductCode'].casefold()]) > 1 for i in row['items'] if i['ProductCode'] and i['Mode']=='stock'))
         if row['overdue']:
             row['due_text'] = f'Quá hẹn {(today-promise).days} ngày'
         elif row['today_due']:

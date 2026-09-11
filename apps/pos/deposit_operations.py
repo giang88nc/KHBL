@@ -130,7 +130,7 @@ def action(request, pk, kind):
             form.fields['employee'].choices=[('','Chưa phân công')]+[(e['EmpID'],e['EmpName']) for e in employees]
         elif kind in ('hold','release'):
             form=HoldForm(request.POST or None)
-            codes=[i['ProductCode'] for i in items if i['ProductCode']] if kind=='hold' else list(DepositStockHold.objects.filter(target=c.target,trn_id=pk,active_key__isnull=False).values_list('product_code',flat=True))
+            codes=[i['ProductCode'] for i in items if i['ProductCode'] and i['Mode']=='stock'] if kind=='hold' else list(DepositStockHold.objects.filter(target=c.target,trn_id=pk,active_key__isnull=False).values_list('product_code',flat=True))
             form.fields['product'].choices=[(code,code) for code in codes]
         elif kind=='quote': form=QuoteForm(request.POST or None,initial={k:getattr(s,k) for k in ('quote_status','quote_amount','quote_terms')})
         elif kind=='cancel': form=CancelForm(request.POST or None)

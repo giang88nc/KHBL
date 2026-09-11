@@ -1,1 +1,16 @@
-<fieldset class="dc-line"><legend>Món đặt hàng</legend><div class="dc-line-fields">{% for field in item %}{% if field.name != 'DELETE' %}<label class="dc-line-field-{{ field.name }}">{{ field.label }}{{ field }}{{ field.errors }}</label>{% if field.name == 'ProductCode' %}<div class="dc-stock-results" aria-live="polite"></div>{% endif %}{% endif %}{% endfor %}</div><label class="dc-remove">{{ item.DELETE }} Bỏ món này khi lưu</label>{{ item.non_field_errors }}</fieldset>
+<div class="dc-line dc-row-sp">
+{{ item.Mode }}{{ item.TotalWeight }}{{ item.DisplayUnits }}<span hidden>{{ item.DELETE }}</span>
+<div class="dc-row-top"><span class="dc-row-source">Hàng đặt</span><button type="button" class="dc-row-remove" data-dc-remove-line aria-label="Bỏ món khỏi phiếu" title="Bỏ món">×</button></div>
+<div class="dc-row-grid">
+<label class="dc-row-code">Mã SP{{ item.ProductCode }}{{ item.ProductCode.errors }}</label>
+<label class="dc-row-name">Tên SP <b class="dc-required">*</b>{{ item.ProductDesc }}{{ item.ProductDesc.errors }}</label>
+<label>Loại <b class="dc-required">*</b>{{ item.GoldCode }}{{ item.GoldCode.errors }}</label>
+<label>TL vàng <span data-dc-unit>chỉ</span>{{ item.GoldWeight }}{{ item.GoldWeight.errors }}</label>
+<label>TL hột <span data-dc-unit>chỉ</span>{{ item.DiamondWeight }}{{ item.DiamondWeight.errors }}</label>
+<label>Size{{ item.Size }}{{ item.Size.errors }}</label>
+<label>SL{{ item.SL }}{{ item.SL.errors }}</label>
+<div class="dc-row-subtotal"><span>Tạm tính (₫)</span><output data-dc-row-total>—</output></div>
+<label class="dc-row-note">Ghi chú món{{ item.Notes }}{{ item.Notes.errors }}</label>
+<label class="dc-row-task">Tiền công / món (₫){{ item.TaskPrice }}{{ item.TaskPrice.errors }}</label>
+</div><div class="dc-stock-results" aria-live="polite"></div>{{ item.non_field_errors }}{{ item.TotalWeight.errors }}{{ item.Mode.errors }}
+</div>

@@ -1,0 +1,27 @@
+{% load pos_extras %}
+<form id="dc-save" class="dc-editor" data-products-url="{% url 'pos:dat_coc_products' %}" data-customers-url="{% url 'pos:dat_coc_customers' %}" data-customer-add-url="{% url 'pos:khach_them' %}" data-units="display" hx-post="{% if pk %}{% url 'pos:dat_coc_popup' pk 'edit' %}{% else %}{% url 'pos:dat_coc_add' %}{% endif %}" hx-target="#modal-root" hx-sync="this:drop" hx-disabled-elt=".dc-save-button">
+{% csrf_token %}<input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="editor_version" value="2"><input type="hidden" name="pricing_token" value="{{ pricing_token }}">
+{{ form.CustID }}{{ form.Estimate }}{{ form.non_field_errors }}
+{{ editor_rates|json_script:'dc-editor-rates' }}{{ customer_initial|json_script:'dc-customer-initial' }}
+<div class="dc-editor-top">
+<section class="dc-editor-section dc-editor-customer"><h3><span>01</span> Khách hàng</h3>
+<label for="dc-customer-search">Tìm hoặc quét CCCD · SĐT · tên khách <b class="dc-required">*</b></label>
+<div class="dc-customer-picker"><input id="dc-customer-search" type="search" placeholder="Nhập tên, số điện thoại hoặc quét CCCD…" autocomplete="off" maxlength="8192" role="combobox" aria-controls="dc-customer-results" aria-expanded="false" aria-autocomplete="list"><button type="button" class="dc-btn" data-dc-customer-add aria-label="Thêm khách hàng" title="Thêm khách hàng">＋</button>
+<div id="dc-customer-results" role="listbox" hidden></div></div>{{ form.CustID.errors }}
+<div class="dc-customer-info"><span id="dc-customer-contact">Chưa chọn khách hàng</span><span id="dc-customer-address">Địa chỉ sẽ hiện khi chọn khách</span></div>
+</section>
+<section class="dc-editor-section"><h3><span>02</span> Thông tin đặt</h3><div class="dc-order-fields">
+<label>Nhân viên <b class="dc-required">*</b>{{ form.EmpID }}{{ form.EmpID.errors }}</label>
+<label>Ngày đặt<input type="text" value="{{ created_date|date:'d/m/Y' }}" readonly title="Ngày tạo phiếu trên PMV"></label>
+<label>Ngày hẹn{{ form.PromiseDate }}{{ form.PromiseDate.errors }}</label>
+<label class="dc-order-note-field">Ghi chú phiếu{{ form.Description }}{{ form.Description.errors }}</label>
+</div></section></div>
+<section class="dc-editor-section dc-editor-items"><div class="dc-line-heading"><div><h3><span>03</span> Danh sách món <small id="dc-row-count"></small></h3><p>TL tính trên 1 món · vàng theo chỉ, loại gram hiển thị g.</p></div><div class="dc-add-buttons"><button type="button" class="dc-btn dc-stock-add" data-dc-add-line="stock">＋ Hàng sẵn</button><button type="button" class="dc-btn" data-dc-add-line="new">＋ Hàng đặt</button></div></div>
+{{ line_set.management_form }}{{ line_set.non_form_errors }}<div id="dc-lines">{% for item in line_set %}{% include 'pos/_dat_coc_line.html' %}{% endfor %}</div>
+<template id="dc-empty-line">{% include 'pos/_dat_coc_line.html' with item=empty_line %}</template>
+</section>
+<section class="dc-editor-section dc-editor-totals"><div class="dc-estimate-panel"><h3><span>04</span> Tổng theo loại vàng</h3><div id="dc-gold-totals" aria-live="polite"></div><div class="dc-estimate-line"><span>Tiền công &amp; làm tròn</span><b id="dc-task-total">0 ₫</b></div><div class="dc-estimate-grand"><span>Tạm tính</span><strong id="dc-estimate-total">0 ₫</strong></div><small>TL vàng × giá bán + tiền công; làm tròn theo cửa hàng. Giá tham khảo được giữ theo phiên lưu phiếu.</small></div>
+<div class="dc-deposit-panel"><h3>Tiền cọc</h3><div class="dc-deposit-fields"><label>Cọc tiền mặt (₫){{ form.CashDeposit }}{{ form.CashDeposit.errors }}</label><label>Cọc chuyển khoản (₫){{ form.BankDeposit }}{{ form.BankDeposit.errors }}</label></div><label class="dc-deposit-grand">Tổng cọc (₫){{ form.TienCoc }}{{ form.TienCoc.errors }}</label><p id="dc-deposit-summary" aria-live="polite"></p><small>{% if has_money %}Cọc đã ghi chứng từ. Thu thêm / hoàn tiền qua thao tác riêng.{% else %}Lưu phiếu ghi nhận số cọc dự kiến. “Lưu & thu cọc” xác nhận tiền mặt đã nhận và tự đối soát chuyển khoản.{% endif %}</small></div>
+</section>
+<div class="dc-editor-status"><span>Trạng thái phiếu</span><span class="dc-status dc-status--{{ work.state_css|default:'W' }}">{{ work.state_name|default:'Chưa giao' }}</span><small>{% if h %}{{ h.state_name }} · cập nhật giao hàng trong popup Tiến độ món.{% else %}Phiếu mới được lưu tạm; cập nhật giao hàng trong Tiến độ món.{% endif %}</small></div>
+</form>

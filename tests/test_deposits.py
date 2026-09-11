@@ -140,6 +140,7 @@ class DepositViewTests(TestCase):
                       TrnDateTime_Upd=dt.datetime(2026, 9, 11, 10), Status='W', CustID='KH001',
                       EmpID='NV1', TienCoc=Decimal('1000000'), Description='Ghi chú <script>', CustName='Khách thử', Phone='')
         self.patchers = [patch.object(D, 'PmvClient', return_value=self.c),
+                         patch('apps.pos.deposit_editor.S.gia_mysql',return_value={}),
                          patch('apps.pos.context_processors.S.thong_tin_tiem', return_value={}),
                          patch('apps.pos.context_processors.gateway.mo_ta_dich', return_value='Bản thử')]
         for p in self.patchers: p.start(); self.addCleanup(p.stop)
@@ -167,7 +168,7 @@ class DepositViewTests(TestCase):
             self.assertContains(response, 'ĐẶT-CỌC')
             for _, label in D.O.TABS:
                 self.assertContains(response, label)
-            self.assertContains(response, 'datcoc.svg')
+        self.assertContains(response, 'datcoc.png')
         with patch.object(D, 'listing', side_effect=RuntimeError('offline')):
             response = self.client.get(reverse('pos:dat_coc'), HTTP_HX_REQUEST='true')
             self.assertContains(response, 'Không kết nối')
@@ -229,13 +230,62 @@ class DepositViewTests(TestCase):
                    'Description': '', 'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
                    'items-0-Mode': 'new', 'items-0-ProductDesc': 'Nhẫn đặt', 'items-0-GoldCode': '18K',
                    'items-0-SL': '1', 'items-0-TotalWeight': '0', 'items-0-DiamondWeight': '0', 'items-0-TaskPrice': '0'}
-        with patch.object(D, 'pmv_user_for_web_user', return_value=SimpleNamespace(user_id='U1', shop_id='S1')), patch.object(D, 'save', return_value='TDC001') as save:
+        with patch.object(D, 'pmv_user_for_web_user', return_value=SimpleNamespace(user_id='U1', shop_id='S1',emp_id='NV1')), patch.object(D, 'save', return_value='TDC001') as save:
             response = self.client.post(reverse('pos:dat_coc_add'), payload)
             self.assertIn('depositSaved', response.headers['HX-Trigger'])
             response = self.client.post(reverse('pos:dat_coc_add'), payload)
             self.assertContains(response, 'đã được xử lý')
             self.assertEqual(save.call_count, 1)
             self.assertEqual(DepositSubmission.objects.filter(completed=True).count(), 1)
+
+    def test_editor_post_recomputes_prices_units_and_cash_bank_before_save(self):
+        from apps.pos.deposit_models import DepositOrderState
+        self.c.query.side_effect=lambda sql,*args: ([{'EmpID':'NV1','EmpName':'Nhân viên'}] if 'T_EMPLOYEE' in sql else
+            [{'GoldCode':'18K','WeightUnit':'L','PriceUnit':'L'}] if 'I_GOLD' in sql else
+            [{'factor':1}] if 'fun_GetHS' in sql else [{'GoldCcy':'18K','SellRate':8000}] if 'I_XRATE' in sql else [])
+        pu=SimpleNamespace(user_id='U1',shop_id='S1',emp_id='NV1',till_id='T1')
+        with patch.object(D,'pmv_user_for_web_user',return_value=pu):
+            opened=self.client.get(reverse('pos:dat_coc_add'))
+            self.assertEqual(len(opened.context['line_set'].forms),0)
+            data={'token':opened.context['token'],'pricing_token':opened.context['pricing_token'],'editor_version':'2',
+                  'CustID':'KH001','EmpID':'NV1','TienCoc':'1','CashDeposit':'1000000','BankDeposit':'250000',
+                  'Estimate':'1','PromiseDate':'2026-09-25','Description':'Ghi chú','items-TOTAL_FORMS':'1','items-INITIAL_FORMS':'0',
+                  'items-0-Mode':'new','items-0-ProductDesc':'Nhẫn đặt','items-0-GoldCode':'18K','items-0-SL':'2',
+                  'items-0-GoldWeight':'1.25','items-0-DiamondWeight':'.25','items-0-TotalWeight':'0',
+                  'items-0-TaskPrice':'100000','items-0-DisplayUnits':'True'}
+            with patch.object(D,'save',return_value='TDC001') as write,patch.object(D,'header',return_value=self.h.copy()),patch.object(D,'lines',return_value=[]):
+                saved=self.client.post(reverse('pos:dat_coc_add'),data)
+            self.assertIn('depositSaved',saved.headers.get('HX-Trigger',''),saved.content.decode())
+            written=write.call_args.args
+            self.assertEqual(written[1]['TienCoc'],Decimal('1250000'))
+            self.assertEqual(written[1]['Estimate'],Decimal('20200000'))
+            self.assertEqual(written[2][0]['GoldWeight'],Decimal('125'))
+            self.assertEqual(written[2][0]['TotalWeight'],Decimal('150'))
+            state=DepositOrderState.objects.get(trn_id='TDC001')
+            self.assertEqual(state.payment_plan,{'cash':'1000000','bank':'250000'})
+            self.assertEqual(state.quote_amount,Decimal('20200000'))
+            self.assertEqual(state.pricing['rates']['18K']['rate'],'8000000')
+            # Nút thu cọc tạo một yêu cầu tiền bền, khác với lưu phiếu thông thường.
+            opened=self.client.get(reverse('pos:dat_coc_add'))
+            data.update(token=opened.context['token'],pricing_token=opened.context['pricing_token'],payment_action='receive')
+            h={**self.h,'TrnID':'TDC002','TienCoc':Decimal('1250000')}
+            finance={'h':h,'amount':h['TienCoc'],'cash':Decimal(0),'bank':Decimal(0),'tx':[],'links':[],'changes':[]}
+            from apps.pos import deposit_money as F
+            from apps.pos.deposit_models import DepositMoneyOperation
+            with patch.object(D,'save',return_value='TDC002'),patch.object(D,'header',return_value=h),patch.object(D,'lines',return_value=[]),patch.object(F,'financial',return_value=finance),patch.object(F,'execute',side_effect=lambda op:op) as execute:
+                saved=self.client.post(reverse('pos:dat_coc_add'),data)
+            self.assertIn('depositSaved',saved.headers.get('HX-Trigger',''),saved.content.decode())
+            op=DepositMoneyOperation.objects.get(trn_id='TDC002')
+            self.assertEqual((op.cash,op.bank,op.amount),(Decimal('1000000'),Decimal('250000'),Decimal('1250000')))
+            self.assertEqual(op.active_key,'sandbox:TDC002'); execute.assert_called_once()
+
+    def test_customer_search_parses_scanned_cccd_and_returns_address(self):
+        with patch('apps.pos.services.cccd_tu_qr',return_value='000000000001') as parse:
+            self.c.query.return_value=[{'CustID':'KH001','CustName':'Khách mẫu','Phone':'0900000000','CMND':'000000000001','Address':'Địa chỉ mẫu'}]
+            response=self.client.get(reverse('pos:dat_coc_customers'),{'customer_q':'QR mẫu','format':'json'})
+        parse.assert_called_once_with('QR mẫu')
+        self.assertEqual(self.c.query.call_args.args[1],('%000000000001%',)*4)
+        self.assertEqual(response.json()['rows'][0]['Address'],'Địa chỉ mẫu')
 
     def test_order_tab_controls_status_and_renders_compact_rows(self):
         row = D.decorate({**self.h, 'TrnID': 'TRC001', 'Status': 'R', 'line_count': 2,

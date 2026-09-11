@@ -71,10 +71,13 @@ def _quy_cach_lam_tron(client=None):
     return v
 
 
-def round_vnd(x, client=None):
+def round_vnd(x, client=None, *, quantum=None):
     """Làm tròn tiền y hệt dbo.fn_LamTronVND (T-SQL ROUND: nửa làm tròn RA XA số 0)."""
     x = dec(x)
-    exp = _THOUSAND if str(_quy_cach_lam_tron(client)).startswith("3@") else _ONE
+    # Phiếu báo giá giữ quy cách đã ký khi mở form, không đổi giữa lúc nhập/lưu.
+    if quantum is not None and dec(quantum) not in (_THOUSAND, _ONE):
+        raise ValueError('Quy cách làm tròn không hợp lệ.')
+    exp = dec(quantum).normalize() if quantum is not None else _THOUSAND if str(_quy_cach_lam_tron(client)).startswith("3@") else _ONE
     return x.quantize(exp, rounding=ROUND_HALF_UP)
 
 

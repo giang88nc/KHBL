@@ -18,7 +18,10 @@ def split_stock_note(note):
 
 def item_info(row):
     code, note = split_stock_note(row.get('Notes'))
-    return {**row, 'Mode': 'stock' if code else 'new', 'ProductCode': code, 'Notes': note}
+    mode='stock' if code else 'new'
+    ordered=re.match(r'^MA_DAT:([^|]+)\s*\|\s*(.*)$',note,re.S) if not code else None
+    if ordered: code,note=ordered[1].strip(),ordered[2]
+    return {**row, 'Mode': mode, 'ProductCode': code, 'Notes': note}
 
 
 def is_mobile_order(row):

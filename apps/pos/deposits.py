@@ -71,9 +71,18 @@ class DepositForm(forms.Form):
     PromiseDate = forms.DateField(label='Ngày hẹn lấy hàng', required=False,
                                  widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'))
     Estimate = forms.DecimalField(label='Tổng tiền tạm tính (₫)', required=False, min_value=0, max_digits=18, decimal_places=3)
+    CashDeposit = forms.DecimalField(label='Cọc tiền mặt',required=False,min_value=0,max_digits=18,decimal_places=3)
+    BankDeposit = forms.DecimalField(label='Cọc chuyển khoản',required=False,min_value=0,max_digits=18,decimal_places=3)
 
     def clean(self):
         data = super().clean()
+        self.raw_description=data.get('Description','')
+        if self.data.get('editor_version')=='2':
+            for key in ('CashDeposit','BankDeposit'):
+                if data.get(key) is None: self.add_error(key,'Nhập số tiền, hoặc 0 nếu không có.')
+            if data.get('CashDeposit') is not None and data.get('BankDeposit') is not None:
+                try: data['TienCoc']=self.fields['TienCoc'].clean(data['CashDeposit']+data['BankDeposit'])
+                except forms.ValidationError as exc: self.add_error('TienCoc',exc)
         if data.get('Estimate') and not data.get('PromiseDate'):
             self.add_error('PromiseDate', 'Nhập ngày hẹn để lưu thông tin đặt hàng và tiền tạm tính.')
         if 'Description' in data:
@@ -94,11 +103,12 @@ class OrderLineForm(forms.Form):
     SL = forms.IntegerField(label='Số lượng', min_value=1, max_value=9999, initial=1)
     TotalWeight = forms.DecimalField(label='Tổng TL', min_value=0, max_digits=19, decimal_places=8, initial=0)
     DiamondWeight = forms.DecimalField(label='TL hột', min_value=0, max_digits=19, decimal_places=8, initial=0)
-    GoldWeight = forms.DecimalField(label='TL vàng dự kiến', required=False, min_value=0, max_digits=19,
+    GoldWeight = forms.DecimalField(label='TL vàng dự kiến', required=False, initial=0, min_value=0, max_digits=19,
                                    decimal_places=8, widget=forms.NumberInput(attrs={'placeholder': 'Tự tính nếu bỏ trống'}))
     TaskPrice = forms.DecimalField(label='Tiền công (₫)', min_value=0, max_digits=18, decimal_places=3, initial=0)
     Size = forms.CharField(label='Ni / kích thước', required=False, max_length=200)
     Notes = forms.CharField(label='Yêu cầu chế tác', required=False, max_length=1000)
+    DisplayUnits = forms.BooleanField(required=False,widget=forms.HiddenInput,initial=True)
 
     def clean(self):
         d = super().clean()
@@ -107,7 +117,11 @@ class OrderLineForm(forms.Form):
             self.add_error('ProductCode', 'Chọn sản phẩm có sẵn trong kho.')
         if mode == 'stock' and d.get('ProductCode'):
             d['Notes'] = f"SP:{d['ProductCode']} | {d.get('Notes') or ''}"
+        elif d.get('ProductCode'):
+            d['Notes'] = f"MA_DAT:{d['ProductCode']} | {d.get('Notes') or ''}"
         d['Mode'] = mode
+        if d.get('DisplayUnits') and d.get('GoldWeight') is not None and d.get('DiamondWeight') is not None:
+            d['TotalWeight']=d['GoldWeight']+d['DiamondWeight']
         if d.get('TotalWeight') is not None and d.get('DiamondWeight') is not None:
             if d['DiamondWeight'] > d['TotalWeight']:
                 raise forms.ValidationError('Trọng lượng hột không được lớn hơn tổng trọng lượng.')
@@ -121,7 +135,7 @@ LineSet = formset_factory(OrderLineForm, extra=0, can_delete=True, min_num=1, va
 
 
 def header(c, pk):
-    rows = c.query('SELECT d.*, k.CustName, k.Phone, k.Address, e.EmpName FROM TRN_DATCOC d WITH (NOLOCK) '
+    rows = c.query('SELECT d.*, k.CustName, k.Phone, k.CMND, k.Address, e.EmpName FROM TRN_DATCOC d WITH (NOLOCK) '
                    'LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID=d.CustID '
                    'LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID=d.EmpID WHERE d.TrnID=?', (pk,))
     return rows[0] if rows else None
@@ -217,17 +231,23 @@ def report(request):
 @require_GET
 def customers(request):
     authorize(request, 'can_edit')
-    q = request.GET.get('customer_q', '').strip()[:100]
+    from . import services as S
+    raw=request.GET.get('customer_q','').strip()[:8192]
+    q=S.cccd_tu_qr(raw) or raw[:100]
     rows = []
     error = ''
-    if len(q) >= 2:
+    if len(q) >= 2 or request.GET.get('cust_id'):
         try:
             term = '%' + q.replace('[', '[[]').replace('%', '[%]').replace('_', '[_]') + '%'
-            rows = PmvClient(tag='datcoc-customer').query(
-                'SELECT TOP 12 CustID,CustName,Phone FROM I_CUSTOMER WITH (NOLOCK) '
-                'WHERE CustName LIKE ? OR Phone LIKE ? OR CustID LIKE ? ORDER BY CustName', (term, term, term))
+            c=PmvClient(tag='datcoc-customer')
+            columns='SELECT TOP 12 CustID,CustName,Phone,CMND,Address FROM I_CUSTOMER WITH (NOLOCK) '
+            if request.GET.get('cust_id'):
+                rows=c.query(columns+'WHERE CustID=?',(request.GET['cust_id'][:15],))
+            else:
+                rows=c.query(columns+'WHERE CustName LIKE ? OR Phone LIKE ? OR CustID LIKE ? OR CMND LIKE ? ORDER BY CustName',(term,term,term,term))
         except Exception:
             log.exception('Tìm khách đặt cọc'); error = 'Không tải được khách hàng.'
+    if request.GET.get('format')=='json': return JsonResponse({'rows':rows,'error':error},status=503 if error else 200)
     return render(request, 'pos/_dat_coc_customers.html', {'customers': rows, 'query': q, 'error': error})
 
 
@@ -244,7 +264,7 @@ def products(request):
                        'p.RingSize,g.WeightUnit FROM T_PRODUCT p WITH (NOLOCK) '
                        'LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode=p.GoldCode '
                        "WHERE p.Status='I' AND (p.ProductCode LIKE ? OR p.ProductDesc LIKE ?) ORDER BY p.ProductCode", (search, search))
-        factor = Decimal('100') if request.GET.get('units') == 'mobile' else Decimal(c.query('SELECT dbo.fun_GetHS() factor')[0]['factor'])
+        factor = Decimal('100') if request.GET.get('units') in ('mobile','display') else Decimal(c.query('SELECT dbo.fun_GetHS() factor')[0]['factor'])
         for row in rows:
             scale = factor if row['WeightUnit'] == 'L' else Decimal(1)
             for key in ('TotalWeight', 'DiamondWeight'):
@@ -365,40 +385,93 @@ def popup(request, action, pk=None):
             raise ValueError('Phiếu đã ghi tiền mặt/chuyển khoản. Cần xử lý cọc theo chứng từ trước khi hủy, không xóa phiếu.')
         initial_header = {**h, 'TienCoc': Decimal(h.get('TienCoc') or 0).quantize(Decimal('0.001')),
                           'Description': h['note'], 'PromiseDate': h['promise_date'], 'Estimate': h['estimate']} if h else None
+        from .deposit_models import DepositOrderState
+        state=DepositOrderState.objects.filter(target=c.target,trn_id=pk).first() if pk else None
+        if action in ('add','edit') and request.method=='GET':
+            ctx['token']=signing.dumps({**version(c,h),'local':state.version if state else 0,'nonce':uuid.uuid4().hex},salt='datcoc')
+        plan=(state.payment_plan if state else {}) or {}
+        if h:
+            initial_header.update(CashDeposit=(h.get('CashPay') or 0) if ctx['has_money'] else plan.get('cash'),
+                                  BankDeposit=(h.get('CardPay') or 0) if ctx['has_money'] else plan.get('bank'))
+            if not h.get('TienCoc'): initial_header.update(CashDeposit=0,BankDeposit=0)
+            if state: initial_header.update(PromiseDate=state.promise,EmpID=state.employee_id)
+        else:
+            pu=pmv_user_for_web_user(request.user)
+            initial_header={'TienCoc':0,'CashDeposit':0,'BankDeposit':0,'EmpID':pu.emp_id if pu else ''}
         form = DepositForm(request.POST if request.method == 'POST' else None, initial=initial_header)
+        form.fields['CustID'].widget=forms.HiddenInput()
+        form.fields['TienCoc'].widget.attrs['readonly']=True
+        form.fields['Estimate'].widget=forms.HiddenInput()
+        if request.POST.get('editor_version')=='2' or request.method=='GET':
+            form.fields['TienCoc'].required=False
+            form.fields['Estimate'].disabled=True
         if action == 'edit' and ctx['has_money']:
             form.fields['TienCoc'].widget.attrs['readonly'] = True
             form.fields['TienCoc'].help_text = 'Phiếu đã ghi tiền: thu bổ sung hoặc hoàn cọc cần chứng từ riêng.'
+            for key in ('CashDeposit','BankDeposit'): form.fields[key].widget.attrs['readonly']=True
         initial_lines = [{**O.item_info(row), **{k: row.get(k) if row.get(k) is not None else (1 if k == 'SL' else 0)
                            for k in ('SL', 'TotalWeight', 'DiamondWeight', 'GoldWeight', 'TaskPrice')}} for row in old_lines]
         for row in initial_lines:
             for key in ('TotalWeight', 'DiamondWeight', 'GoldWeight', 'TaskPrice'):
                 row[key] = Decimal(row[key]).quantize(Decimal('0.001') if key == 'TaskPrice' else Decimal('0.00000001'))
-        line_set = LineSet(request.POST if request.method == 'POST' else None, initial=initial_lines, prefix='items')
         if action in ('add', 'edit'):
+            from . import deposit_editor as E
+            pricing,price_token=E.price_context(c,bool(h and h['mobile_order']),state.pricing if state else None)
+            if request.method=='POST' and request.POST.get('editor_version')=='2':
+                pricing=signing.loads(request.POST.get('pricing_token',''),salt='dc-pricing',max_age=7200)
+                if pricing['target']!=c.target or pricing['mobile']!=bool(h and h['mobile_order']): raise ValueError('Đích hoặc đơn vị đã đổi. Mở lại phiếu.')
+                price_token=request.POST['pricing_token']
+            for row in initial_lines:
+                scale=Decimal(pricing['rates'].get(row.get('GoldCode'),{}).get('native_per_display',1))
+                for key in ('TotalWeight','DiamondWeight','GoldWeight'): row[key]=(row[key]/scale).quantize(Decimal('0.00000001'))
+            line_set = LineSet(request.POST if request.method == 'POST' else None, initial=initial_lines, prefix='items')
+            if action=='add' and request.method=='GET': line_set.min_num=0
             form.fields['EmpID'].choices = [('', 'Chọn nhân viên')] + [(r['EmpID'], r['EmpName']) for r in c.query(
                 'SELECT EmpID,EmpName FROM T_EMPLOYEE WITH (NOLOCK) ORDER BY EmpName')]
-            gold = [('', 'Chọn loại vàng')] + [(r['GoldCode'], r['GoldCode']) for r in c.query(
-                'SELECT GoldCode FROM I_GOLD WITH (NOLOCK) ORDER BY GoldCode')]
+            gold = [('', 'Loại vàng')] + [(code,code) for code in pricing['rates']]
             for f in line_set:
                 f.fields['GoldCode'].choices = gold
             empty = line_set.empty_form
             empty.fields['GoldCode'].choices = gold
-            ctx.update(form=form, line_set=line_set, empty_line=empty)
+            for f in [*line_set,empty]:
+                for key in ('Mode','TotalWeight'): f.fields[key].widget=forms.HiddenInput()
+                f.fields['GoldWeight'].required=request.method=='GET' or request.POST.get('editor_version')=='2'
+                f.fields['GoldWeight'].widget.attrs['placeholder']='0'
+                f.fields['ProductCode'].widget.attrs['placeholder']='Mã / tìm hàng…'
+            ctx.update(form=form, line_set=line_set, empty_line=empty,editor_rates=pricing['rates'],pricing_token=price_token,
+                       created_date=h['TrnDate'] if h else timezone.localdate(),price_at=pricing['at'],
+                       customer_initial={k:h.get(k) for k in ('CustID','CustName','Phone','CMND','Address')} if h else {},
+                       can_receive=ctx['can_approve'] and not ctx['has_money'] and not (h and h['mobile_order']))
         if request.method == 'POST':
             if action in ('add', 'edit') and not (form.is_valid() & line_set.is_valid()):
                 ctx['error'] = 'Vui lòng kiểm tra các ô được đánh dấu bên dưới.'
             else:
+                quoted=None; save_lines=line_set.cleaned_data if action!='delete' else []
+                if action!='delete' and request.POST.get('editor_version')=='2':
+                    quoted=E.calculate(line_set.cleaned_data,pricing['rates'])
+                    try: form.cleaned_data['Estimate']=form.fields['Estimate'].clean(quoted['total'])
+                    except forms.ValidationError as exc: raise ValueError('Tạm tính vượt giới hạn lưu phiếu; kiểm tra số lượng và trọng lượng.') from exc
+                    form.cleaned_data['Description']=O.pack_description(form.cleaned_data.get('PromiseDate'),form.raw_description,quoted['total'])
+                    if len(form.cleaned_data['Description'])>500: raise ValueError('Ghi chú cùng ngày hẹn/tạm tính vượt 500 ký tự.')
+                    save_lines=E.native_lines(line_set.cleaned_data,pricing['rates'])
+                    if request.POST.get('payment_action')=='receive' and not ctx['can_receive']:
+                        raise ValueError('Phiếu hoặc tài khoản không đủ điều kiện thu cọc. Chọn Lưu phiếu.')
                 with SAVE_LOCK:
                     current = header(c, pk) if pk else None
                     current_has_money = bool(current and (Decimal(current.get('CashPay') or 0) != 0 or Decimal(current.get('CardPay') or 0) != 0))
                     if current_has_money and (action == 'delete' or form.cleaned_data['TienCoc'] != Decimal(current['TienCoc'])):
                         raise ValueError('Không sửa đè hoặc xóa tiền cọc đã ghi nhận. Cần xử lý bằng chứng từ thu/hoàn cọc.')
+                    if current_has_money and quoted is not None and any(form.cleaned_data[k]!=Decimal(current.get(column) or 0) for k,column in [('CashDeposit','CashPay'),('BankDeposit','CardPay')]):
+                        raise ValueError('Không sửa phân bổ cọc đã ghi; cần chứng từ thu/hoàn riêng.')
                     try:
                         submitted = signing.loads(request.POST.get('token', ''), salt='datcoc', max_age=7200)
                     except signing.BadSignature:
                         raise ValueError('Phiên thao tác đã hết hạn. Hãy đóng và mở lại popup.')
                     submitted.pop('nonce', None)
+                    local=submitted.pop('local',None)
+                    if local is not None:
+                        latest=DepositOrderState.objects.filter(target=c.target,trn_id=pk).first() if pk else None
+                        if local!=(latest.version if latest else 0): raise ValueError('Phiếu vừa được cập nhật tiến độ hoặc lịch hẹn. Mở lại trước khi sửa.')
                     if submitted != version(c, current):
                         raise ValueError('Dữ liệu hoặc đích kết nối đã thay đổi. Hãy đóng và mở lại phiếu.')
                     if current and current['Status'] != 'W':
@@ -406,6 +479,9 @@ def popup(request, action, pk=None):
                     pu = pmv_user_for_web_user(request.user)
                     if not pu or not pu.shop_id:
                         raise ValueError('Tài khoản chưa được liên kết với nhân viên / cửa hàng PMV.')
+                    if action!='delete' and request.POST.get('payment_action')=='receive':
+                        if not pu.till_id or form.cleaned_data['TienCoc']<=0:
+                            raise ValueError('Thu cọc cần số tiền lớn hơn 0 và tài khoản có két PMV.')
                     if action == 'delete':
                         c.call('TRN_DATCOC_Del', write=True, p_TrnID=pk, p_UserUpd=pu.user_id,
                                p_TrnDateTime_Upd=current['TrnDateTime_Upd'])
@@ -423,15 +499,40 @@ def popup(request, action, pk=None):
                             record.completed = True
                             record.save(update_fields=['completed'])
                         # Khi kết nối có kết quả không chắc chắn, giữ token đã dùng để không tạo cọc hai lần.
-                        saved_pk=save(c, form.cleaned_data, line_set.cleaned_data, pu, current)
+                        saved_pk=save(c, form.cleaned_data, save_lines, pu, current)
+                        W.invalidate(c.target)
                         from .deposit_models import DepositOrderState
                         with transaction.atomic():
                             state=DepositOrderState.objects.select_for_update().filter(target=c.target,trn_id=saved_pk).first()
+                            if not state and quoted is not None:
+                                from .deposit_operations import base_state
+                                state=base_state(c,header(c,saved_pk),[O.item_info(i) for i in lines(c,saved_pk)])
                             if state:
                                 state.promise=form.cleaned_data.get('PromiseDate')
                                 state.employee_id=form.cleaned_data['EmpID']
                                 state.employee_name=dict(form.fields['EmpID'].choices).get(state.employee_id,'')
+                                if quoted is not None:
+                                    state.pricing={**pricing,'lines':quoted['lines']}
+                                    state.payment_plan={'cash':str(form.cleaned_data['CashDeposit']),'bank':str(form.cleaned_data['BankDeposit'])}
+                                    if state.quote_amount!=quoted['total']: state.quote_status='estimate'
+                                    state.quote_amount=quoted['total']
                                 state.version+=1; state.save()
+                        if quoted is not None and request.POST.get('payment_action')=='receive':
+                            from . import deposit_money as F
+                            actual=header(c,saved_pk)
+                            op=DepositMoneyOperation(target=c.target,trn_id=saved_pk,kind='receive',amount=form.cleaned_data['TienCoc'],
+                                cash=form.cleaned_data['CashDeposit'],bank=form.cleaned_data['BankDeposit'],user_id=pu.user_id,till_id=pu.till_id,
+                                username=request.user.username,active_key=c.target+':'+saved_pk,token=hashlib.sha256((request.POST['token']+':receive').encode()).hexdigest(),
+                                evidence={'stamp':F.money_stamp(c,actual),'note':'Thu cọc từ popup đặt hàng'})
+                            try:
+                                F.validate_operation(op,F.financial(c,saved_pk)); op.save(); F.log_event(op); op=F.execute(op)
+                            except Exception:
+                                log.exception('Phiếu đã lưu nhưng thu cọc cần kiểm tra: %s',saved_pk)
+                                W.invalidate(c.target)
+                                from .deposit_messages import saved
+                                return saved('Đã lưu phiếu '+saved_pk+'. Thu cọc chưa hoàn tất; mở Chứng từ cọc để kiểm tra trước khi thu lại.','warning')
+                            from .deposit_messages import saved
+                            return saved('Đã lưu phiếu. '+F.STATES[op.status]+': '+op.message,'success' if op.status=='done' else 'warning' if op.status=='queued' else 'error')
                 W.invalidate(c.target)
                 response = HttpResponse('')
                 import json
@@ -439,6 +540,8 @@ def popup(request, action, pk=None):
                 return response
     except Http404:
         raise
+    except signing.BadSignature:
+        ctx['error']='Phiên giá đã hết hạn hoặc thay đổi. Đóng và mở lại phiếu.'
     except ValueError as exc:
         ctx['error'] = str(exc)
     except Exception:

@@ -16,10 +16,11 @@
   function mode(line) {
     const stock = field(line, 'Mode')?.value === 'stock';
     line.classList.toggle('is-stock', stock);
-    line.querySelector('legend').textContent = stock ? 'Có sẵn trong kho' : 'Đặt mới theo yêu cầu';
+    line.querySelector('.dc-row-source').textContent = stock ? 'Hàng sẵn' : 'Hàng đặt';
+    if (field(line, 'DELETE')?.checked) line.hidden = true;
     if (!stock) line.querySelector('.dc-stock-results').replaceChildren();
   }
-  function bindLines() { document.querySelectorAll('#dc-lines .dc-line').forEach(mode); }
+  function bindLines() { document.querySelectorAll('#dc-lines .dc-line').forEach(mode); window.dcEditorBind?.(); }
   document.addEventListener('click', event => {
     const form = document.getElementById('dc-filter');
     const tab = event.target.closest('[data-dc-tab]');
@@ -64,13 +65,6 @@
     }
     const add = event.target.closest('[data-dc-add-line]');
     if (add) {
-      const blank = [...document.querySelectorAll('#dc-lines .dc-line')].find(line =>
-        !field(line, 'DELETE')?.checked && ['ProductDesc', 'ProductCode', 'Notes'].every(key => !field(line, key).value.trim()));
-      if (blank) {
-        field(blank, 'Mode').value = add.dataset.dcAddLine || 'new'; mode(blank);
-        field(blank, add.dataset.dcAddLine === 'stock' ? 'ProductCode' : 'ProductDesc').focus();
-        return;
-      }
       const total = document.getElementById('id_items-TOTAL_FORMS');
       const n = Number(total.value);
       if (n >= 50) { toast('Mỗi phiếu tối đa 50 món.', 'warning'); return; }
@@ -80,6 +74,7 @@
       const line = document.querySelector('#dc-lines .dc-line:last-child');
       field(line, 'Mode').value = add.dataset.dcAddLine || 'new'; mode(line);
       field(line, add.dataset.dcAddLine === 'stock' ? 'ProductCode' : 'ProductDesc').focus();
+      window.dcEditorRecalculate?.();
     }
   });
   document.addEventListener('change', event => {
@@ -94,7 +89,7 @@
     if (previous) { clearTimeout(previous.timer); previous.controller.abort(); }
     const query = input.value.trim(), controller = new AbortController();
     results.replaceChildren();
-    if (query.length < 2) return;
+    if (query.length < 2 || field(line,'Mode').value !== 'stock') return;
     const timer = setTimeout(async () => {
       results.textContent = 'Đang tìm hàng trong kho…';
       try {
@@ -115,6 +110,7 @@
             ['ProductCode','ProductDesc','GoldCode','TotalWeight','DiamondWeight','GoldWeight'].forEach(key => { field(line,key).value = row[key] ?? ''; });
             field(line,'Size').value = row.RingSize || '';
             results.textContent = 'Đã chọn hàng trong kho: ' + row.ProductCode;
+            window.dcEditorRecalculate?.();
           });
           results.append(button);
         });

@@ -1,6 +1,6 @@
 {% extends 'partials/modal_shell.html' %}{% load pos_extras %}
 {% block modal_title %}{{ title }}{% if h %} · {{ h.BillCode|default:h.TrnID }}{% endif %}{% endblock %}
-{% block modal_style %}width:min(1060px,96vw);max-width:1060px{% endblock %}
+{% block modal_style %}width:min(1260px,97vw);max-width:1260px{% endblock %}
 {% block modal_body %}
 <div class="dc-popup">
 {% if error %}<div class="dc-alert" role="alert" data-dc-error>{{ error }}</div>{% endif %}
@@ -16,15 +16,7 @@
 {% if h.Status == 'W' and not error %}<form id="dc-save" data-products-url="{% url 'pos:dat_coc_products' %}" data-units="{% if h.mobile_order %}mobile{% else %}vendor{% endif %}" hx-post="{% url 'pos:dat_coc_popup' pk 'delete' %}" hx-target="#modal-root" hx-disabled-elt="#dc-submit">{% csrf_token %}<input type="hidden" name="token" value="{{ token }}"></form>{% endif %}
 {% else %}<h3>Chi tiết đặt hàng <span class="dc-muted">· {{ lines|length }} món</span></h3><p class="dc-muted">Đơn vị trọng lượng: {{ unit }} (vàng tính gram giữ đơn vị gram).</p><div class="dc-table-wrap"><table class="dc-table"><thead><tr><th>Món / yêu cầu</th><th>Vàng</th><th>SL</th><th>Tổng TL</th><th>TL hột</th><th>TL vàng</th><th>Tiền công (₫)</th><th>Ni</th></tr></thead><tbody>{% for r in lines %}<tr><td><b>{{ r.ProductDesc }}</b><small>{% if r.Mode == 'stock' %}Có sẵn · {{ r.ProductCode }}{% else %}Đặt mới{% endif %}</small><small>{{ r.Notes|default:'—' }}</small></td><td>{{ r.GoldCode }}</td><td>{{ r.SL|default_if_none:"1" }}</td><td>{{ r.TotalWeight|floatformat:'-4' }}</td><td>{{ r.DiamondWeight|floatformat:'-4' }}</td><td>{{ r.GoldWeight|floatformat:'-4' }}</td><td>{{ r.TaskPrice|tien_tran }}</td><td>{{ r.Size|default:'—' }}</td></tr>{% empty %}<tr><td colspan="8" class="dc-empty">Phiếu tiền cọc không kèm món đặt hàng.</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endif %}
 {% else %}{% if form %}
-<form id="dc-save" data-products-url="{% url 'pos:dat_coc_products' %}" data-units="{% if h.mobile_order %}mobile{% else %}vendor{% endif %}" hx-post="{% if pk %}{% url 'pos:dat_coc_popup' pk 'edit' %}{% else %}{% url 'pos:dat_coc_add' %}{% endif %}" hx-target="#modal-root" hx-disabled-elt="#dc-submit">
-{% csrf_token %}<input type="hidden" name="token" value="{{ token }}">
-<div class="dc-form-grid">{% for field in form %}<label class="dc-field-{{ field.name }}">{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</label>{% endfor %}</div>{{ form.non_field_errors }}
-<label class="dc-customer-search">Tìm khách hàng<input type="search" name="customer_q" placeholder="Nhập ít nhất 2 ký tự tên, SĐT hoặc mã khách…" hx-get="{% url 'pos:dat_coc_customers' %}" hx-trigger="input changed delay:350ms" hx-target="#dc-customer-results" hx-sync="this:replace" autocomplete="off"></label><div id="dc-customer-results" aria-live="polite">{% if h %}Khách hiện tại: {{ h.CustName }} · {{ h.Phone|default:'—' }}{% endif %}</div>
-<div class="dc-line-heading"><div><h3>Chi tiết đặt hàng</h3><p>Mỗi phiếu có ít nhất một món và luôn ghi tiền cọc. Đơn vị TL: {{ unit }}; vàng gram dùng gram.</p></div><div class="dc-add-buttons"><button type="button" class="dc-btn" data-dc-add-line="stock">＋ Hàng có sẵn</button><button type="button" class="dc-btn" data-dc-add-line="new">＋ Đặt mới</button></div></div>
-{{ line_set.management_form }}{{ line_set.non_form_errors }}<div id="dc-lines">{% for item in line_set %}{% include 'pos/_dat_coc_line.html' %}{% endfor %}</div>
-<template id="dc-empty-line">{% include 'pos/_dat_coc_line.html' with item=empty_line %}</template>
-<div class="dc-form-footer"><span>Lưu phiếu ở trạng thái <b>Lưu tạm</b>.</span></div>
-</form>{% endif %}{% endif %}
+{% include 'pos/_dat_coc_editor.html' %}{% endif %}{% endif %}
 </div>
 {% endblock %}
 
@@ -32,5 +24,5 @@
 {% if action == 'view' and h.Status == 'W' and can_delete and not has_money and not has_activity %}<button class="dc-btn dc-btn--danger" type="button" hx-get="{% url 'pos:dat_coc_popup' pk 'delete' %}" hx-target="#modal-root">Xóa phiếu</button>{% endif %}
 <button class="dc-btn" type="button" onclick="closeKhblModal()">Đóng</button>
 {% if action == 'view' and h %}{% if can_approve %}<button class="dc-btn" type="button" hx-get="{% url 'pos:dat_coc_apply' pk %}" hx-target="#modal-root">Cấn cọc vào hóa đơn</button>{% endif %}<button class="dc-btn dc-btn--primary" type="button" data-dc-print>In phiếu</button>{% endif %}
-{% if form %}<button id="dc-submit" class="dc-btn dc-btn--primary" type="submit" form="dc-save">Lưu phiếu cọc</button>{% elif action == 'delete' and h.Status == 'W' and not error %}<button id="dc-submit" class="dc-btn dc-btn--danger" type="submit" form="dc-save">Xác nhận xóa phiếu</button>{% endif %}
+{% if form %}{% if can_receive %}<button class="dc-btn dc-save-button" type="submit" form="dc-save" name="payment_action" value="receive">Lưu &amp; thu cọc</button>{% endif %}<button id="dc-submit" class="dc-btn dc-btn--primary dc-save-button" type="submit" form="dc-save">Lưu phiếu</button>{% elif action == 'delete' and h.Status == 'W' and not error %}<button id="dc-submit" class="dc-btn dc-btn--danger" type="submit" form="dc-save">Xác nhận xóa phiếu</button>{% endif %}
 {% endblock %}

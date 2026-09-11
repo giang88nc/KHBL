@@ -156,3 +156,13 @@ thêm THÔNG BÁO với danh sách từng ngày, sửa/xóa, mẫu OA chưa duy�
   đúng sandbox/đúng dòng kiểm thử; không sửa trực tiếp dữ liệu nghiệp vụ KK.
 - Không dùng thử bằng phiếu/tiền thật và chưa gửi thông báo tới khách. Giao diện OA kiểm bằng
   fixture riêng; kiểm tra trong phiên thật cần người dùng đăng nhập lại.
+
+### Popup thêm / sửa phiếu — 11/09/2026
+
+- Bốn phần: khách hàng (tìm theo tên/SĐT/CCCD hoặc quét QR), thông tin đặt, danh sách món, tổng tiền. Nút + mở popup khách hàng dùng chung; đóng/lưu khách không mất phiếu đang soạn. Địa chỉ lấy từ hồ sơ khách, nhân viên chỉ chọn một lần.
+- Hai nút + Hàng sẵn / + Hàng đặt luôn thêm dòng. Dòng gồm mã, tên, loại vàng, TL vàng/hột, size, SL, tạm tính, ghi chú và tiền công theo món. Mã mẫu hàng đặt lưu trong Notes với tiền tố MA_DAT; không tạo giữ kho hoặc cảnh báo trùng tồn cho mã mẫu.
+- Popup hiển thị TL chỉ hoặc gram thống nhất. Phiếu PMV chuyển qua hệ số gốc khi đọc/ghi; phiếu appMobile giữ cách quy đổi riêng. Tổng TL được tính từ TL vàng + TL hột. Mã hàng sẵn được kiểm lại tồn trước lưu.
+- Tạm tính được tính lại ở máy chủ bằng Decimal từ giá đã ký, SL và TL vàng; làm tròn qua công thức tiền chung. Trình duyệt dùng BigInt cho phần xem trước. Giá / quy cách làm tròn được giữ trên phiếu, thiếu giá hiển thị rõ, không lấy 0 làm giá thay thế. Chỉnh tạm tính làm giá chốt cũ trở về tham khảo.
+- Cọc tiền mặt + cọc chuyển khoản = tổng cọc. Lưu phiếu chỉ lưu dự kiến; Lưu & thu cọc xác nhận tiền mặt, tạo yêu cầu đối soát CK và gọi luồng chứng từ đã kiểm chứng. Khoản đã ghi tiền không được đổi phân bổ qua popup sửa. Ngày đặt lấy ngày tạo PMV; giao hàng đổi qua Tiến độ món.
+- Migration 0020 chỉ thêm pricing/payment_plan vào MySQL. Giá ký và token thao tác kiểm đích/phiên bản, không ghi lặp khi kết quả chưa rõ.
+- Kiểm thử: 72 ca về đặt cọc, vận hành, giá/tổng tiền và quyền; fixture trình duyệt thật kiểm thêm dòng, tra kho, dropdown, popup khách lồng, tiền, xóa dòng và bố cục điện thoại. `manage.py smoke_datcoc_editor` đã tạo/sửa/xóa phiếu trên sandbox qua proc, khớp TL 8 số lẻ, không sinh quỹ.
