@@ -445,6 +445,12 @@ class Command(BaseCommand):
                          not loi_ct, "; ".join(loi_ct[:3]))
                 nay = datetime.date.today().isoformat()
                 b_sach = web.get(f"/banle/thau-vao-2/?d1={nay}&d2={nay}").content.decode()
+                # Cột HÌNH ẢNH (GĐ chốt 11/09/2026): ảnh QR mang ✔️ khi đã xác nhận CK, ❌ khi hết hạn mà chưa xác nhận
+                tpl_l = open("templates/pos/_thau2_list.html", encoding="utf-8").read()
+                self._ok("cột HÌNH ẢNH: ảnh QR có dấu ✔️ khi đã xác nhận, ❌ khi hết hạn mà chưa xác nhận",
+                         "th2-qr-dau--ok" in tpl_l and "th2-qr-dau--loi" in tpl_l
+                         and "{% if r.gd_khop %}" in tpl_l and "{% elif r.qr_het_han %}" in tpl_l
+                         and ".th2-qr-dau{" in open("static/css/thau2.css", encoding="utf-8").read())
                 self._ok("trang thâu 2 không để lọt chú thích nội bộ ra HTML",
                          "{#" not in b_sach and "GĐ chốt" not in b_sach)
 

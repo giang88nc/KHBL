@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import deposits
 from . import qr_learning_views
 from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
@@ -8,6 +9,10 @@ from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
 app_name = "pos"
 
 urlpatterns = [
+    path('banle/dat-coc/', deposits.index, name='dat_coc'),
+    path('banle/dat-coc/khach/', deposits.customers, name='dat_coc_customers'),
+    path('banle/dat-coc/them/', deposits.popup, {'action': 'add'}, name='dat_coc_add'),
+    path('banle/dat-coc/<str:pk>/<str:action>/', deposits.popup, name='dat_coc_popup'),
     path("banle/khach-hang/qr/cong-cu/", qr_learning_views.tool, name="qr_learning"),
     path("banle/khach-hang/qr/hoc/dich/", qr_learning_views.translate, name="qr_learning_translate"),
     path("banle/khach-hang/qr/hoc/loc/", qr_learning_views.filter_errors, name="qr_learning_filter"),

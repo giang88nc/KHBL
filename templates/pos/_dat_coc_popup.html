@@ -1,0 +1,29 @@
+{% extends 'partials/modal_shell.html' %}{% load pos_extras %}
+{% block modal_title %}{{ title }}{% if h %} · {{ h.BillCode }}{% endif %}{% endblock %}
+{% block modal_style %}width:min(1060px,96vw);max-width:1060px{% endblock %}
+{% block modal_body %}
+<div class="dc-popup">
+{% if error %}<div class="dc-alert" role="alert" data-dc-error>{{ error }}</div>{% endif %}
+{% if action == 'view' or action == 'delete' %}{% if h %}
+<div class="dc-detail-summary"><div><span>Khách hàng</span><h3>{{ h.CustName|default:h.CustID }}</h3><p>{{ h.Phone|default:'—' }} · {{ h.TrnDate|date:'d/m/Y' }}</p></div><div><span>Tiền cọc</span><strong>{{ h.TienCoc|tien_tran }} ₫</strong><span class="dc-status dc-status--{{ h.Status }}">{{ h.state_name }}</span></div></div>
+<p class="dc-detail-note">{{ h.Description|default:'Chưa có ghi chú.' }}</p>
+{% if action == 'delete' %}<div class="dc-alert">Xóa phiếu lưu tạm này và {{ lines|length }} dòng đặt hàng đi kèm? Thao tác này không thể hoàn tác.</div>
+{% if h.Status == 'W' and not error %}<form id="dc-save" hx-post="{% url 'pos:dat_coc_popup' pk 'delete' %}" hx-target="#modal-root" hx-disabled-elt="#dc-submit">{% csrf_token %}<input type="hidden" name="token" value="{{ token }}"></form>{% endif %}
+{% else %}<h3>Chi tiết đặt hàng <span class="dc-muted">· {{ lines|length }} món</span></h3><p class="dc-muted">Đơn vị trọng lượng: {{ unit }} (vàng tính gram giữ đơn vị gram).</p><div class="dc-table-wrap"><table class="dc-table"><thead><tr><th>Món / yêu cầu</th><th>Vàng</th><th>SL</th><th>Tổng TL</th><th>TL hột</th><th>TL vàng</th><th>Tiền công (₫)</th><th>Ni</th></tr></thead><tbody>{% for r in lines %}<tr><td><b>{{ r.ProductDesc }}</b><small>{{ r.Notes|default:'—' }}</small></td><td>{{ r.GoldCode }}</td><td>{{ r.SL }}</td><td>{{ r.TotalWeight|floatformat:'-4' }}</td><td>{{ r.DiamondWeight|floatformat:'-4' }}</td><td>{{ r.GoldWeight|floatformat:'-4' }}</td><td>{{ r.TaskPrice|tien_tran }}</td><td>{{ r.Size|default:'—' }}</td></tr>{% empty %}<tr><td colspan="8" class="dc-empty">Phiếu tiền cọc không kèm món đặt hàng.</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endif %}
+{% else %}{% if form %}
+<form id="dc-save" hx-post="{% if pk %}{% url 'pos:dat_coc_popup' pk 'edit' %}{% else %}{% url 'pos:dat_coc_add' %}{% endif %}" hx-target="#modal-root" hx-disabled-elt="#dc-submit">
+{% csrf_token %}<input type="hidden" name="token" value="{{ token }}">
+<div class="dc-form-grid">{% for field in form %}<label class="dc-field-{{ field.name }}">{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}</div>{{ form.non_field_errors }}
+<label class="dc-customer-search">Tìm khách hàng<input type="search" name="customer_q" placeholder="Nhập ít nhất 2 ký tự tên, SĐT hoặc mã khách…" hx-get="{% url 'pos:dat_coc_customers' %}" hx-trigger="input changed delay:350ms" hx-target="#dc-customer-results" hx-sync="this:replace" autocomplete="off"></label><div id="dc-customer-results" aria-live="polite">{% if h %}Khách hiện tại: {{ h.CustName }} · {{ h.Phone|default:'—' }}{% endif %}</div>
+<div class="dc-line-heading"><div><h3>Chi tiết đặt hàng</h3><p>Có thể để trống khi chỉ nhận tiền cọc. Đơn vị TL: {{ unit }}; vàng gram dùng gram.</p></div><button type="button" class="dc-btn" data-dc-add-line>＋ Thêm món</button></div>
+{{ line_set.management_form }}{{ line_set.non_form_errors }}<div id="dc-lines">{% for item in line_set %}{% include 'pos/_dat_coc_line.html' %}{% endfor %}</div>
+<template id="dc-empty-line">{% include 'pos/_dat_coc_line.html' with item=empty_line %}</template>
+<div class="dc-form-footer"><span>Lưu phiếu ở trạng thái <b>Lưu tạm</b>.</span></div>
+</form>{% endif %}{% endif %}
+</div>
+{% endblock %}
+
+{% block modal_foot %}
+<button class="dc-btn" type="button" onclick="closeKhblModal()">Đóng</button>
+{% if form %}<button id="dc-submit" class="dc-btn dc-btn--primary" type="submit" form="dc-save">Lưu phiếu cọc</button>{% elif action == 'delete' and h.Status == 'W' and not error %}<button id="dc-submit" class="dc-btn dc-btn--danger" type="submit" form="dc-save">Xác nhận xóa phiếu</button>{% endif %}
+{% endblock %}

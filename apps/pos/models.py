@@ -4,6 +4,13 @@ from django.conf import settings
 from django.db import models
 
 
+class DepositSubmission(models.Model):
+    """Giữ token một lần trước khi gửi lệnh PMV; không tự gửi lại khi mất phản hồi."""
+    token = models.CharField(max_length=64, unique=True)
+    completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class BankReconcileState(models.Model):
     """Dấu vết đối soát và giữ chỗ TrnID qua các lần UPSERT ngân hàng."""
     notification_id = models.BigIntegerField(primary_key=True)

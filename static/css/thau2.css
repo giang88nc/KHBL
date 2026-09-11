@@ -61,3 +61,7 @@
 .th2-thumbs .th2-qr-cu img{opacity:.3;filter:grayscale(.7)}
 .th2-qr-cu__nhan{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#64748b;color:#fff;
   font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:2px 5px;border-radius:4px;white-space:nowrap}
+/* Dấu trên ảnh QR ở cột HÌNH ẢNH (GĐ chốt 11/09/2026): ✔️ đã xác nhận chuyển khoản · ❌ hết hạn mà chưa xác nhận */
+.th2-qr-dau{position:absolute;right:-3px;bottom:-3px;font-size:13px;line-height:1;
+  background:#fff;border-radius:50%;padding:1px 2px;box-shadow:0 1px 3px rgba(15,23,42,.35)}
+.th2-thumbs button{position:relative}

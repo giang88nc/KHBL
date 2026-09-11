@@ -1,0 +1,2 @@
+{% if error %}<p class="dc-alert">{{ error }}</p>{% endif %}
+{% for c in customers %}<button class="dc-customer" type="button" data-dc-customer="{{ c.CustID }}" data-name="{{ c.CustName }} · {{ c.Phone|default:'—' }}"><b>{{ c.CustName }}</b><span>{{ c.Phone|default:'—' }} · {{ c.CustID }}</span></button>{% empty %}{% if query|length >= 2 and not error %}<p class="dc-muted">Không tìm thấy khách phù hợp.</p>{% endif %}{% endfor %}

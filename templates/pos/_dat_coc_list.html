@@ -1,0 +1,32 @@
+{% load pos_extras %}
+<div class="dc-tabs" role="tablist" aria-label="Danh sách đặt cọc">
+  <button type="button" role="tab" aria-selected="{% if tab == 'money' %}true{% else %}false{% endif %}" data-dc-tab="money">{% icon 'thau' 20 %} Tiền cọc</button>
+  <button type="button" role="tab" aria-selected="{% if tab == 'orders' %}true{% else %}false{% endif %}" data-dc-tab="orders">{% icon 'tem' 20 %} Đặt hàng</button>
+</div>
+<form id="dc-filter" class="dc-filters" hx-get="{% url 'pos:dat_coc' %}" hx-target="#dc-content" hx-indicator="#dc-loading" hx-sync="this:replace">
+  <input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="page" value="1">
+  <label class="dc-search">{{ form.q.label }}{{ form.q }}</label><label>{{ form.start.label }}{{ form.start }}</label><label>{{ form.end.label }}{{ form.end }}</label><label>{{ form.status.label }}{{ form.status }}</label>
+  <button class="dc-btn dc-btn--primary" type="submit">Lọc danh sách</button><button class="dc-btn" type="button" data-dc-reset>Đặt lại</button>
+  <span id="dc-loading" class="htmx-indicator">Đang tải…</span>
+</form>
+{% if form.errors %}<div class="dc-alert" role="alert">{{ form.errors }}</div>{% endif %}
+{% if error %}<div class="dc-alert" role="alert">{{ error }} <button class="dc-btn" data-dc-retry>Thử lại</button></div>{% endif %}
+{% if stats %}
+<div class="dc-stats">
+  <article><span>Số phiếu</span><strong>{{ stats.total }}</strong><small>Theo bộ lọc hiện tại</small></article>
+  <article><span>Tổng tiền cọc trên phiếu</span><strong>{{ stats.amount|tien_tran }} <i>₫</i></strong><small>Bao gồm các trạng thái đã lọc</small></article>
+  <article class="dc-stats--teal"><span>Cọc đã thanh toán, chưa sử dụng</span><strong>{{ stats.available|tien_tran }} <i>₫</i></strong><small>Phiếu có trạng thái P</small></article>
+  <article><span>Phiếu lưu tạm</span><strong>{{ stats.drafts }}</strong><small>Chưa xác nhận thanh toán</small></article>
+</div>
+<section class="dc-panel" aria-label="{% if tab == 'orders' %}Đặt hàng{% else %}Tiền cọc{% endif %}">
+  <div class="dc-panel-head"><div><h2>{% if tab == 'orders' %}Danh sách đặt hàng{% else %}Danh sách tiền cọc{% endif %}</h2><p>{% if tab == 'orders' %}Các phiếu có chi tiết món đặt hàng.{% else %}Tất cả phiếu cọc của khách, bao gồm phiếu đặt hàng.{% endif %}</p></div><span>{{ stats.total }} phiếu</span></div>
+  <div class="dc-table-wrap"><table class="dc-table"><thead><tr><th>Phiếu / ngày</th><th>Khách hàng</th><th class="dc-number">Tiền cọc</th><th>Món đặt</th><th>Trạng thái</th><th>Ghi chú</th><th class="dc-actions">Thao tác</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><button class="dc-link" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'view' %}" hx-target="#modal-root">{{ r.BillCode|default:r.TrnID }}</button><small>{{ r.TrnDate|date:'d/m/Y' }}</small></td>
+    <td><b>{{ r.CustName|default:'Chưa có tên khách' }}</b><small>{{ r.Phone|default:'—' }}</small></td><td class="dc-number dc-money">{{ r.TienCoc|tien_tran }} ₫</td><td>{% if r.line_count %}<span class="dc-count">{{ r.line_count }} món</span>{% else %}<span class="dc-muted">—</span>{% endif %}</td>
+    <td><span class="dc-status dc-status--{{ r.Status }}">{{ r.state_name }}</span></td><td class="dc-note" title="{{ r.Description|default:'' }}">{{ r.Description|default:'—'|truncatechars:65 }}</td>
+    <td class="dc-actions"><button class="dc-btn dc-btn--small" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'view' %}" hx-target="#modal-root" aria-label="Xem phiếu {{ r.BillCode }}">Xem</button>
+    {% if r.Status == 'W' %}{% if can_edit %}<button class="dc-btn dc-btn--small" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'edit' %}" hx-target="#modal-root">Sửa</button>{% endif %}{% if can_delete %}<button class="dc-btn dc-btn--small dc-btn--danger" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'delete' %}" hx-target="#modal-root">Xóa</button>{% endif %}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7"><div class="dc-empty">{% icon 'hoadon' 42 %}<h3>Chưa có phiếu phù hợp</h3><p>Thử đổi khoảng ngày hoặc từ khóa tìm kiếm.</p>{% if can_edit %}<button class="dc-btn" hx-get="{% url 'pos:dat_coc_add' %}" hx-target="#modal-root">＋ Thêm phiếu cọc</button>{% endif %}</div></td></tr>{% endfor %}
+  </tbody></table></div>
+  <footer class="dc-pagination"><span>{{ pager.start_index }}–{{ pager.end_index }} / {{ stats.total }} phiếu</span><div>{% if pager.has_previous %}<button class="dc-btn" data-dc-page="{{ pager.previous_page_number }}">← Trước</button>{% endif %}<span>Trang {{ pager.number }} / {{ pager.paginator.num_pages }}</span>{% if pager.has_next %}<button class="dc-btn" data-dc-page="{{ pager.next_page_number }}">Sau →</button>{% endif %}</div></footer>
+</section>{% endif %}

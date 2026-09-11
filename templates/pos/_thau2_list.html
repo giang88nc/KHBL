@@ -5,7 +5,7 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
   manage.py doi_soat_ck) nên trang KHÔNG tự gọi nữa. Cờ này chỉ tắt vòng tự gọi trong thau2_payments.js; nút
   xác nhận/gỡ trong popup chi tiết vẫn dùng quyền thật ở máy chủ. Nút "Đối soát CK" đã bỏ cùng ngày.
 · Hai nút tải tệp (Excel danh mục NCC · Word ảnh CCCD) đứng ngay trên bảng, giữ nguyên bộ lọc đang xem.
-· Cột NỘI DUNG có tick ✓ khi đúng khuôn đối soát, ✕ khi sai (GĐ chốt 11/09/2026).
+· Cột NỘI DUNG có tick ✓ sau Tên chủ thẻ khi đúng khuôn đối soát, ✕ khi sai (GĐ chốt 11/09/2026).
 · Cột CHUYỂN KHOẢN dòng 2: khớp rồi thì hiện mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK".
 · Mã QR của phiếu khác ngày hôm nay: làm mờ + nhãn HẾT HẠN, không bấm mở.
 {% endcomment %}
@@ -35,7 +35,7 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 <td>{{ r.TrnTime|slice:":5" }}{% if d1 != d2 %}<small>{{ r.TrnDate|date:"d/m/Y" }}</small>{% endif %}</td>
 <td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
 <td>{% include 'pos/_thau2_bank.html' %}</td>
-<td><div class="th2-thumbs">{% for im in r.images %}<button type="button" class="{% if im.slot == 'qr' and r.qr_het_han %}th2-qr-cu{% endif %}" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{% if im.slot == 'qr' and r.qr_het_han %}Mã QR của ngày trước — đã hết hạn{% else %}{{ im.label }}{% endif %}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy">{% if im.slot == 'qr' and r.qr_het_han %}<span class="th2-qr-cu__nhan">HẾT HẠN</span>{% endif %}</button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
+<td><div class="th2-thumbs">{% for im in r.images %}<button type="button" class="{% if im.slot == 'qr' and r.qr_het_han and not r.gd_khop %}th2-qr-cu{% endif %}" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{% if im.slot == 'qr' %}{% if r.gd_khop %}Đã xác nhận chuyển khoản{% elif r.qr_het_han %}Mã QR của ngày trước, chưa xác nhận được tiền{% else %}{{ im.label }}{% endif %}{% else %}{{ im.label }}{% endif %}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy">{% if im.slot == 'qr' %}{% if r.gd_khop %}<span class="th2-qr-dau th2-qr-dau--ok">✔️</span>{% elif r.qr_het_han %}<span class="th2-qr-dau th2-qr-dau--loi">❌</span>{% endif %}{% endif %}</button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
 <td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}{% if r.gd_khop %}  <small class="th2-pay-state th2-pay-state--confirmed" title="Đã khớp giao dịch ngân hàng{% if r.gd_khop.so_lk > 1 %} ({{ r.gd_khop.so_lk }} giao dịch){% endif %}">{{ r.gd_khop.ref_code }} · {{ r.gd_khop.trans_amount|tien_tran }}</small>
 {% else %}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small>{% endif %}</td>
 <td>{% if r.mixed_status %}Nhiều trạng thái{% elif r.IsDel != '0' %}Đã hủy{% elif r.Status == 'C' %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>

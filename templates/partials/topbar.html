@@ -19,6 +19,8 @@
       {% icon_anh "hoadon" 50 %}<span>HÓA ĐƠN</span></a>
     <a class="khbl-top__i{% if nav_active == 'chuyenkhoan' %} is-on{% endif %}" href="{% url 'pos:chuyen_khoan' %}">
       {% icon_anh "chuyenkhoan" 50 %}<span>CHUYỂN KHOẢN</span></a>
+    <a class="khbl-top__i{% if nav_active == 'datcoc' %} is-on{% endif %}" href="{% url 'pos:dat_coc' %}">
+      <img class="khbl-ico-anh" src="{% static 'img/ico/datcoc.svg' %}" width="50" height="50" alt=""><span>ĐẶT-CỌC</span></a>
     <a class="khbl-top__i khbl-top__i--phu{% if nav_active == 'hethong' or request.resolver_match.namespace == 'pmv' %} is-on{% endif %}" href="{% url 'pmv:status' %}">
       {% icon_anh "hethong" 50 %}<span>HỆ THỐNG</span></a>
   </nav>

@@ -282,6 +282,8 @@ PROC_READ_ALLOW = frozenset({
 # Mỗi dòng GHI ghi rõ ngày kiểm chứng. ĐÃ chạy thật trên sandbox 03/09/2026 (tạo khách →
 # lập hóa đơn → chốt → hủy sạch, dấu vết trùng khớp 11 bảng mà app desktop tạo).
 PROC_WRITE_ALLOW = frozenset({
+    # 11/09/2026: CRUD phiếu cọc W theo yêu cầu trang ĐẶT-CỌC; kiểm chứng sandbox.
+    "TRN_DATCOC_Ins", "TRN_DATCOC_Upd", "TRN_DATCOC_Del",
     "I_XRATE_Ins",                                         # 06/09/2026 — cập nhật giá MySQL → MSSQL, smoke_price_sync
     "I_CUSTOMER_Ins", "I_CUSTOMER_Upd",                       # 03/09/2026
     "I_DiemTichLuy_InsFromGT",                                 # 05/09/2026

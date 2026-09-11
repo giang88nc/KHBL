@@ -261,6 +261,7 @@ class UserModuleAccess(models.Model):
         BANG_GIA = "BANG_GIA", "Bảng giá"
         KHACH_HANG = "KHACH_HANG", "Khách hàng"
         HOA_DON = "HOA_DON", "Hóa đơn"
+        DAT_COC = "DAT_COC", "Đặt cọc"
         HE_THONG = "HE_THONG", "Hệ thống"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="module_accesses")

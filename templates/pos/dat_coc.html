@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}ĐẶT-CỌC{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/dat_coc.css' %}?v=20260911.1">{% endblock %}
+{% block page_head %}{% endblock %}
+{% block content %}
+<section class="dc-page">
+  <header class="dc-hero"><div class="dc-heading"><img src="{% static 'img/ico/datcoc.svg' %}" width="62" height="62" alt=""><div><span class="dc-eyebrow">QUẢN LÝ GIAO DỊCH KHÁCH HÀNG</span><h1>ĐẶT-CỌC</h1><p>Theo dõi tiền cọc và từng món khách đặt hàng.</p></div></div>
+  {% if can_edit %}<button class="dc-btn dc-btn--primary" hx-get="{% url 'pos:dat_coc_add' %}" hx-target="#modal-root">＋ Thêm phiếu cọc</button>{% endif %}</header>
+  <div id="dc-content" hx-get="{% url 'pos:dat_coc' %}" hx-trigger="depositRefresh from:body" hx-include="#dc-filter" hx-target="this">{% include 'pos/_dat_coc_list.html' %}</div>
+</section>
+{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/dat_coc.js' %}?v=20260911.1"></script>{% endblock %}
