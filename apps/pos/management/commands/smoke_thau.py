@@ -8,6 +8,7 @@ chuỗi hủy của vendor; lỗi giữa chừng → dọn tay.
 import datetime
 import json
 import re
+from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 from django.test import Client
@@ -431,6 +432,22 @@ class Command(BaseCommand):
                             if nhom_xn.trn_ids[0] in x or (nhom_xn.bill_codes and nhom_xn.bill_codes[0] in x)]
                 self._ok("gỡ liên kết CK → dòng đó quay lại nút MỞ (sửa được như cũ), không kẹt ở chế độ chỉ xem",
                          not dong_sau or ">XEM<" not in dong_sau[0])
+                # GĐ chốt 11/09/2026: KHÔNG chèn chú thích giữa markup. Nguy hiểm nhất là {# … #} NHIỀU DÒNG:
+                # Django chỉ coi {# #} là chú thích khi gọn trong MỘT dòng, nhiều dòng thì in nguyên văn ra trang.
+                loi_ct = []
+                for tep in sorted(Path("templates").rglob("*.html")):
+                    noi = tep.read_text(encoding="utf-8")
+                    for m in _re_ds.finditer(r"\{#", noi):
+                        cuoi = noi.find("#}", m.start())
+                        if cuoi < 0 or chr(10) in noi[m.start():cuoi]:
+                            loi_ct.append(f"{tep}:{noi[:m.start()].count(chr(10)) + 1}")
+                self._ok("không template nào còn chú thích {# #} nhiều dòng (loại này in thẳng ra trang cho khách thấy)",
+                         not loi_ct, "; ".join(loi_ct[:3]))
+                nay = datetime.date.today().isoformat()
+                b_sach = web.get(f"/banle/thau-vao-2/?d1={nay}&d2={nay}").content.decode()
+                self._ok("trang thâu 2 không để lọt chú thích nội bộ ra HTML",
+                         "{#" not in b_sach and "GĐ chốt" not in b_sach)
+
                 # GĐ chốt 10/09/2026: trang /thau-vao-2/ MỞ CÔNG KHAI trong mạng tiệm (gồm ảnh + 2 nút xuất tệp),
                 # nút "Đối soát CK" bỏ đi vì máy chủ tự soát mỗi 5 phút; các trang NHẬP LIỆU vẫn phải đăng nhập.
                 hom_nay = datetime.date.today().isoformat()

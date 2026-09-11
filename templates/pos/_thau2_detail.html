@@ -2,6 +2,11 @@
 Popup mở được từ HAI nơi: trang /thau-vao-2/ (có sẵn thau2.css) và nút XEM trong popup DANH SÁCH của trang
 /thau-vao/ (KHÔNG có thau2.css → trước 10/09/2026 popup mở ở đó bị vỡ giao diện). Vì vậy popup TỰ mang theo
 bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại từ bộ nhớ đệm nên mở lần sau không tốn thêm.
+
+Mã QR bị khóa (làm mờ + phủ nhãn, bỏ thẻ liên kết nên không bấm mở được) trong hai trường hợp: đã xác nhận
+chuyển khoản, hoặc phiếu của NGÀY KHÁC vì mã chỉ dùng trong ngày.
+
+Ảnh bấm vào mở ngay trong khung popup: lớp xem ảnh có slide, lăn chuột giữa để phóng to quanh con trỏ.
 {% endcomment %}
 {% block modal_title %}CHI TIẾT PHIẾU THÂU{% endblock %}
 {% block modal_style %}width:min(1050px,96vw);max-width:96vw;max-height:94vh{% endblock %}
@@ -11,9 +16,6 @@ bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại t�
 <div class="th2-detail-right">
   <section class="th2-detail-section">
     <div class="th2-bank-grid">
-      {# Đã xác nhận CK: phủ nhãn xanh lên mã QR và BỎ thẻ liên kết, để không ai quét lại mã của khoản đã trả (GĐ chốt 10/09/2026) #}
-      {# Mã QR khóa lại trong hai trường hợp: đã xác nhận chuyển khoản, hoặc phiếu của NGÀY KHÁC (mã chỉ dùng
-         trong ngày). Cả hai đều bỏ thẻ liên kết nên không bấm mở được nữa. (GĐ chốt 10 và 11/09/2026) #}
       <div class="th2-bank-qr{% if r.qr_image and r.da_xac_nhan %} th2-bank-qr--xong{% elif r.qr_image and r.qr_het_han %} th2-bank-qr--xong th2-bank-qr--cu{% endif %}"
            {% if r.qr_image and r.da_xac_nhan %}title="Đã xác nhận chuyển khoản — mã QR khóa lại, không quét nữa"
            {% elif r.qr_image and r.qr_het_han %}title="Mã QR của ngày trước — đã hết hạn, không quét nữa"{% endif %}>
@@ -47,7 +49,6 @@ bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại t�
   </section>
 </div>
 
-{# XEM ẢNH ngay trong khung popup (GĐ chốt 10/09/2026): bấm ảnh mở lớp phủ nằm gọn trong popup, lăn chuột để phóng to #}
 <div class="th2-xem" id="th2-xem" data-khbl-lop-con hidden>
   <div class="th2-xem__thanh">
     <b data-nhan></b><span class="th2-xem__dem" data-dem></span>

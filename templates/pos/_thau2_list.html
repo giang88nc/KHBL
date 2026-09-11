@@ -1,7 +1,16 @@
+{% comment %}
+DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KHÔNG chèn giữa markup.
+
+· data-can-manage="0" (GĐ chốt 10/09/2026): máy chủ tự đối soát 5 phút/lần (job trong config/scheduler.py →
+  manage.py doi_soat_ck) nên trang KHÔNG tự gọi nữa. Cờ này chỉ tắt vòng tự gọi trong thau2_payments.js; nút
+  xác nhận/gỡ trong popup chi tiết vẫn dùng quyền thật ở máy chủ. Nút "Đối soát CK" đã bỏ cùng ngày.
+· Hai nút tải tệp (Excel danh mục NCC · Word ảnh CCCD) đứng ngay trên bảng, giữ nguyên bộ lọc đang xem.
+· Cột NỘI DUNG có tick ✓ khi đúng khuôn đối soát, ✕ khi sai (GĐ chốt 11/09/2026).
+· Cột CHUYỂN KHOẢN dòng 2: khớp rồi thì hiện mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK".
+· Mã QR của phiếu khác ngày hôm nay: làm mờ + nhãn HẾT HẠN, không bấm mở.
+{% endcomment %}
 {% load pos_extras %}
-<section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0"{# GĐ chốt 10/09/2026: máy chủ tự đối soát 5 phút/lần, trang KHÔNG tự gọi nữa.
-   Cờ này chỉ điều khiển vòng tự gọi trong thau2_payments.js; nút xác nhận/gỡ trong popup chi tiết vẫn dùng
-   quyền thật ở máy chủ nên không bị ảnh hưởng. #}>
+<section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0">
 <header class="th2-head"><h1>PHIẾU THÂU VÀO</h1><span>{{ rows|length }} đơn / nhóm · {% if source == 'hist' %}Kho lịch sử{% else %}Dữ liệu KK{% endif %}</span></header>
 <form class="th2-filter" hx-get="{% url 'pos:thau_vao_2' %}" hx-target="#thau2-list" hx-swap="outerHTML" hx-trigger="change, submit" hx-sync="this:replace">
 <label>Từ ngày<input class="khbl-input" type="date" name="d1" value="{{ d1 }}"></label>
@@ -13,8 +22,7 @@
 <label>Xác nhận CK<select class="khbl-select" name="payment_status"><option value="">Tất cả</option>{% for value,label in payment_labels %}<option value="{{ value }}" {% if payment_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
 <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:thau_vao_2' %}">Hôm nay</a>
 </form>
-<div class="th2-xuat">{# GĐ chốt 10/09/2026: 2 nút tải tệp, đứng TRƯỚC nút Đối soát CK; giữ nguyên bộ lọc đang xem #}
-  <a class="khbl-btn khbl-btn--outline" title="Tải danh sách khách trong khoảng ngày đang xem, đúng khuôn nhập nhà cung cấp (Ghi chú = tiền CK theo nghìn đồng)"
+<div class="th2-xuat">  <a class="khbl-btn khbl-btn--outline" title="Tải danh sách khách trong khoảng ngày đang xem, đúng khuôn nhập nhà cung cấp (Ghi chú = tiền CK theo nghìn đồng)"
      href="{% url 'pos:thau_vao_2_xuat_ncc' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">⬇ XUẤT EXCEL</a>
   <a class="khbl-btn khbl-btn--outline" title="Tải tệp Word ảnh CCCD hai mặt của các khách trên, in ra đúng cỡ thật 85,6 × 53,98 mm"
      href="{% url 'pos:thau_vao_2_in_cccd' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">🪪 IN CCCD</a>
@@ -28,8 +36,7 @@
 <td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
 <td>{% include 'pos/_thau2_bank.html' %}</td>
 <td><div class="th2-thumbs">{% for im in r.images %}<button type="button" class="{% if im.slot == 'qr' and r.qr_het_han %}th2-qr-cu{% endif %}" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{% if im.slot == 'qr' and r.qr_het_han %}Mã QR của ngày trước — đã hết hạn{% else %}{{ im.label }}{% endif %}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy">{% if im.slot == 'qr' and r.qr_het_han %}<span class="th2-qr-cu__nhan">HẾT HẠN</span>{% endif %}</button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
-<td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}{% if r.gd_khop %}{# đã đối soát khớp: hiện thẳng mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK" (GĐ chốt 11/09/2026) #}
-  <small class="th2-pay-state th2-pay-state--confirmed" title="Đã khớp giao dịch ngân hàng{% if r.gd_khop.so_lk > 1 %} ({{ r.gd_khop.so_lk }} giao dịch){% endif %}">{{ r.gd_khop.ref_code }} · {{ r.gd_khop.trans_amount|tien_tran }}</small>
+<td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}{% if r.gd_khop %}  <small class="th2-pay-state th2-pay-state--confirmed" title="Đã khớp giao dịch ngân hàng{% if r.gd_khop.so_lk > 1 %} ({{ r.gd_khop.so_lk }} giao dịch){% endif %}">{{ r.gd_khop.ref_code }} · {{ r.gd_khop.trans_amount|tien_tran }}</small>
 {% else %}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small>{% endif %}</td>
 <td>{% if r.mixed_status %}Nhiều trạng thái{% elif r.IsDel != '0' %}Đã hủy{% elif r.Status == 'C' %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
 <td><button class="khbl-btn khbl-btn--sm khbl-btn--outline" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root">XEM</button></td>

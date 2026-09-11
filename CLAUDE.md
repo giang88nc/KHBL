@@ -601,6 +601,10 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
    ⚠ Hệ quả GĐ đã chấp nhận: ai vào được mạng tiệm đều xem/tải được tên · SĐT · số CCCD · ẢNH hai mặt CCCD · số tiền
    của khách bán vàng, không cần tài khoản. **Mọi trang NHẬP LIỆU và mọi thao tác GHI vẫn bắt đăng nhập** — thêm
    `@login_not_required` cho đường khác phải hỏi GĐ trước. Nếu sau này mở KHBL ra internet thì phải xét lại mục này.
+0c. **CHÚ THÍCH TEMPLATE: GOM Ở ĐẦU TỆP, KHÔNG CHÈN GIỮA MARKUP** (GĐ chốt 11/09/2026, sau khi thấy chú thích
+   hiện lên màn hình). ⚠ `{# … #}` chỉ là chú thích khi nằm GỌN TRONG MỘT DÒNG — viết nhiều dòng thì Django in
+   nguyên văn ra trang, khách đọc được. Dùng `{% comment %} … {% endcomment %}` đặt ở ĐẦU tệp cho mọi ghi chú;
+   giữa markup không để chú thích. `manage.py smoke_thau` có kiểm tra quét toàn bộ template chặn lỗi này.
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy
    nhất: `_restore_sandbox` trong backup_pmv — server LOCAL). Muốn lệnh mới → thêm vào
    allowlist gateway kèm lý do, không "đi tắt".
