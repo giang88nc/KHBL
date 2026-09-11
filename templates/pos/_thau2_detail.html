@@ -12,10 +12,14 @@ bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại t�
   <section class="th2-detail-section">
     <div class="th2-bank-grid">
       {# Đã xác nhận CK: phủ nhãn xanh lên mã QR và BỎ thẻ liên kết, để không ai quét lại mã của khoản đã trả (GĐ chốt 10/09/2026) #}
-      <div class="th2-bank-qr{% if r.da_xac_nhan and r.qr_image %} th2-bank-qr--xong{% endif %}"
-           {% if r.da_xac_nhan and r.qr_image %}title="Đã xác nhận chuyển khoản — mã QR khóa lại, không quét nữa"{% endif %}>
+      {# Mã QR khóa lại trong hai trường hợp: đã xác nhận chuyển khoản, hoặc phiếu của NGÀY KHÁC (mã chỉ dùng
+         trong ngày). Cả hai đều bỏ thẻ liên kết nên không bấm mở được nữa. (GĐ chốt 10 và 11/09/2026) #}
+      <div class="th2-bank-qr{% if r.qr_image and r.da_xac_nhan %} th2-bank-qr--xong{% elif r.qr_image and r.qr_het_han %} th2-bank-qr--xong th2-bank-qr--cu{% endif %}"
+           {% if r.qr_image and r.da_xac_nhan %}title="Đã xác nhận chuyển khoản — mã QR khóa lại, không quét nữa"
+           {% elif r.qr_image and r.qr_het_han %}title="Mã QR của ngày trước — đã hết hạn, không quét nữa"{% endif %}>
         {% if r.qr_image %}
           {% if r.da_xac_nhan %}<img src="{{ r.qr_image.url }}" alt="QR chuyển khoản (đã dùng xong)"><span class="th2-qr-xong">✓ ĐÃ XONG</span>
+          {% elif r.qr_het_han %}<img src="{{ r.qr_image.url }}" alt="QR chuyển khoản (hết hạn)"><span class="th2-qr-xong th2-qr-xong--cu">HẾT HẠN</span>
           {% else %}<a href="{{ r.qr_image.url }}" target="_blank" rel="noopener" title="Bấm để xem lớn mã QR" data-th2-anh="Mã QR chuyển khoản"><img src="{{ r.qr_image.url }}" alt="QR chuyển khoản"></a>{% endif %}
         {% else %}<span>Chưa có mã QR</span>{% endif %}
       </div>
@@ -25,7 +29,9 @@ bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại t�
         <div><dt>Chủ thẻ:</dt><dd>{{ r.bank.ck_ten|default:"—" }}{% if r.ten_khop is True %}
           <span class="th2-ten-ok" title="Chủ thẻ trùng tên khách hàng của phiếu">✓</span>{% elif r.ten_khop is False %}
           <span class="th2-ten-lech" title="Chủ thẻ KHÁC tên khách hàng của phiếu — kiểm lại xem có nhờ người nhận hộ không">✕</span>{% endif %}</dd></div>
-        <div><dt>Nội dung:</dt><dd>{{ r.bank.ck_nd|default:"—" }}</dd></div>
+        <div><dt>Nội dung:</dt><dd>{{ r.bank.ck_nd|default:"—" }}{% if r.nd_khop is True %}
+          <span class="th2-ten-ok" title="Đúng khuôn THANH TOAN TIEN VANG + 4 số cuối mã phiếu — đối soát tự bắt được">✓</span>{% elif r.nd_khop is False %}
+          <span class="th2-ten-lech" title="Nội dung KHÔNG đúng khuôn đối soát — phải xác nhận tay">✕</span>{% endif %}</dd></div>
       </dl>
     </div>
   </section>

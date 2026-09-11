@@ -28,6 +28,51 @@ class _LearningCase(unittest.TestCase):
 
 
 class LearningTests(_LearningCase):
+    def test_store_created_before_waiting_list_gets_empty_drafts(self):
+        self.path.write_text(json.dumps({"version": 1, "revision": 0, "rules": [], "history": []}), encoding="utf-8")
+        self.assertEqual(learning.read_store()["drafts"], [])
+
+    def test_draft_is_idempotent_and_moves_atomically_to_learned(self):
+        state, message, draft_id = learning.save_draft(
+            "Ngh)a", "ho_ten", revision=0, actor="tester")
+        self.assertIn("CHỜ", message)
+        self.assertEqual(len(state["drafts"]), 1)
+        original = self.path.read_bytes()
+        again, _, again_id = learning.save_draft(
+            "Ngh)a", "ho_ten", revision=0, actor="tester")
+        self.assertEqual(again_id, draft_id)
+        self.assertEqual(again["revision"], 1)
+        self.assertEqual(self.path.read_bytes(), original)
+        state, message = learning.save_rule(
+            "Ngh)a", "Nghĩa", "ho_ten", revision=1, actor="tester", draft_id=draft_id)
+        self.assertEqual(state["drafts"], [])
+        self.assertEqual(len(state["rules"]), 1)
+        self.assertIn("CHỜ sang ĐÃ HỌC", message)
+        self.assertIsNotNone(state["history"][-1]["draft_moved"])
+
+    def test_learning_only_a_filtered_fragment_keeps_full_raw_waiting(self):
+        full = "Kh≤m 4, Ngh)a"
+        state, _, draft_id = learning.save_draft(full, revision=0, actor="tester")
+        state, message = learning.save_rule(
+            "Ngh)a", "Nghĩa", revision=state["revision"], actor="tester", draft_id=draft_id)
+        self.assertEqual(state["drafts"][0]["raw"], full)
+        self.assertIn("RAW đầy đủ vẫn", message)
+
+    def test_draft_validates_content_conflicts_and_existing_learned_rule(self):
+        for raw in (None, "", "<raw>", "x" * 8193):
+            with self.assertRaises(learning.LearningError):
+                learning.prepare_draft(raw)
+        state, _, first_id = learning.save_draft("Ngh)a", revision=0, actor="tester")
+        with self.assertRaises(learning.LearningConflict):
+            learning.save_draft("Th╦", revision=0, actor="tester")
+        state, _ = learning.save_rule("Ngh)a", "Nghĩa", revision=state["revision"], actor="tester",
+                                      draft_id=first_id)
+        state, message, draft_id = learning.save_draft(
+            "Ngh)a", revision=state["revision"], actor="tester")
+        self.assertEqual(draft_id, "")
+        self.assertIn("ĐÃ HỌC", message)
+        self.assertEqual(len(state["drafts"]), 0)
+
     def test_requested_fragment_shapes_apply_within_larger_fields(self):
         pairs = [("KhaV259nC226n", "Kha Vạn Cân", "dia_chi"),
                  ("ñp Tríi L≥n", "Ấp Trại Lớn", "dia_chi"),
@@ -114,6 +159,68 @@ class LearningTests(_LearningCase):
         self.assertEqual(self.path.read_text(), "{broken")
 
 
+class TextToolTests(_LearningCase):
+    def test_translate_uses_live_rules_in_auto_scope_without_writing(self):
+        from apps.pos import cccd_tools as tool
+        self.teach("Ngô Minh Ngh)a", "Ngô Minh Nghĩa", "ho_ten")
+        before = self.path.read_bytes()
+        self.assertEqual(tool.translate("Ngô Minh Ngh)a")["output"], "Ngô Minh Nghĩa")
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_filter_keeps_only_damaged_words_with_exact_raw_spans(self):
+        from apps.pos import cccd_tools as tool
+        raw = "Nguy7877n Ngh)a, Khu Th☃n, Kh≤m 4"
+        output = "Nguyễn Ngh)a, Khu Th☃n, Khóm 4"
+        pairs = tool.filter_errors(raw, output)["segments"]
+        self.assertEqual([(p["raw"], p["output"]) for p in pairs], [("Ngh)a", "Ngh)a"), ("Th☃n", "Th☃n")])
+        for pair in pairs:
+            self.assertEqual(raw[pair["raw_start"]:pair["raw_end"]], pair["raw"])
+            self.assertEqual(output[pair["output_start"]:pair["output_end"]], pair["output"])
+        self.assertFalse(self.path.exists())
+
+    def test_filter_correspondence_survives_words_expanding_and_manual_edits(self):
+        from apps.pos import cccd_tools as tool
+        self.teach("KhaV259nC226n", "Kha Vạn Cân", "dia_chi")
+        pairs = tool.filter_errors("25 KhaV259nC226n, Ngh)a, Khu A", "25 Kha Vạn C☃n, Ngh)a, Khu A")["segments"]
+        self.assertEqual(pairs[0]["raw"], "KhaV259nC226n, Ngh)a")
+        self.assertEqual(pairs[0]["output"], "Kha Vạn C☃n, Ngh)a")
+
+    def test_filter_preserves_numbers_valid_vietnamese_and_punctuation(self):
+        from apps.pos import cccd_tools as tool
+        text = "272A, B272, KP7889, 25/7A, P.5, K'Ho, Hòa-Bình, (Khu A), Nguyễn Ánh"
+        self.assertEqual(tool.filter_errors(text, text)["segments"], [])
+        # A semantic mistake written in valid Unicode is not a font error.
+        self.assertEqual(tool.filter_errors("L≥n", "Lòn")["segments"], [])
+
+    def test_filter_repeated_or_unanchored_tokens_keeps_context(self):
+        from apps.pos import cccd_tools as tool
+        for raw, output in [("A Ngh)a B Ngh)a C", "A Ngh)a C"), ("ABC DEF", "☃")]:
+            pairs = tool.filter_errors(raw, output)["segments"]
+            self.assertEqual(len(pairs), 1)
+            self.assertEqual(pairs[0]["raw"], raw)
+            self.assertEqual(pairs[0]["output"], output)
+            self.assertEqual(pairs[0]["alignment"], "context")
+
+    def test_filter_qr_with_extra_or_missing_delimiters_and_identity_guard(self):
+        from apps.pos import cccd_tools as tool
+        for raw in [self.qr(name="Khách Ngh)a") + "|EXTRA", self.qr(name="Khách Ngh)a").replace("||", "|")]:
+            pairs = tool.filter_errors(raw, self.qr(name="Khách Ngh)a"))["segments"]
+            self.assertEqual([(p["raw"], p["output"]) for p in pairs], [("Ngh)a", "Ngh)a")])
+        with self.assertRaises(learning.LearningError):
+            tool.filter_errors(self.qr(name="Ngh)a"), self.qr(name="Ngh)a").replace("000000000001", "000000000002"))
+
+    def test_validation_and_learning_reject_unfixed_font_damage(self):
+        from apps.pos import cccd_tools as tool
+        for raw in (None, "", "x" * 8193):
+            with self.assertRaises(learning.LearningError):
+                tool.translate(raw)
+        with self.assertRaises(learning.LearningError):
+            tool.filter_errors("Raw", "")
+        for output in ("Ngh)a", "Th☃n", "Trưíng"):
+            with self.assertRaises(learning.LearningError):
+                learning.prepare_rule("Khách A", output)
+
+
 class LearningEndpointTests(_LearningCase):
     @classmethod
     def setUpClass(cls):
@@ -143,12 +250,47 @@ class LearningEndpointTests(_LearningCase):
             self.assertEqual(cccd.analyze_text("Ngh)a", "ho_ten")["output"], "Nghĩa")
 
     def test_save_requires_admin_and_bad_payload_does_not_write(self):
-        from apps.pos.qr_learning_views import save
+        from apps.pos.qr_learning_views import save, save_draft
         body = {"raw": "Ngh)a", "output": "Nghĩa", "revision": 0}
         self.assertEqual(save(self.request(body, admin=False)).status_code, 403)
         self.assertFalse(self.path.exists())
         self.assertEqual(save(self.request([])).status_code, 400)
         self.assertFalse(self.path.exists())
+        self.assertEqual(save_draft(self.request({"raw": "Ngh)a", "revision": 0}, admin=False)).status_code, 403)
+        self.assertFalse(self.path.exists())
+
+    def test_draft_endpoint_and_apply_move_do_not_call_pmv(self):
+        from apps.pos.qr_learning_views import save, save_draft
+        with patch("apps.pmv.client.PmvClient.call", side_effect=AssertionError("No PMV writes")), \
+             patch("apps.pmv.client.PmvClient.query", side_effect=AssertionError("No PMV reads")):
+            response = save_draft(self.request({"raw": "Ngh)a", "scope": "ho_ten", "revision": 0}))
+            payload = json.loads(response.content)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(payload["drafts"]), 1)
+            response = save(self.request({"raw": "Ngh)a", "output": "Nghĩa", "scope": "ho_ten",
+                                          "revision": payload["revision"], "draft_id": payload["draft_id"]}))
+            payload = json.loads(response.content)
+            self.assertEqual(payload["drafts"], [])
+            self.assertEqual(len(payload["rules"]), 1)
+
+    def test_translate_and_filter_are_authenticated_read_only_actions(self):
+        from apps.pos.qr_learning_views import translate, filter_errors
+        with patch("apps.pmv.client.PmvClient.call", side_effect=AssertionError("No PMV writes")), \
+             patch("apps.pmv.client.PmvClient.query", side_effect=AssertionError("No PMV reads")):
+            response = translate(self.request({"raw": "Kh≤m 4"}, admin=False))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(json.loads(response.content)["output"], "Khóm 4")
+            self.assertIn("no-store", response["Cache-Control"])
+            response = filter_errors(self.request({"raw": "Khách Ngh)a", "output": "Khách Ngh)a"}, admin=False))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(json.loads(response.content)["segments"][0]["raw"], "Ngh)a")
+            self.assertFalse(self.path.exists())
+        for view in (translate, filter_errors):
+            request = self.request({"raw": "Kh≤m 4"})
+            request.user.is_authenticated = False
+            request.META["HTTP_HOST"] = "127.0.0.1"
+            self.assertEqual(view(request).status_code, 302)
+            self.assertEqual(view(self.request({"raw": []})).status_code, 400)
 
     def test_page_authentication_and_csrf(self):
         from django.test import Client, override_settings

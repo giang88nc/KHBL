@@ -55,3 +55,9 @@
 @media(max-width:560px){.th2-xem__nhac{display:none}.th2-xem__khung img{max-width:96%;max-height:70%}}
 .th2-xuat{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
 .th2-xuat .khbl-btn{text-decoration:none}
+/* Mã QR của ngày trước = hết hạn (11/09/2026): làm mờ, phủ nhãn xám, không bấm mở */
+.th2-bank-qr--cu .th2-qr-xong--cu{background:#64748b;box-shadow:0 2px 8px rgba(51,65,85,.35)}
+.th2-thumbs .th2-qr-cu{position:relative;cursor:default}
+.th2-thumbs .th2-qr-cu img{opacity:.3;filter:grayscale(.7)}
+.th2-qr-cu__nhan{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#64748b;color:#fff;
+  font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:2px 5px;border-radius:4px;white-space:nowrap}

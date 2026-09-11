@@ -130,6 +130,20 @@ updated_at/by. Full QR thêm fingerprint tất cả trường và fields đã ki
 Kho học có RAW và output do người dùng chủ động phê duyệt lưu; giữ trong private,
 ngoài Git. Các lượt quét thông thường chỉ đọc kho này, không tự học.
 
+Kho version 1 còn có `drafts`: id, raw, scope, created_at/by. Store cũ thiếu
+`drafts` được đọc như danh sách rỗng. `save_draft()` khóa file, kiểm tra revision,
+chống nháp trùng và ghi audit. Endpoint `qr/hoc/luu-nhap/` yêu cầu superuser,
+đăng nhập, CSRF và chỉ nhận RAW/phạm vi; không cần output, không gọi PMV.
+
+`save_rule(..., draft_id=...)` chỉ xóa nháp khi RAW của rule khớp toàn bộ RAW
+nháp. Việc thêm rule và xóa nháp nằm trong cùng lần `os.replace`, nên không có
+trạng thái đã học nhưng vẫn CHỜ do ghi dở. Nếu rule chỉ là đoạn được LỌC từ RAW
+dài, rule vẫn được học nhưng nháp giữ lại và UI báo đang xử lý một phần. Retry
+sau phản hồi thất lạc không nhân đôi rule hay nháp.
+
+UI chỉ hiển thị số lượng CHỜ/ĐÃ HỌC trên form. Popup dùng chung hai tab: CHỜ có
+RAW một dòng và nút Xử lý; ĐÃ HỌC có `RAW → output` một dòng, Sửa và Tạm tắt.
+
 `mask_fragments()` khớp literal, ranh giới nguyên từ, ưu tiên cụm dài rồi phạm vi
 cụ thể. Bộ giải mã chỉ xử lý phần RAW chưa được dạy, dùng placeholder bảo vệ output
 đã duyệt; phục hồi đúng một lần sau đó. Không nối hiệu chỉnh dây chuyền, không đổi
@@ -143,3 +157,21 @@ form và không báo thành công.
 CLI đọc cùng kho khi phân tích QR. Với cụm rời, truyền stdin JSON
 `{"text":"KhaV259nC226n","scope":"dia_chi"}`. Benchmark tắt đối chiếu mẫu và
 leave-one-card-out cũng tắt rule được dạy, tránh dùng đáp án đang thử làm bằng chứng.
+
+### Dịch và lọc đoạn còn lỗi
+
+POST `qr/hoc/dich/` nhận `raw, scope`, trả `output, warnings`; không yêu cầu nhập
+output trước. POST `qr/hoc/loc/` nhận cả `raw, output, scope`, trả `segments` với
+cặp chữ, scope, vị trí trên hai chuỗi gốc và `alignment` (`token`/`context`).
+Cả hai yêu cầu đăng nhập/CSRF, no-store, không gọi PMV và không ghi mẫu.
+
+`cccd_tools` dùng engine tạo gợi ý token để ghép với kết quả hiện tại. Từ bung
+ra từ cùng một token nguồn cùng trỏ về cả token đó; phần chưa khớp được giữ
+theo cụm giữa các mốc. Từ lặp với số lần khác nhau phải giữ ngữ cảnh, không đoán
+vị trí. QR được kiểm tra cùng mốc số/ngày; đoạn vượt nhiều trường giữ cả QR.
+Offset luôn trỏ về chuỗi đầu vào, không phải chuỗi đã được chuẩn hóa.
+
+Giao diện giữ từng cặp riêng, lưu nội dung đang sửa khi chuyển đoạn; LỌC không
+ghép các đoạn rời thành một quy tắc. Bấm Dịch/LỌC có thể hoàn tác phần nhập,
+không hoàn tác mẫu đã lưu. Lỗi mạng, phản hồi cũ, hoặc không phát hiện lỗi mã
+không được xóa/ghi đè nội dung đang nhập. Chỉ Áp dụng mới ghi learned_rules.

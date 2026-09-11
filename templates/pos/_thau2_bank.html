@@ -1,3 +1,4 @@
 {% if r.bank.ck_bank or r.bank.ck_stk %}<b>{{ r.bank.ck_bank }}{% if r.bank.ck_stk %} · {{ r.bank.ck_stk }}{% endif %}</b>{% endif %}
-{% if r.bank.ck_ten %}<small>{{ r.bank.ck_ten }}</small>{% endif %}
-{% if r.bank.ck_nd %}<small>{{ r.bank.ck_nd }}</small>{% elif not r.bank.ck_stk %}<span class="dim">—</span>{% endif %}
+{% if r.bank.ck_ten %}<small>{{ r.bank.ck_ten }}{% if r.ten_khop is True %} <span class="th2-ten-ok" title="Chủ thẻ trùng tên khách hàng">✓</span>{% elif r.ten_khop is False %} <span class="th2-ten-lech" title="Chủ thẻ khác tên khách hàng">✕</span>{% endif %}</small>{% endif %}
+{# Nội dung cũng có tick như tên chủ thẻ: đúng khuôn "THANH TOAN TIEN VANG {4 số cuối}" thì đối soát mới bắt được (GĐ chốt 11/09/2026) #}
+{% if r.bank.ck_nd %}<small>{{ r.bank.ck_nd }}{% if r.nd_khop is True %} <span class="th2-ten-ok" title="Nội dung đúng khuôn đối soát">✓</span>{% elif r.nd_khop is False %} <span class="th2-ten-lech" title="Nội dung KHÔNG đúng khuôn — đối soát sẽ không tự bắt được">✕</span>{% endif %}</small>{% elif not r.bank.ck_stk %}<span class="dim">—</span>{% endif %}

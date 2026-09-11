@@ -3,18 +3,29 @@
 {% block page_title %}Dạy bộ đọc QR CCCD{% endblock %}
 {% block page_sub %}Nhập RAW → kết quả đúng. Áp dụng một lần, dùng ngay cho các lượt quét tiếp theo.{% endblock %}
 {% block page_tools %}<a class="khbl-btn khbl-btn--outline" href="{% url 'pos:khach_hang' %}">Về khách hàng</a>{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/qr_learning.css' %}?v=1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/qr_learning.css' %}?v=20260911.drafts">{% endblock %}
 {% block content %}
 <div class="qrl-layout" id="qr-learning" data-can-teach="{{ can_teach|yesno:'1,0' }}">
   <section class="qrl-card">
     <div class="qrl-heading"><h2 id="qrl-form-title">Thêm mẫu mới</h2><span class="qrl-badge">SKILL · Tiếng Việt</span></div>
-    <form id="qrl-form" data-preview-url="{% url 'pos:qr_learning_preview' %}" data-save-url="{% url 'pos:qr_learning_save' %}" data-list-url="{% url 'pos:qr_learning' %}?format=json">
+    <form id="qrl-form" data-preview-url="{% url 'pos:qr_learning_preview' %}" data-save-url="{% url 'pos:qr_learning_save' %}" data-draft-url="{% url 'pos:qr_learning_save_draft' %}" data-list-url="{% url 'pos:qr_learning' %}?format=json" data-translate-url="{% url 'pos:qr_learning_translate' %}" data-filter-url="{% url 'pos:qr_learning_filter' %}">
       {% csrf_token %}
       <div class="qrl-pair">
         <div class="khbl-field"><label for="qrl-raw">RAW từ máy quét</label>
           <textarea id="qrl-raw" class="khbl-input" rows="5" maxlength="8192" required autocomplete="off" spellcheck="false" placeholder="Dán cụm chữ bị lỗi hoặc toàn bộ chuỗi QR…"></textarea></div>
         <div class="khbl-field"><label for="qrl-output">Kết quả đúng</label>
           <textarea id="qrl-output" class="khbl-input" rows="5" maxlength="8192" required autocomplete="off" spellcheck="false" placeholder="Nhập chính xác chữ tiếng Việt cần trả về…"></textarea></div>
+      </div>
+      <div class="qrl-actions qrl-text-tools">
+        <button type="button" class="khbl-btn khbl-btn--gold" id="qrl-translate">Dịch</button>
+        <button type="button" class="khbl-btn khbl-btn--outline" id="qrl-filter">LỌC</button>
+        <button type="button" class="khbl-btn khbl-btn--outline" id="qrl-save-draft" data-write="1" {% if not can_teach %}disabled{% endif %}>Lưu nháp</button>
+        <button type="button" class="khbl-btn khbl-btn--ghost" id="qrl-undo" hidden>Hoàn tác nhập</button>
+      </div>
+      <p class="qrl-note">Lưu nháp chỉ giữ RAW trong danh sách CHỜ. Dịch điền gợi ý; LỌC giữ đoạn còn lỗi. Áp dụng mới chuyển mẫu hoàn chỉnh sang ĐÃ HỌC.</p>
+      <div id="qrl-fragments" class="qrl-fragments" hidden>
+        <p class="qrl-note">Các đoạn cần sửa — chọn từng cặp, sửa Kết quả đúng rồi Áp dụng. Hoàn tác nhập để trở về nội dung đầy đủ.</p>
+        <div id="qrl-fragment-list" class="qrl-actions"></div>
       </div>
       <div class="khbl-field qrl-scope"><label for="qrl-scope">Áp dụng ở</label><select id="qrl-scope" class="khbl-input">
         <option value="auto">Tự nhận diện — cụm chữ hoặc toàn QR</option>
@@ -33,14 +44,29 @@
         <div><h3>Sau khi áp dụng</h3><pre id="qrl-after"></pre></div>
       </div>
     </form>
+    <div class="qrl-library-bar">
+      <div><b>Kho xử lý QR</b><span>Danh sách được thu gọn trong một cửa sổ.</span></div>
+      <div class="qrl-actions">
+        <button class="khbl-btn khbl-btn--outline" type="button" id="qrl-open-waiting">CHỜ <span id="qrl-draft-count">0</span></button>
+        <button class="khbl-btn khbl-btn--outline" type="button" id="qrl-open-learned">ĐÃ HỌC <span id="qrl-count">0</span></button>
+      </div>
+    </div>
   </section>
-  <section class="qrl-card">
-    <div class="qrl-heading"><h2>Mẫu đã học <span id="qrl-count" class="qrl-count"></span></h2>
-      <button class="khbl-btn khbl-btn--ghost" type="button" id="qrl-reload">Tải lại danh sách</button></div>
-    <p class="qrl-note">Mẫu đã lưu có hiệu lực ngay. Dùng Sửa để đổi kết quả, hoặc Tạm tắt để ngừng áp dụng.</p>
+<div class="qrl-modal" id="qrl-library-modal" hidden>
+  <section class="qrl-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="qrl-library-title">
+    <div class="qrl-heading qrl-modal__head">
+      <div><h2 id="qrl-library-title">Kho xử lý QR</h2><p id="qrl-library-subtitle">Danh sách CHỜ</p></div>
+      <button class="khbl-btn khbl-btn--ghost" type="button" id="qrl-close-library" aria-label="Đóng danh sách">×</button>
+    </div>
+    <div class="qrl-actions qrl-library-tabs">
+      <button class="khbl-btn khbl-btn--outline" type="button" id="qrl-tab-waiting">CHỜ <span id="qrl-modal-draft-count">0</span></button>
+      <button class="khbl-btn khbl-btn--outline" type="button" id="qrl-tab-learned">ĐÃ HỌC <span id="qrl-modal-rule-count">0</span></button>
+      <button class="khbl-btn khbl-btn--ghost" type="button" id="qrl-reload">Tải lại</button>
+    </div>
     <div id="qrl-rules" class="qrl-rules"></div>
   </section>
 </div>
+</div>
 {{ learning_state|json_script:"qrl-initial-state" }}
 {% endblock %}
-{% block extra_js %}<script defer src="{% static 'js/qr_learning.js' %}?v=1"></script>{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/qr_learning.js' %}?v=20260911.drafts"></script>{% endblock %}

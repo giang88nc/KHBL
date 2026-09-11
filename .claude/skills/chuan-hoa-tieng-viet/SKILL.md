@@ -26,6 +26,20 @@ vào kho dùng chung `var/private/qr/learned_rules.json`, có hiệu lực ở l
 tiếp theo, không cần sửa SKILL.md hay khởi động web. `Xem thử` không ghi. Có Sửa,
 Tạm tắt/Bật lại, kiểm tra phiên bản đồng thời, lịch sử thay đổi và chống lưu trùng.
 
+Nếu mới có RAW nhưng chưa xác định được kết quả, **Lưu nháp** đưa RAW vào danh
+sách CHỜ trong cùng kho private. Mở CHỜ → Xử lý → Dịch/đối chiếu → Áp dụng;
+khi RAW đầy đủ khớp nháp, một lần ghi sẽ thêm mẫu học và lấy nháp khỏi CHỜ.
+Nếu chỉ học một đoạn đã LỌC từ RAW dài, giữ RAW đầy đủ trong CHỜ để tránh đánh
+dấu nhầm là đã xử lý xong. CHỜ và ĐÃ HỌC nằm trong popup quản lý; mẫu học hiển
+thị một dòng `RAW → kết quả`.
+
+**Dịch** gọi cùng engine, điền gợi ý sang Kết quả đúng mà chưa học mẫu.
+**LỌC** gọi `apps/pos/cccd_tools.py::filter_errors()` để giữ các cặp đoạn còn lỗi
+mã. Ghép bằng mốc từ đã giải mã, hỗ trợ một token RAW bung thành nhiều từ;
+không cắt theo cùng chỉ số từ hai phía. Khi ghép chưa chắc, giữ cụm rộng hơn.
+Các đoạn riêng được sửa/lưu từng cặp, có Hoàn tác nhập để khôi phục văn bản đầy đủ.
+Lọc lỗi font không xác minh được tên/địa danh sai nhưng vẫn viết bằng Unicode hợp lệ.
+
 - Đây là học mẫu được người dùng dạy rõ ràng, không tự huấn luyện từ mọi lượt quét.
 - `apps/pos/cccd_learning.py` giữ một nguồn quy tắc cho engine, công cụ và CLI của
   skill. Luôn dùng engine này; không chỉ đọc bảng mã trong Markdown để bỏ qua mẫu mới.
@@ -39,7 +53,8 @@ Tạm tắt/Bật lại, kiểm tra phiên bản đồng thời, lịch sử tha
   Cặp cuối đổi nội dung theo chỉ định: chỉ áp nguyên cụm RAW đó, không đổi mọi
   `Phương Sơn` thành `Phường Tây`. Quy tắc học có nguồn riêng, ưu tiên hơn giải mã.
 - Chỉ tài khoản quản trị được ghi mẫu chung. Khi dùng nút Áp dụng để dạy, RAW và
-  output được lưu có chủ đích trong file private (ngoài Git); lượt quét thường vẫn
+  output hoặc khi dùng Lưu nháp, RAW được lưu có chủ đích trong file private
+  (ngoài Git); lượt quét thường vẫn
   không lưu RAW. Khi chuyển máy phải chuyển cả hai file model và learned_rules.
 
 - Điểm gợi ý là điểm quy tắc, không phải xác suất chính xác. Dữ liệu mã hóa cần

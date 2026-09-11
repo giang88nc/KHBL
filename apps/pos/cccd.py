@@ -399,6 +399,10 @@ def analyze_text(raw, scope="auto", *, learned_rules=None):
         learned_rules = learning.read_store()["rules"]
     key = "ho_ten" if scope == "ho_ten" else "dia_chi"
     candidates, used = _decode_field(learning._framing_text(raw), key, detect_profiles(raw), context.load_model(), learned_rules)
+    if scope in ("auto", "text") and not used:
+        name_candidates, name_used = _decode_field(learning._framing_text(raw), "ho_ten", detect_profiles(raw), context.load_model(), learned_rules)
+        if name_used:
+            candidates, used = name_candidates, name_used
     return {"output": candidates[0]["value"], "warnings": ["Đã dùng mẫu được dạy."] if used else []}
 
 

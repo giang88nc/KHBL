@@ -27,8 +27,10 @@
 <td>{{ r.TrnTime|slice:":5" }}{% if d1 != d2 %}<small>{{ r.TrnDate|date:"d/m/Y" }}</small>{% endif %}</td>
 <td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
 <td>{% include 'pos/_thau2_bank.html' %}</td>
-<td><div class="th2-thumbs">{% for im in r.images %}<button type="button" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{{ im.label }}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy"></button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
-<td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small></td>
+<td><div class="th2-thumbs">{% for im in r.images %}<button type="button" class="{% if im.slot == 'qr' and r.qr_het_han %}th2-qr-cu{% endif %}" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{% if im.slot == 'qr' and r.qr_het_han %}Mã QR của ngày trước — đã hết hạn{% else %}{{ im.label }}{% endif %}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy">{% if im.slot == 'qr' and r.qr_het_han %}<span class="th2-qr-cu__nhan">HẾT HẠN</span>{% endif %}</button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
+<td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}{% if r.gd_khop %}{# đã đối soát khớp: hiện thẳng mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK" (GĐ chốt 11/09/2026) #}
+  <small class="th2-pay-state th2-pay-state--confirmed" title="Đã khớp giao dịch ngân hàng{% if r.gd_khop.so_lk > 1 %} ({{ r.gd_khop.so_lk }} giao dịch){% endif %}">{{ r.gd_khop.ref_code }} · {{ r.gd_khop.trans_amount|tien_tran }}</small>
+{% else %}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small>{% endif %}</td>
 <td>{% if r.mixed_status %}Nhiều trạng thái{% elif r.IsDel != '0' %}Đã hủy{% elif r.Status == 'C' %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
 <td><button class="khbl-btn khbl-btn--sm khbl-btn--outline" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root">XEM</button></td>
 </tr>{% empty %}<tr><td colspan="9" class="pg-tb__trong">Không có phiếu phù hợp với bộ lọc.</td></tr>{% endfor %}

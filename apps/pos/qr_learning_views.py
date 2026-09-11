@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
-from . import cccd, cccd_learning as learning
+from . import cccd, cccd_learning as learning, cccd_tools
 
 
 def _json(data, status=200):
@@ -15,7 +15,9 @@ def _json(data, status=200):
 
 def _public(state):
     return {"revision": state["revision"], "rules": [{k: rule.get(k) for k in
-            ("id", "raw", "output", "scope", "active", "updated_at", "updated_by")} for rule in state["rules"]]}
+            ("id", "raw", "output", "scope", "active", "updated_at", "updated_by")} for rule in state["rules"]],
+            "drafts": [{k: draft.get(k) for k in
+            ("id", "raw", "scope", "created_at", "created_by")} for draft in state["drafts"]]}
 
 
 def _payload(request):
@@ -50,6 +52,43 @@ def tool(request):
 
 @login_required
 @require_POST
+def translate(request):
+    try:
+        data = _payload(request)
+        return _json(cccd_tools.translate(data.get("raw"), data.get("scope", "auto")))
+    except learning.LearningError as exc:
+        return _json({"error": str(exc)}, 400)
+
+
+@login_required
+@require_POST
+def filter_errors(request):
+    try:
+        data = _payload(request)
+        return _json(cccd_tools.filter_errors(data.get("raw"), data.get("output"), data.get("scope", "auto")))
+    except learning.LearningError as exc:
+        return _json({"error": str(exc)}, 400)
+
+
+@login_required
+@require_POST
+def save_draft(request):
+    if not request.user.is_superuser:
+        return _json({"error": "Chỉ tài khoản quản trị được cập nhật danh sách CHỜ."}, 403)
+    try:
+        data = _payload(request)
+        state, message, draft_id = learning.save_draft(
+            data.get("raw"), data.get("scope", "auto"), revision=data.get("revision"),
+            actor=request.user.get_username())
+        return _json({**_public(state), "message": message, "draft_id": draft_id})
+    except learning.LearningConflict as exc:
+        return _json({"error": str(exc)}, 409)
+    except learning.LearningError as exc:
+        return _json({"error": str(exc)}, 400)
+
+
+@login_required
+@require_POST
 def preview(request):
     try:
         data = _payload(request)
@@ -75,7 +114,8 @@ def save(request):
         data = _payload(request)
         state, message = learning.save_rule(data.get("raw", ""), data.get("output", ""), data.get("scope", "auto"),
                     revision=data.get("revision"), actor=request.user.get_username(),
-                    edit_id=data.get("edit_id", ""), active=data.get("active"))
+                    edit_id=data.get("edit_id", ""), active=data.get("active"),
+                    draft_id=data.get("draft_id", ""))
         applied_id = data.get("edit_id") if data.get("active") is not None else learning.prepare_rule(
             data.get("raw", ""), data.get("output", ""), data.get("scope", "auto"))["id"]
         return _json({**_public(state), "message": message, "applied_id": applied_id})

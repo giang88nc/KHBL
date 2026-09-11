@@ -34,6 +34,10 @@ def enrich(rows, membership):
         by_slot = {im['slot']: im for im in row['images']}
         row['qr_image'] = by_slot.get('qr')
         row['photo_grid'] = [im for im in row['images'] if im['slot'] != 'qr']
+        ids = [m['TrnID'] for m in row.get('members', [])] or [row['TrnID']]
+        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), ids)
+        row['qr_het_han'] = not qr_con_han(row.get('TrnDate') or (row.get('members') or [{}])[0].get('CreatedDate'))
+        row['gd_khop'] = giao_dich_da_khop(ids)
     return rows
 
 
@@ -92,6 +96,49 @@ def doi_chieu_ten(chu_the, khach):
     return None if not a or not b else a == b
 
 
+def nd_dung_chuan(ck_nd, ids):
+    """Nội dung chuyển khoản của phiếu có đúng khuôn đối soát không (GĐ chốt 11/09/2026).
+
+    Đúng khuôn nghĩa là chứa "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" — chính chuỗi mà bên đối soát đi tìm
+    trong nội dung ngân hàng. Trả None khi chưa có nội dung hoặc chưa có mã phiếu (không kết luận được).
+    """
+    from . import thau_payments as TP
+
+    nd = (ck_nd or "").strip().upper()
+    if not nd or not ids:
+        return None
+    return TP.code_match({"ids": list(ids), "members": []}, {"description": nd})
+
+
+def qr_con_han(ngay_phieu):
+    """Mã QR chỉ dùng trong NGÀY. Phiếu của ngày khác hôm nay thì coi như hết hạn, giao diện làm mờ và che lại
+    để không ai quét lại mã cũ (GĐ chốt 11/09/2026)."""
+    if not ngay_phieu:
+        return True
+    ngay = ngay_phieu.date() if hasattr(ngay_phieu, "date") else None
+    if ngay is None:
+        try:
+            ngay = dt.date.fromisoformat(str(ngay_phieu)[:10])
+        except ValueError:
+            return True
+    return ngay == dt.date.today()
+
+
+def giao_dich_da_khop(ids):
+    """Mã tham chiếu + số tiền của giao dịch ngân hàng đã được nối cho nhóm này — để hiện thay chữ
+    "Đã xác nhận CK" (GĐ chốt 11/09/2026). Trả None khi chưa nối được giao dịch nào."""
+    from .transfers import query
+
+    lk = [l for l in ThauPaymentLink.objects.filter(active_notification_id__isnull=False).order_by("-pk")
+          if set(ids) & set(l.trn_ids)]
+    if not lk:
+        return None
+    bank = query("SELECT ref_code, trans_amount FROM bank_notifications WHERE id=%s", [lk[0].active_notification_id])
+    if not bank:
+        return None
+    return {"ref_code": bank[0]["ref_code"], "trans_amount": bank[0]["trans_amount"], "so_lk": len(lk)}
+
+
 def da_xac_nhan_ck(ids, can_tra):
     """Nhóm này đã được xác nhận chuyển khoản đủ tiền chưa — đọc bảng thau_payment_link (MySQL), chỉ tính liên kết
     còn hiệu lực (chưa gỡ). Dùng để che mã QR trong popup chi tiết: tiền đã đi rồi thì đừng quét lại lần nữa."""
@@ -126,6 +173,9 @@ def detail(request):
         enrich([row], membership)
         row['da_xac_nhan'], row['ck_da_tra'] = da_xac_nhan_ck([i['TrnID'] for i in items], p['tien_ck'])
         row['ten_khop'] = doi_chieu_ten(getattr(group, 'ck_ten', ''), items[0].get('CustName'))
+        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), ids)
+        row['qr_het_han'] = not qr_con_han(items[0].get('TrnDate') or items[0].get('CreatedDate'))
+        row['gd_khop'] = giao_dich_da_khop(ids)
         from . import customer as C
         cust_id = items[0].get('CustID')
         row['cccd_images'] = []

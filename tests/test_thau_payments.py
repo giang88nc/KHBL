@@ -21,7 +21,7 @@ class ThauPaymentsTests(TransactionTestCase):
         with connection.cursor() as c:
             c.execute('CREATE TABLE bank_notifications (id integer primary key, provider text, ref_code text, bank_number text, bank_name text, trans_amount decimal, transaction_time text, direction text, description text, bill_code_raw text)')
             c.execute('CREATE TABLE gold_bank (bank_number text, Active integer)')
-            c.execute("INSERT INTO gold_bank VALUES ('001',1)")
+            c.execute("INSERT INTO gold_bank VALUES ('666141168',1)")
         self.user = get_user_model().objects.create_superuser('thau-test', password='test')
         self.client.force_login(self.user)
         self.raw = [self.bill()]
@@ -45,10 +45,19 @@ class ThauPaymentsTests(TransactionTestCase):
         return dict(TrnID=trn, BillCode='26-09-09-'+trn[-6:], CreatedDate=dt.datetime(2026,9,9,11,45),
                     Status='C', IsDel='0', CardPay=-Decimal(amount), SoTien=Decimal(amount), TienMua=Decimal(amount), loai='THAU')
 
-    def bank(self, id=1, description='TBG260900000001', amount=100, ref=None):
+    # CHUẨN MỚI (GĐ chốt 11/09/2026): chỉ giao dịch OUT từ tài khoản trả tiền của tiệm, nội dung mang
+    # "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" mới được xét. Mặc định của helper dựng đúng khuôn đó.
+    TK = '666141168'
+
+    def nd_chuan(self, trn='TBG260900000001'):
+        return 'THANH TOAN TIEN VANG ' + trn[-4:] + '-090926-12:00:00 6253ASCB'
+
+    def bank(self, id=1, description=None, amount=100, ref=None, tk=None):
+        if description is None:
+            description = self.nd_chuan()
         with connection.cursor() as c:
             c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                      [id,'sepay',ref or f'REF{id}','001','ACB',amount,self.day+' 12:00:00','out',description,''])
+                      [id,'sepay',ref or f'REF{id}',tk or self.TK,'ACB',amount,self.day+' 12:00:00','out',description,''])
 
     def inspect(self):
         return P.inspect(self.day, self.day)[0]
@@ -68,16 +77,20 @@ class ThauPaymentsTests(TransactionTestCase):
         self.assertEqual(self.inspect()[0]['payment_status'], 'confirmed')
         self.assertEqual(self.inspect()[0]['candidates'], [])
 
-    def test_amount_time_only_requires_manual(self):
-        self.bank(description='transfer')
+    def test_amount_time_only_no_longer_candidate(self):
+        """CHUẨN MỚI: đúng số tiền, đúng giờ nhưng nội dung không mang mã phiếu → KHÔNG còn là ứng viên."""
+        self.bank(description='CHUYEN TIEN')          # cùng số tiền, cùng ngày giờ với phiếu
         order = self.inspect()[0]
-        self.assertTrue(order['candidates'][0]['can_link'])
-        with self.assertRaises(ValueError): P.create_link(order, order['candidates'][0])
-        self.link()
-        self.assertEqual(self.inspect()[0]['payment_status'], 'confirmed')
+        self.assertEqual(order['candidates'], [])
+        self.assertEqual(order['payment_status'], 'unconfirmed')
+        # ghi đúng khuôn thì bắt được ngay
+        self.bank(id=2, ref='REF2')
+        order = self.inspect()[0]
+        self.assertTrue(order['candidates'][0]['can_link'] and order['candidates'][0]['exact'])
 
     def test_ambiguous_groups_cannot_auto_but_allow_review(self):
-        self.raw.append(self.bill('TBG260900000002'))
+        # hai phiếu KHÁC THÁNG nhưng trùng 4 số cuối → một giao dịch khớp cả hai, không được tự nối
+        self.raw.append(self.bill('TBG260800000001'))
         self.bank()
         order = self.inspect()[0]
         self.assertTrue(order['candidates'][0]['ambiguous'])
@@ -142,38 +155,40 @@ class ThauPaymentsTests(TransactionTestCase):
         self.groups = [SimpleNamespace(pk=1,trn_ids=[self.raw[0]['TrnID'],'MISSING'],tien_ck=100,ck_bank='',ck_stk='',ck_ten='',ck_nd='')]
         self.assertEqual(self.inspect()[0]['payment_status'], 'review')
 
-    def test_time_window_and_code_boundaries(self):
-        self.bank(description='transfer')
-        order = self.inspect()[0]; bank = order['candidates'][0]
-        for value, expected in [('11:30:00',True),('12:00:00',True),('11:29:59',False),('12:00:01',False)]:
-            order['members'][0]['CreatedDate'] = self.day+' '+value
-            self.assertEqual(P.near(order,bank),expected)
-        self.assertFalse(P.code_match(order,dict(description='TBG2609000000012')))
-
-    def test_code_match_reads_bill_code_and_standard_content(self):
-        # GĐ chốt 10/09/2026: nội dung chuẩn "THANH TOAN TIEN VANG {6 số cuối}"; ngân hàng nối thêm đuôi ngày giờ.
+    def test_new_standard_rules(self):
+        """CHUẨN MỚI: chỉ nội dung mang đúng 4 số cuối mã phiếu mới khớp; các đường cũ đã bỏ."""
         self.bank(description='transfer')
         order = self.inspect()[0]
-        khop = [
-            dict(description='THANH TOAN TIEN VANG-100926-11:03:21 6253ASCB', bill_code_raw='TBG260900000001'),
-            dict(description='THANH TOAN TIEN VANG 0001-100926-10:47:17 6253ASCB'),
-            dict(description='thanh toan tien vang 0001'),
-            dict(description='CONG TY TNHH TRANG SUC KIM HANH 2 THANH TOAN TIEN VANG', bill_code_raw='TBG260900000001'),
-        ]
-        for bank in khop:
-            self.assertTrue(P.code_match(order, bank), bank)
-        lech = [
-            # nội dung KHÔNG mang mã: 100926 là NGÀY, tuyệt đối không được nhận nhầm thành mã phiếu
-            dict(description='THANH TOAN TIEN VANG-100926-11:03:21 6253ASCB'),
-            dict(description='THANH TOAN TIEN VANG 1-100926-10:47:17 6253ASCB'),
-            dict(description='THANH TOAN TIEN VANG 0002-100926'),        # phiếu khác
-            dict(description='THANH TOAN TIEN VANG 100926-10:47:17'),     # 6 số là NGÀY, không phải mã
-            dict(description='THANH TOAN TIEN VANG 00001-100926'),        # 5 số, không đúng form
-            dict(description='TT TIEN VANG', bill_code_raw='TBG260900000002'),
-            dict(description='', bill_code_raw='chi CĐ'),
-        ]
-        for bank in lech:
-            self.assertFalse(P.code_match(order, bank), bank)
+        khop = ['THANH TOAN TIEN VANG 0001-090926-12:00:00 6253ASCB',
+                'THANH TOAN TIEN VANG 0001',
+                'thanh toan tien vang 0001']
+        for nd in khop:
+            self.assertTrue(P.code_match(order, dict(description=nd)), nd)
+        lech = ['THANH TOAN TIEN VANG 1-090926-12:00:00',      # khoản chi khác
+                'THANH TOAN TIEN VANG-090926-12:00:00',        # không mang mã
+                'THANH TOAN TIEN VANG 0002-090926',            # phiếu khác
+                'THANH TOAN TIEN VANG 090926',                 # 6 số là ngày
+                'TBG260900000001']                             # mã đầy đủ: chuẩn CŨ, nay bỏ
+        for nd in lech:
+            self.assertFalse(P.code_match(order, dict(description=nd)), nd)
+        # mã đầy đủ nằm ở ô mã hóa đơn cũng không còn được đọc
+        self.assertFalse(P.code_match(order, dict(description='THANH TOAN TIEN VANG-090926',
+                                                  bill_code_raw='TBG260900000001')))
+
+    def test_new_standard_eligibility(self):
+        """Bốn điều kiện lọc giao dịch của chuẩn mới."""
+        goc = dict(direction='out', trans_amount=100, bank_number=P.TAI_KHOAN_TRA[0],
+                   description='THANH TOAN TIEN VANG 0001')
+        self.assertTrue(P.eligible(goc))
+        self.assertFalse(P.eligible(dict(goc, direction='in')))
+        self.assertFalse(P.eligible(dict(goc, bank_number='999999999')))
+        self.assertFalse(P.eligible(dict(goc, trans_amount=0)))
+        self.assertFalse(P.eligible(dict(goc, description='THANH TOAN TIEN VANG 1-090926')))
+
+    def test_other_account_never_matches(self):
+        """Tiền ra từ tài khoản KHÁC của tiệm không được nhận, dù nội dung đúng khuôn."""
+        self.bank(tk='123456789')
+        self.assertEqual(self.inspect()[0]['candidates'], [])
 
     def test_group_confirms_when_content_names_first_bill(self):
         # Nhóm 2 phiếu, nội dung chỉ nhắc phiếu ĐẦU (người đại diện nhận tiền) → xác nhận cho cả nhóm, đủ tổng tiền.

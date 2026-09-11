@@ -85,7 +85,10 @@ FORM_NOI_DUNG = re.compile(r'TIEN\s+VANG\s+(\d{4})(?!\d)')
 # Ngân hàng để mã phiếu ở hai ô: nội dung tự do và ô mã hóa đơn. Thực đo 10/09/2026: 28/316 giao dịch OUT mang mã
 # đầy đủ ở bill_code_raw, mà hàm này trước chỉ đọc description nên bỏ lỡ sạch. bill_code_norm và full_code hiện
 # luôn rỗng nên không đọc, khỏi phải nới BANK_FIELDS.
-COT_CO_MA = ('description', 'bill_code_raw')
+# Tài khoản tiệm dùng trả tiền thâu. GĐ chốt 11/09/2026 khoá TẠM đúng một số; mở thêm thì thêm vào đây.
+TAI_KHOAN_TRA = ("666141168",)
+# "THANH TOAN TIEN VANG 1-…" là khoản chi khác (chi CĐ), KHÔNG phải trả tiền thâu — loại thẳng.
+LOAI_TRU = "THANH TOAN TIEN VANG 1-"
 
 
 def duoi_ma(value):
@@ -95,23 +98,24 @@ def duoi_ma(value):
 
 
 def code_match(order, bank):
-    """Giao dịch ngân hàng có nhắc tới phiếu nào của nhóm không. Hai đường, đều là bằng chứng chắc chắn:
+    """Nội dung ngân hàng có nhắc ĐÚNG phiếu của nhóm không — CHUẨN MỚI, chỉ đọc ô NỘI DUNG.
 
-    · mã phiếu ĐẦY ĐỦ xuất hiện ở nội dung hoặc ở ô mã hóa đơn của ngân hàng;
-    · nội dung viết theo form chuẩn "THANH TOAN TIEN VANG {6 số cuối}".
+    Khớp khi nội dung chứa "THANH TOAN TIEN VANG {4 số cuối mã phiếu}", đúng khuôn quầy đang gõ; ngân hàng nối
+    thêm đuôi ngày giờ phía sau vẫn khớp.
 
-    Nhóm nhiều phiếu: nội dung chỉ cần nhắc MỘT phiếu, thường là phiếu đầu vì khách đứng tên phiếu đó nhận tiền
-    cho cả nhóm (GĐ chốt 10/09/2026). Xác nhận vẫn ở mức NHÓM và số tiền vẫn phải bằng đúng tổng cần chuyển của
-    nhóm, nên việc chỉ nhắc một phiếu không làm mất kiểm soát số tiền.
+    GĐ chốt 11/09/2026 BỎ hai đường khớp cũ — đọc mã đầy đủ ở ô mã hóa đơn, và đoán theo số tiền + thời gian —
+    chỉ giữ một đường này cho chắc, tránh nhận nhầm khoản chi khác.
+
+    Nhóm nhiều phiếu: nội dung chỉ cần nhắc MỘT phiếu (thường là phiếu đầu, người đứng tên nhận tiền cho cả nhóm).
+    Xác nhận vẫn ở mức NHÓM và số tiền vẫn phải bằng đúng tổng cần chuyển của nhóm.
     """
-    text = ' '.join(str(bank.get(k) or '') for k in COT_CO_MA).upper()
-    tokens = [t for t in order['ids'] + [m.get('BillCode') for m in order['members']] if t]
-    if any(re.search(r'(?<![A-Z0-9])'+re.escape(str(t).upper())+r'(?![A-Z0-9])', text) for t in tokens):
-        return True
-    # 4 số cuối chỉ lấy từ MÃ PHIẾU (TrnID), không lấy từ số hóa đơn: hai mã có đuôi khác nhau
-    # (TBG260900000495 ↔ 26-09-10-000058) nên gom cả hai chỉ làm rộng vùng trùng mà không thêm ca khớp nào.
+    nd = (bank.get('description') or '').upper()
+    if LOAI_TRU in nd:
+        return False
+    # 4 số cuối lấy từ MÃ PHIẾU (TrnID), không lấy từ số hóa đơn: hai mã có đuôi khác nhau
+    # (TBG260900000495 ↔ 26-09-10-000058) nên gom cả hai chỉ làm rộng vùng trùng chứ không thêm ca khớp nào.
     duoi = {duoi_ma(t) for t in order['ids']} - {''}
-    return any(m.group(1) in duoi for m in FORM_NOI_DUNG.finditer(text))
+    return any(m.group(1) in duoi for m in FORM_NOI_DUNG.finditer(nd))
 
 
 def near(order, bank):
@@ -122,10 +126,21 @@ def near(order, bank):
     return bool(times) and any(when-dt.timedelta(minutes=30) <= t <= when for t in times)
 
 
-def eligible(bank, accounts):
-    return (str(bank.get('direction', '')).lower() == 'out' and M.dec(bank['trans_amount']) > 0
-            and bank['bank_number'] in accounts and 'THANH TOAN TIEN VANG 1' not in (bank.get('description') or '').upper()
-            and (bank.get('bill_code_raw') or '').casefold() != 'chi cđ')
+def eligible(bank, accounts=None):
+    """CHUẨN ĐỐI SOÁT MỚI (GĐ chốt 11/09/2026) — thay hẳn chuẩn cũ. Chỉ xét giao dịch đủ CẢ BỐN điều kiện:
+
+        · direction = out (tiền rời tài khoản tiệm);
+        · bank_number nằm trong TAI_KHOAN_TRA (tạm thời đúng một số);
+        · trans_amount > 0;
+        · nội dung KHÔNG phải khoản chi khác "THANH TOAN TIEN VANG 1-…".
+
+    Tham số accounts giữ cho chỗ gọi cũ nhưng KHÔNG dùng nữa: danh sách tài khoản lấy từ hằng trên chứ không
+    từ bảng gold_bank, để khỏi vô tình nhận tiền ra từ tài khoản khác của tiệm.
+    """
+    return (str(bank.get('direction', '')).lower() == 'out'
+            and M.dec(bank['trans_amount']) > 0
+            and str(bank.get('bank_number') or '') in TAI_KHOAN_TRA
+            and LOAI_TRU not in (bank.get('description') or '').upper())
 
 
 def history_for(ids):
@@ -167,8 +182,10 @@ def inspect(d1, d2):
             ref = (bank['provider'], bank['bank_number'], bank['ref_code'])
             if bank['ref_code'] and ref in used_refs:
                 continue
+            # CHUẨN MỚI (11/09/2026): chỉ nội dung khớp mã phiếu mới thành ứng viên. Đường "đúng tiền + trong
+            # 30 phút" đã bỏ — nó chỉ là phỏng đoán, dễ gán nhầm khoản chi khác cùng số tiền.
             exact = code_match(order, bank)
-            if not exact and not (M.dec(bank['trans_amount']) == order['required'] and near(order, bank)):
+            if not exact:
                 continue
             foreign = legacy.get(bank['id']) and legacy[bank['id']] not in order['ids']
             foreign = foreign or ((bank['bill_code_raw'] or '').startswith('TBG') and bank['bill_code_raw'] not in order['ids'])

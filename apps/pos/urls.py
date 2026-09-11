@@ -9,6 +9,9 @@ app_name = "pos"
 
 urlpatterns = [
     path("banle/khach-hang/qr/cong-cu/", qr_learning_views.tool, name="qr_learning"),
+    path("banle/khach-hang/qr/hoc/dich/", qr_learning_views.translate, name="qr_learning_translate"),
+    path("banle/khach-hang/qr/hoc/loc/", qr_learning_views.filter_errors, name="qr_learning_filter"),
+    path("banle/khach-hang/qr/hoc/luu-nhap/", qr_learning_views.save_draft, name="qr_learning_save_draft"),
     path("banle/khach-hang/qr/hoc/xem-thu/", qr_learning_views.preview, name="qr_learning_preview"),
     path("banle/khach-hang/qr/hoc/ap-dung/", qr_learning_views.save, name="qr_learning_save"),
     path("banle/thau-vao-2/", thau_list.listing, name="thau_vao_2"),

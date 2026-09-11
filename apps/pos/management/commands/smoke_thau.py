@@ -405,8 +405,11 @@ class Command(BaseCommand):
                          r_in.status_code == 403 and "khóa in" in r_in.content.decode().lower()
                          and web.get("/banle/thau-vao/").content.decode().count("Tạm khóa in phiếu") == 2)
                 b_ds2 = web.get("/banle/thau-vao/danh-sach/").content.decode()
+                # ngày không có phiếu đã chốt thì không dòng nào vẽ nút 🖨 → kiểm thêm ở template cho chắc
+                tpl_ds = open("templates/pos/_thau_ds.html", encoding="utf-8").read()
                 self._ok("popup DANH SÁCH: nút 🖨 của từng dòng cũng bị khóa, không còn gọi được đường dẫn in",
-                         "Tạm khóa in phiếu" in b_ds2 and "thau-vao/in/" not in b_ds2)
+                         "thau-vao/in/" not in b_ds2 and "disabled title=\"{{ khoa_in_msg }}\"" in tpl_ds
+                         and ("Tạm khóa in phiếu" in b_ds2 or ">🖨</button>" not in b_ds2))
                 nhom_xn = ThauNhom.objects.order_by("-pk").first()
                 lk_gia = ThauPaymentLink.objects.create(
                     order_key="smoke", trn_ids=list(nhom_xn.trn_ids), notification_id=999999999,
@@ -449,10 +452,11 @@ class Command(BaseCommand):
                 # ⬇ XUẤT EXCEL + 🪪 IN CCCD (GĐ chốt 10/09/2026) — đúng khuôn tệp mẫu NCC_NHAP_CHUAN_KH2.xlsx
                 hom_nay_iso = hom_nay
                 b_tr2 = web.get("/banle/thau-vao-2/").content.decode()
-                self._ok("trang thâu 2: 2 nút tải tệp đứng TRƯỚC nút Đối soát CK, giữ nguyên bộ lọc đang xem",
+                # nút "Đối soát CK" đã bỏ (11/09) nên không so vị trí với nó nữa; 2 nút tải tệp đứng ngay trên bảng
+                self._ok("trang thâu 2: 2 nút tải tệp có mặt, giữ nguyên bộ lọc đang xem",
                          "XUẤT EXCEL" in b_tr2 and "IN CCCD" in b_tr2
-                         and b_tr2.index("XUẤT EXCEL") < b_tr2.index("Đối soát CK")
-                         and "xuat-ncc/?d1=" in b_tr2 and "in-cccd/?d1=" in b_tr2)
+                         and "xuat-ncc/?d1=" in b_tr2 and "in-cccd/?d1=" in b_tr2
+                         and b_tr2.index("XUẤT EXCEL") < b_tr2.index("th2-table"))
                 r_xl = web.get(f"/banle/thau-vao-2/xuat-ncc/?d1={hom_nay_iso}&d2={hom_nay_iso}&method=all")
                 from io import BytesIO as _B
                 import openpyxl as _xl
