@@ -1,10 +1,20 @@
-"""Authenticated local tool for explicitly teaching QR corrections. No PMV calls."""
+"""Authenticated local tool for explicitly teaching QR corrections. No PMV calls.
+
+Quyền CRUD của công cụ này KẾ THỪA danh mục KHÁCH HÀNG (GĐ chốt 11/09/2026): trang nằm trong
+``/banle/khach-hang/…`` và chỉ phục vụ việc nhập khách, nên XEM đi theo quyền Xem của Khách hàng,
+THÊM/SỬA mẫu đi theo quyền Tạo/sửa của Khách hàng. Luật nằm ở ``customer.quyen`` (ma trận
+``UserModuleAccess`` module ``KHACH_HANG``) — đừng đặt luật riêng ở đây.
+"""
 import json
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
-from . import cccd, cccd_learning as learning, cccd_tools
+from . import cccd, cccd_learning as learning, cccd_tools, customer
+
+
+XEM_CAN_QUYEN = "Bạn chưa được cấp quyền xem danh mục Khách hàng."
 
 
 def _json(data, status=200):
@@ -35,6 +45,8 @@ def _payload(request):
 @login_required
 @require_GET
 def tool(request):
+    if not customer.duoc_xem(request.user):
+        raise PermissionDenied("Bạn chưa được cấp quyền xem danh mục Khách hàng.")
     error = ""
     try:
         state = learning.read_store()
@@ -44,7 +56,7 @@ def tool(request):
         return _json({**_public(state), "error": error}, 503 if error else 200)
     response = render(request, "pos/qr_learning.html", {
         "nav_active": "khach", "learning_state": _public(state), "learning_error": error,
-        "can_teach": request.user.is_superuser, "scopes": learning.SCOPES,
+        "can_teach": customer.duoc_sua(request.user), "scopes": learning.SCOPES,
     })
     response["Cache-Control"] = "private, no-store"
     return response
@@ -53,6 +65,8 @@ def tool(request):
 @login_required
 @require_POST
 def translate(request):
+    if not customer.duoc_xem(request.user):
+        return _json({"error": XEM_CAN_QUYEN}, 403)
     try:
         data = _payload(request)
         return _json(cccd_tools.translate(data.get("raw"), data.get("scope", "auto")))
@@ -63,6 +77,8 @@ def translate(request):
 @login_required
 @require_POST
 def filter_errors(request):
+    if not customer.duoc_xem(request.user):
+        return _json({"error": XEM_CAN_QUYEN}, 403)
     try:
         data = _payload(request)
         return _json(cccd_tools.filter_errors(data.get("raw"), data.get("output"), data.get("scope", "auto")))
@@ -73,8 +89,8 @@ def filter_errors(request):
 @login_required
 @require_POST
 def save_draft(request):
-    if not request.user.is_superuser:
-        return _json({"error": "Chỉ tài khoản quản trị được cập nhật danh sách CHỜ."}, 403)
+    if not customer.duoc_sua(request.user):
+        return _json({"error": "Bạn không có quyền cập nhật danh sách CHỜ (theo quyền danh mục Khách hàng)."}, 403)
     try:
         data = _payload(request)
         state, message, draft_id = learning.save_draft(
@@ -90,6 +106,8 @@ def save_draft(request):
 @login_required
 @require_POST
 def preview(request):
+    if not customer.duoc_xem(request.user):
+        return _json({"error": XEM_CAN_QUYEN}, 403)
     try:
         data = _payload(request)
         raw, output, scope = data.get("raw"), data.get("output"), data.get("scope", "auto")
@@ -108,8 +126,8 @@ def preview(request):
 @login_required
 @require_POST
 def save(request):
-    if not request.user.is_superuser:
-        return _json({"error": "Chỉ tài khoản quản trị được cập nhật bộ mẫu dùng chung."}, 403)
+    if not customer.duoc_sua(request.user):
+        return _json({"error": "Bạn không có quyền cập nhật bộ mẫu dùng chung (theo quyền danh mục Khách hàng)."}, 403)
     try:
         data = _payload(request)
         state, message = learning.save_rule(data.get("raw", ""), data.get("output", ""), data.get("scope", "auto"),

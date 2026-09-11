@@ -863,6 +863,27 @@ Tiền `1.234.567 ₫` · ngày `dd/mm/yyyy` · toàn bộ tiếng Việt · UI 
   tiếng Việt sẵn (P-002 không tồn tại · P-017 đã xuất) — UI in NGUYÊN VĂN, không tự dịch.
 - ⚠ **Viết lại `base.html` là dễ LÀM RƠI thẻ nạp thư viện** — 03/09/2026 rơi mất `js/vendor/htmx.min.js`, mọi tương tác (quét mã, lọc, popup) chết mà bộ kiểm vẫn XANH vì nó chỉ kiểm phản hồi máy chủ. Nay `smoke_ui` khẳng định mỗi tài nguyên vừa **tải được** vừa **được nhúng vào HTML**. Sau khi sửa layout luôn mở trình duyệt bấm thử một thao tác thật.
 - ⚠ **KHÔNG gọi file `.bat` từ Git Bash** (`cmd //c ...`) — bước `sc query MySQL80` trả sai dưới bash → báo “MySQL80 khong chay sau 60s” và HỦY bật, trong khi TURN_OFF đã chạy xong ⇒ hệ nằm im. Đã dính 03/09/2026. Luôn gọi qua PowerShell: `cmd /c D:\PYTHON\KHBL\RESET_KHBL.bat`.
+- **QUYỀN THEO DANH MỤC — MÀN PHỤ KẾ THỪA DANH MỤC CHA** (GĐ chốt 11/09/2026). Ma trận quyền thật là
+  `UserModuleAccess` (bảng `user_module_access`, 8 danh mục · 4 ô Xem / Tạo-sửa / Hủy-xóa / Duyệt-chốt,
+  set ở trang quản trị người dùng; superuser luôn đủ quyền). **Một màn hình phụ nằm dưới đường dẫn của
+  danh mục nào thì ăn quyền của danh mục đó, KHÔNG đặt luật riêng** — không có chuyện "chỉ superuser mới
+  dùng được". Mỗi danh mục gom luật vào MỘT hàm dùng chung: `customer.quyen/duoc_xem/duoc_sua`
+  (KHACH_HANG) · `deposits.allowed` (DAT_COC) · `thau_payments.permitted` (THAU_VAO). Đã áp:
+  **Dạy bộ đọc QR `/banle/khach-hang/qr/cong-cu/` → danh mục KHÁCH HÀNG** (xem trang + dịch/lọc/xem thử =
+  ô *Xem*; lưu nháp + áp dụng mẫu = ô *Tạo / sửa*) — kiểm ở `tests/test_qr_learning.py`.
+  ⚠ Còn nợ: chính các trang Khách hàng (DS · popup thêm/sửa · xóa) vẫn chỉ đòi ĐĂNG NHẬP, chưa soi ma trận
+  — nối vào `customer.quyen` khi GĐ yêu cầu, đừng nối lặng lẽ vì đang có tài khoản chưa được set quyền.
+- 🔴 **CHỈ CHẠY BỘ KIỂM QUA `manage.py test`** — chạy `python -m unittest discover -s tests` (hay `-m unittest`
+  một tệp có `TransactionTestCase`) thì Django KHÔNG dựng DB kiểm riêng, bước dọn dẹp `_fixture_teardown`
+  chạy `DELETE FROM` **thẳng trên `khj_bl`**. Đã dính 11/09/2026 lúc 09:50: mất 355.918 dòng — `gold_bill`
+  1.701 (kèm ảnh CCCD/QR), `thau_nhom` 584, `auth_user` 3 tài khoản, `user_module_access` 22, `bill_audit`,
+  `bank_reconcile_state`, `pmv_*`… Khôi phục trọn vẹn trong ~1 giờ nhờ **`log_bin` ROW giữ 30 ngày**
+  (`D:\PYTHON\mysql8\data\binlog.000006`): `mysqlbinlog --base64-output=DECODE-ROWS -v` in ra ảnh ĐẦY ĐỦ của
+  từng dòng bị xóa → dựng lại INSERT đúng id cũ (ảnh JPEG khớp từng byte; vì là `DELETE` nên số tự tăng còn
+  nguyên, dòng mới sinh sau đó không bị đụng). Nay `tests/__init__.py` có **chốt chặn**: tên DB không bắt đầu
+  bằng `test_` thì bước dọn dẹp DỪNG NGAY. ⚠ `manage.py test` hiện KHÔNG chạy được vì `khj_admin` không có
+  quyền tạo `test_khj_bl` — muốn chạy cả cụm phải cấp quyền đó trước, đừng lách bằng unittest. Kiểm nhanh vẫn
+  an toàn với các tệp không đụng DB (`test_qr_learning`, `test_customer`, `test_cccd`).
 - **Bộ kiểm KHÔNG được `set_password()`** — nó đổi session hash và đá mọi người đang đăng nhập ra; dùng `Client.force_login(user)`.
 - **CHỮ TIẾNG VIỆT TỪ NGUỒN NGOÀI PHẢI CHUẨN HÓA** — skill `.claude/skills/chuan-hoa-tieng-viet/`,
   code `apps/pos/vn_text.py` + bản JS `static/js/vn_text.js` (sửa cái nào phải sửa cả hai).

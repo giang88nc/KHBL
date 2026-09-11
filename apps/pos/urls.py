@@ -2,6 +2,9 @@ from django.urls import path
 
 from . import views
 from . import deposits
+from . import deposit_operations
+from . import deposit_messages
+from . import deposit_money
 from . import qr_learning_views
 from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
@@ -10,8 +13,18 @@ app_name = "pos"
 
 urlpatterns = [
     path('banle/dat-coc/', deposits.index, name='dat_coc'),
+    path('banle/dat-coc/bao-cao/', deposits.report, name='dat_coc_report'),
+    path('banle/dat-coc/thong-bao/soan/', deposit_messages.compose, name='dat_coc_compose'),
+    path('banle/dat-coc/thong-bao/mau/them/', deposit_messages.template_edit, name='dat_coc_template_add'),
+    path('banle/dat-coc/thong-bao/mau/<int:pk>/', deposit_messages.template_edit, name='dat_coc_template'),
+    path('banle/dat-coc/thong-bao/mau/<int:pk>/kiem-tra/', deposit_messages.approve_template, name='dat_coc_template_approve'),
+    path('banle/dat-coc/thong-bao/<int:pk>/<str:kind>/', deposit_messages.edit, name='dat_coc_message'),
     path('banle/dat-coc/khach/', deposits.customers, name='dat_coc_customers'),
+    path('banle/dat-coc/hang-trong-kho/', deposits.products, name='dat_coc_products'),
     path('banle/dat-coc/them/', deposits.popup, {'action': 'add'}, name='dat_coc_add'),
+    path('banle/dat-coc/<str:pk>/van-hanh/<str:kind>/', deposit_operations.action, name='dat_coc_operation'),
+    path('banle/dat-coc/<str:pk>/tien/<str:kind>/', deposit_money.action, name='dat_coc_money'),
+    path('banle/dat-coc/<str:pk>/can-coc/', deposit_money.apply_to_invoice, name='dat_coc_apply'),
     path('banle/dat-coc/<str:pk>/<str:action>/', deposits.popup, name='dat_coc_popup'),
     path("banle/khach-hang/qr/cong-cu/", qr_learning_views.tool, name="qr_learning"),
     path("banle/khach-hang/qr/hoc/dich/", qr_learning_views.translate, name="qr_learning_translate"),

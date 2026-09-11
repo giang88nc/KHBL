@@ -1,4 +1,4 @@
-/* ĐẶT-CỌC: popup HTMX, thao tác bất đồng bộ và thông báo không chặn màn hình. */
+/* Phiếu đặt hàng: tab trạng thái, popup và tra cứu hàng tồn. */
 (() => {
   'use strict';
   function toast(message, tone = 'success') {
@@ -7,65 +7,139 @@
     const item = document.createElement('div');
     item.className = tone;
     item.setAttribute('role', tone === 'error' ? 'alert' : 'status');
-    item.textContent = message;
-    root.append(item);
+    item.textContent = message; root.append(item);
     item.addEventListener('click', () => item.remove());
     setTimeout(() => item.remove(), tone === 'error' ? 12000 : 5000);
   }
-  function filter() {
-    const form = document.getElementById('dc-filter');
-    if (form) form.requestSubmit();
+  function filter() { document.getElementById('dc-filter')?.requestSubmit(); }
+  function field(line, key) { return line.querySelector(`[name$="-${key}"]`); }
+  function mode(line) {
+    const stock = field(line, 'Mode')?.value === 'stock';
+    line.classList.toggle('is-stock', stock);
+    line.querySelector('legend').textContent = stock ? 'Có sẵn trong kho' : 'Đặt mới theo yêu cầu';
+    if (!stock) line.querySelector('.dc-stock-results').replaceChildren();
   }
+  function bindLines() { document.querySelectorAll('#dc-lines .dc-line').forEach(mode); }
   document.addEventListener('click', event => {
-    const tab = event.target.closest('[data-dc-tab]');
-    const page = event.target.closest('[data-dc-page]');
     const form = document.getElementById('dc-filter');
+    const tab = event.target.closest('[data-dc-tab]');
+    if (tab && (!form || tab.dataset.dcTab === 'notifications')) {
+      htmx.ajax('GET', '/banle/dat-coc/?tab=' + encodeURIComponent(tab.dataset.dcTab), {target:'#dc-content'}); return;
+    }
+    const messagePage = event.target.closest('[data-dc-message-page]');
+    if (messagePage) { const mf=document.getElementById('dc-message-filter'); mf.elements.page.value=messagePage.dataset.dcMessagePage; mf.requestSubmit(); }
+    const copy = event.target.closest('[data-dc-copy]');
+    if (copy) navigator.clipboard.writeText(copy.dataset.dcCopy).then(()=>toast('Đã chép nội dung tin.')).catch(()=>toast('Không chép được. Hãy chọn và sao chép nội dung tin.','error'));
     if (tab && form) {
+      if (form.elements.tab.value === tab.dataset.dcTab) return;
       form.elements.tab.value = tab.dataset.dcTab;
+      form.elements.due.value = ''; form.elements.quick.value = '';
+      form.elements.sort.value = ['ready','pending'].includes(tab.dataset.dcTab) ? 'priority' : tab.dataset.dcTab === 'delivered' ? 'delivered' : 'newest';
       form.elements.page.value = '1'; filter();
     }
+    const work = event.target.closest('[data-dc-work]');
+    if (work && form) {
+      const key = work.dataset.dcWork;
+      form.elements.tab.value = key === 'money' ? 'all' : 'pending';
+      form.elements.quick.value = key === 'pending' ? '' : key;
+      form.elements.due.value = ''; form.elements.sort.value = 'priority'; form.elements.page.value = '1'; filter();
+    }
+    if (event.target.closest('[data-dc-refresh]') && form) {
+      const flag = document.createElement('input'); flag.type = 'hidden'; flag.name = 'refresh'; flag.value = '1';
+      form.append(flag); filter(); flag.remove();
+    }
+    const page = event.target.closest('[data-dc-page]');
     if (page && form) { form.elements.page.value = page.dataset.dcPage; filter(); }
     if (event.target.closest('[data-dc-retry]')) filter();
     if (event.target.closest('[data-dc-reset]') && form) {
-      ['q', 'start', 'end', 'status'].forEach(name => { form.elements[name].value = ''; });
-      form.elements.page.value = '1'; filter();
+      ['q', 'start', 'end', 'due', 'quick', 'source'].forEach(name => { form.elements[name].value = ''; });
+      form.elements.mine.checked = false;
+      form.elements.sort.value = 'newest'; form.elements.page.value = '1'; filter();
     }
+    if (event.target.closest('[data-dc-print]')) window.print();
     const customer = event.target.closest('[data-dc-customer]');
     if (customer) {
       document.querySelector('#dc-save [name=CustID]').value = customer.dataset.dcCustomer;
       document.getElementById('dc-customer-results').textContent = 'Đã chọn: ' + customer.dataset.name;
     }
-    if (event.target.closest('[data-dc-add-line]')) {
+    const add = event.target.closest('[data-dc-add-line]');
+    if (add) {
+      const blank = [...document.querySelectorAll('#dc-lines .dc-line')].find(line =>
+        !field(line, 'DELETE')?.checked && ['ProductDesc', 'ProductCode', 'Notes'].every(key => !field(line, key).value.trim()));
+      if (blank) {
+        field(blank, 'Mode').value = add.dataset.dcAddLine || 'new'; mode(blank);
+        field(blank, add.dataset.dcAddLine === 'stock' ? 'ProductCode' : 'ProductDesc').focus();
+        return;
+      }
       const total = document.getElementById('id_items-TOTAL_FORMS');
       const n = Number(total.value);
       if (n >= 50) { toast('Mỗi phiếu tối đa 50 món.', 'warning'); return; }
       const template = document.getElementById('dc-empty-line');
       document.getElementById('dc-lines').insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__prefix__', String(n)));
       total.value = n + 1;
-      document.querySelector('#dc-lines .dc-line:last-child input').focus();
+      const line = document.querySelector('#dc-lines .dc-line:last-child');
+      field(line, 'Mode').value = add.dataset.dcAddLine || 'new'; mode(line);
+      field(line, add.dataset.dcAddLine === 'stock' ? 'ProductCode' : 'ProductDesc').focus();
     }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.closest('#dc-message-filter') && event.target.name !== 'page') document.getElementById('dc-message-filter').elements.page.value = '1';
+    if (event.target.matches('#dc-lines [name$="-Mode"]')) mode(event.target.closest('.dc-line'));
+  });
+  const searches = new WeakMap();
+  document.addEventListener('input', event => {
+    if (!event.target.matches('#dc-lines [name$="-ProductCode"]')) return;
+    const input = event.target, line = input.closest('.dc-line'), results = line.querySelector('.dc-stock-results');
+    const previous = searches.get(input);
+    if (previous) { clearTimeout(previous.timer); previous.controller.abort(); }
+    const query = input.value.trim(), controller = new AbortController();
+    results.replaceChildren();
+    if (query.length < 2) return;
+    const timer = setTimeout(async () => {
+      results.textContent = 'Đang tìm hàng trong kho…';
+      try {
+        const form = document.getElementById('dc-save');
+        const url = new URL(form.dataset.productsUrl, location.origin);
+        url.searchParams.set('q', query); url.searchParams.set('units', form.dataset.units);
+        const response = await fetch(url, {signal:controller.signal, headers:{'Accept':'application/json'}});
+        if (!response.ok) throw new Error('Không tải được hàng trong kho. Vui lòng thử lại.');
+        const data = await response.json();
+        if (!input.isConnected || input.value.trim() !== query || field(line,'Mode').value !== 'stock') return;
+        results.replaceChildren();
+        if (!data.rows.length) results.textContent = 'Không có hàng còn tồn khớp từ khóa.';
+        data.rows.forEach(row => {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'dc-stock-option';
+          button.textContent = `${row.ProductCode} · ${row.ProductDesc || ''} · ${row.GoldCode}`;
+          button.addEventListener('click', () => {
+            ['ProductCode','ProductDesc','GoldCode','TotalWeight','DiamondWeight','GoldWeight'].forEach(key => { field(line,key).value = row[key] ?? ''; });
+            field(line,'Size').value = row.RingSize || '';
+            results.textContent = 'Đã chọn hàng trong kho: ' + row.ProductCode;
+          });
+          results.append(button);
+        });
+      } catch (error) { if (error.name !== 'AbortError' && input.isConnected) results.textContent = error.message; }
+    }, 300);
+    searches.set(input, {timer,controller});
   });
   document.addEventListener('keydown', event => {
     const tab = event.target.closest('[data-dc-tab]');
-    if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+    if (tab && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
       event.preventDefault();
-      const tabs = [...document.querySelectorAll('[data-dc-tab]')];
-      const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs.find(t => t !== tab);
+      const tabs = [...document.querySelectorAll('[data-dc-tab]')], index = tabs.indexOf(tab);
+      const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
       next.focus(); next.click();
     }
   });
   document.body.addEventListener('depositSaved', event => {
-    window.closeKhblModal();
-    toast(event.detail.message);
-    htmx.trigger(document.body, 'depositRefresh');
+    window.closeKhblModal(); toast(event.detail.message,event.detail.tone || 'success'); htmx.trigger(document.body, 'depositRefresh');
   });
   document.body.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id === 'modal-root') {
+      bindLines();
       const error = document.querySelector('[data-dc-error]');
       if (error) toast(error.textContent, 'error');
     }
   });
-  ['htmx:responseError', 'htmx:sendError'].forEach(name => document.body.addEventListener(name, () => {
-    toast('Không hoàn tất yêu cầu. Kiểm tra kết nối / quyền truy cập rồi tải lại danh sách.', 'error');
-  }));
+  ['htmx:responseError','htmx:sendError'].forEach(name => document.body.addEventListener(name, () => toast('Không hoàn tất yêu cầu. Kiểm tra kết nối / quyền truy cập rồi tải lại danh sách.', 'error')));
 })();

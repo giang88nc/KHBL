@@ -37,7 +37,7 @@
         <button type="button" class="khbl-btn khbl-btn--outline" id="qrl-preview">Xem thử</button>
         <button type="button" class="khbl-btn khbl-btn--ghost" id="qrl-new">Mẫu mới</button>
       </div>
-      {% if not can_teach %}<p class="qrl-note">Bạn có thể xem thử. Cập nhật mẫu dùng chung cần tài khoản quản trị.</p>{% endif %}
+      {% if not can_teach %}<p class="qrl-note">Bạn có thể xem thử. Cập nhật mẫu dùng chung cần quyền thêm/sửa của danh mục Khách hàng.</p>{% endif %}
       <p id="qrl-status" role="status" aria-live="polite" class="qrl-status{% if learning_error %} is-error{% endif %}">{{ learning_error }}</p>
       <div id="qrl-comparison" class="qrl-comparison" hidden>
         <div><h3>Trước khi áp dụng</h3><pre id="qrl-before"></pre></div>

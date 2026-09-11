@@ -186,3 +186,6 @@ LOGGING = {
     },
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# ĐẶT-CỌC: token OA chỉ ở máy chủ; mẫu phải được OA duyệt trước khi gửi.
+DATCOC_OA_ACCESS_TOKEN = env('DATCOC_OA_ACCESS_TOKEN', default='')

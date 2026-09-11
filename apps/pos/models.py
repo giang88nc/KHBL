@@ -1,5 +1,8 @@
 import uuid
 
+from .deposit_models import (DepositOrderState, DepositEvent, DepositStockHold,
+                             DepositMoneyOperation, DepositMessageTemplate, DepositMessage)
+
 from django.conf import settings
 from django.db import models
 

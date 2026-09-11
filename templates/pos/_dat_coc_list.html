@@ -1,32 +1,29 @@
 {% load pos_extras %}
-<div class="dc-tabs" role="tablist" aria-label="Danh sách đặt cọc">
-  <button type="button" role="tab" aria-selected="{% if tab == 'money' %}true{% else %}false{% endif %}" data-dc-tab="money">{% icon 'thau' 20 %} Tiền cọc</button>
-  <button type="button" role="tab" aria-selected="{% if tab == 'orders' %}true{% else %}false{% endif %}" data-dc-tab="orders">{% icon 'tem' 20 %} Đặt hàng</button>
+{% if kpis %}<div class="dc-work-kpis" aria-label="Công việc theo phạm vi tìm kiếm"><button type="button" data-dc-work="pending"><b>{{ kpis.pending }}</b> Chưa giao</button><button type="button" data-dc-work="overdue" class="dc-kpi-urgent"><b>{{ kpis.overdue }}</b> Quá hẹn</button><button type="button" data-dc-work="call"><b>{{ kpis.call }}</b> Cần liên hệ</button><button type="button" data-dc-work="money"><b>{{ kpis.money }}</b> Cọc cần đối soát</button></div>{% endif %}
+<div class="dc-tabs" role="tablist" aria-label="Phiếu đặt hàng">
+{% for key,label in tabs %}<button type="button" role="tab" aria-selected="{% if tab == key %}true{% else %}false{% endif %}" data-dc-tab="{{ key }}">{{ label }}</button>{% endfor %}
 </div>
-<form id="dc-filter" class="dc-filters" hx-get="{% url 'pos:dat_coc' %}" hx-target="#dc-content" hx-indicator="#dc-loading" hx-sync="this:replace">
+<form id="dc-filter" class="dc-filters dc-filters--list" hx-get="{% url 'pos:dat_coc' %}" hx-target="#dc-content" hx-indicator="#dc-loading" hx-sync="this:replace">
   <input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="page" value="1">
-  <label class="dc-search">{{ form.q.label }}{{ form.q }}</label><label>{{ form.start.label }}{{ form.start }}</label><label>{{ form.end.label }}{{ form.end }}</label><label>{{ form.status.label }}{{ form.status }}</label>
-  <button class="dc-btn dc-btn--primary" type="submit">Lọc danh sách</button><button class="dc-btn" type="button" data-dc-reset>Đặt lại</button>
-  <span id="dc-loading" class="htmx-indicator">Đang tải…</span>
+  <label class="dc-search">{{ form.q.label }}{{ form.q }}</label><label>{{ form.start.label }}{{ form.start }}</label><label>{{ form.end.label }}{{ form.end }}</label><label>{{ form.due.label }}{{ form.due }}</label><label>{{ form.sort.label }}{{ form.sort }}</label>
+  <button class="dc-btn dc-btn--primary" type="submit">Lọc</button><button class="dc-btn" type="button" data-dc-reset>Đặt lại</button><span id="dc-loading" class="htmx-indicator">Đang tải…</span>
+  <details class="dc-filter-extra"><summary>Bộ lọc công việc · nguồn hàng · của tôi</summary><div class="dc-filter-controls"><label>{{ form.quick.label }}{{ form.quick }}</label><label>{{ form.source.label }}{{ form.source }}</label><label class="dc-mine">{{ form.mine }} Của tôi</label><span>Chưa giao bao gồm hàng sẵn sàng</span><button type="button" class="dc-btn dc-btn--small" data-dc-refresh>Làm mới dữ liệu</button></div></details>
 </form>
 {% if form.errors %}<div class="dc-alert" role="alert">{{ form.errors }}</div>{% endif %}
 {% if error %}<div class="dc-alert" role="alert">{{ error }} <button class="dc-btn" data-dc-retry>Thử lại</button></div>{% endif %}
 {% if stats %}
-<div class="dc-stats">
-  <article><span>Số phiếu</span><strong>{{ stats.total }}</strong><small>Theo bộ lọc hiện tại</small></article>
-  <article><span>Tổng tiền cọc trên phiếu</span><strong>{{ stats.amount|tien_tran }} <i>₫</i></strong><small>Bao gồm các trạng thái đã lọc</small></article>
-  <article class="dc-stats--teal"><span>Cọc đã thanh toán, chưa sử dụng</span><strong>{{ stats.available|tien_tran }} <i>₫</i></strong><small>Phiếu có trạng thái P</small></article>
-  <article><span>Phiếu lưu tạm</span><strong>{{ stats.drafts }}</strong><small>Chưa xác nhận thanh toán</small></article>
-</div>
-<section class="dc-panel" aria-label="{% if tab == 'orders' %}Đặt hàng{% else %}Tiền cọc{% endif %}">
-  <div class="dc-panel-head"><div><h2>{% if tab == 'orders' %}Danh sách đặt hàng{% else %}Danh sách tiền cọc{% endif %}</h2><p>{% if tab == 'orders' %}Các phiếu có chi tiết món đặt hàng.{% else %}Tất cả phiếu cọc của khách, bao gồm phiếu đặt hàng.{% endif %}</p></div><span>{{ stats.total }} phiếu</span></div>
-  <div class="dc-table-wrap"><table class="dc-table"><thead><tr><th>Phiếu / ngày</th><th>Khách hàng</th><th class="dc-number">Tiền cọc</th><th>Món đặt</th><th>Trạng thái</th><th>Ghi chú</th><th class="dc-actions">Thao tác</th></tr></thead><tbody>
-  {% for r in rows %}<tr><td><button class="dc-link" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'view' %}" hx-target="#modal-root">{{ r.BillCode|default:r.TrnID }}</button><small>{{ r.TrnDate|date:'d/m/Y' }}</small></td>
-    <td><b>{{ r.CustName|default:'Chưa có tên khách' }}</b><small>{{ r.Phone|default:'—' }}</small></td><td class="dc-number dc-money">{{ r.TienCoc|tien_tran }} ₫</td><td>{% if r.line_count %}<span class="dc-count">{{ r.line_count }} món</span>{% else %}<span class="dc-muted">—</span>{% endif %}</td>
-    <td><span class="dc-status dc-status--{{ r.Status }}">{{ r.state_name }}</span></td><td class="dc-note" title="{{ r.Description|default:'' }}">{{ r.Description|default:'—'|truncatechars:65 }}</td>
-    <td class="dc-actions"><button class="dc-btn dc-btn--small" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'view' %}" hx-target="#modal-root" aria-label="Xem phiếu {{ r.BillCode }}">Xem</button>
-    {% if r.Status == 'W' %}{% if can_edit %}<button class="dc-btn dc-btn--small" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'edit' %}" hx-target="#modal-root">Sửa</button>{% endif %}{% if can_delete %}<button class="dc-btn dc-btn--small dc-btn--danger" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'delete' %}" hx-target="#modal-root">Xóa</button>{% endif %}{% endif %}</td></tr>
-  {% empty %}<tr><td colspan="7"><div class="dc-empty">{% icon 'hoadon' 42 %}<h3>Chưa có phiếu phù hợp</h3><p>Thử đổi khoảng ngày hoặc từ khóa tìm kiếm.</p>{% if can_edit %}<button class="dc-btn" hx-get="{% url 'pos:dat_coc_add' %}" hx-target="#modal-root">＋ Thêm phiếu cọc</button>{% endif %}</div></td></tr>{% endfor %}
+<section class="dc-panel dc-panel--list" aria-label="Danh sách phiếu khách đã đặt">
+  <div class="dc-list-summary"><h2>Phiếu khách đã đặt <span>{{ stats.total }}</span></h2><div><span title="Tổng ghi trên phiếu trong bộ lọc; không phải số dư tiền thực giữ">Cọc ghi trên phiếu <b>{{ stats.amount|tien_tran }} ₫</b></span><span>Dữ liệu {{ as_of|date:'H:i:s' }}</span></div></div>
+  <div class="dc-table-wrap dc-list-scroll"><table class="dc-table dc-list-table"><thead><tr><th>Phiếu / ngày đặt</th><th>Khách hàng</th><th>Hàng khách đặt</th><th>Tiến độ / ngày hẹn</th><th class="dc-number">Tiền CỌC</th><th>Phụ trách / việc tiếp theo</th><th class="dc-actions">Thao tác</th></tr></thead><tbody>
+  {% for r in rows %}<tr><td><b class="dc-code">{{ r.BillCode|default:r.TrnID }}</b><small>{{ r.TrnDate|date:'d/m/Y' }}</small></td>
+    <td><b>{{ r.CustName|default:'Chưa có tên khách' }}</b><small>{% if r.Phone %}<a href="tel:{{ r.Phone }}">{{ r.Phone }}</a>{% else %}Chưa có SĐT{% endif %}</small></td>
+    <td class="dc-items-cell"><div title="{{ r.item_summary }}">{{ r.item_summary|default:'Chưa bổ sung chi tiết hàng'|truncatechars:75 }}{% if r.item_extra %}<small>+ {{ r.item_extra }} món khác</small>{% endif %}</div><div class="dc-item-tags">{% if r.stock_count %}<span class="dc-source dc-source--stock">{{ r.stock_count }} có sẵn</span>{% endif %}{% if r.new_count %}<span class="dc-source dc-source--new">{{ r.new_count }} đặt mới</span>{% endif %}</div></td>
+    <td><span class="dc-status dc-status--{{ r.state_css|default:r.Status }}">{{ r.state_name }}</span><small>{{ r.promise_date|date:'d/m/Y'|default:'Chưa hẹn ngày' }}{% if r.due_text %} · <b class="{% if r.overdue %}dc-due-text--overdue{% endif %}">{{ r.due_text }}</b>{% endif %}</small>{% if r.progress_text %}<small>{{ r.progress_text }}</small>{% endif %}</td>
+    <td class="dc-number dc-money">{{ r.TienCoc|tien_tran }} ₫<small class="{% if r.needs_money %}dc-money-review{% endif %}">{{ r.money_name|default:'Chưa đối soát' }}</small></td>
+    <td class="dc-note"><b>{{ r.responsible|default:r.EmpName|default:'Chưa phân công' }}</b><small title="{{ r.next_task }}">{{ r.next_task|default:r.note|default:'—'|truncatechars:70 }}</small>{% if r.hold_conflict %}<small class="dc-due-text--overdue">Mã hàng cần kiểm tra</small>{% endif %}</td>
+    <td class="dc-actions"><button class="dc-btn dc-btn--small" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'view' %}" hx-target="#modal-root" aria-label="Xem phiếu {{ r.BillCode|default:r.TrnID }}">XEM</button>
+    {% if can_edit and r.Status == 'W' %}<button class="dc-btn dc-btn--small dc-btn--primary" hx-get="{% url 'pos:dat_coc_popup' r.TrnID 'edit' %}" hx-target="#modal-root" aria-label="Sửa phiếu {{ r.BillCode|default:r.TrnID }}">SỬA</button>{% else %}<button class="dc-btn dc-btn--small dc-edit-locked" disabled title="{% if not can_edit %}Chưa được cấp quyền sửa phiếu{% else %}PMV chỉ cho sửa phiếu đang chờ (W){% endif %}">SỬA</button>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="7"><div class="dc-empty">{% icon 'hoadon' 36 %}<h3>Không có phiếu phù hợp</h3><p>Thử đổi khoảng ngày, lịch hẹn hoặc từ khóa.</p></div></td></tr>{% endfor %}
   </tbody></table></div>
   <footer class="dc-pagination"><span>{{ pager.start_index }}–{{ pager.end_index }} / {{ stats.total }} phiếu</span><div>{% if pager.has_previous %}<button class="dc-btn" data-dc-page="{{ pager.previous_page_number }}">← Trước</button>{% endif %}<span>Trang {{ pager.number }} / {{ pager.paginator.num_pages }}</span>{% if pager.has_next %}<button class="dc-btn" data-dc-page="{{ pager.next_page_number }}">Sau →</button>{% endif %}</div></footer>
 </section>{% endif %}

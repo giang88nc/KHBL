@@ -284,6 +284,9 @@ PROC_READ_ALLOW = frozenset({
 PROC_WRITE_ALLOW = frozenset({
     # 11/09/2026: CRUD phiếu cọc W theo yêu cầu trang ĐẶT-CỌC; kiểm chứng sandbox.
     "TRN_DATCOC_Ins", "TRN_DATCOC_Upd", "TRN_DATCOC_Del",
+    # 11/09/2026 GĐ duyệt thu/hoàn/cấn cọc: smoke_datcoc_money PASS, source KK=bản thử,
+    # COPY_ONLY + VERIFY DATCOC_BEFORE_20260911_100542 trước mở. Vẫn qua chốt ghi/khóa hiện hữu.
+    "TRN_DATCOC_Complete", "TRN_RT_BUYSELL_DatCoc_Ins",
     "I_XRATE_Ins",                                         # 06/09/2026 — cập nhật giá MySQL → MSSQL, smoke_price_sync
     "I_CUSTOMER_Ins", "I_CUSTOMER_Upd",                       # 03/09/2026
     "I_DiemTichLuy_InsFromGT",                                 # 05/09/2026

@@ -1,0 +1,8 @@
+{% extends 'partials/modal_shell.html' %}
+{% block modal_title %}{{ title }} · {{ pk }}{% endblock %}
+{% block modal_style %}width:min(900px,96vw);max-width:900px{% endblock %}
+{% block modal_body %}<div class="dc-popup">{% if error %}<div class="dc-alert" role="alert" data-dc-error>{{ error }}</div>{% endif %}
+{% if preview %}<div class="dc-message-preview">{{ preview|linebreaksbr }}</div>{% endif %}
+{% if form %}<form id="dc-ops-form" hx-post="{{ request.path }}" hx-target="#modal-root" hx-disabled-elt="#dc-ops-submit">{% csrf_token %}<input type="hidden" name="token" value="{{ token }}"><div class="dc-form-grid">{% for field in form %}<label>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}</div>{{ form.non_field_errors }}</form>{% endif %}
+{% if events %}<h3>Lịch sử gần đây</h3><ol class="dc-history">{% for e in events %}<li><b>{{ e.created_at|date:'d/m H:i' }} · {{ e.username }}</b> · {{ e.action_name }}<p>{{ e.note }}</p></li>{% endfor %}</ol>{% endif %}</div>{% endblock %}
+{% block modal_foot %}<button class="dc-btn" type="button" onclick="closeKhblModal()">Đóng</button>{% if form %}<button id="dc-ops-submit" class="dc-btn dc-btn--primary" form="dc-ops-form" type="submit">Lưu thay đổi</button>{% endif %}{% endblock %}

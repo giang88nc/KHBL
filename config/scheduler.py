@@ -42,6 +42,10 @@ def _job_doi_soat_ck():
     call_command("doi_soat_ck", ngay=3)
 
 
+def _job_deposit_work():
+    call_command('process_deposit_work')
+
+
 def _job_sync_hist():
     # Đồng bộ KK → kho lịch sử PMV_KH2_HIST (incremental) — 09:00 & 21:00 (GĐ chốt 06/09/2026)
     call_command("sync_hist", sync=True)
@@ -65,9 +69,11 @@ def start():
                       max_instances=1, coalesce=True)
     scheduler.add_job(_job_doi_soat_ck, IntervalTrigger(minutes=5), name="Đối soát CK phiếu thâu 5 phút",
                       max_instances=1, coalesce=True)
+    scheduler.add_job(_job_deposit_work, IntervalTrigger(minutes=1), name="Đối soát cọc & lịch OA 1 phút",
+                      max_instances=1, coalesce=True, misfire_grace_time=60)
     # flush=True: stdout đổ vào logs/scheduler.log bị block-buffer, BlockingScheduler không bao giờ thoát
     # → banner nằm kẹt trong buffer, nhìn log tưởng chưa nạp job mới (đã dính 06/09/2026).
     print("KHBL scheduler khởi động: sync lịch sử 09:00/21:00 + backup PMV+kho 09:30/21:30 (bù 1h) + check KK 60' "
-          "+ đối soát CK phiếu thâu 5'. "
+          "+ đối soát CK phiếu thâu 5' + đối soát cọc/lịch OA 1'. "
           "(Thu thập hành vi 2' đã tắt — dùng ĐÁNH DẤU tay.) Ctrl+C để dừng.", flush=True)
     scheduler.start()

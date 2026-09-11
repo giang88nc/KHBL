@@ -268,6 +268,9 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
 
     Sau khi ghi LUÔN đọc lại đối chiếu — proc có thể trả rc=0 mà không đổi gì (luật 2)."""
     c = c or S.client("luu_hoa_don")
+    if trn_id:
+        from .deposit_money import invoice_deposit_guard
+        invoice_deposit_guard(c,trn_id,coc,cust_id)
     t_ban = sum((x[0] for x in ban), Decimal(0))
     t_doi = sum((x[0] for x in doi), Decimal(0))
     tong = tinh_tong(t_ban, t_doi, bot, cong_them, vang_them, coc)
@@ -284,6 +287,8 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
         p_Trn_RT_BUYSELL=xml, p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG,
     )
     ma_hang = sorted(x[1].get("ProductCode") for x in ban)
+    from .deposit_operations import check_holds
+    check_holds(ma_hang, c.target)
 
     if not trn_id:
         rc, sets = c.call("TRN_RT_BUYSELL_Ins", write=True, day_du=True, raise_on_rc=False,
@@ -292,6 +297,13 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
         if rc != 0 or not moi:
             raise PmvProcError("TRN_RT_BUYSELL_Ins", rc, sets)
         trn_id = moi
+        # Proc Ins của vendor không nhận p_TienCoc (luôn ghi 0), dù PayAmount đã trừ cọc.
+        # Upd có tham số này: bổ sung ngay rồi kiểm chứng cả cột cọc và tiền khách trả.
+        if M.dec(coc):
+            moc=c.moc_khoa('TRN_RT_BUYSELL','TrnID',trn_id)
+            c.call('TRN_RT_BUYSELL_Upd',write=True,day_du=True,
+                **_tham_so(c,'TRN_RT_BUYSELL_Upd',p_TrnID=trn_id,p_UserUpd=user_id,
+                           p_TrnDateTime_Upd=PmvClient.fmt_moc(moc),**chung))
     else:
         cu = c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
         if not cu:
@@ -307,11 +319,11 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
             raise PmvProcError("TRN_RT_BUYSELL_Upd", rc, sets)
 
     # ── đối chiếu lại: rc=0 KHÔNG bảo đảm dữ liệu đã đổi (luật 2) ──
-    h = c.query("SELECT BillCode, Status, PayAmount FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
+    h = c.query("SELECT BillCode, Status, PayAmount, TienCoc FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
                 (trn_id,))
     thuc = sorted(x["ProductCode"] for x in c.query(
         "SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)))
-    if not h or thuc != ma_hang or M.dec(h[0]["PayAmount"]) != tong["khach_tra"]:
+    if not h or thuc != ma_hang or M.dec(h[0]["PayAmount"]) != tong["khach_tra"] or M.dec(h[0].get('TienCoc')) != M.dec(c.money(coc)):
         raise PmvProcError("TRN_RT_BUYSELL", -2, [{
             "loi": f"Lưu xong nhưng đọc lại KHÔNG khớp — hàng {thuc} ≠ {ma_hang} "
                    f"hoặc tiền {h and h[0]['PayAmount']} ≠ {tong['khach_tra']}. "
@@ -323,6 +335,12 @@ def chot(trn_id, *, till_id, user_id, c=None):
     """DUYỆT (v5 pha 5): Complete → (kiểm chưa có sổ quỹ) → T_TILL_TXN_Proc → KIỂM 6 ĐIỂM.
     Idempotent: đơn đã C thì không Complete lại; đã có dòng sổ quỹ thì không Proc lần 2."""
     c = c or S.client("chot_hoa_don")
+    from .deposit_money import invoice_deposit_guard
+    deposit_header=c.query('SELECT CustID,TienCoc FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))
+    if deposit_header:
+        invoice_deposit_guard(c,trn_id,deposit_header[0]['TienCoc'],deposit_header[0]['CustID'])
+    from .deposit_operations import check_holds
+    check_holds([r['ProductCode'] for r in c.query('SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))],c.target)
     st = (c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)) or [{}])[0].get("Status")
     if st != CHOT_ROI:
         c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")

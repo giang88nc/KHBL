@@ -40,6 +40,10 @@ không cắt theo cùng chỉ số từ hai phía. Khi ghép chưa chắc, giữ
 Các đoạn riêng được sửa/lưu từng cặp, có Hoàn tác nhập để khôi phục văn bản đầy đủ.
 Lọc lỗi font không xác minh được tên/địa danh sai nhưng vẫn viết bằng Unicode hợp lệ.
 
+- **Quyền của công cụ kế thừa danh mục KHÁCH HÀNG** (GĐ chốt 11/09/2026): xem trang + Dịch/LỌC/Xem thử
+  theo ô *Xem*, Lưu nháp + Áp dụng theo ô *Tạo / sửa* của danh mục Khách hàng trong ma trận
+  `UserModuleAccess`. Luật gom ở `apps/pos/customer.py::quyen` — công cụ KHÔNG đặt luật riêng
+  (bản cũ đòi superuser đã bỏ).
 - Đây là học mẫu được người dùng dạy rõ ràng, không tự huấn luyện từ mọi lượt quét.
 - `apps/pos/cccd_learning.py` giữ một nguồn quy tắc cho engine, công cụ và CLI của
   skill. Luôn dùng engine này; không chỉ đọc bảng mã trong Markdown để bỏ qua mẫu mới.

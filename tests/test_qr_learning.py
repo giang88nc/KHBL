@@ -228,10 +228,21 @@ class LearningEndpointTests(_LearningCase):
         import django
         django.setup()
 
-    def request(self, data, admin=True):
+    def setUp(self):
+        super().setUp()
+        # Ma trận quyền nằm trong DB; bộ kiểm này chạy KHÔNG DB nên thay bằng bộ quyền gắn trên user giả.
+        # Nhánh không-đăng-nhập / superuser của chính customer.quyen được kiểm riêng ở test dưới.
+        self.gia_quyen = patch("apps.pos.customer.quyen",
+                               side_effect=lambda user, action="can_view": action in getattr(user, "quyen_kh", ()))
+        self.addCleanup(self.gia_quyen.stop)
+        self.gia_quyen.start()
+
+    def request(self, data, admin=True, logged_in=True, quyen_kh=("can_view", "can_edit")):
+        """User giả kèm quyền danh mục KHÁCH HÀNG mà công cụ QR kế thừa (GĐ chốt 11/09/2026)."""
         from django.test import RequestFactory
         request = RequestFactory().post("/banle/khach-hang/qr/hoc/ap-dung/", data, content_type="application/json")
-        request.user = SimpleNamespace(is_authenticated=True, is_superuser=admin, get_username=lambda: "tester")
+        request.user = SimpleNamespace(is_authenticated=logged_in, is_superuser=admin,
+                                       quyen_kh=quyen_kh, get_username=lambda: "tester")
         return request
 
     def test_preview_never_persists_and_apply_persists(self):
@@ -249,15 +260,52 @@ class LearningEndpointTests(_LearningCase):
             self.assertTrue(self.path.exists())
             self.assertEqual(cccd.analyze_text("Ngh)a", "ho_ten")["output"], "Nghĩa")
 
-    def test_save_requires_admin_and_bad_payload_does_not_write(self):
-        from apps.pos.qr_learning_views import save, save_draft
+    def test_rights_inherit_customer_category_and_bad_payload_does_not_write(self):
+        """Quyền CRUD kế thừa danh mục KHÁCH HÀNG (GĐ chốt 11/09/2026) — hết luật riêng "phải là quản trị".
+
+        Tạo/sửa mẫu đi theo ô "Tạo / sửa" của Khách hàng; chỉ có ô "Xem" thì xem thử được, ghi thì 403.
+        """
+        from apps.pos.qr_learning_views import filter_errors, preview, save, save_draft
         body = {"raw": "Ngh)a", "output": "Nghĩa", "revision": 0}
-        self.assertEqual(save(self.request(body, admin=False)).status_code, 403)
+        nhap = {"raw": "Ngh)a", "revision": 0}
+        # nhân viên thường (không superuser) nhưng có quyền Tạo/sửa Khách hàng → GHI ĐƯỢC
+        self.assertEqual(save(self.request(body, admin=False)).status_code, 200)
+        self.assertTrue(self.path.exists())
+        self.path.unlink()
+        self.assertEqual(save_draft(self.request(nhap, admin=False)).status_code, 200)
+        self.path.unlink()
+        # chỉ có quyền XEM → xem thử/dịch được, nhưng không được ghi
+        chi_xem = dict(admin=False, quyen_kh=("can_view",))
+        self.assertEqual(preview(self.request(body, **chi_xem)).status_code, 200)
+        self.assertEqual(save(self.request(body, **chi_xem)).status_code, 403)
+        self.assertEqual(save_draft(self.request(nhap, **chi_xem)).status_code, 403)
+        self.assertFalse(self.path.exists())
+        # không có quyền nào trong danh mục Khách hàng → cả đọc lẫn ghi đều 403
+        khong = dict(admin=False, quyen_kh=())
+        for view, data in ((preview, body), (filter_errors, body), (save, body), (save_draft, nhap)):
+            self.assertEqual(view(self.request(data, **khong)).status_code, 403)
+        self.assertFalse(self.path.exists())
+        # chưa đăng nhập: @login_required đá về trang đăng nhập trước khi tới luật quyền
+        for view, data in ((save, body), (save_draft, nhap)):
+            khach = self.request(data, logged_in=False)
+            khach.META["HTTP_HOST"] = "127.0.0.1"
+            self.assertEqual(view(khach).status_code, 302)
         self.assertFalse(self.path.exists())
         self.assertEqual(save(self.request([])).status_code, 400)
         self.assertFalse(self.path.exists())
-        self.assertEqual(save_draft(self.request({"raw": "Ngh)a", "revision": 0}, admin=False)).status_code, 403)
-        self.assertFalse(self.path.exists())
+
+    def test_customer_rights_helper_short_circuits(self):
+        """customer.quyen: chưa đăng nhập luôn KHÔNG, superuser luôn CÓ — hai nhánh không cần chạm DB."""
+        from apps.pos import customer
+        self.gia_quyen.stop()                            # test này gọi hàm THẬT, không dùng bản giả
+        try:
+            self.assertFalse(customer.duoc_xem(SimpleNamespace(is_authenticated=False, is_superuser=False)))
+            self.assertFalse(customer.duoc_sua(SimpleNamespace(is_authenticated=False, is_superuser=True)))
+            self.assertTrue(customer.duoc_xem(SimpleNamespace(is_authenticated=True, is_superuser=True)))
+            self.assertTrue(customer.duoc_sua(SimpleNamespace(is_authenticated=True, is_superuser=True)))
+            self.assertEqual(customer.MODULE, "KHACH_HANG")
+        finally:
+            self.gia_quyen.start()
 
     def test_draft_endpoint_and_apply_move_do_not_call_pmv(self):
         from apps.pos.qr_learning_views import save, save_draft

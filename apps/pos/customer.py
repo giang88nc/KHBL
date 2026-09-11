@@ -59,6 +59,38 @@ MAX_UPLOAD = 15 * 1024 * 1024
 MAX_PIXELS = 25_000_000
 
 
+MODULE = "KHACH_HANG"      # mã danh mục trong ma trận quyền (UserModuleAccess.Module)
+
+
+def quyen(user, action="can_view"):
+    """Quyền của danh mục KHÁCH HÀNG trong ma trận quyền người dùng — MỘT nguồn sự thật duy nhất.
+
+    Mọi màn hình THUỘC danh mục Khách hàng (kể cả công cụ phụ như "Dạy bộ đọc QR" ở
+    ``/banle/khach-hang/qr/cong-cu/``) gọi hàm này thay vì tự đặt luật riêng, nên GĐ tick ô nào trong
+    trang quản trị người dùng là toàn bộ mục theo đúng ô đó — GĐ chốt 11/09/2026.
+
+    Cùng khuôn với ``deposits.allowed`` của ĐẶT-CỌC: phải có quyền XEM trước đã, rồi mới xét thêm
+    ``can_edit`` / ``can_delete`` / ``can_approve``; superuser luôn đủ quyền.
+    """
+    from apps.pmv.models import UserModuleAccess
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    them = {} if action == "can_view" else {action: True}
+    return UserModuleAccess.objects.filter(user=user, module=MODULE, can_view=True, **them).exists()
+
+
+def duoc_xem(user):
+    """Xem danh mục Khách hàng."""
+    return quyen(user, "can_view")
+
+
+def duoc_sua(user):
+    """Thêm / sửa trong danh mục Khách hàng (XÓA khách còn phải qua passcode, xem ``delete``)."""
+    return quyen(user, "can_edit")
+
+
 def clean_form(post):
     """Chuẩn hóa và kiểm tra dữ liệu form. Trả ``(data, errors, warnings)``."""
     errors, warnings = [], []

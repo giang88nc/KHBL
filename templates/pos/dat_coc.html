@@ -1,12 +1,12 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}ĐẶT-CỌC{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/dat_coc.css' %}?v=20260911.1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/dat_coc.css' %}?v=20260911.ops3">{% endblock %}
 {% block page_head %}{% endblock %}
 {% block content %}
 <section class="dc-page">
-  <header class="dc-hero"><div class="dc-heading"><img src="{% static 'img/ico/datcoc.svg' %}" width="62" height="62" alt=""><div><span class="dc-eyebrow">QUẢN LÝ GIAO DỊCH KHÁCH HÀNG</span><h1>ĐẶT-CỌC</h1><p>Theo dõi tiền cọc và từng món khách đặt hàng.</p></div></div>
-  {% if can_edit %}<button class="dc-btn dc-btn--primary" hx-get="{% url 'pos:dat_coc_add' %}" hx-target="#modal-root">＋ Thêm phiếu cọc</button>{% endif %}</header>
-  <div id="dc-content" hx-get="{% url 'pos:dat_coc' %}" hx-trigger="depositRefresh from:body" hx-include="#dc-filter" hx-target="this">{% include 'pos/_dat_coc_list.html' %}</div>
+  <header class="dc-hero"><div class="dc-heading"><img src="{% static 'img/ico/datcoc.svg' %}" width="62" height="62" alt=""><div><span class="dc-eyebrow">PHIẾU ĐẶT HÀNG CỦA KHÁCH</span><h1>ĐẶT HÀNG <span>· TIỀN CỌC</span></h1><p>Hàng có sẵn trong kho hoặc đặt mới · Tiền cọc luôn gắn với phiếu.</p></div></div>
+  <div class="dc-add-buttons"><button class="dc-btn" hx-get="{% url 'pos:dat_coc_report' %}" hx-target="#modal-root">Báo cáo</button>{% if can_edit %}<button class="dc-btn dc-btn--primary" hx-get="{% url 'pos:dat_coc_add' %}" hx-target="#modal-root">＋ Lập phiếu đặt hàng</button>{% endif %}</div></header>
+  <div id="dc-content" hx-get="{% url 'pos:dat_coc' %}" hx-trigger="depositRefresh from:body" hx-include="#dc-filter,#dc-message-filter" hx-target="this">{% if tab == 'notifications' %}{% include 'pos/_dat_coc_messages.html' %}{% else %}{% include 'pos/_dat_coc_list.html' %}{% endif %}</div>
 </section>
 {% endblock %}
-{% block extra_js %}<script defer src="{% static 'js/dat_coc.js' %}?v=20260911.1"></script>{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/dat_coc.js' %}?v=20260911.ops3"></script>{% endblock %}
