@@ -432,17 +432,13 @@ class Command(BaseCommand):
                             if nhom_xn.trn_ids[0] in x or (nhom_xn.bill_codes and nhom_xn.bill_codes[0] in x)]
                 self._ok("gỡ liên kết CK → dòng đó quay lại nút MỞ (sửa được như cũ), không kẹt ở chế độ chỉ xem",
                          not dong_sau or ">XEM<" not in dong_sau[0])
-                # GĐ chốt 11/09/2026: KHÔNG chèn chú thích giữa markup. Nguy hiểm nhất là {# … #} NHIỀU DÒNG:
-                # Django chỉ coi {# #} là chú thích khi gọn trong MỘT dòng, nhiều dòng thì in nguyên văn ra trang.
-                loi_ct = []
-                for tep in sorted(Path("templates").rglob("*.html")):
-                    noi = tep.read_text(encoding="utf-8")
-                    for m in _re_ds.finditer(r"\{#", noi):
-                        cuoi = noi.find("#}", m.start())
-                        if cuoi < 0 or chr(10) in noi[m.start():cuoi]:
-                            loi_ct.append(f"{tep}:{noi[:m.start()].count(chr(10)) + 1}")
+                # Chú thích {# #} nhiều dòng bị Django in nguyên văn ra trang. Bộ dò giờ là CHECK của
+                # Django (apps/pos/kiem_template.py, mã khbl.E001) nên mọi lệnh manage.py đều chạy qua;
+                # ở đây chỉ gọi lại đúng bộ dò đó, không chép thuật toán lần hai.
+                from apps.pos.kiem_template import kiem_chu_thich_template
+                loi_ct = [str(x) for x in kiem_chu_thich_template(None)]
                 self._ok("không template nào còn chú thích {# #} nhiều dòng (loại này in thẳng ra trang cho khách thấy)",
-                         not loi_ct, "; ".join(loi_ct[:3]))
+                         not loi_ct, "; ".join(loi_ct[:2]))
                 nay = datetime.date.today().isoformat()
                 b_sach = web.get(f"/banle/thau-vao-2/?d1={nay}&d2={nay}").content.decode()
                 # Cột HÌNH ẢNH (GĐ chốt 11/09/2026): ảnh QR mang ✔️ khi đã xác nhận CK, ❌ khi hết hạn mà chưa xác nhận
