@@ -10,6 +10,71 @@ from apps.pos import deposit_workspace as W
 
 
 class WorkspaceTests(SimpleTestCase):
+    def test_all_receipt_tabs_match_progress_not_creation_date(self):
+        states=('waiting','new','ordering','crafting','ready','shipping','partial','unknown','delivered','applied','cancelled')
+        rows=[]
+        for state in states:
+            row=self.appointment_row(dt.date(2026,9,15),created=dt.date(2025,1,1),state=state)
+            row['TrnID']=state
+            rows.append(row)
+        rows=W.classify(rows)
+        expected={'all':set(states)-{'delivered','applied','cancelled'},
+                  'new':{'waiting','new'},'ordering':{'ordering','crafting'},'ready':{'ready'}}
+        for tab,wanted in expected.items():
+            with self.subTest(tab=tab):
+                self.assertEqual({r['TrnID'] for r in W.paginate(rows,{'tab':tab})['rows']},wanted)
+                self.assertEqual({r['TrnID'] for r in W.paginate(rows,{'tab':tab,'start':dt.date(2026,9,1),'end':dt.date(2026,9,30)})['rows']},wanted)
+                self.assertEqual(W.paginate(rows,{'tab':tab,'start':dt.date(2026,10,1)})['rows'],[])
+
+    def appointment_row(self, promise, created=None, state='ready'):
+        row=self.rows({'TrnID':'TRC1','Status':'W','TrnDate':created or dt.date(2026,8,1)})[0]
+        row.update(promise_date=promise,fulfilment=state)
+        return row
+
+    def test_date_range_filters_promise_not_creation_inclusively(self):
+        data={'tab':'all','start':dt.date(2026,9,1),'end':dt.date(2026,9,30)}
+        for date,expected in [(dt.date(2026,9,1),True),(dt.date(2026,9,30),True),
+                              (dt.date(2026,8,31),False),(dt.date(2026,10,1),False),(None,False)]:
+            with self.subTest(promise=date):
+                self.assertEqual(W.matches(self.appointment_row(date),data),expected)
+        self.assertFalse(W.matches(self.appointment_row(dt.date(2026,10,1),created=dt.date(2026,9,15)),data))
+
+    def test_blank_and_one_sided_appointment_dates(self):
+        row=self.appointment_row(None)
+        self.assertTrue(W.matches(row,{'tab':'all','start':None,'end':None}))
+        row['promise_date']=dt.date(2026,9,15)
+        self.assertTrue(W.matches(row,{'start':dt.date(2026,9,1)}))
+        self.assertTrue(W.matches(row,{'end':dt.date(2026,9,30)}))
+        self.assertFalse(W.matches(row,{'start':dt.date(2026,9,16)}))
+        self.assertFalse(W.matches(row,{'end':dt.date(2026,9,14)}))
+
+    def test_appointment_range_applies_to_all_four_receipt_tabs(self):
+        for tab,state in [('all','waiting'),('new','waiting'),('ordering','crafting'),('ready','ready')]:
+            row=self.appointment_row(dt.date(2026,9,15),created=timezone.localdate(),state=state)
+            data={'tab':tab,'start':dt.date(2026,9,1),'end':dt.date(2026,9,30)}
+            self.assertEqual(len(W.paginate([row],data)['rows']),1)
+            row['promise_date']=dt.date(2026,10,1)
+            self.assertEqual(len(W.paginate([row],data)['rows']),0)
+
+    def test_report_can_still_filter_creation_date_explicitly(self):
+        row=self.appointment_row(dt.date(2026,10,1),created=dt.date(2026,9,15))
+        self.assertTrue(W.matches(row,{'tab':'scope','date_field':'created','start':dt.date(2026,9,1),'end':dt.date(2026,9,30)}))
+
+    def test_many_deposits_keep_original_receipts_and_show_same_sales_invoice(self):
+        headers=[{'TrnID':pk,'BillCode':code,'CustID':'K1','ShopID':'S1','Status':'C',
+                  'TienCoc':amount,'CashPay':amount,'CardPay':0,'TrnDate':dt.date(2026,8,1)}
+                 for pk,code,amount in [('TDC1','26-08-01-000001',500),('TDC2','26-08-01-000002',300)]]
+        funds=[{'TrnRefID':h['TrnID'],'Status':'P','TillID':'T1','TrnTotalAmount':h['TienCoc'],
+                'detail_count':1,'amount_count':1,'cash_amount':h['TienCoc'],'bad_detail':0} for h in headers]
+        links=[{'DatCocID':h['TrnID'],'TrnID':'TRB1','CustID':'K1','TienCoc':800,'Status':'C','kind':'sell',
+                'invoice_bill_code':'26-09-10-000048','invoice_tx_count':1,'invoice_posted':1} for h in headers]
+        rows=W.prepare({'headers':headers,'items':{},'funds':funds,'links':links})
+        self.assertEqual([r['BillCode'] for r in rows],[h['BillCode'] for h in headers])
+        self.assertTrue(all(r['money_balance']==0 and r['money_confirmed'] for r in rows))
+        self.assertTrue(all(r['application_codes']=='26-09-10-000048' for r in rows))
+        self.assertTrue(all(r['TrnDate']==dt.date(2026,8,1) for r in rows))
+        self.assertTrue(W.matches(W.classify(rows)[0],{'tab':'scope','q':'26-09-10-000048'}))
+
     def rows(self, *headers, items=None):
         return W.classify(W.prepare({'headers': list(headers), 'items': items or {}}, today=dt.date(2026,9,11)),
                           today=dt.date(2026,9,11))

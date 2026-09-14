@@ -1,0 +1,130 @@
+{% load pos_extras %}{% comment %}
+Phần SỐ LIỆU của trang BÁO CÁO — HTMX thay riêng mảnh này mỗi lần đổi kỳ.
+Thứ tự đọc: ba con số doanh thu → tiền về quầy → cân đối vàng → nhân viên → từng ngày.
+Mỗi con số đều ghi rõ nó được tính từ đâu, để người đọc đối chiếu được với phần mềm bán hàng.
+{% endcomment %}
+{% if loi %}<div class="bc-loi">Không đọc được số liệu từ máy KK: {{ loi }}</div>{% else %}
+<p class="bc-ky-text">Kỳ <b>{{ bc.d1|slice:"8:10" }}/{{ bc.d1|slice:"5:7" }}</b>
+  {% if bc.so_ngay > 1 %}→ <b>{{ bc.d2|slice:"8:10" }}/{{ bc.d2|slice:"5:7" }}</b> · {{ bc.so_ngay }} ngày{% endif %}
+  · số liệu lúc {{ bc.luc|date:"H:i d/m/Y" }} · chỉ tính phiếu đã chốt, chưa hủy</p>
+
+<section class="bc-dt" aria-label="Ba con số doanh thu">
+  <article class="bc-dt__o bc-dt__o--thuc">
+    <span>DOANH THU THỰC</span><b>{{ bc.ban.thuc|tien_tran }}</b>
+    <small>tiền hàng bán ra · {{ bc.ban.so }} hóa đơn</small></article>
+  <article class="bc-dt__o bc-dt__o--rong">
+    <span>DOANH THU RÒNG</span><b>{{ bc.ban.rong|tien_tran }}</b>
+    <small>tổng tiền, tính cả bù + dư (đã cấn vàng cũ {{ bc.ban.vang_cu|tien_tran }})</small></article>
+  <article class="bc-dt__o bc-dt__o--hh">
+    <span>DOANH THU HH</span><b>{{ bc.ban.hh|tien_tran }}</b>
+    <small>chỉ phần dương — cơ sở tính hoa hồng{% if bc.ban.so_tra_khach %} · đã bỏ {{ bc.ban.so_tra_khach }} đơn trả khách {{ bc.ban.tra_khach|tien_tran }}{% endif %}</small></article>
+</section>
+
+<div class="bc-luoi">
+  <section class="bc-the">
+    <h2>TIỀN VỀ QUẦY</h2>
+    <table class="bc-bang">
+      <tr><th>Khách trả tiền mặt</th><td class="bc-so">{{ bc.ban.tien_mat|tien_tran }}</td></tr>
+      <tr><th>Khách chuyển khoản / thẻ</th><td class="bc-so">{{ bc.ban.chuyen_khoan|tien_tran }}</td></tr>
+      {% if bc.ban.chua_ro %}<tr class="bc-luu-y"><th>Chưa ghi rõ hình thức</th>
+        <td class="bc-so">{{ bc.ban.chua_ro|tien_tran }}</td></tr>{% endif %}
+      <tr><th>Trả khách khi thâu — tiền mặt</th><td class="bc-so bc-ra">− {{ bc.thau.tien_mat|tien_tran }}</td></tr>
+      <tr><th>Trả khách khi thâu — chuyển khoản</th><td class="bc-so bc-ra">− {{ bc.thau.chuyen_khoan|tien_tran }}</td></tr>
+      <tr class="bc-tong"><th>Tiền mặt ròng</th><td class="bc-so">{{ bc.tien_mat_rong|tien_tran }}</td></tr>
+      <tr class="bc-tong"><th>Chuyển khoản ròng</th><td class="bc-so">{{ bc.ck_rong|tien_tran }}</td></tr>
+    </table>
+    <p class="bc-ghi">Hình thức trả chỉ có khi quầy phân bổ trên phiếu; phần chưa ghi rõ là phiếu chưa tách tiền mặt / chuyển khoản.</p>
+  </section>
+
+  <section class="bc-the">
+    <h2>THÂU VÀO &amp; KHÁCH</h2>
+    <table class="bc-bang">
+      <tr><th>Số phiếu thâu</th><td class="bc-so">{{ bc.thau.so }}</td></tr>
+      <tr><th>Tiền thâu</th><td class="bc-so">{{ bc.thau.tien|tien_tran }}</td></tr>
+      <tr><th>Vàng thâu vào</th><td class="bc-so">{{ bc.thau.chi|floatformat:"2" }} chỉ</td></tr>
+      <tr><th>Vàng cũ khách đưa trong đơn bán</th><td class="bc-so">{{ bc.ban.vang_cu|tien_tran }}</td></tr>
+      <tr><th>Tiền bớt cho khách</th><td class="bc-so">{{ bc.ban.bot|tien_tran }}</td></tr>
+      <tr><th>Công thêm thu của khách</th><td class="bc-so">{{ bc.ban.cong_them|tien_tran }}</td></tr>
+      <tr class="bc-tong"><th>Khách mới lập hồ sơ</th><td class="bc-so">{{ bc.khach_moi }}</td></tr>
+    </table>
+  </section>
+</div>
+
+<section class="bc-the">
+  <h2>CÂN ĐỐI VÀNG THEO TUỔI <small>bán ra − thâu vào, đơn vị CHỈ</small></h2>
+  <div class="bc-cuon"><table class="bc-bang bc-bang--rong">
+    <thead><tr><th>Tuổi vàng</th><th class="bc-so">Số món bán</th><th class="bc-so">Bán ra (chỉ)</th>
+      <th class="bc-so">Tiền bán</th><th class="bc-so">Phiếu thâu</th><th class="bc-so">Thâu vào (chỉ)</th>
+      <th class="bc-so">Tiền thâu</th><th class="bc-so">Chênh lệch (chỉ)</th></tr></thead>
+    <tbody>
+      {% for g in bc.vang %}
+      <tr><th>{{ g.ten }}</th>
+        <td class="bc-so">{{ g.ra_dong }}</td>
+        <td class="bc-so">{{ g.ra_chi|floatformat:"2" }}</td><td class="bc-so">{{ g.ra_tien|tien_tran }}</td>
+        <td class="bc-so">{{ g.vao_dong }}</td>
+        <td class="bc-so">{{ g.vao_chi|floatformat:"2" }}</td><td class="bc-so">{{ g.vao_tien|tien_tran }}</td>
+        <td class="bc-so {% if g.lech_chi > 0 %}bc-ra{% else %}bc-vao{% endif %}">{{ g.lech_chi|floatformat:"2" }}</td></tr>
+      {% empty %}<tr><td colspan="8" class="bc-trong">Kỳ này chưa có giao dịch vàng.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <p class="bc-ghi">Chênh lệch <b>dương</b> = kho vơi đi (bán nhiều hơn thâu) · <b>âm</b> = kho dày thêm.
+    Vàng bán ra tính theo vàng thật của món (đã trừ hột); dẻ khách mang tới gộp chung tuổi tương ứng.</p>
+</section>
+
+<section class="bc-the">
+  <h2>HÀNG ĐÃ BÁN — TỪNG NHÓM &amp; TỪNG LOẠI VÀNG <small>số món · trọng lượng · tiền</small></h2>
+  <div class="bc-cuon"><table class="bc-bang bc-bang--rong bc-bang--nhom">
+    <thead><tr><th>Nhóm hàng</th><th>Loại vàng</th><th class="bc-so">Số món</th>
+      <th class="bc-so">Trọng lượng (chỉ)</th><th class="bc-so">Thành tiền</th></tr></thead>
+    <tbody>
+      {% for n in bc.nhom %}
+      <tr class="bc-nhom"><th>{{ n.nhom }}</th><td class="bc-dim">cả nhóm</td>
+        <td class="bc-so">{{ n.mon }}</td><td class="bc-so">{{ n.chi|floatformat:"2" }}</td>
+        <td class="bc-so bc-manh">{{ n.tien|tien_tran }}</td></tr>
+      {% for v in n.vang %}
+      <tr class="bc-nhom-con"><td></td><th>{{ v.ma }}</th>
+        <td class="bc-so">{{ v.mon }}</td><td class="bc-so">{{ v.chi|floatformat:"2" }}</td>
+        <td class="bc-so">{{ v.tien|tien_tran }}</td></tr>
+      {% endfor %}{% endfor %}
+      {% if not bc.nhom %}<tr><td colspan="5" class="bc-trong">Kỳ này chưa bán món nào.</td></tr>{% endif %}
+    </tbody>
+  </table></div>
+  <p class="bc-ghi">Nhóm hàng lấy từ danh mục nhóm của phần mềm bán hàng; món chưa xếp nhóm gom vào dòng
+    “(chưa xếp nhóm)”. Trọng lượng là vàng thật của món, đã trừ hột.</p>
+</section>
+
+<section class="bc-the">
+  <h2>THEO NHÂN VIÊN <small>xếp theo doanh thu HH</small></h2>
+  <div class="bc-cuon"><table class="bc-bang bc-bang--rong">
+    <thead><tr><th>#</th><th>Nhân viên</th><th class="bc-so">Hóa đơn</th><th class="bc-so">Doanh thu thực</th>
+      <th class="bc-so">Doanh thu ròng</th><th class="bc-so">Doanh thu HH</th></tr></thead>
+    <tbody>
+      {% for n in bc.nv %}
+      <tr><td class="bc-stt">{{ forloop.counter }}</td><th>{{ n.ten }}</th>
+        <td class="bc-so">{{ n.so }}</td><td class="bc-so">{{ n.thuc|tien_tran }}</td>
+        <td class="bc-so">{{ n.rong|tien_tran }}</td><td class="bc-so bc-manh">{{ n.hh|tien_tran }}</td></tr>
+      {% empty %}<tr><td colspan="6" class="bc-trong">Kỳ này chưa có hóa đơn.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% if bc.so_ngay > 1 %}
+<section class="bc-the">
+  <h2>TỪNG NGÀY</h2>
+  <div class="bc-cuon"><table class="bc-bang bc-bang--rong">
+    <thead><tr><th>Ngày</th><th class="bc-so">HĐ</th><th class="bc-so">Doanh thu thực</th>
+      <th class="bc-so">Doanh thu ròng</th><th class="bc-so">Doanh thu HH</th>
+      <th class="bc-so">Phiếu thâu</th><th class="bc-so">Tiền thâu</th><th class="bc-so">Vàng thâu (chỉ)</th></tr></thead>
+    <tbody>
+      {% for d in bc.ngay %}
+      <tr><th>{{ d.ngay|date:"d/m" }}<small>{{ d.ngay|date:"D" }}</small></th>
+        <td class="bc-so">{{ d.so_ban }}</td><td class="bc-so">{{ d.thuc|tien_tran }}</td>
+        <td class="bc-so">{{ d.rong|tien_tran }}</td><td class="bc-so">{{ d.hh|tien_tran }}</td>
+        <td class="bc-so">{{ d.so_thau }}</td><td class="bc-so">{{ d.thau_tien|tien_tran }}</td>
+        <td class="bc-so">{{ d.thau_chi|floatformat:"2" }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endif %}

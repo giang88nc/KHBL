@@ -1,0 +1,33 @@
+<dialog id="customer-sync" class="customer-sync" aria-labelledby="customer-sync-title"
+        data-list-url="{% url 'pos:customer_sync_list' %}" data-insert-url="{% url 'pos:customer_sync_insert' %}">
+  <header class="customer-sync__head">
+    <div><h2 id="customer-sync-title">Sync khách hàng một chiều</h2><p>KHÁCH → PMV · Đối chiếu duy nhất bằng PHONE</p></div>
+    <button type="button" class="khbl-btn khbl-btn--ghost" data-sync-close aria-label="Đóng popup">×</button>
+  </header>
+  <div class="customer-sync__body">
+    <p data-sync-target></p>
+    <div class="customer-sync__tabs" role="tablist" aria-label="Nhóm đối chiếu">
+      <button type="button" role="tab" aria-selected="true" aria-controls="sync-panel" id="sync-tab-ready" data-sync-tab="ready">CHƯA CÓ <b data-count="ready">0</b></button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="sync-panel" id="sync-tab-existing" data-sync-tab="existing">ĐÃ CÓ <b data-count="existing">0</b></button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="sync-panel" id="sync-tab-attention" data-sync-tab="attention">CẦN XỬ LÝ <b data-count="attention">0</b></button>
+    </div>
+    <div class="customer-sync__tools">
+      <input type="search" class="khbl-input" data-sync-search aria-label="Tìm trong nhóm" placeholder="Tìm PHONE, tên, địa chỉ…" autocomplete="off">
+      <button type="button" class="khbl-btn khbl-btn--outline" data-sync-reload>Tải lại đối chiếu</button>
+      <button type="button" class="khbl-btn khbl-btn--gold" data-sync-all disabled>THÊM TẤT CẢ</button>
+      <button type="button" class="khbl-btn khbl-btn--outline" data-sync-stop hidden>Dừng sau khách này</button>
+    </div>
+    <p class="customer-sync__hint">THÊM TẤT CẢ áp dụng toàn bộ nhóm CHƯA CÓ đủ PHONE + TÊN, kể cả ngoài trang và ô tìm kiếm. Ngày sinh: 01/01/1900 · Giới tính: Chưa xác định · CMND: CCCD nguồn nếu có · Nơi cấp: Cục Cảnh Sát QLHC về TTXH.</p>
+    <p data-sync-message role="status" aria-live="polite">Đang tải đối chiếu…</p>
+    <progress data-sync-progress max="1" value="0" hidden aria-label="Tiến độ thêm khách"></progress>
+    <div id="sync-panel" role="tabpanel" aria-labelledby="sync-tab-ready" class="customer-sync__table" tabindex="0">
+      <table><thead><tr><th>ID nguồn</th><th>PHONE</th><th>Tên khách</th><th>Địa chỉ</th><th>Đối chiếu / kết quả</th><th>Thao tác</th></tr></thead><tbody data-sync-rows></tbody></table>
+    </div>
+    <div class="customer-sync__pages">
+      <button type="button" class="khbl-btn khbl-btn--ghost" data-sync-prev>← Trước</button><span data-sync-page></span>
+      <button type="button" class="khbl-btn khbl-btn--ghost" data-sync-next>Sau →</button>
+    </div>
+    <form hidden data-sync-csrf>{% csrf_token %}</form>
+  </div>
+  <footer class="customer-sync__foot"><span>Mỗi PHONE chỉ tạo một khách. Dòng trùng hoặc lỗi có lý do riêng.</span><button type="button" class="khbl-btn khbl-btn--outline" data-sync-close>Đóng</button></footer>
+</dialog>

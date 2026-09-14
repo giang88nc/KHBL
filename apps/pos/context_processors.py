@@ -27,4 +27,15 @@ def khbl(request):
         "pmv_dich": gateway.dich_hien_tai(),
         "pmv_dich_mo_ta": gateway.mo_ta_dich(),
         "pmv_ghi_kk": gateway.duoc_ghi_kk(),
+        "quyen_muc": quyen_muc(getattr(request, "user", None)),
     }
+
+
+def quyen_muc(user):
+    """Mục nào tài khoản được XEM — thanh menu chỉ vẽ những mục này (GĐ chốt 13/09/2026).
+
+    Bảng danh mục + hàm kiểm nằm ở ``apps/pos/quyen.py``, dùng chung với các trang đích nên menu và
+    trang không bao giờ lệch nhau: hiện trên menu tức là bấm vào mở được."""
+    from . import quyen as Q
+
+    return Q.cua_user(user)

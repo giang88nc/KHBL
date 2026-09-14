@@ -106,7 +106,7 @@ class PriceSaveTests(TransactionTestCase):
 
     def setUp(self):
         if connection.vendor != 'sqlite':
-            self.skipTest('Chạy với --settings=config.settings.test_prices để cách ly dữ liệu thật')
+            self.skipTest('Chạy với --settings=config.settings.test_price_save để cách ly dữ liệu thật')
         with connection.cursor() as c:
             c.execute('CREATE TABLE IF NOT EXISTS gold_prices (id INTEGER PRIMARY KEY AUTOINCREMENT, '
                       'gold_type VARCHAR(50), gold_name VARCHAR(50), buy DECIMAL, sell DECIMAL, '
@@ -139,7 +139,8 @@ class PriceSaveTests(TransactionTestCase):
     def test_insert_history_pin_order_and_no_duplicate_post(self):
         form = self.form()
         batch = prices.save_prices(form, self.user)
-        self.assertEqual(batch.status, 'synced')
+        self.assertEqual(batch.status, 'saved')
+        self.assertEqual(batch.target, 'mysql')
         rows = prices.current_rows()
         self.assertEqual(len(rows), 1)
         self.assertEqual(int(rows[0]['buy']), 8400000)
@@ -152,16 +153,15 @@ class PriceSaveTests(TransactionTestCase):
         self.assertEqual(display.position, 2)
         self.assertEqual(prices.save_prices(form, self.user).pk, batch.pk)
         self.assertEqual(PriceBatch.objects.count(), 1)
-        self.sync.assert_called_once()
+        self.sync.assert_not_called()
 
-    def test_mssql_failure_keeps_mysql_and_retry_does_not_insert_again(self):
+    def test_local_save_does_not_depend_on_mssql(self):
         self.sync.side_effect = RuntimeError('offline')
-        with self.assertLogs('apps.pos.prices', level='ERROR'):
+        with patch('apps.pos.prices.PmvState.get', return_value='1'):
             batch = prices.save_prices(self.form(), self.user)
-        self.assertEqual(batch.status, 'sync_failed')
+        self.assertEqual(batch.status, 'saved')
         self.assertEqual(int(prices.current_rows()[0]['buy']), 8400000)
-        self.sync.side_effect = None
-        self.assertEqual(prices.retry_sync(batch.pk).status, 'synced')
+        self.sync.assert_not_called()
         with connection.cursor() as c:
             c.execute('SELECT COUNT(*) FROM gold_prices')
             self.assertEqual(c.fetchone()[0], 2)
@@ -186,13 +186,14 @@ class PriceSaveTests(TransactionTestCase):
 
     def test_stale_form_and_stale_retry_are_rejected(self):
         stale_form = self.form()
-        self.sync.side_effect = RuntimeError('offline')
-        with self.assertLogs('apps.pos.prices', level='ERROR'):
-            old = prices.save_prices(self.form(), self.user)
-        self.sync.side_effect = None
+        old = prices.save_prices(self.form(), self.user)
+        old.target, old.status = 'sandbox', 'sync_failed'
+        old.save()
         with self.assertRaises(prices.PriceError):
             prices.save_prices(stale_form, self.user)
-        prices.save_prices(self.form(), self.user)
+        newer = self.form()
+        newer['buy_' + str(prices.current_rows()[0]['id'])] = '8.450.000'
+        prices.save_prices(newer, self.user)
         with self.assertRaises(prices.PriceError):
             prices.retry_sync(old.pk)
 
@@ -205,12 +206,11 @@ class PriceSaveTests(TransactionTestCase):
         self.assertFalse(PriceBatch.objects.exists())
         self.sync.assert_not_called()
 
-    def test_target_change_rejected(self):
+    def test_target_change_does_not_block_local_save(self):
         form = self.form()
         with patch('apps.pos.prices.gateway.dich_hien_tai', return_value='kk'):
-            with self.assertRaises(prices.PriceError):
-                prices.save_prices(form, self.user)
-        self.assertFalse(PriceBatch.objects.exists())
+            self.assertEqual(prices.save_prices(form, self.user).target, 'mysql')
+        self.sync.assert_not_called()
 
     def test_mysql_failure_rolls_back_old_price(self):
         with patch('apps.pos.prices.PriceBatch.objects.create', side_effect=RuntimeError('mysql failed')):
@@ -238,3 +238,85 @@ class PriceSaveTests(TransactionTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(PriceBatch.objects.count(), 1)
         self.assertEqual(self.client.get('/banle/bang-gia/cap-nhat/').status_code, 405)
+
+    def test_save_one_row_leaves_other_prices_untouched(self):
+        with connection.cursor() as c:
+            c.execute("INSERT INTO gold_prices VALUES (2,'980','Vàng 980',13000000,14000000,'2026-09-05 13:53:57','fixture',1)")
+        rows = prices.decorate(prices.current_rows())
+        data = QueryDict(mutable=True)
+        data.setlist('row_id', ['1', '2'])
+        data.update({'edit_token': prices.edit_token(rows, self.user.pk, 'kk'), 'save_row': '1',
+                     'buy_1': '8.400.000', 'sell_1': '8.900.000', 'position_1': '1',
+                     'buy_2': 'invalid unsaved input', 'sell_2': '1'})
+        result = self.client.post('/banle/bang-gia/cap-nhat/', data, HTTP_ACCEPT='application/json')
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertTrue(result.json()['ok'])
+        current = {r['gold_type']: r for r in prices.current_rows()}
+        self.assertEqual(current['980']['id'], 2)
+        self.assertEqual(int(current['980']['buy']), 13000000)
+        self.assertEqual(int(current['610']['buy']), 8400000)
+        self.assertNotEqual(current['610']['id'], 1)
+        self.sync.assert_not_called()
+
+    def test_display_only_save_does_not_create_price_history(self):
+        form = self.form()
+        form.update({'buy_1': '8.350.000', 'sell_1': '8.850.000'})
+        prices.save_prices(form, self.user)
+        self.assertEqual(prices.current_rows()[0]['id'], 1)
+        self.assertTrue(PriceDisplay.objects.get(gold_type='610').pinned)
+        self.assertEqual(PriceBatch.objects.get().payload, [])
+
+    def test_replayed_ajax_does_not_issue_fresh_token_over_unsaved_inputs(self):
+        form = self.form()
+        self.assertEqual(self.client.post('/banle/bang-gia/cap-nhat/', form, HTTP_ACCEPT='application/json').status_code, 200)
+        replay = self.client.post('/banle/bang-gia/cap-nhat/', form, HTTP_ACCEPT='application/json')
+        self.assertEqual(replay.status_code, 409)
+        self.assertNotIn('edit_token', replay.json())
+        self.assertEqual(PriceBatch.objects.count(), 1)
+
+    def test_all_current_gold_types_can_be_edited_without_kk_mapping(self):
+        with connection.cursor() as c:
+            c.execute("UPDATE gold_prices SET gold_type='CUSTOM' WHERE id=1")
+        self.assertEqual(prices.save_prices(self.form(), self.user).status, 'saved')
+        self.sync.assert_not_called()
+
+    def test_local_save_invalidates_price_caches(self):
+        from django.core.cache import cache
+        for key in ('khbl:gia_mysql', 'khbl:xrate', 'khbl:loaide'):
+            cache.set(key, 'old')
+        prices.save_prices(self.form(), self.user)
+        for key in ('khbl:gia_mysql', 'khbl:xrate', 'khbl:loaide'):
+            self.assertIsNone(cache.get(key))
+
+
+class AuthoritativePriceTests(UnitTestCase):
+    def test_scanned_product_cannot_fall_back_to_kk_price(self):
+        from apps.pos import services as S
+        with patch.object(S, 'gia_mysql', return_value={}):
+            with self.assertRaisesRegex(prices.PriceError, 'Chưa có giá'):
+                S.ap_gia_mysql({'GoldCode': '18K', 'SellRate': Decimal('9999')})
+
+    def test_cached_catalog_uses_fresh_mysql_prices(self):
+        from apps.pos import services as S
+        from django.core.cache import cache
+        cache.set('khbl:xrate', [{'GoldCcy':'18K', 'Type':'G', 'SellRate':Decimal('9999'),
+                                 'BuyRate':Decimal('8888'), 'PriceUnit':'L', 'Active':'1'}])
+        try:
+            with patch.object(S, 'gia_mysql', return_value={'18K': {'SellRate':Decimal('123'), 'BuyRate':Decimal('100')}}):
+                self.assertEqual(S.bang_gia()[0]['SellRate'], Decimal('123'))
+            with patch.object(S, 'gia_mysql', return_value={}):
+                self.assertEqual(S.bang_gia()[0]['SellRate'], 0)
+                self.assertFalse(S.bang_gia()[0]['gia_mysql'])
+        finally:
+            cache.delete('khbl:xrate')
+
+    def test_deposit_quote_cannot_fall_back_to_kk(self):
+        from unittest.mock import MagicMock
+        from apps.pos import deposit_editor as E
+        c = MagicMock(target='sandbox')
+        c.query.side_effect = lambda sql, *args: ([{'GoldCode':'18K','WeightUnit':'L','PriceUnit':'L'}]
+            if 'I_GOLD' in sql else [{'factor':1}])
+        with patch.object(E.S, 'gia_mysql', return_value={}):
+            quote, _ = E.price_context(c)
+        self.assertIsNone(quote['rates']['18K']['rate'])
+        self.assertFalse(any('I_XRATE' in call.args[0] for call in c.query.call_args_list))

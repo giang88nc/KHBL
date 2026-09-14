@@ -2,11 +2,13 @@ from django.urls import path
 
 from . import views
 from apps.pos.views import gdb_mau
+from apps.pos.deposit_print_config import config as deposit_print_config
 
 app_name = "pmv"
 
 urlpatterns = [
     path("mau-in-gdb/", gdb_mau, name="gdb_mau"),
+    path("mau-in-coc/", deposit_print_config, name="deposit_print_config"),
     path("", views.status, name="status"),
     path("nguoi-dung/", views.user_list, name="user_list"),
     path("nguoi-dung/them/", views.user_form, name="user_create"),

@@ -12,11 +12,16 @@
     setTimeout(() => item.remove(), tone === 'error' ? 12000 : 5000);
   }
   function filter() { document.getElementById('dc-filter')?.requestSubmit(); }
+  window.dcToast=toast;
   function field(line, key) { return line.querySelector(`[name$="-${key}"]`); }
   function mode(line) {
     const stock = field(line, 'Mode')?.value === 'stock';
     line.classList.toggle('is-stock', stock);
-    line.querySelector('.dc-row-source').textContent = stock ? 'Hàng sẵn' : 'Hàng đặt';
+    ['ProductDesc','GoldWeight','Size','TaskPrice'].forEach(key=>{field(line,key).readOnly=stock;});
+    field(line,'GoldCode').disabled=stock;
+    field(line,'ProductCode').readOnly=!stock;
+    if (!stock) field(line,'ProductCode').value='Khách đặt';
+    field(line,'ProductCode').placeholder='Quét / nhập mã SP';
     if (field(line, 'DELETE')?.checked) line.hidden = true;
     if (!stock) line.querySelector('.dc-stock-results').replaceChildren();
   }
@@ -35,13 +40,13 @@
       if (form.elements.tab.value === tab.dataset.dcTab) return;
       form.elements.tab.value = tab.dataset.dcTab;
       form.elements.due.value = ''; form.elements.quick.value = '';
-      form.elements.sort.value = ['ready','pending'].includes(tab.dataset.dcTab) ? 'priority' : tab.dataset.dcTab === 'delivered' ? 'delivered' : 'newest';
+      form.elements.sort.value = ['ready','ordering'].includes(tab.dataset.dcTab) ? 'priority' : 'newest';
       form.elements.page.value = '1'; filter();
     }
     const work = event.target.closest('[data-dc-work]');
     if (work && form) {
       const key = work.dataset.dcWork;
-      form.elements.tab.value = key === 'money' ? 'all' : 'pending';
+      form.elements.tab.value = 'all';
       form.elements.quick.value = key === 'pending' ? '' : key;
       form.elements.due.value = ''; form.elements.sort.value = 'priority'; form.elements.page.value = '1'; filter();
     }
@@ -78,6 +83,17 @@
     }
   });
   document.addEventListener('change', event => {
+    if(event.target.closest('#dc-filter') && event.target.name!=='page') document.getElementById('dc-filter').elements.page.value='1';
+    const selection=document.getElementById('dc-reminder-selection');
+    if (selection && event.target.closest('#dc-reminder-selection')) {
+      const boxes=[...selection.querySelectorAll('input[name=orders]')];
+      if(event.target.matches('[data-dc-select-all]')) boxes.forEach(box=>box.checked=event.target.checked);
+      const count=boxes.filter(box=>box.checked).length, all=selection.querySelector('[data-dc-select-all]');
+      if(all) {all.checked=count>0 && count===boxes.length; all.indeterminate=count>0 && count<boxes.length;}
+      selection.querySelector('[data-dc-selected-count]').textContent=`${count} phiếu đã chọn`;
+      selection.querySelector('[data-dc-bulk-compose]').disabled=count===0 || count>200;
+      if(count>200) toast('Mỗi lượt tối đa 200 phiếu.','warning');
+    }
     if (event.target.closest('#dc-message-filter') && event.target.name !== 'page') document.getElementById('dc-message-filter').elements.page.value = '1';
     if (event.target.matches('#dc-lines [name$="-Mode"]')) mode(event.target.closest('.dc-line'));
   });
@@ -89,36 +105,38 @@
     if (previous) { clearTimeout(previous.timer); previous.controller.abort(); }
     const query = input.value.trim(), controller = new AbortController();
     results.replaceChildren();
+    if (field(line,'Mode').value==='stock') {
+      ['ProductDesc','GoldCode','GoldWeight','DiamondWeight','TotalWeight','Size','TaskPrice'].forEach(key=>{field(line,key).value='';});
+      line.classList.remove('is-verified'); window.dcEditorRecalculate?.();
+    }
     if (query.length < 2 || field(line,'Mode').value !== 'stock') return;
     const timer = setTimeout(async () => {
       results.textContent = 'Đang tìm hàng trong kho…';
       try {
         const form = document.getElementById('dc-save');
         const url = new URL(form.dataset.productsUrl, location.origin);
-        url.searchParams.set('q', query); url.searchParams.set('units', form.dataset.units);
+        url.searchParams.set('q', query); url.searchParams.set('units', form.dataset.units); url.searchParams.set('exact','1');
         const response = await fetch(url, {signal:controller.signal, headers:{'Accept':'application/json'}});
         if (!response.ok) throw new Error('Không tải được hàng trong kho. Vui lòng thử lại.');
         const data = await response.json();
         if (!input.isConnected || input.value.trim() !== query || field(line,'Mode').value !== 'stock') return;
         results.replaceChildren();
-        if (!data.rows.length) results.textContent = 'Không có hàng còn tồn khớp từ khóa.';
-        data.rows.forEach(row => {
-          const button = document.createElement('button');
-          button.type = 'button'; button.className = 'dc-stock-option';
-          button.textContent = `${row.ProductCode} · ${row.ProductDesc || ''} · ${row.GoldCode}`;
-          button.addEventListener('click', () => {
-            ['ProductCode','ProductDesc','GoldCode','TotalWeight','DiamondWeight','GoldWeight'].forEach(key => { field(line,key).value = row[key] ?? ''; });
-            field(line,'Size').value = row.RingSize || '';
-            results.textContent = 'Đã chọn hàng trong kho: ' + row.ProductCode;
-            window.dcEditorRecalculate?.();
-          });
-          results.append(button);
-        });
+        if (data.rows.length!==1) {results.textContent='Mã chưa đúng hoặc hàng không còn sẵn. Quét/nhập lại mã.'; return;}
+        const row=data.rows[0];
+        ['ProductCode','ProductDesc','GoldCode','TotalWeight','DiamondWeight','GoldWeight'].forEach(key=>{field(line,key).value=row[key]??'';});
+        window.dcSetWeightValue?.(field(line,'GoldWeight'),row.GoldWeight||'0');
+        field(line,'Size').value=row.RingSize||'';
+        window.dcSetMoneyValue?.(field(line,'TaskPrice'),row.TaskPrice||'0');
+        line.classList.add('is-verified');
+        window.dcEditorRecalculate?.();
       } catch (error) { if (error.name !== 'AbortError' && input.isConnected) results.textContent = error.message; }
     }, 300);
     searches.set(input, {timer,controller});
   });
   document.addEventListener('keydown', event => {
+    if (event.key==='Enter' && event.target.matches('#dc-lines [name$="-ProductCode"]')) {
+      event.preventDefault(); event.target.dispatchEvent(new Event('input',{bubbles:true})); return;
+    }
     const tab = event.target.closest('[data-dc-tab]');
     if (tab && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
       event.preventDefault();
@@ -129,9 +147,11 @@
   });
   document.body.addEventListener('depositSaved', event => {
     window.closeKhblModal(); toast(event.detail.message,event.detail.tone || 'success'); htmx.trigger(document.body, 'depositRefresh');
+    if(event.detail.open_url) htmx.ajax('GET',event.detail.open_url,{target:'#modal-root'});
   });
   document.body.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id === 'modal-root') {
+      document.querySelector('#modal-root .dc-popup')?.classList.add('dc-purple');
       bindLines();
       const error = document.querySelector('[data-dc-error]');
       if (error) toast(error.textContent, 'error');

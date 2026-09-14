@@ -24,7 +24,7 @@ from apps.pmv import money as M
 from apps.pmv.client import PmvClient, PmvProcError
 from apps.pmv.models import pmv_user_for_web_user
 
-from . import bill as B, cart, cccd, customer as C, passcode as PC, services as S, vietqr as QR
+from . import bill as B, cart, cccd, customer as C, passcode as PC, quyen as Q, services as S, vietqr as QR
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 def dashboard(request):
     # Tổng quan là màn điều hành hiện thời: luôn đọc trực tiếp MSSQL máy KK, không dùng kho lịch sử.
+    Q.chan(request, "DASHBOARD")
     ngay = datetime.date.today().isoformat()
     try:
         tq = S.tong_quan_realtime(ngay)
@@ -205,8 +206,61 @@ def _ctx_pos(request, extra=None):
     ctx["khoa_ngay_cu"] = ctx["phieu_chot"] and not ctx["don_hom_nay"]
     ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
     ctx["ten_nv_sup"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp_sup")), "")
+    ctx.update(_coc_ctx(g))
     ctx.update(extra or {})
     return ctx
+
+
+def _coc_cache_key(cust_id):
+    return f"khbl:coc_cho:v3:{cust_id}"
+
+
+def _coc_ctx(g):
+    """Nút 💸 cạnh ô Tiền cọc (GĐ chốt 11/09/2026): phiếu ĐẶT-CỌC còn chờ của khách đang chọn.
+
+    Quét mỗi lần chọn khách rồi NHỚ 2 phút — #pos-tong bị dựng lại sau từng thao tác trên đơn, hỏi
+    máy KK mỗi lần là phí. Bỏ nhớ ngay khi áp/gỡ phiếu (xem ``ban_coc``)."""
+    from . import ban_coc as BC
+
+    ids = [str(x) for x in (g.get("coc_ids") or [])]
+    cust = (g.get("cust") or {}).get("id") or ""
+    ra = {"coc_ds": [], "coc_ids": ids if cust else [], "coc_loi": "",
+          "coc_sp": _coc_sp(g, cust)}
+    if not cust:
+        return ra
+    ds, loi = cache.get(_coc_cache_key(cust)), ""
+    if ds is None or g.get('trn_id') or any('money_error' not in p or 'san_pham' not in p or any('nguon' not in i for i in p['san_pham']) for p in ds):
+        try:
+            ds = BC.phieu_cho(S.client("coc_cho"), cust, g.get('trn_id') or '')
+        except Exception as exc:                 # KK lỗi thì màn bán vẫn phải chạy — chỉ mất nút 💸
+            logger.warning("Không quét được phiếu cọc của khách %s: %s", cust, exc)
+            ds, loi = [], "Chưa đọc được phiếu cọc từ máy KK"
+        else:
+            if not g.get('trn_id'): cache.set(_coc_cache_key(cust), ds, 120)
+    ra.update(coc_ds=BC.doi_soat_title(ds, g.get('ban')), coc_loi=loi, coc_tong=BC.tong_tien(ds, ids))
+    return ra
+
+
+def _coc_sp(g, cust):
+    """Dấu 💸 / ⛔ cho từng mã hàng trong VÀNG BÁN (GĐ chốt 11/09/2026).
+
+    Mã đang nằm trong một phiếu cọc chưa hoàn thành: của CHÍNH khách trên đơn thì chỉ nhắc 💸, của
+    khách KHÁC (hoặc đơn chưa chọn khách nên chưa biết của ai) thì ⛔ + tô cảnh báo cả dòng.
+    Bản đồ mã→phiếu nhớ 2 phút dùng chung cho mọi đơn, vì nó không phụ thuộc khách đang bán."""
+    from . import ban_coc as BC
+
+    codes = [x["row"].get("ProductCode") for x in (g.get("ban") or []) if x.get("row", {}).get("ProductCode")]
+    if not codes:
+        return {}
+    ban_do = cache.get("khbl:coc_sp")
+    if ban_do is None:
+        try:
+            ban_do = BC.sp_dang_coc(S.client("coc_sp"))
+        except Exception as exc:                 # đọc hỏng thì thôi, không chặn bán
+            logger.warning("Không quét được mã hàng đang cọc: %s", exc)
+            return {}
+        cache.set("khbl:coc_sp", ban_do, 120)
+    return BC.danh_dau_sp(ban_do, codes, cust)
 
 
 def _ma_du_kien_an_toan():
@@ -239,6 +293,7 @@ def _loi(request, thong_diep, extra=None):
 # ─────────────────────────── MUA BÁN ───────────────────────────
 
 def ban(request):
+    Q.chan(request, "BAN_HANG")
     return render(request, "pos/ban.html", _ctx_pos(request))
 
 
@@ -440,6 +495,8 @@ def ban_doi_them(request):
     de = next((x for x in S.loai_de() if x["GoldCode"] == ma), None)
     if not de:
         return _loi(request, "Chưa chọn loại dẻ")
+    if M.dec(de.get('BuyRate')) <= 0 or M.dec(de.get('SellRate')) <= 0:
+        return _loi(request, 'Chưa có giá MySQL hợp lệ cho loại vàng này. Hãy kiểm tra Bảng giá.')
     if tong_tl <= 0:
         return _loi(request, "Chưa nhập tổng trọng lượng vàng đổi")
     if tl_hot > tong_tl:
@@ -591,8 +648,50 @@ def ban_dat(request):
         g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
     if "bank_id" in request.POST:
         g["bank_id"] = (request.POST.get("bank_id") or "").strip()
+    if "cust_id" in request.POST and g.get("coc_ids"):
+        g["coc_ids"], g["coc"] = [], "0"        # đổi khách thì phiếu cọc của khách cũ không còn đúng
     cart.save(request, g)
     return _pos_oob(request)
+
+
+@require_POST
+def ban_coc(request):
+    """💸 Áp phiếu ĐẶT-CỌC của khách vào đơn (GĐ chốt 11/09/2026).
+
+    `mo=1` mở danh sách · `id=<mã phiếu>` chọn/bỏ từng phiếu (áp nhiều phiếu thì cộng dồn) ·
+    `bo=1` gỡ hết. Tiền cọc của đơn LUÔN bằng tổng các phiếu đang chọn — người bán không gõ tay
+    đè lên được, vì lúc THANH TOÁN số này phải khớp đúng các phiếu gắn vào hóa đơn."""
+    from . import ban_coc as BC
+
+    if _dang_khoa(request):
+        return _loi(request, KHOA_MSG)
+    g = cart.get(request)
+    cust = (g.get("cust") or {}).get("id") or ""
+    if not cust:
+        return _loi(request, "Chọn KHÁCH HÀNG trước rồi mới áp được phiếu cọc", {"loi_o": "#o-khach"})
+    cache.delete(_coc_cache_key(cust))          # thao tác tay → quét lại cho chắc, không ăn bản nhớ
+    ds = _coc_ctx(g)["coc_ds"]
+    co = {p["id"] for p in ds}
+    dang = [x for x in (g.get("coc_ids") or []) if x in co]
+    if request.POST.get("bo") == "1":
+        dang = []
+    ma = (request.POST.get("id") or "").strip()
+    if ma:
+        if ma not in co:
+            return _loi(request, f"Phiếu cọc {ma} không còn ở trạng thái chờ áp dụng")
+        if ma not in dang:
+            loi_sp = BC.kiem_san_pham(S.client('coc_kiem_sp'), [ma], g.get('ban'))
+            if loi_sp:
+                return _loi(request, loi_sp, {"coc_mo": True})
+            _, money_error = BC.kiem_truoc_khi_gan(S.client('coc_kiem_tien'),ma,cust,g.get('trn_id') or '')
+            if money_error:
+                return _loi(request,money_error,{'coc_mo':True})
+        dang = [x for x in dang if x != ma] if ma in dang else dang + [ma]
+    g["coc_ids"] = dang
+    g["coc"] = BC.chuoi_tien(BC.tong_tien(ds, dang))
+    cart.save(request, g)
+    mo = request.POST.get("mo") == "1" and bool(dang or ds)
+    return _pos_oob(request, {"coc_mo": mo})
 
 
 @require_GET
@@ -894,21 +993,77 @@ def ban_thanh_toan(request):
         return _loi(request, "Đang thanh toán phiếu này — chờ vài giây, đừng bấm lại.")
     c = S.client("thanh_toan")
     now = datetime.datetime.now()
+    reservation = None
     try:
+        from . import deposit_application as A
+        resume = A.invoice(c,g['trn_id']) if g.get('trn_id') else None
+        # Complete có thể thành công trước khi mất kết nối. Chỉ tiếp tục xác minh/kết sổ hóa đơn đó.
+        if resume and resume['Status'] == 'C':
+            doc = B.doc(g['trn_id'],c)
+            B.chot(g['trn_id'],till_id=ph['till_id'],user_id=ph['user_id'],c=c)
+            from . import ban_coc as BC
+            ids = A.linked_ids(c,g['trn_id'])
+            if ids: BC.hoan_tat(c,ids,request.user,trn_id=g['trn_id'],bill_code=doc['bill_code'])
+            cart.nap(request,B.doc(g['trn_id'],c))
+            cache.delete(khoa)
+            return _pos_oob(request,{'tin':'Đã xác minh hóa đơn '+doc['bill_code']+' hoàn tất; không chốt lặp.'})
+        if g.get('coc_ids'):
+            from . import ban_coc as BC
+            loi_sp = BC.kiem_san_pham(c, g['coc_ids'], g.get('ban'))
+            if loi_sp:
+                cache.delete(khoa)
+                return _loi(request, loi_sp, {"coc_mo": True})
+            from . import deposit_application as A
+            A.check(c,g['coc_ids'],(g.get('cust') or {}).get('id') or S.WALK_IN,
+                    g.get('trn_id') or '',g.get('coc'))
+            if not g.get('trn_id'):
+                reservation=A.reserve_invoice(c,request.session.session_key,g['coc_ids'],
+                    (g.get('cust') or {}).get('id') or S.WALK_IN,g.get('coc'),request.user.username)
+        def invoice_created(trn_id):
+            g['trn_id']=trn_id
+            cart.save(request,g)
+            request.session.save()
+            if reservation:
+                reservation.invoice_id=trn_id;reservation.status='done';reservation.active_key=None
+                reservation.message='PMV đã cấp mã hóa đơn; tiếp tục trên đúng hóa đơn này.'
+                reservation.save()
         kq = B.luu(trn_id=g.get("trn_id") or "", ban=cart.dong_ban(g), doi=cart.dong_doi(g),
                    ngay=c.fmt_date(now.date()), gio=c.fmt_time(now),
                    cust_id=(g.get("cust") or {}).get("id") or S.WALK_IN,
                    emp_id=g.get("emp"), till_id=ph["till_id"], shop_id=ph["shop_id"],
                    user_id=ph["user_id"], ghi_chu=g.get("ghi_chu") or "",
                    bot=g.get("bot"), cong_them=g.get("cong_them"),
-                   vang_them=g.get("vang_them"), coc=g.get("coc"), c=c)
+                   vang_them=g.get("vang_them"), coc=g.get("coc"), c=c,
+                   on_created=invoice_created if g.get('coc_ids') else None)
+        # Giữ mã hóa đơn ngay khi lưu xong; liên kết/chốt lỗi không tạo hóa đơn mới khi bấm lại.
+        g['trn_id'],g['bill_code']=kq['trn_id'],kq['bill_code']
+        cart.save(request,g)
+        # Phiếu ĐẶT-CỌC (11/09/2026): gắn vào hóa đơn khi còn LƯU TẠM, ngay trước khi chốt. Gắn hỏng
+        # giữa chừng thì dừng lại và kéo Tiền cọc về đúng phần đã gắn — bill.chot chặn nếu lệch.
+        coc_ids = [str(x) for x in (g.get("coc_ids") or [])]
+        if coc_ids:
+            from . import ban_coc as BC
+            cust_id = (g.get("cust") or {}).get("id") or S.WALK_IN
+            da_gan, loi_coc = BC.lien_ket(c, kq["trn_id"], coc_ids, cust_id, request.user)
+            if loi_coc:
+                cache.delete(khoa)
+                cache.delete(_coc_cache_key(cust_id))
+                return _loi(request, f"{loi_coc} Hóa đơn {kq['bill_code']} đã lưu; mở Chứng từ cọc để kiểm tra liên kết trước khi tiếp tục.")
         B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
     except Exception as exc:
+        if reservation and not reservation.invoice_id:
+            reservation.status='uncertain';reservation.message='Chưa nhận được mã hóa đơn; kiểm tra PMV trước khi tạo lại.'
+            reservation.save()
         cache.delete(khoa)
         return _loi(request, _loi_goi(exc))
     finally:
         pass
     cache.delete(khoa)
+    if coc_ids:
+        # Hóa đơn đã chốt ⇒ phiếu cọc coi như XONG: đánh dấu đã giao + giải phóng hàng đang giữ.
+        from . import ban_coc as BC
+        BC.hoan_tat(c, coc_ids, request.user, trn_id=kq["trn_id"], bill_code=kq["bill_code"])
+        cache.delete(_coc_cache_key((g.get("cust") or {}).get("id") or ""))
     from . import don as _don
     _don.don_treo(force=True)                     # badge ⚠ đơn treo làm mới ngay (cache 60s)
     g["trn_id"], g["bill_code"] = kq["trn_id"], kq["bill_code"]
@@ -1029,6 +1184,7 @@ def _loi_goi(exc):
 
 @require_GET
 def bang_gia(request):
+    Q.chan(request, "BANG_GIA")
     from . import prices
     ctx = prices.page_data()
     ctx["edit_token"] = prices.edit_token(ctx["prices"], request.user.pk, ctx["sync_target"])
@@ -1038,9 +1194,15 @@ def bang_gia(request):
 @require_POST
 def gia_cap_nhat(request):
     from . import prices
+    ajax = request.headers.get('Accept') == 'application/json'
     try:
-        prices.save_prices(request.POST, request.user)
+        batch = prices.save_prices(request.POST, request.user)
     except (prices.PriceError, DatabaseError) as exc:
+        if ajax:
+            if isinstance(exc, DatabaseError):
+                logger.exception('Không thể lưu bảng giá')
+            error = str(exc) if isinstance(exc, prices.PriceError) else 'Chưa xác nhận được lần lưu. Hãy tải lại bảng giá để kiểm tra trước khi thử lại.'
+            return JsonResponse({'ok': False, 'error': error}, status=409)
         if isinstance(exc, DatabaseError):
             logger.exception("Không thể xác nhận cập nhật bảng giá")
             messages.error(request, "Không thể xác nhận cập nhật MySQL. Hãy kiểm tra trạng thái lô mới nhất trước khi thử lại.")
@@ -1056,6 +1218,14 @@ def gia_cap_nhat(request):
                 row["unit"] = request.POST.get("unit_" + key, "")
         ctx.update(edit_token=request.POST.get("edit_token", ""), price_error=str(exc))
         return render(request, "pos/bang_gia.html", {"nav_active": "gia", **ctx}, status=400)
+    if ajax:
+        if getattr(batch, 'editor_replayed', False):
+            return JsonResponse({'ok': False, 'error': 'Lần gửi trước đã được lưu. Hãy tải lại bảng giá để tiếp tục; không cần gửi lại giá cũ.'}, status=409)
+        rows = batch.editor_rows
+        return JsonResponse({'ok': True, 'rows': rows,
+                             'edit_token': prices.edit_token(rows, request.user.pk, 'mysql'),
+                             'message': 'Đã lưu giá. Hệ thống sử dụng bảng giá vừa lưu.'})
+    messages.success(request, 'Đã lưu bảng giá sử dụng cho bán, thâu và đặt cọc.')
     return redirect("pos:bang_gia")
 
 
@@ -1272,6 +1442,7 @@ def _ctx_khach(request):
 
 
 def khach_hang(request):
+    Q.chan(request, "KHACH_HANG")
     ctx = _ctx_khach(request)
     if request.headers.get("HX-Request") and request.GET.get("partial"):
         return render(request, "pos/_khach_bang.html", ctx)
@@ -1436,6 +1607,25 @@ def khach_luu(request):
     return response
 
 
+@require_GET
+def khach_kiem_sdt(request):
+    """Gợi ý trùng khi đủ 10 số; kiểm tra quyết định vẫn nằm trong khóa lúc UPSERT."""
+    Q.chan(request, "KHACH_HANG")
+    phone = C.P.phone_key(request.GET.get("phone"))
+    if not C.P.valid(phone):
+        return JsonResponse({"error": "SĐT phải gồm đúng 10 chữ số"}, status=400)
+    try:
+        rows = (getattr(request, "customer_client", None) or S.client("khach_kiem_sdt")).query(
+            "SELECT CustID, CustCode, CustName FROM I_CUSTOMER WITH (NOLOCK) WHERE "
+            + C.P.exact_sql() + " AND CustID<>? ORDER BY CustID",
+            (phone, phone, phone, request.GET.get("cust_id", "")))
+        response = JsonResponse({"matches": rows})
+        response["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        return JsonResponse({"error": "Chưa kiểm tra được SĐT. Hệ thống sẽ kiểm tra lại khi lưu."}, status=503)
+
+
 # ─────────────────────────── THÂU VÀO ───────────────────────────
 
 # THÂU VÀO: toàn bộ view ở apps/pos/views_thau.py (08/09/2026 tối — thiết kế lại theo khung màn bán).
@@ -1451,6 +1641,7 @@ def _ngay_hd(value, mac_dinh):
 
 
 def hoa_don(request):
+    Q.chan(request, "HOA_DON")
     hom_nay = datetime.date.today().isoformat()
     d1, d2 = _ngay_hd(request.GET.get("d1"), hom_nay), _ngay_hd(request.GET.get("d2"), hom_nay)
     if d1 > d2:

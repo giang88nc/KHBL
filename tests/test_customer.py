@@ -1,5 +1,6 @@
 """Hồi quy lưu khách bằng dữ liệu giả; không truy cập PMV."""
 from io import BytesIO
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -70,6 +71,11 @@ class CustomerValidationTests(unittest.TestCase):
 
 
 class CustomerUpsertTests(unittest.TestCase):
+    def setUp(self):
+        p = patch("apps.pos.customer.phone_write_lock", side_effect=lambda target: nullcontext())
+        p.start()
+        self.addCleanup(p.stop)
+
     def _client(self):
         client = Mock()
         client.call.side_effect = [

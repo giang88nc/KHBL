@@ -5,16 +5,23 @@ from . import deposits
 from . import deposit_operations
 from . import deposit_messages
 from . import deposit_money
+from . import deposit_photos
+from . import deposit_editing
+from . import bao_cao
 from . import qr_learning_views
+from . import customer_camera
+from . import customer_sync
 from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
 
 app_name = "pos"
 
 urlpatterns = [
+    path('banle/bao-cao/', bao_cao.trang, name='bao_cao'),        # BÁO CÁO (12/09/2026)
     path('banle/dat-coc/', deposits.index, name='dat_coc'),
     path('banle/dat-coc/bao-cao/', deposits.report, name='dat_coc_report'),
     path('banle/dat-coc/thong-bao/soan/', deposit_messages.compose, name='dat_coc_compose'),
+    path('banle/dat-coc/thong-bao/goi-y/<str:kind>/', deposit_messages.suggestion_edit, name='dat_coc_suggestion'),
     path('banle/dat-coc/thong-bao/mau/them/', deposit_messages.template_edit, name='dat_coc_template_add'),
     path('banle/dat-coc/thong-bao/mau/<int:pk>/', deposit_messages.template_edit, name='dat_coc_template'),
     path('banle/dat-coc/thong-bao/mau/<int:pk>/kiem-tra/', deposit_messages.approve_template, name='dat_coc_template_approve'),
@@ -22,9 +29,13 @@ urlpatterns = [
     path('banle/dat-coc/khach/', deposits.customers, name='dat_coc_customers'),
     path('banle/dat-coc/hang-trong-kho/', deposits.products, name='dat_coc_products'),
     path('banle/dat-coc/them/', deposits.popup, {'action': 'add'}, name='dat_coc_add'),
+    path('banle/dat-coc/<str:pk>/anh/<str:slot>/', deposit_photos.photo, name='dat_coc_photo'),
+    path('banle/dat-coc/<str:pk>/hinh-anh/', deposit_photos.edit, name='dat_coc_photos_edit'),
+    path('banle/dat-coc/<str:pk>/mo-sua/', deposit_editing.unlock, name='dat_coc_unlock'),
     path('banle/dat-coc/<str:pk>/van-hanh/<str:kind>/', deposit_operations.action, name='dat_coc_operation'),
     path('banle/dat-coc/<str:pk>/tien/<str:kind>/', deposit_money.action, name='dat_coc_money'),
     path('banle/dat-coc/<str:pk>/can-coc/', deposit_money.apply_to_invoice, name='dat_coc_apply'),
+    path('banle/dat-coc/<str:pk>/xoa/', deposits.xoa, name='dat_coc_xoa'),        # 🗑 XÓA + Passcode (11/09)
     path('banle/dat-coc/<str:pk>/<str:action>/', deposits.popup, name='dat_coc_popup'),
     path("banle/khach-hang/qr/cong-cu/", qr_learning_views.tool, name="qr_learning"),
     path("banle/khach-hang/qr/hoc/dich/", qr_learning_views.translate, name="qr_learning_translate"),
@@ -57,6 +68,7 @@ urlpatterns = [
     path("banle/ban-hang/vang-doi/tinh-lai/", views.ban_doi_tinh_lai, name="ban_doi_tinh_lai"),
     path("banle/ban-hang/dat/", views.ban_dat, name="ban_dat"),
     path("banle/ban-hang/qr/", views.ban_qr, name="ban_qr"),
+    path("banle/ban-hang/coc/", views.ban_coc, name="ban_coc"),          # 💸 áp phiếu ĐẶT-CỌC (11/09/2026)
     path("banle/ban-hang/moi/", views.ban_moi, name="ban_moi"),
     path("banle/ban-hang/tim-khach/", views.ban_tim_khach, name="ban_tim_khach"),
     path("banle/ban-hang/tim-nv/", views.ban_tim_nv, name="ban_tim_nv"),
@@ -118,8 +130,12 @@ urlpatterns = [
 
     # Khách hàng
     path("banle/khach-hang/", views.khach_hang, name="khach_hang"),
+    path("banle/khach-hang/sync/", customer_sync.listing, name="customer_sync_list"),
+    path("banle/khach-hang/sync/them/", customer_sync.insert, name="customer_sync_insert"),
+    path("banle/khach-hang/chup-hinh/tach-cccd/", customer_camera.split_card, name="customer_camera_card"),
     path("banle/khach-hang/them/", views.khach_form, name="khach_them"),
     path("banle/khach-hang/luu/", views.khach_luu, name="khach_luu"),
+    path("banle/khach-hang/kiem-sdt/", views.khach_kiem_sdt, name="khach_kiem_sdt"),
     path("banle/khach-hang/qr/phan-tich/", views.khach_qr_phan_tich, name="khach_qr_phan_tich"),
     path("banle/khach-hang/anh/cat/", VT.khach_anh_cat, name="khach_anh_cat"),            # ✂ popup khách (10/09) — tái dùng AC.cat_cccd
     path("banle/khach-hang/anh/cat/luu/", VT.khach_anh_cat_luu, name="khach_anh_cat_luu"),

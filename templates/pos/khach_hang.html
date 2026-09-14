@@ -1,8 +1,11 @@
-{% extends "base.html" %}{% load pos_extras %}
+{% extends "base.html" %}{% load pos_extras static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/customer_camera.css' %}?v=20260913.2"><link rel="stylesheet" href="{% static 'css/customer_sync.css' %}?v=20260914.1">{% endblock %}
 {% block title %}Khách hàng{% endblock %}
 {% block page_title %}Khách hàng{% endblock %}
 {% block page_sub %}{{ tong|sokhong }} khách trong máy KK · xếp theo hoạt động gần nhất · rê chuột lên dòng để XEM · SỬA · XÓA{% endblock %}
 {% block page_tools %}
+  <button class="khbl-btn khbl-btn--outline" type="button" data-customer-sync-open>⇢ SYNC 1 CHIỀU</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" data-local-camera-open>📷 CHỤP HÌNH</button>
   <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:qr_learning' %}">Dạy bộ đọc QR</a>
   <button class="khbl-btn khbl-btn--gold" type="button"
           hx-get="{% url 'pos:khach_them' %}" hx-target="#modal-root">+ THÊM KHÁCH</button>
@@ -13,7 +16,7 @@
       hx-trigger="submit, keyup changed delay:350ms from:input, change from:select" hx-push-url="false">
   <div class="khbl-field" style="width:280px">
     <label>Tìm theo điện thoại · CCCD · họ tên</label>
-    <input class="khbl-input" name="key" value="{{ key }}" placeholder="vd 0906 · 096088 · Nguyễn" autofocus autocomplete="off">
+    <input class="khbl-input" name="key" value="{{ key }}" placeholder="SĐT đủ 10 số · CCCD · Họ tên" autofocus autocomplete="off" title="SĐT đủ 10 số: một hồ sơ (ưu tiên số chính, rồi mã khách). Tên hoặc CCCD: có thể nhiều hồ sơ.">
   </div>
   <div class="khbl-field" style="width:230px">
     <label>Địa chỉ</label>
@@ -34,4 +37,7 @@
 </form>
 
 <div id="kh-bang">{% include "pos/_khach_bang.html" %}</div>
+{% include 'pos/_customer_camera.html' %}
+{% include 'pos/_customer_sync.html' %}
 {% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/customer_camera.js' %}?v=20260913.2"></script><script defer src="{% static 'js/customer_sync.js' %}?v=20260914.1"></script>{% endblock %}

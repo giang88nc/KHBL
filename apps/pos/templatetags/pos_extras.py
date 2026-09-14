@@ -53,7 +53,7 @@ def icon(key, size=18):
 # sinh từ ảnh gốc 1254px bằng System.Drawing — gốc GIỮ NGUYÊN trong static/img/, đừng xóa.
 # Muốn sinh lại sau khi đổi ảnh: xem CLAUDE.md mục "Icon topbar".
 # {% icon %} (SVG nét, ăn theo currentColor) vẫn dùng cho mọi chỗ khác trong app.
-_ICON_ANH = {"tong", "ban", "thau", "gia", "khach", "hoadon", "hethong", "chuyenkhoan", "datcoc"}
+_ICON_ANH = {"tong", "ban", "thau", "gia", "khach", "hoadon", "hethong", "chuyenkhoan", "datcoc", "baocao"}
 
 
 @register.simple_tag
@@ -134,6 +134,15 @@ def sokhong(x):
     """Số trần để nhúng vào data-*/value= (chống localize)."""
     d = M.dec(x)
     return str(int(d)) if d == d.to_integral_value() else format(d.normalize(), "f")
+
+
+@register.filter
+def muc(d, khoa):
+    """Lấy một mục của dict khi KHÓA là biến — Django không cho viết d[bien] trong template."""
+    try:
+        return d.get(khoa)
+    except AttributeError:
+        return None
 
 
 @register.simple_tag

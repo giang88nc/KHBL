@@ -3,32 +3,6 @@ import uuid
 from django.db import models
 
 
-class DepositOrderState(models.Model):
-    target = models.CharField(max_length=10)
-    trn_id = models.CharField(max_length=20)
-    version = models.PositiveIntegerField(default=0)
-    original_promise = models.DateField(null=True, blank=True)
-    promise = models.DateField(null=True, blank=True)
-    employee_id = models.CharField(max_length=20, blank=True)
-    employee_name = models.CharField(max_length=200, blank=True)
-    fulfilment = models.CharField(max_length=20, blank=True)
-    items = models.JSONField(default=list)
-    item_signature = models.CharField(max_length=64, blank=True)
-    next_contact = models.DateTimeField(null=True, blank=True, db_index=True)
-    last_contact = models.DateTimeField(null=True, blank=True)
-    contacted = models.BooleanField(null=True)
-    note = models.CharField(max_length=1000, blank=True)
-    ready_at = models.DateTimeField(null=True, blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    quote_status = models.CharField(max_length=12, default='estimate')
-    quote_amount = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
-    quote_terms = models.CharField(max_length=1000, blank=True)
-    pricing = models.JSONField(default=dict)
-    payment_plan = models.JSONField(default=dict)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [models.UniqueConstraint(fields=['target','trn_id'], name='dc_state_target_order')]
 
 
 class DepositEvent(models.Model):
@@ -43,10 +17,12 @@ class DepositEvent(models.Model):
 
     @property
     def action_name(self):
-        return {'contact':'Liên hệ / nhắc hẹn','progress':'Tiến độ giao hàng','hold':'Giữ hàng','release':'Giải phóng hàng',
+        return {'edit_info':'Cập nhật thông tin / tiến độ','create':'Lập phiếu đặt hàng','contact':'Liên hệ / nhắc hẹn','progress':'Tiến độ giao hàng','hold':'Giữ hàng','release':'Giải phóng hàng',
             'quote':'Thỏa thuận giá','cancel':'Hủy đặt hàng','money_receive':'Thu cọc','money_refund':'Hoàn cọc',
             'money_apply':'Cấn cọc hóa đơn','message_edit':'Sửa thông báo','message_delete':'Xóa khỏi lịch gửi',
-            'message_schedule':'Lên lịch thông báo','message_result':'Kết quả gửi thông báo'}.get(self.action,self.action)
+            'message_schedule':'Lên lịch thông báo','message_result':'Kết quả gửi thông báo',
+            'reminder_add':'Thêm phiếu nhắc','reminder_remove':'Bỏ gợi ý trong ngày',
+            'reminder_zalo':'Mốc nhắc Zalo tiếp theo','reminder_synced':'Đã đồng bộ mốc Zalo'}.get(self.action,self.action)
 
     def save(self, *args, **kwargs):
         if self.pk: raise ValueError('Nhật ký chỉ được ghi thêm.')
@@ -122,3 +98,5 @@ class DepositMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True)
     claimed_at = models.DateTimeField(null=True)
+
+from .models import DepositOrderState  # noqa: E402,F401

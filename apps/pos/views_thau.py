@@ -22,6 +22,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.pmv import gateway, money as M
 from apps.pmv.client import PmvProcError
 
+from . import quyen as Q
 from . import anh_cccd as AC, bill as B, customer as C, services as S, thau_cart as TC, vietqr as QR
 from .models import GoldBill, ThauAnhTam, ThauNhom, ThauPaymentLink
 
@@ -343,6 +344,7 @@ def khach_anh_cat(request):
         return HttpResponse("Chỉ tách thẻ cho CCCD mặt trước / mặt sau.", status=400)
     field, kind, label = cau_hinh
     tpl = "pos/_khach_cat_modal.html"
+    popup_render = getattr(request, "customer_render", render)
     ctx = {"mat": mat, "label": label, "slot": "kh_" + mat}
     upload = request.FILES.get(field)
     data = None
@@ -352,27 +354,27 @@ def khach_anh_cat(request):
         else:
             cust_id = (request.POST.get("CustID") or "").strip()
             if cust_id:
-                da_luu, _ct = C.saved_image(cust_id, kind)
+                da_luu, _ct = C.saved_image(cust_id, kind, client=getattr(request, "customer_client", None))
                 data = _nen_anh(bytes(da_luu), canh=1600, chat_luong=92)
     except Exception as exc:
         logger.warning("✂ khách: không đọc được ảnh nguồn (%s): %s", mat, exc)
-        return render(request, tpl, {**ctx, "loi": "Không đọc được ảnh nguồn: " + str(exc)[:120]})
+        return popup_render(request, tpl, {**ctx, "loi": "Không đọc được ảnh nguồn: " + str(exc)[:120]})
     if not data:
-        return render(request, tpl, {**ctx, "loi": "Ô này chưa có ảnh — chọn tệp / chụp ảnh trước (khách đã lưu ảnh thì bấm ✂ được ngay)."})
+        return popup_render(request, tpl, {**ctx, "loi": "Ô này chưa có ảnh — chọn tệp / chụp ảnh trước (khách đã lưu ảnh thì bấm ✂ được ngay)."})
     try:
         kq = AC.cat_cccd(data, 0.0)
     except AC.KhongThayThe as exc:
-        return render(request, tpl, {**ctx, "loi": str(exc)})
+        return popup_render(request, tpl, {**ctx, "loi": str(exc)})
     except Exception as exc:
         logger.exception("Tách CCCD (popup khách) lỗi")
-        return render(request, tpl, {**ctx, "loi": "Lỗi xử lý ảnh: " + str(exc)[:120]})
+        return popup_render(request, tpl, {**ctx, "loi": "Lỗi xử lý ảnh: " + str(exc)[:120]})
     nguon = secrets.token_urlsafe(18)
     cache.set("khbl:khcat:" + nguon, data, KH_CAT_TTL)
     goc = _nen_anh(data, canh=900, chat_luong=70)
     xem = _nen_anh(kq, canh=900, chat_luong=80)
     ctx.update({"nguon": nguon, "anh_goc": "data:image/jpeg;base64," + base64.b64encode(goc).decode("ascii"),
                 "anh_kq": "data:image/jpeg;base64," + base64.b64encode(xem).decode("ascii"), "w": AC.CHUAN_W, "h": AC.CHUAN_H})
-    return render(request, tpl, ctx)
+    return popup_render(request, tpl, ctx)
 
 
 @require_POST
@@ -549,6 +551,7 @@ def _dang_khoa(request):
 
 # ─────────────────────────── trang + thao tác giỏ ───────────────────────────
 def thau(request):
+    Q.chan(request, "THAU_VAO")
     return render(request, "pos/thau.html", _ctx(request))
 
 
@@ -627,6 +630,8 @@ def thau_them(request):
         return _loi(request, "Trọng lượng hột phải nhỏ hơn tổng trọng lượng", {"loi_o": "#t-tlhot"})
     pu = de.get("PriceUnit") or "L"
     moc = M.dec(de.get("SellRate") if kieu == "ban" else de.get("BuyRate"))
+    if moc <= 0:
+        return _loi(request, 'Chưa có giá MySQL hợp lệ cho loại vàng này. Hãy kiểm tra Bảng giá.', {"loi_o": "#t-gia"})
     if gia > 0 and moc > 0 and abs(gia - moc) / moc > M.dec("0.3"):
         return _loi(request, f"Giá {M.money_vn(gia * M.RATE_SCALE)} lệch quá 30% so với bảng giá "
                              f"{M.money_vn(moc * M.RATE_SCALE)} ₫/{de.get('don_vi', 'chỉ')} — nhập theo ĐỒNG, kiểm lại",

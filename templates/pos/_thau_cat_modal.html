@@ -69,6 +69,7 @@ cat_ghi_chu / cat_dong / cat_luu / cat_script_extra là điểm nối, đừng �
     vung.querySelectorAll('.th-cat__tay').forEach(function(t){ t.addEventListener('pointerdown',function(e){ e.preventDefault(); e.stopPropagation(); try{st.setPointerCapture(e.pointerId);}catch(x){} keoCat={canh:t.dataset.canh, x:e.clientX, y:e.clientY, cat:Object.assign({},cat)}; }); });
     st.parentNode.querySelectorAll('.th-cat__tools [data-xoay]').forEach(function(b){ b.addEventListener('click',function(){ var v=parseInt(b.dataset.xoay,10); if(v===0){ goc=0; cat={t:0,r:0,b:0,l:0}; } else goc=hit(goc+v); ve(); }); });
     coStage(); window.addEventListener('resize', coStage); if(!im.complete) im.addEventListener('load', coStage);
+    st.addEventListener('khbl:crop-dispose',function(){ window.removeEventListener('resize',coStage); im.removeEventListener('load',coStage); },{once:true});
     ve();
   })();
   </script>

@@ -28,6 +28,7 @@ hình đó có nút "Đổi / Sửa ảnh" thì đường sửa ấy phải dẫ
 |---|---|---|---|
 | KHBL | `/thau-vao/` — form ảnh phiếu (`_thau_ck.html`, slot cccd1/cccd2) | nhập được | ✅ 08/09/2026 |
 | KHBL | `/khach-hang/` + mọi nơi mở popup Thêm/Sửa khách (`_khach_form.html`) | nhập được | ✅ 10/09/2026 |
+| KHBL | `/khach-hang/` → CHỤP HÌNH độc lập (`_customer_camera.html`) | ảnh chụp trong trình duyệt | ✅ 13/09/2026 — ✂ Tách CCCD; API RAM, không cache/tệp/hồ sơ; tải kết quả về máy |
 | KHBL | popup XEM khách (`_khach_modal.html`) | chỉ xem (đổi ảnh qua nút Sửa → popup có ✂) | — không cần |
 | KHJ (HR) | popup Thêm/Sửa hồ sơ NV (`_employee_form_modal.html` → partial `_cccd_field.html`) | nhập được | ✅ 10/09/2026 — xem "Mang sang KHJ" bên dưới |
 | KHJ (HR) | `employee_detail.html` + portal quản lý (chỉ hiển thị ảnh) | chỉ xem | — không cần |
@@ -222,3 +223,8 @@ trên KK (`customer.saved_image`, CHỈ ĐỌC) — đo IoU bằng `AC.iou_quad`
     → **4 tay cầm cắt bớt bị bỏ qua ÂM THẦM, không lỗi**. Smoke 8b từng "pass" vì so 2 lần LƯU liên tiếp trên ảnh ĐÃ
     CẮT (ô bị ghi đè sau LƯU lần 1 — `thau_anh_cat_luu` đọc ảnh HIỆN TẠI của ô). Quy tắc: helper KHÔNG mang decorator
     view; smoke muốn so "cắt / không cắt" phải tải lại ảnh GỐC trước mỗi LƯU.
+
+
+### CHỤP HÌNH độc lập — 13/09/2026
+
+`customer_camera.split_card` gọi nguyên `AC.cat_cccd`; `_customer_camera_card.html` extends `_thau_cat_modal.html`, giữ popup kéo xoay + bốn cạnh. Khác tích hợp hồ sơ: không cache ảnh hay mã nguon. Trình duyệt giữ nguồn, gửi lại raw JPEG khi xem trước / áp dụng; không dùng multipart, không tạo tệp upload tạm. JPEG vào ≤350 KB (trình duyệt thu gọn trước), đáp ứng ảnh ≤350 KB; ảnh base64 xem trước ≤128 KB mỗi ảnh, dưới ngưỡng spool RAM mặc định Waitress 512 KB input / 1 MB output. Không gọi API lưu khách, DB hay archive. Ảnh trả về popup chụp, LƯU VỀ MÁY tải qua blob URL. Cắt thường vẫn cục bộ; riêng nút Tách CCCD ghi rõ xử lý tạm bằng RAM máy chủ. Kiểm thử: tests.test_customer_camera + scripts/check_customer_camera.cjs, ảnh giả từ skill, không dùng CCCD khách thật.

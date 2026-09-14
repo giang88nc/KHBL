@@ -1,0 +1,45 @@
+{% load pos_extras %}{% comment %}
+Danh sách phiếu ĐẶT-CỌC còn chờ của khách đang chọn, thả ra NGAY DƯỚI nút 💸 ở ô Tiền cọc
+(GĐ chốt 11/09/2026). Mỗi dòng: ngày cọc · số món · tổng cọc — bấm là áp/bỏ phiếu đó, áp nhiều phiếu
+thì tiền cộng dồn. Nền XANH NHẠT cho khớp với dòng hàng đã cọc bên VÀNG BÁN.
+
+Khối này nổi lên trên (absolute) nên không đẩy các dòng bên dưới; bấm ra NGOÀI là tự ẩn — đoạn script
+cuối tệp gỡ luôn khối khỏi trang, lần render sau server không gửi lại (biến coc_mo chỉ bật khi bấm nút).
+{% endcomment %}<div class="pg-coc__ds" id="coc-ds">
+  <div class="pg-coc__dau">
+    <b>PHIẾU ĐẶT-CỌC CỦA KHÁCH</b>
+    <button type="button" class="pg-coc__dong" title="Đóng danh sách"
+            hx-post="{% url 'pos:ban_coc' %}" hx-swap="none">✕</button>
+  </div>
+  {% for p in coc_ds %}
+  <button type="button" class="pg-coc__dong-p{% if p.id in coc_ids %} on{% endif %}"
+          hx-post="{% url 'pos:ban_coc' %}" hx-vals='{"id": "{{ p.id }}", "mo": "1"}' hx-swap="none"
+          title="{{ p.doi_soat_title }}"{% if p.khong_duoc_dung and p.id not in coc_ids %} disabled aria-disabled="true"{% endif %}>
+    <i class="pg-coc__tick">{% if p.khong_duoc_dung %}⚠{% elif p.id in coc_ids %}✔{% else %}＋{% endif %}</i>
+    <span class="pg-coc__ngay"><b>{{ p.ma }}</b><small>{{ p.ngay|date:"d/m/Y" }}</small></span>
+    <span class="pg-coc__mon">{{ p.so_mon }} món</span>
+    <b class="pg-coc__tien mono">{{ p.tien|tien_tran }}</b>
+  </button>
+  {% if p.money_error %}<div class="pg-coc__money-error"><small>{{ p.money_error }}</small>
+    <button type="button" hx-get="{% url 'pos:dat_coc_money' p.id 'history' %}" hx-target="#modal-root">Chứng từ cọc</button></div>{% endif %}
+  {% empty %}
+  <p class="pg-coc__trong">Khách này không còn phiếu cọc nào đang chờ.</p>
+  {% endfor %}
+  {% if coc_ids %}
+  <div class="pg-coc__tong">Đang áp <b>{{ coc_ids|length }}</b> phiếu · tổng <b class="mono">{{ coc_tong|tien }}</b></div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  var ds = document.getElementById("coc-ds");
+  if (!ds) return;
+  function dong(e) {
+    var t = e.target;
+    if (ds.contains(t) || (t.closest && t.closest(".pg-coc__nut"))) return;   // trong danh sách / bấm lại nút
+    ds.remove();
+    document.removeEventListener("pointerdown", dong, true);
+  }
+  // gắn ở lượt sự kiện sau, nếu không chính cú bấm mở danh sách sẽ đóng nó ngay
+  setTimeout(function () { document.addEventListener("pointerdown", dong, true); }, 0);
+})();
+</script>

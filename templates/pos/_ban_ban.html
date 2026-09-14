@@ -51,10 +51,12 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
         <th class="r">ĐƠN GIÁ</th><th class="r">CÔNG</th><th class="r">THÀNH TIỀN</th><th class="w-x"></th>
       </tr></thead>
       <tbody>
-        {% for x in g.ban %}
-        <tr>
+        {% for x in g.ban %}{% with dc=coc_sp|muc:x.row.ProductCode %}
+        <tr{% if dc %} class="{% if dc.cua_khach %}pg-tr-coc{% else %}pg-tr-coc-la{% endif %}"{% endif %}>
           <td class="w-stt dim">{{ forloop.counter }}</td>
-          <td class="mono">{{ x.row.ProductCode }}</td>
+          <td class="mono">{{ x.row.ProductCode }}{% if dc %}{% if dc.cua_khach %}<span class="pg-sp-coc"
+              title="SP đã cọc">💸</span>{% else %}<span class="pg-sp-coc pg-sp-coc--la"
+              title="SP đã được cọc bởi KHÁCH khác, vui lòng kiểm tra trước khi THANH TOÁN!">⛔</span>{% endif %}{% endif %}</td>
           <td><span class="pg-tuoi">{{ x.row.GoldCode|tuoi }}</span></td>
           <td class="pg-td-ten">{{ x.row.ProductDesc }}</td>
           <td class="r mono">{{ x.row.TotalWeight|tl_chi:x.row.PriceUnit }}</td>
@@ -68,7 +70,7 @@ Thân bảng cuộn được, KHÔNG giới hạn số dòng. Chân bảng cộn
                     hx-post="{% url 'pos:ban_xoa' %}" hx-vals='{"code": "{{ x.row.ProductCode }}"}'
                     hx-swap="none">×</button>{% endif %}
           </td>
-        </tr>
+        </tr>{% endwith %}
         {% empty %}
         <tr class="pg-tb__trong"><td colspan="11">
           {% icon "tem" 34 %}<b>Chưa có món nào</b>

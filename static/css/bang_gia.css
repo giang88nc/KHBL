@@ -1,4 +1,12 @@
 .pg-gia{display:grid;gap:22px;max-width:1500px;margin:0 auto}
+.pg-gia__source-card{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 28px;background:linear-gradient(115deg,#102f35,#23514e);border-radius:16px;color:#fff;box-shadow:0 8px 24px #183f3712}
+.pg-gia__source-card .pg-gia__eyebrow{color:#b9d7ce;font-size:10px;letter-spacing:.14em}
+.pg-gia__source-card strong{font-size:23px;font-weight:600}.pg-gia__source-card p{margin:8px 0 0;color:#d4e5df;font-size:12px}
+.pg-gia__source-badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.pg-gia__source-badges span{padding:8px 12px;border:1px solid #ffffff30;background:#ffffff0c;border-radius:30px;font-size:11px;white-space:nowrap}.pg-gia__source-badges .pg-gia__source-active{background:#dff6e8;color:#195b3e;border-color:#dff6e8}
+.pg-gia .pg-gia__editor{border-radius:16px;overflow:hidden}.pg-gia .pg-gia__editor .pg-gia__toolbar h2{font-family:var(--f-body);font-size:18px;font-weight:700;letter-spacing:.03em}
+.pg-gia .pg-gia__editor thead{background:#f3f6f5}.pg-gia .pg-gia__editor tbody tr{transition:background .2s,box-shadow .2s}.pg-gia .pg-gia__editor tr.is-dirty{background:#fff9e9;box-shadow:inset 3px 0 #b9892e}.pg-gia .pg-gia__editor tr.is-saved{background:#eaf8ee;box-shadow:inset 3px 0 #3b9360}.pg-gia .pg-gia__editor tr.is-saving{opacity:.6}
+.pg-gia__row-state{display:block;margin-top:6px;font-size:10px;color:#62796b;text-align:center}.is-dirty .pg-gia__row-state{color:#9b6816;font-weight:600}.pg-gia__save-row{font-size:11px;min-width:68px}
+@media(max-width:800px){.pg-gia__source-card{align-items:flex-start;flex-direction:column;padding:20px;gap:16px}.pg-gia__source-card strong{font-size:20px}.pg-gia__source-badges{justify-content:flex-start}}
 .pg-gia__overview{display:grid;grid-template-columns:1fr 1.2fr 1fr;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r);padding:22px 26px;gap:24px}
 .pg-gia__overview>div+div{border-left:1px solid var(--line-2);padding-left:28px}
 .pg-gia__eyebrow{display:block;font-size:10px;letter-spacing:.12em;font-weight:600;color:var(--ink-600);margin-bottom:8px}

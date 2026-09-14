@@ -27,6 +27,7 @@ DATE — tham số ngày truyền CHUỖI ISO 'YYYY-MM-DD'.
 """
 import re
 import time
+from decimal import Decimal
 
 import pyodbc
 from django.conf import settings
@@ -357,6 +358,115 @@ def pmv_call(proc, params=None, *, tag, write=False, timeout=120, target=None):
     except Exception as exc:
         _audit("EXEC", tag, summary, ok=False, ms=int((time.monotonic() - t0) * 1000), error=exc)
         raise
+
+
+def pmv_deposit_money(expected, cash, bank, *, till_id, tag, target):
+    """12/09/2026 GĐ duyệt ghi trực tiếp 3 cột tiền cọc, không qua CARDPAY_Ins.
+
+    Không nhận SQL tùy ý. Khóa/đối chiếu phiếu, liên kết và quỹ trong cùng transaction.
+    Chỉ ghi khi quỹ mới U bằng tổng cọc, chưa có phân bổ. Giữ tổng cọc cố định.
+    Gọi đúng nhánh TDC của proc quỹ để phần tiền mặt khớp trước khi chốt két.
+    """
+    from .models import PmvState
+    cash, bank = Decimal(str(cash)), Decimal(str(bank))
+    pk = expected.get('TrnID', '')
+    summary = f'[{target}] DATCOC money {pk}: TM={cash}, CK={bank}'
+    if target not in ('kk', 'sandbox') or (target == 'kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock', '0') == '1':
+        _audit('BLOCKED', tag, summary, ok=False)
+        raise PmvBlocked('Đích hoặc chốt ghi PMV không cho phép cập nhật tiền cọc.')
+    if not re.fullmatch(r'TDC\d{12}', pk) or not till_id:
+        raise ValueError('Cần mã TDC và két thu hợp lệ.')
+    if any(not n.is_finite() or n < 0 or n >= Decimal('1000000000000000') for n in (cash, bank, cash + bank)):
+        raise ValueError('Số tiền cọc ngoài giới hạn.')
+    if cash + bank <= 0 or cash + bank != Decimal(expected['TienCoc']):
+        raise ValueError('Tiền mặt + CK phải bằng tổng cọc cố định.')
+    keys = ('TrnID', 'BillCode', 'TrnDate', 'TrnDateTime_Upd', 'CustID', 'ShopID', 'Status', 'TienCoc', 'CashPay', 'CardPay')
+    t0 = time.monotonic()
+    cn = None
+    try:
+        cn = _connect_dich(target, autocommit=False)
+        cur = cn.cursor()
+        cur.execute('SELECT ' + ','.join(keys) + ' FROM TRN_DATCOC WITH (UPDLOCK,HOLDLOCK) WHERE TrnID=?', (pk,))
+        rows = cur.fetchall()
+        if len(rows) != 1 or dict(zip(keys, rows[0])) != {k: expected[k] for k in keys}:
+            raise ValueError('Phiếu vừa thay đổi; chưa cập nhật tiền cọc.')
+        h = dict(zip(keys, rows[0]))
+        if h['Status'] != 'P' or not h['ShopID']:
+            raise ValueError('Chỉ cập nhật phiếu đã thu, có cửa hàng PMV.')
+        for table in ('TRN_RT_BUYSELL_DatCoc', 'TRN_RT_CHANGE_DatCoc'):
+            cur.execute(f'SELECT TrnID FROM {table} WITH (UPDLOCK,HOLDLOCK) WHERE DatCocID=?', (pk,))
+            if cur.fetchone():
+                raise ValueError('Phiếu đã liên kết hóa đơn; không tự đổi phân bổ cọc.')
+        if (h['CashPay'] or 0) != 0 or (h['CardPay'] or 0) != 0:
+            raise ValueError('Phiếu đã có phân bổ tiền; không ghi lại.')
+        cur.execute('SELECT TillTxnID,TillID,Status,TrnTotalAmount FROM T_TILL_TXN WITH (UPDLOCK,HOLDLOCK) WHERE TrnRefID=?', (pk,))
+        tx = cur.fetchall()
+        if len(tx) != 1 or tx[0][2] != 'U' or tx[0][3] != cash + bank:
+            raise ValueError('Quỹ cọc không khớp tiền mặt/két thu.')
+        cur.execute('SELECT Amount,CrDr,GoldCcy FROM T_TILL_TXN_DETAIL WITH (UPDLOCK,HOLDLOCK) WHERE TillTxnID=?', (tx[0][0],))
+        detail = cur.fetchall()
+        if len(detail) != 1 or tuple(detail[0]) != (cash + bank, '+', 'VND'):
+            raise ValueError('Chi tiết quỹ cọc không khớp.')
+        cur.execute('UPDATE TRN_DATCOC SET CashPay=?,CardPay=?,TienCoc=?,TrnDateTime_Upd=GETDATE() WHERE TrnID=?',
+                    (cash, bank, cash + bank, pk))
+        if cur.rowcount != 1:
+            raise ValueError('Chưa cập nhật đúng một phiếu cọc.')
+        cur.execute('SELECT CashPay,CardPay,TienCoc FROM TRN_DATCOC WHERE TrnID=?', (pk,))
+        if tuple(cur.fetchone()) != (cash, bank, cash + bank):
+            raise ValueError('Đọc lại tiền cọc không khớp.')
+        if bank:
+            # Chỉ nhánh TDC, trong cùng transaction/khóa. Không mở proc này cho SQL tùy ý.
+            cur.execute("DECLARE @rc int, @err varchar(100); EXEC @rc=TRN_TILL_TXN_Upd "
+                        "@p_TrnID=?,@p_TrnType='TDC',@p_TrnCode='TDC',@p_ErrCode=@err OUTPUT; "
+                        "SELECT @rc AS __rc, @err AS err", (pk,))
+            rc, _ = _drain(cur)
+            if rc != 0: raise ValueError('PMV không cập nhật được phần tiền mặt của quỹ cọc.')
+        cur.execute('SELECT TrnTotalAmount,Status FROM T_TILL_TXN WHERE TillTxnID=?', (tx[0][0],))
+        if tuple(cur.fetchone()) != (cash, 'U'):
+            raise ValueError('Quỹ chưa khớp tiền mặt sau phân bổ.')
+        cur.execute('SELECT Amount,CrDr,GoldCcy FROM T_TILL_TXN_DETAIL WHERE TillTxnID=?', (tx[0][0],))
+        if tuple(cur.fetchone()) != (cash, '+', 'VND'):
+            raise ValueError('Chi tiết quỹ chưa khớp tiền mặt sau phân bổ.')
+        cn.commit()
+        _audit('EXEC', tag, summary, ms=int((time.monotonic() - t0) * 1000))
+    except Exception as exc:
+        if cn is not None: cn.rollback()
+        _audit('EXEC', tag, summary, ok=False, error=exc, ms=int((time.monotonic() - t0) * 1000))
+        raise
+    finally:
+        if cn is not None: cn.close()
+
+
+def pmv_deposit_zalo(trn_id, next_day, number, *, target, tag='datcoc-zalo'):
+    """Mốc nhắc được duyệt: chỉ Description + dấu phiên bản; không gọi proc tài chính."""
+    import datetime as dt
+    from .models import PmvState
+    from apps.pos.deposit_orders import merge_zalo
+    if target not in ('kk','sandbox') or (target=='kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock','0')=='1':
+        raise PmvBlocked('Chốt ghi PMV đang đóng; mốc nhắc được giữ tại MySQL.')
+    if not isinstance(trn_id,str) or not re.fullmatch(r'[A-Za-z0-9-]{1,20}',trn_id): raise ValueError('Mã phiếu không hợp lệ.')
+    day=dt.date.fromisoformat(next_day).isoformat()
+    if not isinstance(number,int) or not 1<=number<=99999: raise ValueError('Số lần nhắc không hợp lệ.')
+    cn=None
+    try:
+        cn=_connect_dich(target,autocommit=False); cur=cn.cursor()
+        cur.execute('SELECT Description FROM TRN_DATCOC WITH (UPDLOCK,HOLDLOCK) WHERE TrnID=?',(trn_id,))
+        row=cur.fetchone()
+        if row is None: raise ValueError('Phiếu không còn tồn tại.')
+        description=merge_zalo(row[0],{day:f'nhắc lần {number}'})
+        if description!=row[0]:
+            cur.execute('UPDATE TRN_DATCOC SET Description=?,TrnDateTime_Upd=GETDATE() WHERE TrnID=?',(description,trn_id))
+            if cur.rowcount!=1: raise ValueError('Chưa cập nhật đúng một phiếu.')
+            cur.execute('SELECT Description FROM TRN_DATCOC WHERE TrnID=?',(trn_id,))
+            if cur.fetchone()[0]!=description: raise ValueError('Đọc lại mốc Zalo không khớp.')
+        cn.commit()
+        _audit('EXEC',tag,f'[{target}] DATCOC Zalo {trn_id}: {day} lần {number}')
+    except Exception as exc:
+        if cn is not None: cn.rollback()
+        _audit('EXEC',tag,f'[{target}] DATCOC Zalo {trn_id}',ok=False,error=exc)
+        raise
+    finally:
+        if cn is not None: cn.close()
 
 
 def _proc_sql(proc, params):

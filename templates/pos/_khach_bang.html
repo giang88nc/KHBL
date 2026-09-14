@@ -14,7 +14,7 @@
         <td><b>{{ k.CustName }}</b></td>
         <td class="dim">{{ k.Address|default:"—"|truncatechars:46 }}</td>
         <td class="mono">{{ k.CMND|default:"—" }}</td>
-        <td class="mono">{{ k.Phone|default:"—" }}</td>
+        <td class="mono">{{ k.Phone|default:"—" }}{% if k.GhiChu2 %}<div><small class="dim">2:</small> {{ k.GhiChu2 }}</div>{% endif %}{% if k.GhiChu3 %}<div><small class="dim">3:</small> {{ k.GhiChu3 }}</div>{% endif %}</td>
         <td class="num">{{ k.BirthDate|date:"d/m/Y"|default:"—" }}</td>
         <td>{% if k.loai.ma %}<span class="khbl-badge {{ k.loai.badge }}">{{ k.loai.ten }}</span>
             {% else %}<span class="dim">Thường</span>{% endif %}</td>

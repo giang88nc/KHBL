@@ -1,0 +1,19 @@
+{% extends 'pmv/base.html' %}{% load static %}
+{% block title %}Mẫu in CỌC{% endblock %}
+{% block page_title %}Mẫu in CỌC{% endblock %}
+{% block page_sub %}Kéo-thả khối hoặc nhập vị trí, kích thước và cỡ chữ · Chỉ in trang 1 · Lưu riêng cho phiếu cọc{% endblock %}
+{% block system_head %}<link rel="stylesheet" href="{% static 'css/deposit_print_config.css' %}?v=1">{% endblock %}
+{% block page_tools %}<form method="get"><input class="khbl-input" name="trn_id" value="{{ trn_id }}" placeholder="Mã TDC để xem phiếu thật"><button class="khbl-btn khbl-btn--outline">Xem phiếu</button></form><button class="khbl-btn khbl-btn--outline" id="dc-layout-reset">Mặc định</button><button class="khbl-btn khbl-btn--outline" id="dc-layout-print" disabled>In thử</button><button class="khbl-btn khbl-btn--gold" id="dc-layout-save">Lưu mẫu</button>{% endblock %}
+{% block content %}
+<div id="dc-layout-status" role="status">Đang tải bản xem trước…</div>
+<div class="dc-layout-grid" id="dc-layout-config" data-url="{% url 'pmv:deposit_print_config' %}">
+  <div class="dc-layout-preview"><iframe id="dc-layout-frame" title="Xem trước mẫu in cọc" src="{{ preview_url }}"></iframe></div>
+  <aside class="dc-layout-panel">{% csrf_token %}<div class="dc-layout-row dc-layout-labels"><b>Khối</b><span>Trái %</span><span>Trên %</span><span>Rộng %</span><span>Cao %</span><span>Chữ pt</span></div>
+  {% for b in blocks %}<div class="dc-layout-row" data-key="{{ b.key }}"><b>{{ b.ten }}</b><input type="number" step=".1" min="0" max="99" data-p="left" aria-label="{{ b.ten }}: trái"><input type="number" step=".1" min="0" max="99" data-p="top" aria-label="{{ b.ten }}: trên"><input type="number" step=".1" min="1" max="100" data-p="w" aria-label="{{ b.ten }}: rộng"><input type="number" step=".1" min="1" max="100" data-p="h" aria-label="{{ b.ten }}: cao"><input type="number" step=".1" min="5" max="24" data-p="fs" aria-label="{{ b.ten }}: cỡ chữ"></div>{% endfor %}
+  <section class="dc-layout-printer"><h3>Máy in · Tờ 148 × 210 mm</h3><label>Khổ giấy<select data-in="kho"><option value="auto">Theo máy in</option><option value="A5">A5</option><option value="A4">A4</option><option value="Letter">Letter</option></select></label><label>Canh ngang<select data-in="canh"><option value="giua">Giữa</option><option value="trai">Trái</option></select></label><label>Lệch ngang mm<input type="number" data-in="dx" min="-80" max="80" step=".5"></label><label>Lệch dọc mm<input type="number" data-in="dy" min="-80" max="80" step=".5"></label><label>Tỷ lệ in %<input type="number" data-in="ty_le" min="50" max="150" step="1"></label></section>
+  <p>Kéo khối trên bản xem trước hoặc chọn khối rồi dùng phím mũi tên. Giữ Shift để dịch nhanh hơn. Bảng món tự thu gọn; nội dung dư hiện ở trang sau trong bản xem trước. Luôn cho phép in và chỉ in trang 1.</p>
+  </aside>
+</div>
+{{ layout|json_script:'dc-layout-state' }}{{ defaults|json_script:'dc-layout-defaults' }}{{ blocks|json_script:'dc-layout-blocks' }}
+{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/deposit_print_config.js' %}?v=1"></script>{% endblock %}

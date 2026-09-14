@@ -17,6 +17,7 @@ from apps.pmv import money as M
 from apps.pmv.client import PmvProcError
 from apps.pos import bill as B
 from apps.pos import services as S
+from apps.pos.models import BillAudit        # 11/09/2026: thiếu dòng này nên phần kiểm web nổ NameError
 
 NGUOI, TIEM, KET, NV = "US1806000000001", "TSP141100000001", "TIL260500000001", "EMP150400000001"
 
@@ -95,10 +96,22 @@ class Command(BaseCommand):
         self.ok("A6 danh mục loại dẻ lấy được + có giá đổi",
                 len(de) >= 4 and any(M.dec(x["BuyRate"]) > 0 for x in de),
                 " · ".join(x["GoldCode"] for x in de))
+        from apps.pos.vn_text import bo_dau
         self.ok("A7 tìm nhân viên ưu tiên TÊN GỌI",
-                all((e["EmpName"].split()[-1].lower().startswith("ph"))
+                all(bo_dau(e["EmpName"].split()[-1]).lower().startswith("ph")
                     for e in S.tim_nhan_vien("ph")[:2]),
                 " · ".join(e["EmpName"] for e in S.tim_nhan_vien("ph")[:3]))
+        # GĐ chốt 13/09/2026: gõ KHÔNG DẤU vẫn ra, và DS xếp theo TÊN GỌI
+        thu = [e["EmpName"] for e in S.tim_nhan_vien("thu")]
+        self.ok("A7b gõ 'thu' không dấu ra cả Thư · Thủy · Thúy",
+                len(thu) >= 2 and all(any(bo_dau(t).lower().startswith("thu") for t in ten.split())
+                                      for ten in thu), " · ".join(thu[:4]))
+        ten_goi = [bo_dau(S.ten_goi(e["EmpName"])).lower() for e in S.nhan_vien_ban()]
+        self.ok("A7c danh sách nhân viên xếp theo TÊN GỌI (a→z)", ten_goi == sorted(ten_goi),
+                " · ".join(ten_goi[:6]))
+        hd = [bo_dau(S.ten_goi(e["EmpName"])).lower() for e in S.nhan_vien_hoa_don(True)]
+        self.ok("A7d ô chọn nhân viên trang HÓA ĐƠN cùng thứ tự TÊN GỌI", hd == sorted(hd),
+                " · ".join(hd[:6]))
         ma = B.ma_du_kien(self.c)
         self.ok("A8 mã hóa đơn dự kiến đúng dạng TRB…", ma.startswith("TRB") and ma[3:].isdigit(), ma)
 

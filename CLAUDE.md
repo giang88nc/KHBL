@@ -1,5 +1,7 @@
 # KHBL — WEBAPP BÁN LẺ | KIM HANH JEWELRY (song song PMVGoldRT)
 
+> **UPSERT CUSTOMER dùng chung (GĐ chốt 14/09/2026):** khi triển khai/sửa thêm, sửa, lưu khách PMV từ webapp, cầm đồ hoặc trang khác, đọc `.claude/skills/upsert-customer/SKILL.md` trước và tái sử dụng `apps/pos/customer.py` cùng `customer_phones.py`. Skill tập hợp ba SĐT, ảnh CCCD, quy tắc webapp/PMV, retry và hợp đồng DONE. Không tạo luồng ghi khách riêng, không gộp/xóa CustID cũ. Codex cá nhân có điểm vào `$upsert-customer` trỏ về bản chuẩn này.
+
 > File định hướng cho Claude Code. Dự án CAN THIỆP TRỰC TIẾP vào DB phần mềm bán vàng
 > PMVGoldRT **đang bán hàng thật mỗi ngày** — mức rủi ro CAO HƠN KHJ HR, mọi thay đổi
 > phải qua đúng RULES bên dưới. Toàn bộ UI + commit message bằng **tiếng Việt**.
@@ -589,6 +591,108 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
   **56/56** (C8b form trắng sau thanh toán · C8c in theo trn_id · C8d ĐƠN MỚI xóa NV) + smoke_ui **130/130**; kiểm
   trên KK thật: lọc 01–07/09 đọc HIST, 01/08→07/09 chạm trần 2000 báo cam, in `?trn_id=` ra đúng số phiếu.
 
+## 4g. STACK OA TIN NHẮN — SỔ ZALO ZNS TẬP TRUNG (`apps/oa`, GĐ chốt 14/09/2026)
+
+**BA BẢNG LÀ BẢN CHÉP TỪ CARE360 — DJANGO KHÔNG SỞ HỮU SCHEMA.** Giám đốc tự tay chép
+`zalo_templates` (3 dòng) · `zalo_send_rules` (2 dòng) · `zalo_messages` (**16.657 dòng LỊCH SỬ GỬI
+THẬT**: `sent` 15.015 · `cancelled` 959 · `failed_permanent` 683) từ `pmv_report` sang `khj_bl`.
+Tên cột là của CARE360 (`oa_account_id`, `external_template_id`, `recipient_ciphertext`, `dedupe_key`…).
+**DDL THẬT trong MySQL là NGUỒN SỰ THẬT**; `apps/oa/models.py` chỉ soi chiếu lại với `managed=False`.
+- `manage.py migrate` là lệnh RỖNG với app này (`sqlmigrate oa 0001` in "(no-op)").
+- **3 migration cũ đã bị XÓA 14/09/2026** vì là mìn hẹn giờ: chúng `CreateModel` đúng tên 3 bảng
+  đang có 16.657 dòng, seed theo bộ cột CŨ, và `AddConstraint` + vá khóa rỗng GHI THẲNG vào bảng
+  thật. Lần `migrate` kế tiếp bất kỳ sẽ đâm lỗi 1050 chặn cả hàng đợi migration.
+- **KHÔNG BAO GIỜ bỏ `managed = False`** — bỏ là lần `makemigrations` sau sinh DDL cho bảng thật.
+
+**LUỒNG XẾP HÀNG ZNS (`apps/oa/xep_hang.py`) — BƯỚC 1: CHỈ TẠO DANH SÁCH, CHƯA GỬI.**
+Hóa đơn chốt THÀNH CÔNG ⇒ thêm dòng `status='queued'` vào `zalo_messages`, nội dung dựng theo mẫu
+`zalo_templates`, lịch gửi theo `zalo_send_rules`. **Không một dòng gọi mạng nào** trong `apps/oa`
+(có kịch bản smoke quét tĩnh toàn thư mục để chốt chặn). Bước 2 (gọi API gửi) để lượt sau, khi GĐ duyệt.
+
+| Móc | Vị trí | Việc |
+|---|---|---|
+| Chốt | `apps/pos/bill.chot()` ngay TRƯỚC `return True` | `XH.xep_hang_hoa_don(trn_id, c=c)` — chỉ ở đây mới chắc "lập THÀNH CÔNG" (đã qua trọn 6 điểm kiểm hậu-DUYỆT). Móc trong `bill.py` chứ không trong view vì view có HAI đường gọi `B.chot()` (bán thường + đường "resume") |
+| Hủy thanh toán | `bill.mo_lai()` | `XH.huy_xep_hang(trn_id, 'source_not_completed')` |
+| Xóa đơn | `bill.huy()` | `XH.huy_xep_hang(trn_id, 'source_deleted')` |
+| Quét bù | `manage.py xep_hang_zns --ngay N` | hóa đơn lập từ app PMVGoldRT không đi qua KHBL. **XEM TRƯỚC là mặc định** (chạy mã thật rồi rollback), muốn ghi phải `--ghi`; `--ngay` chặn cứng ≤ 7; `--don` rà ngược hủy dòng mồ côi; `--xem` thống kê sổ. **CHƯA gắn vào `config/scheduler.py`** |
+
+Cả ba móc bọc `try/except Exception` HAI TẦNG và `import` đặt TRONG hàm — **lỗi xếp hàng KHÔNG BAO
+GIỜ làm hỏng một lượt bán**. Lý do sống còn: hóa đơn ở MSSQL, sổ ở MySQL, không có transaction phân
+tán; ngoại lệ lọt ra sẽ rơi vào `except` của `views.ban_thanh_toan` và báo "thanh toán lỗi" TRONG KHI
+TIỀN ĐÃ VÀO KÉT THẬT. Cũng **không `select_for_update`**, không giữ khóa MySQL nào trên đường chốt.
+
+**Dòng KHBL khác dòng CARE360 đúng 3 chỗ** — mọi thứ còn lại dựng y hệt để đối soát không vỡ:
+`source_type` `auto_rule`→**`khbl_invoice`** · `dedupe_key` = sha256(`"{oa}|{rule}|khbl_invoice|{trn}"`)
+· `recipient_ciphertext` = **`khbl_no_cipher`** (KHBL không giữ khóa Fernet của KH_GATEWAY; lớp gửi
+lấy số từ `customer_phone` nên placeholder không cản bước 2).
+⚠ Tiền tố băm số điện thoại **GIỮ NGUYÊN `"care360-zbs|"`** — đổi là vỡ đối soát VÀ vỡ khoảng lặng chéo.
+⚠ Mọi cột `datetime` là **UTC NAIVE**; gán datetime AWARE để Django tự quy đổi, KHÔNG trừ tay 7 giờ.
+⚠ `scheduled_at = eligible_at + delay_minutes`, mà `eligible_at` = **GIỜ TẠO HÓA ĐƠN**, không phải
+giờ xếp hàng.
+
+**BỐN LỚP CHỐNG TRÙNG** (thứ tự cố định, KHÔNG BAO GIỜ INSERT MÙ):
+0. `(oa, send_rule_id, trn_id)` — thấy dòng của hệ KHÁC ⇒ **BỎ QUA TOÀN BỘ, không UPDATE một cột
+   nào**. Khóa duy nhất `uq_zalo_message_auto_rule_bill` KHÔNG có `source_type`, nên nhãn riêng
+   không cứu được: thiếu lớp này là GHI ĐÈ THẲNG lên lịch sử CARE360 (7.805 trn `sent`).
+1. Dòng CỦA CHÍNH KHBL: `sent/delivered/seen` ⇒ không đụng nội dung; khác ⇒ UPSERT. Hồi sinh dòng
+   `cancelled`/`failed` **chỉ khi `error_code` thuộc bộ cho phép** — CỐ Ý loại `task_activation_cutoff`
+   (754 dòng CARE360 hủy có chủ ý) và `-118`/`-141` (Zalo từ chối vĩnh viễn).
+2. `(oa, template_id, trn_id)` còn sống — **không lọc `source_type`, không lọc `send_rule_id`**: hóa
+   đơn nào CARE360 đã phục vụ thì KHBL tự im lặng bỏ qua.
+3. Khoảng lặng: cùng số (hoặc cùng băm) + cùng `template_tag` trong `[eligible−cooldown, eligible]`.
+4. INSERT bọc SAVEPOINT + bắt `IntegrityError` (trùng `tracking_id` ⇒ sinh lại, tối đa 3 lần).
+
+**BA CÔNG TẮC AN TOÀN**: `STOP_ZNS.flag` ở gốc dự án (dừng khẩn, không cần RESET) · `ZNS_XEP_HANG`
+trong `.env` (**MẶC ĐỊNH TẮT**, bật xong phải RESET) · `PMV_TARGET` phải là **kk** (sandbox là bản
+sao dữ liệu thật, ghi vào SỔ THẬT thì không cột nào phân biệt được — đây cũng là thứ khiến
+`smoke_ban_hang`/`smoke_ban_coc`/`smoke_datcoc_money` không đẻ dòng nào). Hai công tắc đầu chỉ chặn
+đường GHI MỚI; `huy_xep_hang` vẫn chạy (dòng đã xếp phải được hủy, nếu không thành tin mồ côi).
+Lệnh kiểm nào sau này chạy trên KK phải tự gọi `xep_hang.tat_cho_tien_trinh()`.
+
+**HẠN CHẾ ĐÃ BIẾT**: bảng sự kiện `zalo_auto_send_events` của CARE360 **KHÔNG được chép sang**
+`khj_bl`, nên lý do một hóa đơn không có tin (hoặc chỉ có 1 thay vì 2 vì khoảng lặng) chỉ nằm ở
+`logs/zns_xep_hang.log` + `manage.py xep_hang_zns --xem`, KHÔNG lên màn hình GĐ. Trang OA bên KHJ
+**không phải bức tranh đầy đủ**.
+
+**Bộ kiểm: `manage.py smoke_oa`** — 30 khẳng định. Chạy THẲNG trên DB thật vì KHBL không có DB kiểm,
+nên **toàn bộ nằm trong một `transaction.atomic()` rồi rollback CƯỠNG BỨC** (xóa theo danh sách id
+KHÔNG hoàn tác được UPDATE ⇒ rollback là lớp chính); lớp hai chỉ xóa dòng thỏa CẢ HAI điều kiện
+`source_type='khbl_invoice'` VÀ `trn_id` bắt đầu `SMOKE-`; `COUNT(*)` toàn bảng in ở đầu/cuối phải
+bằng nhau (16.657 → 16.657). Cột `is_test` **KHÔNG TỒN TẠI** trong DDL thật.
+⚠ **KHÔNG BAO GIỜ `unittest discover` / `pytest`** (11/09/2026 đã xóa sạch 355.918 dòng `khj_bl`).
+
+> ### ⚠️ **KHJ ĐỌC 3 BẢNG NÀY QUA USER CHỈ-ĐỌC — ĐỔI TÊN CỘT LÀ GÃY TRANG "OA TIN NHẮN" BÊN KHJ**
+> `D:\PYTHON\KHJ\apps\oa_messages` là **ảnh chiếu chỉ-đọc** (`managed=False`) của đúng 3 bảng này.
+> **KHBL là CHỦ SCHEMA.** Đổi/xóa tên cột, đổi kiểu cột, đổi bộ giá trị `TextChoices` ⇒ bên KHJ nổ
+> MySQL 1054 hoặc — tệ hơn — **trang vẫn mở mà số ra 0, không báo lỗi gì**. Sửa cột ở đây thì phải
+> sửa `apps/oa_messages/models.py` bên KHJ trong CÙNG một lần.
+
+> ### 🔴 **NGUY CƠ GỬI ĐÔI SỐ 1 — CARE360 VẪN ĐANG GỬI THẬT CHO CHÍNH NHỮNG HÓA ĐƠN NÀY**
+> Hai quy tắc `auto_send_affter_2m` / `auto_send_affter_5m` của CARE360 **CÒN BẬT**, `last_scan_at`
+> vẫn nhảy liên tục. Hôm nay an toàn vì HAI lý do, không phải một: (a) sổ tách nhau — KHBL ghi
+> `khj_bl`, CARE360 đọc/ghi `pmv_report`; và (b) **bước 2 chưa tồn tại**.
+> **HÓA ĐƠN PHÁT SINH TỪ NAY SẼ CÓ HAI DÒNG** — một ở `pmv_report` (đã gửi thật), một ở `khj_bl`
+> (`queued`). Đo thật 14/09/2026 bằng `xep_hang_zns --ngay 1` (xem trước): **184 hóa đơn 1 ngày ⇒ 250
+> dòng SẼ TẠO MỚI**, chỉ 100 lượt bị lớp 2 chặn — vì bản chép chỉ phủ tới thời điểm chép, không phủ
+> hóa đơn mới. Sổ sẽ tích dồn hàng nghìn dòng `queued` quá hạn.
+> **TRƯỚC KHI BẬT BƯỚC 2 BẮT BUỘC:** (1) chốt HOẶC CARE360 HOẶC KHBL gửi — tắt 2 quy tắc CARE360
+> hoặc dừng worker; (2) `cancelled` toàn bộ dòng `khbl_invoice` có `scheduled_at` quá cũ; (3) bước 2
+> phải có **RÀO TUỔI CỨNG** — `dispatch_due_messages` của CARE360 lấy MỌI dòng tới hạn, không giới
+> hạn tuổi, bật lên là bắn một mẻ hàng nghìn tin trùng.
+> ⚠ Và đừng tin rằng nhãn `khbl_invoice` tự bảo vệ trong kịch bản GỘP SỔ: `dispatch_due_messages` có
+> lọc nhãn, nhưng `reconcile_auto_messages` thì **gán đè `source_type = 'auto_rule'`** rồi dispatcher
+> gửi bình thường.
+
+> ### ⚠️ **NGUY CƠ GỬI ĐÔI SỐ 2 — TUYỆT ĐỐI CHƯA ĐIỀN `provider_id` CHO MẪU 635720**
+> Nghiệp vụ **"hàng sẵn sàng"** của mẫu ZNS `635720` **trùng sân** với một đường gửi Zalo RIÊNG đã
+> nằm sẵn trong KHBL: `pos_depositmessage` + `apps/pos/deposit_messages.py` gọi **THẲNG API Zalo**
+> (`business.openapi.zalo.me/message/template`), **không qua CARE360, không qua sổ này**.
+> Đường đó hiện IM chỉ vì hai lý do tạm bợ: `.env` chưa có `DATCOC_OA_ACCESS_TOKEN` và
+> `DepositMessageTemplate.provider_id` còn để trống. **Ai dán mã mẫu vào ô đó là khách nhận 2 tin và
+> tiệm trả tiền 2 lần**, không có gì báo động.
+> **Giám đốc CHƯA chốt bỏ hay giữ đường gửi riêng này** ⇒ chưa chốt thì chưa được điền `provider_id`,
+> chưa được cấp token, và chưa được bật quy tắc nào cho `635720`.
+
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
 0. **Ô ẢNH CCCD ⇒ LUÔN CÓ NÚT ✂ TÁCH THẺ** (GĐ chốt 10/09/2026: "tool cắt hình này luôn đi chung với ô hình chứa
@@ -605,6 +709,17 @@ Lõi mới **`apps/pos/don.py`** (ĐƠN CHỜ v5), nối tại `views._pos_oob` 
    hiện lên màn hình). ⚠ `{# … #}` chỉ là chú thích khi nằm GỌN TRONG MỘT DÒNG — viết nhiều dòng thì Django in
    nguyên văn ra trang, khách đọc được. Dùng `{% comment %} … {% endcomment %}` đặt ở ĐẦU tệp cho mọi ghi chú;
    giữa markup không để chú thích. `manage.py smoke_thau` có kiểm tra quét toàn bộ template chặn lỗi này.
+0d. **Ô NHẬP / CHỌN NHÂN VIÊN: XẾP THEO TÊN GỌI, TÌM KHÔNG DẤU** (GĐ chốt 13/09/2026 — "áp dụng cho tất cả
+   các input nếu là tìm NV"). Người bán nhớ nhau bằng TÊN chứ không ai nhớ họ: DS xếp theo họ-tên thì cùng tên
+   Nguyện mà họ Trần với họ Bùi nằm cách nhau cả trang. Nguồn duy nhất `apps/pos/services.py`:
+   `ten_goi()` (chữ cuối họ tên) · `khoa_sap_nv()` (khóa xếp, so trên bản BỎ DẤU để Thu·Thư·Thủy·Thụy đứng liền
+   nhau) · `nhan_vien_ban()` (DS đã xếp, cache `khbl:nvban:v2` 5') · `tim_nhan_vien()` (4 bậc ưu tiên: tên gọi
+   trùng khít → tên gọi bắt đầu bằng → chữ khác trong họ tên bắt đầu bằng → nằm đâu đó; so khớp trên bản bỏ dấu
+   nên gõ "thu" ra cả Thư · Thủy · Thúy). Ô chọn trang HÓA ĐƠN đọc nguồn khác (kho lịch sử khi xem ngày cũ) nên
+   có hàm riêng `nhan_vien_hoa_don()` — vẫn phải sort bằng CHÍNH `khoa_sap_nv`, đừng quay lại `ORDER BY EmpName`.
+   ⚠ Thêm ô nhập/chọn NV mới thì GỌI LẠI 2 hàm này, không tự query `T_EMPLOYEE`. Kiểm: `manage.py smoke_ban_hang`
+   mục A7–A7d (6 ô đang chạy: gợi ý NV bán + NV hỗ trợ màn BÁN HÀNG · lọc DS bán · lọc DS thâu · gợi ý thâu ·
+   lọc HÓA ĐƠN · popup phiếu ĐẶT-CỌC).
 1. **GATEWAY DUY NHẤT**: không import `pyodbc` ngoài `apps/pmv/gateway.py` (ngoại lệ duy
    nhất: `_restore_sandbox` trong backup_pmv — server LOCAL). Muốn lệnh mới → thêm vào
    allowlist gateway kèm lý do, không "đi tắt".
@@ -737,6 +852,9 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 | **TRACK D-10 — LUỒNG ẢNH 'NHÀ MỚI' (09/09/2026 trưa, GĐ chốt sau khi duyệt 4 câu hỏi)**: khối 5 ảnh đổi hẳn chủ sở hữu — **CCCD trước/sau THUỘC KHÁCH** (hiện từ `I_CUSTOMER.ImagePathMat*` máy KK; chưa chọn khách → ô KHÓA 'chọn khách hàng', tải CCCD bị từ chối `ValueError` → toast + focus #o-khach) · **Hình 1 · Hình 2 · QR THUỘC NHÓM ĐƠN** (`ThauNhom.anh_hinh1/anh_hinh2/anh_qr`, migration pos-0013; **0014 data migration chép 1 lần từ `gold_bill(trn_ids[0]).anh_*` — 111 nhóm; 5 cột `gold_bill.anh_*` GIỮ NGUYÊN, không đọc ghi nữa**). Chụp / chọn / ✂ LƯU chỉ tạo **ẢNH CHỜ** (`thau_anh_tam` theo phiên, nhãn '· chờ', × chỉ bỏ ảnh chờ — × lên ảnh đã gắn → từ chối); **THANH TOÁN mới ghi** (`_chot_anh`): nhóm cũ (🔓 SỬA → thanh toán lại = nhóm MỚI) chép 3 ảnh sang nhóm mới trước rồi ảnh chờ đè lên (bóp MIN); CCCD chờ → `customer.cap_nhat_anh` (I_CUSTOMER_Upd, GHI ĐÈ nếu khách đã có — GĐ chốt) **+ FILE trên máy chủ này `media/cccd/<CustID>/MT|MS_<lúc>.jpg`** (mỗi lần 1 file mới, `media/` đã vào .gitignore); ô ghi xong mới xóa chờ, CCCD ghi KK thất bại thì GIỮ chờ + toast 'CHƯA cập nhật… 🔓 SỬA rồi THANH TOÁN lại'. Đơn KHÓA → chỉ `fieldset disabled` (bỏ `pg-box--khoa` ở khối ảnh, bỏ nền tối sau ảnh, bỏ badge 👤 — GĐ: 'bỏ hết'). Popup Tạo QR nút LƯU → ghi THẲNG `thau_nhom.anh_qr` (+ck_*), 🔍 quét đọc qua `_anh_slot_data` (chờ → nhóm). `thau_anh` phục vụ `?slot=&nhom=<id>`; `_anh_slots` dựng `src` sẵn trong Python (⚠ `&` bị template escape thành `&amp;` — smoke phải `.replace('&amp;','&')`). Bỏ `_trn_giu_anh`/`_chuyen_anh_sang_bill`/`_chuyen_anh_tam` (→ `_ghi_gold_bill` không ảnh). **Bẫy QR (lộ khi smoke)**: `segno` viền 2 ô < chuẩn 4 ô → OpenCV có payload không đọc được → `_qr_png_b64` border=4 + `vietqr.doc_anh` thử thêm bản đệm trắng 12 % (18/18 biến thể đọc được). **+ 09/09 chiều (GĐ chốt 'fix triệt để'): ẢNH CHỜ KHÔNG BAO GIỜ bị thao tác trên trang xóa** — mở đơn khác (`thau_mo`, bỏ luôn popup hỏi) · 🔓 SỬA · HỦY TT · HỦY HĐ · XÓA nháp đều GIỮ nguyên, ảnh chờ đè lên ô của đơn vừa mở và THANH TOÁN mới ghi (thuật toán chạy ngầm, không cần tải lại trang); **CHỈ ＋ PHIẾU MỚI (`thau_moi`, vẫn có popup Ở LẠI / Bỏ ảnh) và 'THANH TOÁN & IN' (form trắng cho khách kế) mới dọn**; THANH TOÁN chỉ xóa đúng ô đã ghi xong (tiêu thụ, không phải xóa); popup xác nhận xóa/hủy bỏ dòng dọa mất ảnh. Smoke `smoke_thau` **92/92** (mục 8c: mở đơn khác không hỏi + giữ chờ, HỦY TT giữ, XÓA nháp giữ, chỉ PHIẾU MỚI dọn; mục 9: mở lại đơn Hình 2 chờ vẫn hiện đè, SỬA → THANH TOÁN lại ghi vào nhóm mới). **+ BUG 📷 CHỤP (09/09 chiều, GĐ bắt: 'chỉ đúng với CHỌN từ PC, CHỤP thì không có ×, F5 là mất')**: `khbl.js` nút 'Lưu ảnh' của camera gọi `closeCamera()` (đặt `target = null`) RỒI mới `target.dispatchEvent('change')` → TypeError bị `try/catch` nuốt im → không có sự kiện change → form không tải lên, chỉ có preview blob tại chỗ (vì thế nhìn 'OK' mà server không nhận gì — khớp log 36 lần tải đều từ CHỌN tệp). Sửa: giữ `var inp = target` trước khi đóng camera rồi dispatch lên `inp`; đổi cache-buster `khbl.js?v=20260909.camera-change` trong base.html. Kiểm bằng trang render qua test client + `getUserMedia` giả (canvas.captureStream) đi đúng 📷 → Chụp → Lưu ảnh: có `htmx:beforeRequest /anh/len/`. ⚠ JS chụp ảnh nằm ở khbl.js (dùng chung màn Khách hàng) — smoke server-side KHÔNG bắt được lỗi này. | ✅ 09/09/2026 — chờ nghiệm thu |
 | **TRACK D-11 — Ô NHẬP GÕ MƯỢT, KHÔNG GIẬT (09/09/2026 chiều, GĐ bắt: ô Khách bán vàng gõ bị giật/sai chữ, /ban-hang/ y hệt)**: nguyên nhân = JS inline 'GIỮ Ô ĐANG GÕ qua OOB' (thau.html + ban.html) chạy cho CẢ yêu cầu lọc gợi ý (ô Khách tự gửi `keyup delay:220ms`) rồi sau `htmx:afterSettle` gọi `setSelectionRange(pos lúc GỬI)` → con trỏ nhảy về vị trí cũ, chữ gõ tiếp chèn vào giữa; ô lọc Khách trong popup DANH SÁCH (`_thau_ds`/`_ban_ds`) còn `hx-target=#modal-root` → mỗi phím thay NGUYÊN popup kể cả ô đang gõ. Sửa: (1) **module dùng chung `khblGiuO` trong `static/js/khbl.js`** thay 2 bản inline — ô đang gõ là NGUỒN gửi (src === activeElement) → không đụng; chụp giá trị + con trỏ lúc `htmx:beforeSwap` (giữ cả chữ gõ trong lúc chờ); sau settle ô còn nguyên + còn focus → không đụng; ô bị THAY (OOB) → tìm ô mới (id → name trong form cùng class → name trong #modal-root), trả chữ (trừ khi chính ô đó vừa gửi — giữ giá trị server định dạng), focus, con trỏ kẹp trong độ dài; chỉ setSelectionRange với type text/search/tel/url/password; (2) popup DANH SÁCH bọc kết quả trong `#ds-kq`, ô Khách `hx-target=#ds-kq hx-select=#ds-kq hx-swap=outerHTML` → ô đứng yên, chỉ bảng thay; (3) cache-buster `khbl.js?v=20260909.giu-o`. Kiểm bằng trang render qua test client + gợi ý tĩnh: gõ 'Ng' → yêu cầu gửi → gõ thêm thành 'Nguyen' → sau settle con trỏ vẫn 6, chữ đủ, gợi ý hiện; OOB thay trọn #pos-info giữa lúc gõ → ô mới có đúng 'Nguyen', focus, con trỏ 6. **+ ＋ THÊM KHÁCH mang SĐT đang gõ (09/09 chiều, GĐ)**: nút ＋ cạnh ô Khách (thâu + bán) thêm `hx-include="#o-khach"` → `khach_form?q=…`; `_so_dt_tu(q)` bỏ khoảng trắng/./-/(), `+84`/`84` → `0`, 9–11 số mới coi là SĐT → `goi_y_dt` điền sẵn `#f-dt` (chỉ khi THÊM, chữ thường → trống). Smoke `smoke_thau` **95/95**. | ✅ 09/09/2026 — chờ nghiệm thu |
 | **TRACK D-12 — ✂ TÁCH THẺ CCCD trong popup THÊM/SỬA KHÁCH (10/09/2026, GĐ: "tái dùng tool cắt của /thau-vao/, KHÔNG sửa thuật toán, cho 2 ảnh CCCD trước & sau")**: 2 ô CCCD của `_khach_form.html` thêm nút ✂ (htmx trong form: `hx-post khach_anh_cat` multipart, **`hx-params` chỉ gửi ô đó + CustID + mat**, loading vào `#kh-cat-root`); view `khach_anh_cat` (views_thau.py): nguồn = tệp đang chọn/chụp, chưa chọn → ảnh ĐÃ LƯU trên KK (`saved_image`); `_nen_anh` 1600px → **chỉ gọi `AC.cat_cccd`** → ảnh gốc giữ 30' trong cache theo mã `nguon` → popup **LỒNG** `_khach_cat_modal.html` **extends `_thau_cat_modal.html`** (kế thừa trọn kéo xoay + 4 tay cầm; parent mở 5 block nối: cat_form_extra/cat_ghi_chu/cat_dong/cat_luu/cat_script_extra) vào `#kh-cat-root` (ngoài `<form>`, z-index 70); Đóng/×/màn mờ/Esc = `khblKhCatDong` (popup khách còn nguyên); ✓ DÙNG → `khach_anh_cat_luu` trả JSON b64 JPEG (410 hết hạn / 422) → `khblKhCatNhan` dựng File gán vào ô (DataTransfer + `_capturedFile`), sự kiện `khbl:anh-dat` → bindAnh xem trước + ghi chú "✂ đã tách — bấm LƯU KHÁCH để ghi"; **ảnh chỉ lên KK khi LƯU biểu mẫu** (khach_luu như ảnh chọn tay). `khblCatLoading(label, rootId)` chuyển từ inline thau.html sang khbl.js dùng chung; cache-buster `khbl.js?v=20260910.kh-cat`. **Bug phát hiện & sửa cùng lượt**: `@require_GET` nằm nhầm trên helper `_phan_cat` → POST LƯU nhận 405 thay tuple → 4 tay cầm cắt bớt ở trang THÂU bị bỏ qua âm thầm (smoke cũ pass do so 2 lần LƯU trên ảnh đã cắt) — decorator trả về `thau_anh_cat`, smoke tải lại ảnh gốc trước mỗi LƯU. Kiểm: `smoke_thau` **103/103** (mục 8d mới) + JS trên trang render (loading sync khi bấm, hx-params đúng 3 khóa kèm tệp, ✓ → files[0]=cccd_truoc_*.jpg 1170×738 xem trước, Esc/màn mờ chỉ đóng popup lồng, 410 báo đỏ trong popup, chọn tệp khác xóa ghi chú). Sandbox tắt OLE nên smoke không ghi ảnh khách được. Skill cat-anh-cccd thêm mục "Tích hợp lần 2" + bẫy 13. | ✅ 10/09/2026 — chờ nghiệm thu |
+| **TRACK D-13 — 💸 ÁP PHIẾU ĐẶT-CỌC VÀO ĐƠN BÁN (11/09/2026, GĐ chốt 3 luật: chỉ phiếu CHỜ mới dùng được · 1 đơn áp NHIỀU cọc cộng dồn nhưng 1 cọc chỉ áp 1 đơn · áp TRỌN phiếu, dư thì trả lại khách)**: ô "Tiền cọc" khối TÍNH TỔNG thêm nút **💸 mặc định ẨN** — mỗi lần đơn chọn KHÁCH thì quét phiếu cọc chờ của khách đó (`ban_coc.phieu_cho`: Status W/R/P · TienCoc>0 · chưa gắn hóa đơn nào · chưa hủy đặt hàng bên MySQL), có phiếu thì nút hiện và **nhấp nháy** kèm số phiếu; bấm → thả danh sách `_ban_coc_ds.html` (ngày cọc · số món · tổng cọc), bấm từng dòng để chọn/bỏ, **tiền cọc = tổng các phiếu đang chọn** và ô nhập bị khóa gõ tay; đang áp thì nút đổi thành **❌** gỡ hết. Danh sách quét xong NHỚ 2 phút theo khách (`khbl:coc_cho:<CustID>`), thao tác tay hoặc thanh toán xong thì bỏ nhớ. **THANH TOÁN**: sau `B.luu` (đơn còn W, TienCoc = tổng) và TRƯỚC `B.chot` → `ban_coc.lien_ket` gắn cọc; chốt xong → `hoan_tat` đánh dấu phiếu **đã xong (delivered)** + **giải phóng hàng đang giữ** + ghi `DepositEvent` / `DepositMoneyOperation(kind=apply, done)`; phiếu đã dùng thì **KHÓA** — `deposits.popup` chặn sửa/xóa, `deposit_operations.action` chặn mọi thao tác trừ Liên hệ. ⚠ **BẪY**: proc `TRN_RT_BUYSELL_DatCoc_Ins` nhận danh sách ngăn bằng **'@'** và **XÓA SẠCH rồi ghi lại** liên kết của hóa đơn — gọi từng phiếu một thì phiếu sau đá phiếu trước; phải gọi ĐÚNG MỘT LẦN với cả danh sách rồi đọc lại kiểm. ⚠ `str(Decimal)` sau `tron_ngan` ra dạng mũ ('2.000E+6', '0E+3') → tiền ghi vào giỏ luôn qua `ban_coc.chuoi_tien`. **Hai chốt chặn của luồng cọc phải nới theo (GĐ chốt)**: `invoice_deposit_guard` nhận thêm `chung_tu_cu_du_dung` (phiếu appMobile TRC… có TienCoc = CashPay+CardPay nhưng KHÔNG qua két — toàn bộ 69 phiếu đang chờ của tiệm thuộc loại này, đòi 'valid' thì không phiếu nào dùng được) và `financial.applied` so Tiền cọc hóa đơn với **TỔNG** phiếu gắn vào nó thay vì riêng 1 phiếu. **+ DẤU TRÊN DANH SÁCH VÀNG BÁN (cùng ngày, GĐ chốt)**: mã hàng đang nằm trong một phiếu cọc CHƯA HOÀN THÀNH thì hiện ngay sau mã — **💸 `title="SP đã cọc"`** nếu phiếu đúng của khách trên đơn, **⛔ + tô nền cảnh báo cả dòng** nếu của khách KHÁC hoặc đơn chưa chọn khách (`title="SP đã được cọc bởi KHÁCH khác, vui lòng kiểm tra trước khi THANH TOÁN!"`). Bản đồ mã→phiếu dựng ở `ban_coc.sp_dang_coc` (bóc mã trong ghi chú dòng phiếu bằng `deposit_orders.item_info`: `SP: <mã>|…` hàng sẵn, `MA_DAT:<mã>|…` hàng đặt), nhớ 2 phút dùng chung mọi đơn; phiếu gắn hóa đơn rồi thì mã tự hết đánh dấu. Lọc theo khóa là biến nên thêm filter `muc` trong pos_extras (Django không cho viết `d[bien]`). Thực đo trên dữ liệu thật: 37 mã đang bị cọc giữ. **Màu + vị trí (GĐ chốt cùng ngày)**: dòng 💸 tô **xanh nhạt** `#EAF5EC` + vạch xanh đầu dòng, dòng ⛔ tô đỏ nhạt `#FBEDE9` + vạch đỏ; form "PHIẾU ĐẶT-CỌC CỦA KHÁCH" cùng tông xanh, chuyển vào TRONG `.pg-tong__form` (`position:absolute; left:0; right:0`) nên **thả ngay dưới nút 💸, rộng đúng bằng khối TÍNH TỔNG và nổi lên trên chứ không đẩy các dòng dưới**; bấm ra ngoài form là tự ẩn (script trong chính mảnh OOB `#pos-tong`, nghe `pointerdown` ở pha capture, gắn sau 1 nhịp `setTimeout` — gắn ngay thì chính cú bấm mở danh sách sẽ đóng nó). Kiểm: **`manage.py smoke_ban_coc` 23/23 PASS** trên sandbox, tự dọn (2 phiếu 500k+300k → 1 đơn 1tr → khách trả 200k · gắn lại phiếu đã dùng bị từ chối · cọc 800k cho đơn 500k → khách trả **−300.000**, PMV nhận) + thử trên dữ liệu thật qua test client (nút hiện/ẩn, chọn/gỡ, khóa ô, đổi khách thì bỏ cọc). | ✅ 11/09/2026 — chờ nghiệm thu |
+| **TRACK D-14 — XÓA PHIẾU ĐẶT-CỌC BẰNG PASSCODE (11/09/2026, GĐ chốt)**: mỗi dòng danh sách ĐẶT-CỌC thêm nút **XÓA** (chỉ hiện với quyền *Hủy/xóa* của danh mục DAT_COC) → popup xóa. **Đổi luật**: phiếu ĐÃ GHI TIỀN hoặc ĐÃ CÓ lịch sử vận hành/chứng từ trước đây bị CHẶN CỨNG (bắt dùng "Hủy đặt hàng"), nay vẫn xóa được nhưng phải **xác nhận PASSCODE** — dùng chung bộ passcode của màn bán (`views._passcode_dung`, băm ở `auth_user.passcode`, sai 5 lần khóa nhập 30 giây), popup nói rõ hậu quả trước khi nhập. Xóa xong: PMV xóa phiếu (`TRN_DATCOC_Del`), `don_sau_khi_xoa` trả hàng đang giữ về kho + dọn `DepositOrderState`, **GIỮ NGUYÊN `DepositEvent` + chứng từ tiền** và ghi thêm dòng `delete` kèm ảnh chụp TienCoc/CashPay/CardPay/Status — phiếu mất rồi thì nhật ký là chỗ duy nhất còn dấu vết; log cảnh báo tên người xóa. **Hai chặn KHÔNG nới** (không phải luật KHBL mà là vật lý dữ liệu): phiếu **đã áp vào hóa đơn bán** (tiền cọc đã cấn vào đơn đó) và phiếu **đã thu tiền vào két** — proc vendor chỉ xóa được phiếu W nên phải Chứng từ cọc → Hoàn/Hủy thu cho tiền về két trước. ⚠ Câu hỏi GĐ kèm theo: "đảo tiến độ giao/hủy bằng sửa thông tin" **vẫn bị cấm kể cả có passcode** — `deposit_editing.set_progress` chặn ở mọi đường; muốn mở phải sửa riêng chỗ đó. **Popup xác nhận (GĐ chốt cùng ngày)**: bấm XÓA mở THẲNG popup xác nhận gọn theo đúng khuôn các trang khác (`_dat_coc_xoa.html` extend `partials/modal_shell`, view riêng `deposits.xoa`, url `dat-coc/<pk>/xoa/`) — phiếu · khách · tiền cọc · số món · người thao tác · hậu quả rồi tới ô Passcode, không phải mở popup phiếu đầy đủ rồi tìm nút. Nút 'Xóa phiếu' trong popup XEM cũng trỏ về đây. Chốt chặn kiểm LẠI ngay trước khi ghi (đọc lại header), nên gửi thẳng lệnh POST kèm mã đúng vẫn bị chặn. Kiểm: **`manage.py smoke_xoa_coc` 9/9 PASS** trên sandbox, tự dọn (popup mở được dù có lịch sử · sai mã KHÔNG xóa · đúng mã xóa hẳn + trả hàng giữ + giữ nhật ký · 2 trường hợp chặn). ⚠ Bộ kiểm chạy web trên bản thử phải **đổi `gateway.dich_hien_tai` TRONG TIẾN TRÌNH** (đích là công tắc PmvState dùng chung — đổi thật là kéo cả máy quầy sang sandbox). | ✅ 11/09/2026 — chờ nghiệm thu |
+| **TRACK E-1 — TRANG BÁO CÁO (12/09/2026, GĐ chốt định nghĩa doanh thu)**: mục **BÁO CÁO** trên topbar (sau HÓA ĐƠN, icon `baocao.png` 96px GĐ đưa) → `/banle/bao-cao/`. **BA CON SỐ DOANH THU dùng CẢ BA, GĐ chốt**: **THỰC** = tiền hàng bán ra `SUM(SellTotalAmount)` · **RÒNG** = tổng tiền tính cả bù + dư `SUM(PayAmount)` (đơn tiệm trả tiền ra là số ÂM) · **HH** = chỉ phần > 0, dùng tính hoa hồng NV. Tháng 8/2026: 98,7 tỷ · 71,9 tỷ · 60,5 tỷ — chênh nhau là thật, không phải lỗi. Thuật toán gom ở **`apps/pos/bao_cao.py`**; quy tắc chung: chỉ `IsDel='0' AND Status='C'`, mốc thời gian **`CreatedDate`** (không phải TrnDate — phiếu ghi lùi ngày vẫn nằm đúng ngày làm việc), lọc bằng khoảng `>= d1 AND < d2+1` (SQL 2005 không có kiểu date), trọng lượng quy **CHỈ** (100 ly = 1 chỉ), gộp bằng GROUP BY ngay trên máy KK. Nội dung trang: 3 thẻ doanh thu · TIỀN VỀ QUẦY (tiền mặt/CK/chưa rõ hình thức − tiền trả khách khi thâu = tiền mặt & CK ròng) · THÂU VÀO & KHÁCH (số phiếu, tiền, chỉ vàng, khách mới theo `I_CUSTOMER.DateOfJoining`) · **CÂN ĐỐI VÀNG THEO TUỔI** (bán ra đọc từng dòng `TRN_RT_BUYSELL_SELL.GoldReal` đã trừ hột, thâu vào `TRN_RT_BUYGOLD.GoldWeight`; **`ho_vang()` ghép dẻ với vàng cùng tuổi** — PMV để D9999/N9999 thành 2 mã, không ghép thì không trừ được nhau) · **HÀNG ĐÃ BÁN — TỪNG NHÓM & TỪNG LOẠI VÀNG** (GĐ 12/09 chiều: 'chi tiết hơn: từng loại vàng, số món, số tiền'): mỗi nhóm hàng một dòng đậm + dòng con từng tuổi vàng, cột số món · chỉ · tiền — nhóm lấy từ `I_PRODUCT_GROUP` ghép qua `GroupID` vì cột `GroupCode` trên dòng bán RỖNG; mỗi dòng bán = 1 món (SL=1). Bảng cân đối vàng cũng thêm cột **Số món bán** và **Phiếu thâu** · theo NHÂN VIÊN · theo NGÀY. Kỳ nhanh hôm nay/hôm qua/7 ngày/tháng này/tháng trước + 2 ô ngày, HTMX chỉ thay mảnh số liệu; nhớ tạm 1 phút (kỳ có hôm nay) / 15 phút (kỳ đã đóng). **Quyền: danh mục MỚI `BAO_CAO`** trong ma trận `UserModuleAccess` (migration pmv-0011) — superuser tự có, tài khoản khác phải tick ô Xem ở trang Hệ thống → Người dùng. ⚠ Bẫy: `TRN_RT_BUYSELL.ThuHo` là **varchar** → đưa vào SUM là lỗi 8117. Kiểm: **`manage.py smoke_bao_cao` 21/21 PASS** (chỉ đọc KK, chạy lúc nào cũng được) — khóa các đẳng thức THỰC−vàng cũ−bớt+công thêm+vàng thêm = RÒNG, RÒNG = HH + phần trả khách, tổng từng ngày = tổng kỳ, tổng theo NV = tổng kỳ, ghép họ vàng, chặn quyền. **CHƯA làm (chờ GĐ duyệt tiếp)**: bấm số để xem danh sách chứng từ, xuất Excel, lãi gộp (cột `GiaVon` của vendor RỖNG, `InPrice` có ở 41% món nhưng giá trị không phải tiền — cần GĐ xác nhận ý nghĩa), tồn kho & hàng chậm (chờ GĐ giải nghĩa trạng thái `O` của `T_PRODUCT`). | ✅ 12/09/2026 — chờ nghiệm thu |
 | GĐ1.5 | (nếu cần) so sánh SÂU 1 bảng: diff theo từng dòng PK, xem giá trị cột đổi | ⏳ |
 | GĐ2 | Khung web nghiệp vụ: auth + layout KHJ + màn tra cứu ĐỌC (bảng giá, khách, hàng, hóa đơn trong ngày) | ⏳ |
 | GĐ3 | Mở kênh GHI `pmv_exec` từng nghiệp vụ trên SANDBOX: bảng giá → customer → product sửa → HĐ thâu → bán → đổi (chuỗi `*_Ins` → `CARDPAY_Ins` → `*_Complete`) — mỗi cái 1 bộ smoke + diff | ⏳ |
@@ -886,6 +1004,36 @@ Tiền `1.234.567 ₫` · ngày `dd/mm/yyyy` · toàn bộ tiếng Việt · UI 
   bằng `test_` thì bước dọn dẹp DỪNG NGAY. ⚠ `manage.py test` hiện KHÔNG chạy được vì `khj_admin` không có
   quyền tạo `test_khj_bl` — muốn chạy cả cụm phải cấp quyền đó trước, đừng lách bằng unittest. Kiểm nhanh vẫn
   an toàn với các tệp không đụng DB (`test_qr_learning`, `test_customer`, `test_cccd`).
+- 🔴 **QUYỀN THEO DANH MỤC — MỘT NGUỒN SỰ THẬT CHO CẢ MENU LẪN TRANG** (GĐ chốt 13/09/2026 sau sự cố
+  máy quầy ăn 403). Hai luật GĐ chốt: **hệ thống làm ĐÚNG ma trận đã gán**, và **mục tick XEM mới hiện
+  trên topbar, không thì ẩn**. Bảng danh mục + hàm kiểm gom ở **`apps/pos/quyen.py`** (`MUC` 10 mục ↔ 10
+  mục menu · `duoc()` · `chan()` · `cua_user()`): topbar bọc `{% if quyen_muc.<MÃ> %}` từng mục, trang đích
+  gọi `Q.chan(request, "<MÃ>")` — menu và trang dùng CHUNG một bảng nên không bao giờ lệch (hiện trên menu
+  tức là bấm vào mở được). Đã gắn: Tổng quan · Bán hàng · Thâu vào · Đặt-cọc · Bảng giá · Khách hàng ·
+  Hóa đơn · Báo cáo · **Chuyển khoản (danh mục MỚI `CHUYEN_KHOAN`, migration pmv-0012 + 0013 chép nguyên
+  quyền HÓA ĐƠN sang để không ai mất quyền đang có)** · Hệ thống. ⚠ URL CON của một mục (popup, HTMX,
+  nút trong trang) đi theo trang đích, CHƯA chặn riêng từng URL — muốn chặt như ma trận KHJ thì thêm
+  middleware ánh xạ url name → danh mục. Kiểm: **`manage.py smoke_quyen` 19/19 PASS** (dựng tài khoản thử,
+  bật/tắt từng mục, kiểm menu ẩn-hiện + 403 từng trang, rồi xóa tài khoản). Thực tế sau khi áp: admin &
+  kimhanh2 thấy 10/10 mục, ketoan 9/10 (chưa có HỆ THỐNG → mục ẩn, vào thẳng URL thì 403 có hướng dẫn).
+  Quyền có hiệu lực TỨC THÌ, không cần đăng nhập lại.
+- 🔴 **MÁY QUẦY EDGE `--app` KHÔNG CÓ NÚT BACK** (GĐ báo 13/09/2026).
+  Máy quầy chạy Edge `--app=… --kiosk-printing` → **không có nút Back**: gặp "403 Forbidden" trần của
+  Django là phải tắt cửa sổ mở lại. Gốc: ĐẶT-CỌC (`DAT_COC`) và BÁO CÁO (`BAO_CAO`) chịu ma trận
+  `UserModuleAccess`, nhưng tài khoản quầy chưa có dòng quyền tương ứng — `ketoan` thiếu cả hai,
+  `kimhanh2` thiếu `BAO_CAO`. Hai lớp chống tái diễn: (1) **thanh menu chỉ vẽ mục có quyền** —
+  context processor `pos.context_processors.quyen_muc` đổ `quyen_muc.<MÃ>` vào mọi trang, topbar bọc
+  `{% if quyen_muc.DAT_COC %}`; (2) **`templates/403.html`** nói rõ lý do + chỉ đường
+  *HỆ THỐNG → Người dùng → Quyền → tick Xem* + 2 nút quay về. **Làm màn mới có gate quyền thì phải
+  bọc mục menu VÀ cấp quyền cho tài khoản quầy ngay trong lượt đó.** Quyền có hiệu lực tức thì,
+  không cần đăng nhập lại hay khởi động lại máy.
+- 🔴 **CHÚ THÍCH TEMPLATE: `{# … #}` CHỈ ĐƯỢC GỌN TRONG MỘT DÒNG** — nhiều dòng thì Django IN NGUYÊN VĂN
+  ra trang cho khách đọc. Lỗi này tái đi tái lại (trang Nghỉ phép KHJ hiện suốt 28/08→11/09; khối TÍNH TỔNG
+  màn bán 11/09) vì bộ dò cũ nằm lẫn trong `smoke_thau` — sửa màn khác thì không ai chạy tới. Nay nó là
+  **check của Django**: `apps/pos/kiem_template.py` (mã **khbl.E001**, nạp ở `PosConfig.ready`) nên **mọi lệnh
+  `manage.py` đều chạy qua**, sai là dừng ngay, không cần nhớ. KHJ có bản sao `apps/common/kiem_template.py`
+  (mã khj.E001) — sửa thì chép cả hai. Quy tắc viết: gom chú thích về ĐẦU tệp trong
+  `{% comment %}…{% endcomment %}`, giữa markup chỉ dùng `{# … #}` một dòng.
 - **Bộ kiểm KHÔNG được `set_password()`** — nó đổi session hash và đá mọi người đang đăng nhập ra; dùng `Client.force_login(user)`.
 - **CHỮ TIẾNG VIỆT TỪ NGUỒN NGOÀI PHẢI CHUẨN HÓA** — skill `.claude/skills/chuan-hoa-tieng-viet/`,
   code `apps/pos/vn_text.py` + bản JS `static/js/vn_text.js` (sửa cái nào phải sửa cả hai).

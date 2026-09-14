@@ -1,0 +1,31 @@
+{% load static pos_extras %}<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xem trước · {{ pk }} · Phiếu đặt cọc</title>
+<link rel="stylesheet" href="{% static 'css/dat_coc_print.css' %}?v=20260913.firstpage">
+<style id="deposit-layout-css">{{ deposit_print_calibration|safe }}</style>
+<script defer src="{% static 'js/dat_coc_print.js' %}?v=20260913.firstpage"></script>
+</head><body>
+<header class="preview-toolbar">
+  <div><strong>Xem trước · Giấy đảm bảo</strong><span>{{ pk }} · Giao khách + bản tiệm</span></div>
+  <div id="print-status" class="print-status" role="status">{% if error %}{{ error }}{% else %}Đang căn nội dung theo giấy…{% endif %}</div>
+  <nav><label><input type="checkbox" id="paper-background" checked> Nền giấy mẫu</label><button type="button" onclick="window.close()">Đóng</button>{% if not error %}<button class="primary" id="print-receipt" type="button" >In phiếu</button>{% endif %}</nav>
+</header>
+
+<main id="receipt-pages">
+<article class="gdb-a5 deposit-paper" aria-label="Phiếu đặt cọc {{ pk }} trên giấy đảm bảo">
+  <section class="customer-copy" aria-label="Phần giao khách">
+    <header class="customer-heading" data-dc-block="heading"><div class="customer-qr"><img src="{{ receipt_qr }}" alt="QR mã phiếu {{ pk }}"></div><div class="customer-title"><h1>PHIẾU ĐẶT HÀNG</h1><b class="document-code">{{ pk }}</b></div></header>
+    <div class="customer-info" data-dc-block="info"><dl><div><dt>Khách hàng</dt><dd><b>{{ h.CustName|default:h.CustID }}</b></dd></div><div><dt>Số ĐT</dt><dd><b>{% if h.Phone %}******{{ h.Phone|slice:'-4:' }}{% else %}—{% endif %}</b></dd></div><div><dt>Địa chỉ</dt><dd>{{ h.Address|default:'' }}</dd></div></dl><dl><div><dt>Ngày đặt</dt><dd><b>{{ h.TrnDate|date:'d/m/Y' }}</b></dd></div><div><dt>Ngày hẹn</dt><dd><b>{{ work.promise_date|date:'d/m/Y'|default:'—' }}</b></dd></div><div><dt>Tiền cọc</dt><dd><b>{{ h.TienCoc|tien_tran }} đ</b></dd></div></dl></div>
+    <div class="customer-content" data-dc-block="items" data-fit-area>
+      <table class="customer-items"><thead><tr><th>#</th><th>Sản phẩm</th><th>Vàng</th><th>Size</th><th>TL</th></tr></thead><tbody data-customer-items>{% for row in view_lines %}<tr><td class="number">{{ forloop.counter }}</td><td><span>[{{ row.ProductCode|default:'Khách đặt' }}]</span> <b>{{ row.ProductDesc }}</b>{% if row.SL > 1 %} × {{ row.SL }}{% endif %}</td><td>{% if row.GoldCode == 'N9999' %}9999{% else %}{{ row.GoldCode|tuoi }}{% endif %}</td><td>{{ row.Size|default:'—' }}</td><td class="number">{{ row.GoldWeight|floatformat:'3' }} {{ row.unit }}</td></tr>{% endfor %}</tbody></table>
+    </div>
+    <footer class="customer-reminder" data-dc-block="reminder">Vui lòng giữ phiếu để đối chiếu khi nhận hàng.</footer>
+    <div class="customer-employee" data-dc-block="employee">{{ work.responsible|default:'—' }}</div>
+  </section>
+  <section class="store-copies" data-dc-block="store" aria-label="Phần tiệm giữ · hai cột giống nhau">
+    {% include 'pos/_dat_coc_print_store.html' %}
+    {% include 'pos/_dat_coc_print_store.html' %}
+  </section>
+</article>
+</main>
+</body></html>

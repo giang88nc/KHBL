@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "apps.pmv",
     "apps.pos",
+    "apps.oa",          # SỔ TIN NHẮN ZALO OA tập trung của 3 hệ (GĐ chốt 14/09/2026) — xem apps/oa/models.py
 ]
 
 MIDDLEWARE = [

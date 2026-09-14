@@ -1,0 +1,9 @@
+{% extends 'partials/modal_shell.html' %}
+{% block modal_title %}{{ title }} · {{ pk }}{% endblock %}
+{% block modal_style %}width:min(880px,94vw){% endblock %}
+{% block modal_body %}<div class="dc-popup dc-purple">
+{% if error %}<div class="dc-alert" data-dc-error>{{ error }}</div>{% endif %}
+<form id="dc-photo-save" enctype="multipart/form-data" hx-encoding="multipart/form-data" hx-post="{% url 'pos:dat_coc_photos_edit' pk %}" hx-target="#modal-root" hx-sync="this:drop" hx-disabled-elt="#dc-photo-submit">
+{% csrf_token %}<input type="hidden" name="token" value="{{ token }}">{% include 'pos/_dat_coc_photos.html' %}</form>
+</div>{% endblock %}
+{% block modal_foot %}<button type="button" class="dc-btn" onclick="closeKhblModal()">Đóng</button><button id="dc-photo-submit" type="submit" form="dc-photo-save" class="dc-btn dc-btn--primary">Lưu hình ảnh</button>{% endblock %}

@@ -22,7 +22,7 @@ luôn mục đầu = chọn khách; không có → báo để bấm ＋ THÊM. S
   <button type="button" style="all:unset;cursor:pointer;display:block;padding:7px 11px;border-bottom:1px solid var(--line);width:100%"
           hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": "{{ k.CustID }}"}' hx-swap="none">
     <div style="font-weight:600">{{ k.CustName }}</div>
-    <div class="dim" style="font-size:12px"><span class="mono">{{ k.Phone }}</span>
+    <div class="dim" style="font-size:12px"><span class="mono">{{ k.Phone }}{% if k.GhiChu2 %} · {{ k.GhiChu2 }}{% endif %}{% if k.GhiChu3 %} · {{ k.GhiChu3 }}{% endif %}</span>
       {% if k.Address %}· {{ k.Address|truncatechars:44 }}{% endif %}</div>
   </button>
   {% endfor %}

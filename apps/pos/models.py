@@ -1,7 +1,5 @@
 import uuid
 
-from .deposit_models import (DepositOrderState, DepositEvent, DepositStockHold,
-                             DepositMoneyOperation, DepositMessageTemplate, DepositMessage)
 
 from django.conf import settings
 from django.db import models
@@ -127,14 +125,32 @@ class BillAudit(models.Model):
         return self.TEN.get(self.action, self.action)
 
 
+class RetailBillManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().exclude(bill_kind='deposit').defer(
+            'dc_photo_sample1', 'dc_photo_sample2', 'dc_photo_finished1', 'dc_photo_finished2')
+
+
+class DepositBillManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(bill_kind='deposit').defer(
+            'dc_photo_sample1', 'dc_photo_sample2', 'dc_photo_finished1', 'dc_photo_finished2',
+            'anh_cccd1', 'anh_cccd2', 'anh_hinh1', 'anh_hinh2', 'anh_qr')
+
+
 class GoldBill(models.Model):
-    """`gold_bill` — 1 dòng = 1 ĐƠN BÁN (khóa TrnID), GĐ chốt 08/09/2026. KHÔNG phải bản sao KK (HIST đã có):
+    """`gold_bill` — 1 dòng/chứng từ, khóa target + TrnID; bill_kind tách bán và cọc.
+    objects chỉ lấy hóa đơn bán; DepositOrderState lấy cọc. KHÔNG phải bản sao KK (HIST đã có):
     vai trò = (1) dữ liệu KK KHÔNG có chỗ: NV HỖ TRỢ, tách tiền mặt/CK/thẻ, TK ngân hàng, số lần in, user web;
     (2) tra cứu/thống kê nhanh không đụng KK; (3) `items`/`doi` = ẢNH CHỤP dòng hàng để hiển thị, không phải sự thật.
     KK vẫn là sự thật: ghi SAU khi KK OK (write-through), MySQL lỗi → log, không chặn bán; làm tươi khi xem +
     job đối soát 60'. Chỉ áp dụng từ ngày bật (không backfill). Đơn KK xóa → is_del=1 (không xóa dòng)."""
 
-    trn_id = models.CharField(max_length=20, unique=True)
+    objects = RetailBillManager()
+    all_objects = models.Manager()
+    bill_kind = models.CharField(max_length=12, default='retail', db_index=True)
+    target = models.CharField(max_length=10, default='kk')
+    trn_id = models.CharField(max_length=20)
     bill_code = models.CharField(max_length=30, blank=True, default="", db_index=True)
     trn_date = models.DateField(null=True, blank=True, db_index=True)
     trn_time = models.CharField(max_length=8, blank=True, default="")
@@ -174,9 +190,52 @@ class GoldBill(models.Model):
     anh_hinh2 = models.BinaryField("Hình 2", null=True, blank=True, editable=False)
     anh_qr = models.BinaryField("QR chuyển khoản", null=True, blank=True, editable=False)
 
+    # Thông tin vận hành phiếu cọc; dùng chung gold_bill, không cộng vào doanh số bán.
+    version = models.PositiveIntegerField(default=0)
+    original_promise = models.DateField(null=True, blank=True)
+    promise = models.DateField(null=True, blank=True)
+    employee_id = models.CharField(max_length=20, blank=True)
+    employee_name = models.CharField(max_length=200, blank=True)
+    fulfilment = models.CharField(max_length=20, blank=True)
+    item_signature = models.CharField(max_length=64, blank=True)
+    next_contact = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_contact = models.DateTimeField(null=True, blank=True)
+    contacted = models.BooleanField(null=True)
+    note = models.CharField(max_length=1000, blank=True)
+    ready_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    quote_status = models.CharField(max_length=12, default='estimate')
+    quote_amount = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    quote_terms = models.CharField(max_length=1000, blank=True)
+    pricing = models.JSONField(default=dict)
+    payment_plan = models.JSONField(default=dict)
+    photos = models.JSONField(default=dict)
+    dc_photo_sample1 = models.BinaryField(null=True, blank=True, editable=False)
+    dc_photo_sample2 = models.BinaryField(null=True, blank=True, editable=False)
+    dc_photo_finished1 = models.BinaryField(null=True, blank=True, editable=False)
+    dc_photo_finished2 = models.BinaryField(null=True, blank=True, editable=False)
+    extra_notes = models.JSONField(default=list)
+    cancellation_policy = models.CharField(max_length=10, blank=True)
+
+
     class Meta:
         db_table = "gold_bill"
+        constraints = [models.UniqueConstraint(fields=["target", "trn_id"], name="gold_bill_target_trn")]
         ordering = ["-trn_date", "-trn_time"]
+
+
+class DepositOrderState(GoldBill):
+    """API trạng thái cọc cũ; dữ liệu thực tế nằm trong gold_bill."""
+    objects = DepositBillManager()
+
+    class Meta:
+        proxy = True
+        ordering = ['-updated_at']
+
+    def save(self, *args, **kwargs):
+        self.bill_kind = 'deposit'
+        self.nguon = 'KHBL'
+        super().save(*args, **kwargs)
 
 
 class PriceBatch(models.Model):
@@ -246,3 +305,8 @@ class ThauNhom(models.Model):
 
     def __str__(self):
         return f"Thâu #{self.pk} {', '.join(self.bill_codes or self.trn_ids)}"
+
+from .deposit_models import (DepositEvent, DepositStockHold, DepositMoneyOperation,
+                             DepositMessageTemplate, DepositMessage)  # noqa: E402,F401
+from .customer_sync_models import CustomerSyncReceipt  # noqa: E402,F401
+from .customer_bridge_models import CustomerBridgeReceipt  # noqa: E402,F401

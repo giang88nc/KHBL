@@ -156,6 +156,10 @@ class PmvClient:
             raise ValueError(f"{proc}: tham số không có trong chữ ký proc: {thua}")
         return day_du
 
+    def update_deposit_money(self, expected, cash, bank, *, till_id):
+        return gateway.pmv_deposit_money(expected, cash, bank, till_id=till_id,
+                                        target=self.target, tag=self.tag)
+
     # ---------- gọi ----------
     def call(self, proc, write=False, raise_on_rc=True, day_du=False, **params):
         """Gọi proc với tham số đặt tên. Trả (rc, sets). rc≠0 → PmvProcError (mặc định).

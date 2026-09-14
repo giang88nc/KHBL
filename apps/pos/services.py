@@ -12,6 +12,7 @@ from django.core.cache import cache
 from apps.pmv import money as M
 from apps.pmv.client import PmvClient
 from .vn_text import chuan_hoa
+from . import customer_phones as P
 
 logger = logging.getLogger(__name__)
 
@@ -43,36 +44,43 @@ def gia_mysql():
     """GIÁ BÁN/MUA từ MySQL `gold_prices` (nguồn chính — GĐ chốt 07/09/2026), quy về ĐƠN VỊ + THANG
     của I_XRATE (nghìn đồng / PriceUnit KK) qua đúng hàm `price_sync.mssql_rate` mà nút ĐỒNG BỘ dùng
     → web và KK (sau đồng bộ) luôn ra cùng một số. Trả {mã KK: {"SellRate","BuyRate","luc"}} cho cả mã
-    vàng (18K, N9999…) lẫn mã dẻ (D18K, D9999…). MySQL lỗi → {} (rơi về giá KK, có log)."""
+    vàng (18K, N9999…) lẫn mã dẻ (D18K, D9999…). MySQL lỗi → {} và chặn dùng giá KK thay thế."""
     def _lay():
         from . import prices as P
         from .price_sync import GOLD_CODES, mssql_rate
         out = {}
-        for p in P.decorate(P.current_rows()):
+        rows = P.decorate(P.current_rows())
+        if not rows or len({r['gold_type'] for r in rows}) != len(rows):
+            raise P.PriceError('Bảng giá hiện hành trống hoặc trùng loại vàng.')
+        for p in rows:
+            if not 0 < p['buy'] <= p['sell']:
+                raise P.PriceError('Bảng giá hiện hành có giá mua/bán không hợp lệ.')
             for code in GOLD_CODES.get(p["gold_type"], ()):
                 out[code] = {"SellRate": mssql_rate(p, "sell"), "BuyRate": mssql_rate(p, "buy"),
                              "luc": p.get("effective_at")}
         return out
     try:
-        return cache.get_or_set("khbl:gia_mysql", _lay, 5)
+        return _lay()  # Sáu dòng hiện hành; đọc mới cả khi nguồn ngoài vừa cập nhật MySQL.
     except Exception:
-        logger.exception("Không đọc được giá MySQL gold_prices — tạm dùng giá KK")
+        logger.exception("Không đọc được giá MySQL gold_prices — không dùng giá KK thay thế")
         return {}
 
 
 def ap_gia_mysql(row, code_key="GoldCode"):
-    """Ghi đè SellRate/BuyRate của 1 dòng (hàng quét / dòng bảng giá) bằng giá MySQL nếu có mã."""
+    """Hàng quét bắt buộc có giá MySQL trước khi được thêm vào phiếu."""
+    from .prices import PriceError
     g = gia_mysql().get((row.get(code_key) or "").strip())
-    if g:
-        row["SellRate"], row["BuyRate"] = g["SellRate"], g["BuyRate"]
-        row["gia_mysql"] = True
+    if not g:
+        raise PriceError(f"Chưa có giá hợp lệ trong bảng giá cho {row.get(code_key) or 'mã vàng này'}. Hãy kiểm tra Bảng giá.")
+    row["SellRate"], row["BuyRate"] = g["SellRate"], g["BuyRate"]
+    row["gia_mysql"] = True
     return row
 
 
 def bang_gia(force=False):
     """15 dòng bảng giá + tên tiếng Việt + đơn vị. Cache 5 giây (N tab chỉ tốn 1 truy vấn/5s).
     07/09/2026: khung dòng (mã, tên, đơn vị, nhóm) vẫn từ I_XRATE/I_GOLD, nhưng SELL/BUY được PHỦ bằng
-    giá MySQL `gold_prices` (mốc giờ = effective_at) — mã không có trong MySQL (USD, VND, VBK…) giữ giá KK."""
+    giá MySQL `gold_prices` (mốc giờ = effective_at). Mã vàng thiếu giá không lấy giá KK thay thế."""
     key = "khbl:xrate"
     rows = None if force else cache.get(key)
     if rows is None:
@@ -82,19 +90,24 @@ def bang_gia(force=False):
             "ISNULL(g.PriceUnit,'L') AS PriceUnit, ISNULL(g.Active,'1') AS Active "
             "FROM I_XRATE x WITH (NOLOCK) LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = x.GoldCcy "
             "WHERE x.ShopID = ? ORDER BY x.Type DESC, x.GoldCcy", (XRATE_SHOP,))
-        my = gia_mysql()
-        for r in rows:
-            g = my.get(r["GoldCcy"])
-            if g:
-                r["SellRate"], r["BuyRate"], r["gia_mysql"] = g["SellRate"], g["BuyRate"], True
-                if g.get("luc"):
-                    r["RateDate"] = g["luc"].strftime("%Y-%m-%d")
-                    r["RateTime"] = g["luc"].strftime("%H:%M:%S")
-            r["don_vi"] = "₫/gram" if (r["PriceUnit"] or "L").upper() == "G" else "₫/chỉ"
-            r["ban_dong"] = M.dec(r["SellRate"]) * M.RATE_SCALE
-            r["mua_dong"] = M.dec(r["BuyRate"]) * M.RATE_SCALE
-            r["age"] = age_class(r["GoldCcy"])
         cache.set(key, rows, 5)
+    # Cache chỉ giữ khung danh mục; mỗi phép tính lấy giá MySQL hiện hành.
+    rows = [dict(row) for row in rows]
+    my = gia_mysql()
+    for r in rows:
+        g = my.get(r["GoldCcy"])
+        if g:
+            r["SellRate"], r["BuyRate"], r["gia_mysql"] = g["SellRate"], g["BuyRate"], True
+            if g.get("luc"):
+                r["RateDate"] = g["luc"].strftime("%Y-%m-%d")
+                r["RateTime"] = g["luc"].strftime("%H:%M:%S")
+        elif r.get('Type') != 'C':
+            r['SellRate'] = r['BuyRate'] = M.D0
+            r['gia_mysql'] = False
+        r["don_vi"] = "₫/gram" if (r["PriceUnit"] or "L").upper() == "G" else "₫/chỉ"
+        r["ban_dong"] = M.dec(r["SellRate"]) * M.RATE_SCALE
+        r["mua_dong"] = M.dec(r["BuyRate"]) * M.RATE_SCALE
+        r["age"] = age_class(r["GoldCcy"])
     return rows
 
 
@@ -156,7 +169,11 @@ def _quet(ma, till_id="", cust_id=WALK_IN):
             desc = f"{desc}: {ma}"
         return None, {"code": code, "desc": desc, "style": SCAN_ERR_STYLE.get(code, "do")}
     # Giá bán của món = giá MySQL theo tuổi vàng (nguồn chính); proc chỉ cấp khung món + công.
-    return ap_gia_mysql(row), None
+    from .prices import PriceError
+    try:
+        return ap_gia_mysql(row), None
+    except PriceError as exc:
+        return None, {'code': 'GIA-MYSQL', 'desc': str(exc), 'style': 'do'}
 
 
 def quet_ma(ma, till_id="", cust_id=WALK_IN):
@@ -223,15 +240,15 @@ def tim_khach(q="", limit=25):
     q = (q or "").strip()
     if not q:
         return []
+    condition, params = P.search(q)
     return client("tim_khach").query(
-        f"SELECT TOP {int(limit)} c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, c.CMND, "
+        f"SELECT TOP {int(limit)} c.CustID, c.CustCode, c.CustName, c.Phone, c.GhiChu2, c.GhiChu3, c.Address, c.CMND, "
         "c.LastTradingDate, ISNULL(d.DiemDoiQua,0) AS Diem "
         "FROM I_CUSTOMER c WITH (NOLOCK) "
         "LEFT JOIN I_DIEMTICHLUY d WITH (NOLOCK) ON d.CustID = c.CustID "
-        "WHERE c.Active = '1' AND c.CustID <> ? AND (c.Phone LIKE ? OR c.CustName LIKE ? "
-        "  OR c.CustCode LIKE ? OR c.CMND LIKE ?) "
+        "WHERE c.Active = '1' AND c.CustID <> ? AND " + condition + " "
         "ORDER BY c.LastTradingDate DESC, c.CustName",
-        (WALK_IN, f"%{q}%", f"%{q}%", f"{q}%", f"%{q}%"))
+        (WALK_IN,) + params)
 
 
 def cccd_tu_qr(q):
@@ -249,9 +266,9 @@ def cccd_tu_qr(q):
     return m.group(0) if m else ""
 
 
-def khach_theo_id(cust_id):
-    r = client("khach").query(
-        "SELECT TOP 1 c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, c.CMND, c.BirthDate, "
+def khach_theo_id(cust_id, *, pmv_client=None):
+    r = (pmv_client or client("khach")).query(
+        "SELECT TOP 1 c.CustID, c.CustCode, c.CustName, c.Phone, c.GhiChu2, c.GhiChu3, c.Address, c.CMND, c.BirthDate, "
         "c.Gender, COALESCE(NULLIF(c.CustTypeID,''), c.CustType) AS CustType, "
         "c.Email, c.Notes, c.NgayCap, c.NoiCap, c.Company, c.Masothue, "
         "c.ImagePath, c.ImagePathMatTruoc, c.ImagePathMatSau, c.Active, "
@@ -290,11 +307,11 @@ def _dep_khach(r):
     r["Active"] = "1" if r.get("Active") is True or str(r.get("Active")) == "1" else "0"
     g = r.get("Gender")
     la_nam = g is True or str(g) in ("1", "True")
-    r["gioi_tinh"] = "Nam" if la_nam else "Nữ"
+    r["gioi_tinh"] = "Chưa xác định" if g is None else ("Nam" if la_nam else "Nữ")
     ten = (r.get("CustName") or "").strip().lower() + " "
     goi_nam = ten.startswith(_TIEN_TO_NAM)
     goi_nu = ten.startswith(_TIEN_TO_NU)
-    r["gt_lech"] = (goi_nam and not la_nam) or (goi_nu and la_nam)
+    r["gt_lech"] = g is not None and ((goi_nam and not la_nam) or (goi_nu and la_nam))
     return r
 
 
@@ -321,15 +338,15 @@ def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50, loc=""):
     key = (key or "").strip()
     addr = (addr or "").strip()
     ngay = (ngay_sinh or "").strip()
-    dk = ("WHERE c.CustID <> ? "
-          "AND (? = '' OR c.Phone LIKE ? OR c.CMND LIKE ? OR c.CustName LIKE ? OR c.CustCode LIKE ?) "
+    condition, params = P.search(key) if key else ("1=1", ())
+    dk = ("WHERE c.CustID <> ? AND " + condition + " "
           "AND (? = '' OR c.Address LIKE ?) "
           "AND (? = '' OR c.BirthDate = CAST(? AS datetime))")
     if loc in ("xoa", "chuahople"):
         dk += " AND " + KHONG_GD_SQL.format(a="c")
     if loc == "chuahople":
-        dk += " AND ISNULL(c.Phone, '') = '' AND ISNULL(c.CMND, '') = ''"
-    ps = (WALK_IN, key, f"%{key}%", f"%{key}%", f"%{key}%", f"{key}%", addr, f"%{addr}%", ngay, ngay)
+        dk += " AND ISNULL(c.Phone, '') = '' AND ISNULL(c.GhiChu2, '') = '' AND ISNULL(c.GhiChu3, '') = '' AND ISNULL(c.CMND, '') = ''"
+    ps = (WALK_IN,) + params + (addr, f"%{addr}%", ngay, ngay)
     c = client("khach_loc")
     tong = c.query(f"SELECT COUNT(*) AS n FROM I_CUSTOMER c WITH (NOLOCK) {dk}", ps)[0]["n"]
     tu = (max(1, int(trang)) - 1) * moi_trang + 1
@@ -339,7 +356,7 @@ def khach_loc(key="", addr="", ngay_sinh="", trang=1, moi_trang=50, loc=""):
     rows = c.query(
         "SELECT t.*, CASE WHEN " + KHONG_GD_SQL.format(a="t") + " THEN 0 ELSE 1 END AS co_gd "
         f"FROM (SELECT ROW_NUMBER() OVER (ORDER BY {hoat_dong} DESC, c.CustID DESC) AS rn, "
-        "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.BirthDate, "
+        "c.CustID, c.CustCode, c.CustName, c.Address, c.CMND, c.Phone, c.GhiChu2, c.GhiChu3, c.BirthDate, "
         "COALESCE(NULLIF(c.CustTypeID,''), c.CustType) AS CustType, "
         "c.Gender, c.DateOfJoining, c.LastTradingDate, c.Active "
         f"FROM I_CUSTOMER c WITH (NOLOCK) {dk}) t WHERE t.rn BETWEEN ? AND ? ORDER BY t.rn",
@@ -367,39 +384,81 @@ def lich_su_khach(cust_id, limit=15):
 
 def danh_sach_khach(q="", limit=60):
     q = (q or "").strip()
+    condition, params = P.search(q) if q else ("1=1", ())
     return client("ds_khach").query(
-        f"SELECT TOP {int(limit)} c.CustID, c.CustCode, c.CustName, c.Phone, c.Address, "
+        f"SELECT TOP {int(limit)} c.CustID, c.CustCode, c.CustName, c.Phone, c.GhiChu2, c.GhiChu3, c.Address, "
         "c.LastTradingDate, ISNULL(d.DiemDoiQua,0) AS Diem FROM I_CUSTOMER c WITH (NOLOCK) "
         "LEFT JOIN I_DIEMTICHLUY d WITH (NOLOCK) ON d.CustID = c.CustID "
-        "WHERE c.Active = '1' AND c.CustID <> ? AND (? = '' OR c.Phone LIKE ? OR c.CustName LIKE ?) "
+        "WHERE c.Active = '1' AND c.CustID <> ? AND " + condition + " "
         "ORDER BY c.LastTradingDate DESC",
-        (WALK_IN, q, f"%{q}%", f"%{q}%"))
+        (WALK_IN,) + params)
 
 
 # ─────────────────────────── NHÂN VIÊN / KÉT ───────────────────────────
 
+def ten_goi(ho_ten):
+    """TÊN GỌI = chữ cuối của họ tên. Người trong tiệm gọi nhau bằng tên, không gọi bằng họ."""
+    phan = str(ho_ten or "").strip().split()
+    return phan[-1] if phan else ""
+
+
+def khoa_sap_nv(e):
+    """Khóa sắp xếp danh sách nhân viên: theo TÊN GỌI trước, rồi tới cả họ tên (GĐ chốt 13/09/2026).
+
+    Xếp theo bản BỎ DẤU để Thu · Thư · Thủy · Thụy đứng liền nhau đúng thứ tự chữ cái, sau đó mới so
+    bản có dấu cho ổn định. Xếp theo cả chuỗi họ tên như trước thì tìm người rất cực: cùng tên Nguyện
+    mà họ Trần với họ Bùi nằm cách nhau cả trang.
+    """
+    from .vn_text import bo_dau
+
+    ten = (e.get("EmpName") or "").strip()
+    goi = ten_goi(ten)
+    return (bo_dau(goi).lower(), goi.lower(), bo_dau(ten).lower())
+
+
 def nhan_vien_ban():
-    return cache.get_or_set("khbl:nvban", lambda: client("nv").query(
-        "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) WHERE ISNULL(Active,'1') = '1' "
-        "ORDER BY EmpName"), 300)
+    """DS nhân viên đang làm, ĐÃ xếp theo tên gọi — mọi ô chọn/tìm NV trong hệ đều lấy từ đây."""
+    def _lay():
+        ds = client("nv").query(
+            "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) WHERE ISNULL(Active,'1') = '1'")
+        return sorted([dict(r) for r in ds], key=khoa_sap_nv)
+
+    return cache.get_or_set("khbl:nvban:v2", _lay, 300)
 
 
 def tim_nhan_vien(q="", limit=15):
-    """Tra nhân viên bán. GĐ chốt gõ theo TÊN GỌI (chữ cuối của họ tên) nên kết quả xếp
-    tên-gọi-khớp lên trước, rồi mới tới khớp ở giữa: gõ 'nguyện' ra 'Trần Ngọc Nguyện'."""
-    q = (q or "").strip().lower()
+    """Tra nhân viên theo TÊN GỌI, KHÔNG phân biệt dấu (GĐ chốt 13/09/2026).
+
+    Gõ "thu" ra cả Thu · Thư · Thủy · Thụy — người bán gõ nhanh, không ai bỏ dấu đúng khi đang đứng
+    quầy. Thứ tự ưu tiên, trong mỗi bậc vẫn giữ thứ tự tên gọi của danh sách gốc:
+
+        1. tên gọi TRÙNG KHÍT phần gõ ("thu" → Thu)
+        2. tên gọi BẮT ĐẦU bằng phần gõ ("thu" → Thư, Thủy, Thụy)
+        3. một chữ khác trong họ tên bắt đầu bằng phần gõ ("thu" → Lê Thu Hà)
+        4. còn lại: nằm đâu đó trong họ tên
+
+    So khớp chạy trên bản BỎ DẤU của cả hai phía nên gõ có dấu hay không đều ra.
+    """
+    from .vn_text import bo_dau
+
+    q = bo_dau((q or "").strip()).lower()
     ds = nhan_vien_ban()
     if not q:
         return ds[:limit]
-    dau, giua = [], []
+    bac = ([], [], [], [])
     for e in ds:
         ten = (e.get("EmpName") or "").strip()
-        goi = ten.split()[-1].lower() if ten else ""
-        if goi.startswith(q):
-            dau.append(e)
-        elif q in ten.lower():
-            giua.append(e)
-    return (dau + giua)[:limit]
+        khong_dau = bo_dau(ten).lower()
+        goi = bo_dau(ten_goi(ten)).lower()
+        if goi == q:
+            bac[0].append(e)
+        elif goi.startswith(q):
+            bac[1].append(e)
+        elif any(tu.startswith(q) for tu in khong_dau.split()):
+            bac[2].append(e)
+        elif q in khong_dau:
+            bac[3].append(e)
+    return [e for nhom in bac for e in nhom][:limit]
 
 
 def loai_de():
@@ -410,20 +469,17 @@ def loai_de():
         ds = client("loai_de").query(
             "SELECT GoldCode, GoldDesc, PriceUnit FROM I_GOLD WITH (NOLOCK) "
             "WHERE GoldType = 'D' AND ISNULL(Active,'1') = '1' ORDER BY OrderBy, GoldCode")
-        gia = {g["GoldCcy"]: g for g in bang_gia()}
-        for x in ds:
-            g = gia.get(x["GoldCode"], {})
-            x["BuyRate"] = g.get("BuyRate") or 0
-            # Giá BÁN RA để ĐỔI NGANG: SellRate của chính dòng dẻ; nếu 0 thì lấy của loại vàng bán tương ứng
-            base = M.de_base(x["GoldCode"])
-            x["base"] = base
-            sell = M.dec(g.get("SellRate"))
-            if sell <= 0:
-                sell = M.dec((gia.get(base) or {}).get("SellRate"))
-            x["SellRate"] = str(sell)
-            x["don_vi"] = "₫/chỉ" if (x.get("PriceUnit") or "L").upper() in ("L", "M") else "₫/g"
         return ds
-    return cache.get_or_set("khbl:loaide", _lay, 30)
+    ds = [dict(row) for row in cache.get_or_set("khbl:loaide:metadata", _lay, 30)]
+    gia = gia_mysql()
+    for x in ds:
+        g = gia.get(x["GoldCode"], {})
+        x['gia_mysql'] = bool(g)
+        x['BuyRate'] = g.get('BuyRate') or M.D0
+        x['SellRate'] = g.get('SellRate') or M.D0
+        x['base'] = M.de_base(x['GoldCode'])
+        x['don_vi'] = '₫/chỉ' if (x.get('PriceUnit') or 'L').upper() in ('L', 'M') else '₫/g'
+    return ds
 
 
 def loai_vang_thau():
@@ -486,10 +542,14 @@ def hoa_don_loc(d1, d2, *, loai="", emp_id="", khach="", trang_thai="", limit=50
 
 
 def nhan_vien_hoa_don(live):
-    """Danh sách chọn nhân viên phải cùng nguồn dữ liệu với báo cáo."""
-    return PmvClient("kk" if live else "hist", tag="hd_nv").query(
-        "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) "
-        "WHERE ISNULL(Active,'1') = '1' ORDER BY EmpName")
+    """Danh sách chọn nhân viên phải cùng nguồn dữ liệu với báo cáo.
+
+    Nguồn khác (kho lịch sử khi xem ngày cũ) nên không dùng chung cache với ``nhan_vien_ban``,
+    nhưng thứ tự thì phải giống hệt: xếp theo TÊN GỌI (xem ``khoa_sap_nv``).
+    """
+    ds = PmvClient("kk" if live else "hist", tag="hd_nv").query(
+        "SELECT EmpID, EmpName FROM T_EMPLOYEE WITH (NOLOCK) WHERE ISNULL(Active,'1') = '1'")
+    return sorted([dict(r) for r in ds], key=khoa_sap_nv)
 
 
 def tong_quan(ngay_iso, so_ngay=7):

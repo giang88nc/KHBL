@@ -73,7 +73,8 @@ class DepositValidationTests(TestCase):
                    DiamondWeight=Decimal('0.2'), GoldWeight=Decimal('100'), TaskPrice=Decimal('250000'), Size='', Notes='')
         root = ElementTree.fromstring(D.xml_lines([row, {**row, 'DELETE': True}], 'TDC1'))
         self.assertEqual(len(root), 1)
-        self.assertEqual(root[0].findtext('ProductDesc'), row['ProductDesc'])
+        import json
+        self.assertEqual(json.loads(root[0].findtext('ProductDesc')), {'Khách đặt': row['ProductDesc']})
         self.assertEqual(root[0].findtext('TaskPrice'), '250000')
         self.assertEqual(root[0].findtext('TrnID'), 'TDC1')
 
@@ -117,7 +118,8 @@ class DepositValidationTests(TestCase):
                               'PromiseDate': '2026-09-25', 'Estimate': '1200000'})
         form.fields['EmpID'].choices = [('E1', 'Nhân viên')]
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['Description'], 'HEN:2026-09-25 | Khách gọi lại | 1200000')
+        import json
+        self.assertEqual(json.loads(form.cleaned_data['Description']),{'notes':[{'date':None,'text':'Khách gọi lại'}],'promise':'2026-09-25','estimate':'1200000'})
 
     def test_legacy_weights_are_read_without_vendor_unit_conversion(self):
         c = MagicMock()
@@ -180,7 +182,7 @@ class DepositViewTests(TestCase):
             self.assertContains(response, 'Ghi chú &lt;script&gt;')
             self.assertNotContains(response, 'Ghi chú <script>')
             response = self.client.get(reverse('pos:dat_coc_popup', args=['TDC001', 'delete']))
-            self.assertContains(response, 'Chỉ phiếu Lưu tạm')
+            self.assertContains(response, 'PMV chỉ xóa được phiếu đang Lưu tạm')
             self.assertNotContains(response, 'Xác nhận xóa phiếu')
 
     def test_stale_version_and_changed_target_block_delete(self):
@@ -195,7 +197,7 @@ class DepositViewTests(TestCase):
         h = {**self.h, 'CashPay': self.h['TienCoc']}
         with patch.object(D, 'header', return_value=h), patch.object(D, 'lines', return_value=[]):
             response = self.client.post(reverse('pos:dat_coc_popup', args=['TDC001','delete']), {})
-            self.assertContains(response, 'không xóa phiếu')
+            self.assertContains(response, 'phiếu CHƯA bị xóa')
             response = self.client.get(reverse('pos:dat_coc_popup', args=['TDC001','edit']))
             self.assertTrue(response.context['form'].fields['TienCoc'].widget.attrs['readonly'])
         self.c.call.assert_not_called()
@@ -226,19 +228,26 @@ class DepositViewTests(TestCase):
         response = self.client.get(reverse('pos:dat_coc_add'))
         self.assertContains(response, 'items-__prefix__-GoldCode')
         token = response.context['token']
-        payload = {'token': token, 'CustID': 'KH001', 'EmpID': 'NV1', 'TienCoc': '1000000',
+        payload = {'PromiseDate':'2026-09-25', 'items-0-GoldWeight':'1', 'token': token, 'CustID': 'KH001', 'EmpID': 'NV1', 'TienCoc': '1000000',
                    'Description': '', 'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
                    'items-0-Mode': 'new', 'items-0-ProductDesc': 'Nhẫn đặt', 'items-0-GoldCode': '18K',
                    'items-0-SL': '1', 'items-0-TotalWeight': '0', 'items-0-DiamondWeight': '0', 'items-0-TaskPrice': '0'}
-        with patch.object(D, 'pmv_user_for_web_user', return_value=SimpleNamespace(user_id='U1', shop_id='S1',emp_id='NV1')), patch.object(D, 'save', return_value='TDC001') as save:
+        from apps.pos import deposit_money as F
+        money = {'h': self.h.copy(), 'amount': Decimal('1000000'), 'cash': 0, 'bank': 0, 'tx': [], 'links': [], 'changes': []}
+        with patch.object(D, 'pmv_user_for_web_user', return_value=SimpleNamespace(user_id='U1', shop_id='S1',emp_id='NV1',till_id='T1')), patch.object(D, 'save', return_value='TDC001') as save, patch.object(D, 'header', return_value=self.h.copy()), patch.object(D, 'lines', return_value=[]), patch.object(F, 'financial', return_value=money), patch.object(F, 'execute', return_value=SimpleNamespace(status='done', message='Đã thu')) as receive:
             response = self.client.post(reverse('pos:dat_coc_add'), payload)
             self.assertIn('depositSaved', response.headers['HX-Trigger'])
             response = self.client.post(reverse('pos:dat_coc_add'), payload)
             self.assertContains(response, 'đã được xử lý')
             self.assertEqual(save.call_count, 1)
+            self.assertEqual(receive.call_count, 1)
+            received = receive.call_args.args[0]
+            self.assertEqual((received.cash, received.bank), (Decimal('1000000'), 0))
+            self.assertTrue(received.evidence['staff_confirmed'])
             self.assertEqual(DepositSubmission.objects.filter(completed=True).count(), 1)
 
-    def test_editor_post_recomputes_prices_units_and_cash_bank_before_save(self):
+    @patch('apps.pos.deposit_editor.S.gia_mysql', return_value={'18K': {'SellRate': Decimal('8000')}})
+    def test_editor_post_recomputes_prices_units_and_cash_bank_before_save(self, _prices):
         from apps.pos.deposit_models import DepositOrderState
         self.c.query.side_effect=lambda sql,*args: ([{'EmpID':'NV1','EmpName':'Nhân viên'}] if 'T_EMPLOYEE' in sql else
             [{'GoldCode':'18K','WeightUnit':'L','PriceUnit':'L'}] if 'I_GOLD' in sql else

@@ -670,7 +670,7 @@ button,input,select,textarea{font:inherit;color:inherit}
    · chân nút. Cả khung cao đúng màn hình, chỉ thân bảng cuộn.                     */
 .pg-ban{display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0;height:100%}
 #pos-foot{display:contents}
-.pg-ban__body{display:grid;grid-template-columns:minmax(0,1fr) 340px;
+.pg-ban__body{display:grid;grid-template-columns:minmax(0,1fr) 360px;
   grid-template-rows:minmax(0,1fr);gap:10px;padding:10px 12px;min-height:0}
 /* Cột TRÁI: thông tin (cao tự nhiên) + vàng bán + vàng đổi (chia phần còn lại, cuộn trong bảng) */
 .pg-ban__col-l{display:grid;grid-template-rows:auto minmax(0,1.35fr) minmax(0,1fr);gap:10px;min-height:0;min-width:0}
@@ -897,7 +897,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
 .pg-doi-nhap label{display:flex;flex-direction:column;gap:2px;position:relative}
 .pg-doi-nhap label > span{font-size:9.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-600)}
-.pg-doi-nhap .khbl-input,.pg-doi-nhap .khbl-select{width:104px;padding:5px 8px;font-size:13px}
+.pg-doi-nhap .khbl-input,.pg-doi-nhap .khbl-select{width:104px;padding:5px 18px;font-size:13px}
 .pg-doi-nhap .khbl-select{width:136px}
 .pg-doi-nhap .r{text-align:right}
 .pg-doi-nhap__dv{position:absolute;right:7px;bottom:6px;font-size:9.5px;color:#4CAF50;font-style:normal}
@@ -919,7 +919,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   margin:3px 0;padding:6px 0}
 .pg-tong__r--conlai span{font-weight:700;font-size:11.5px;letter-spacing:.05em;color:var(--ink)}
 .pg-tong__r--conlai b{font-size:17px;color:var(--gold-700)}
-.pg-tong__form{display:flex;flex-direction:column;gap:5px}
+.pg-tong__form{display:flex;flex-direction:column;gap:5px;position:relative}
 .pg-tong__r--nhap .khbl-input{width:132px;padding:4px 8px;font-size:13px;text-align:right}
 .pg-tong__r--ghi{flex-direction:column;align-items:stretch;gap:3px}
 .pg-tong__r--ghi .khbl-input{width:100%;padding:4px 8px;font-size:12.5px}
@@ -931,6 +931,51 @@ button,input,select,textarea{font:inherit;color:inherit}
   border-radius:6px;padding:3px 9px;line-height:1.1}
 .pg-botle__nut:hover{background:var(--gold-300);color:var(--ink)}
 .pg-botle__nut--bo{color:var(--ink-500);background:var(--surface);border-style:dashed;font-family:inherit;font-weight:600}
+
+/* Dấu SP đã cọc trên danh sách VÀNG BÁN (11/09/2026): 💸 của chính khách · ⛔ của khách khác */
+.pg-sp-coc{margin-left:4px;font-size:12px;cursor:help;vertical-align:middle}
+.pg-sp-coc--la{animation:pg-coc-nhac 1.3s ease-in-out infinite}
+tr.pg-tr-coc>td{background:var(--coc-xanh,#EAF5EC)}            /* của chính khách: xanh nhạt, chỉ để nhận ra */
+tr.pg-tr-coc>td:first-child{box-shadow:inset 3px 0 0 #2E7D46}
+tr.pg-tr-coc-la>td{background:#FBEDE9}                          /* của khách khác: đỏ nhạt, phải kiểm trước khi chốt */
+tr.pg-tr-coc-la>td:first-child{box-shadow:inset 3px 0 0 #B3402A}
+@keyframes pg-coc-nhac{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.pg-sp-coc--la{animation:none}}
+
+/* PHIẾU ĐẶT-CỌC áp vào đơn (11/09/2026): nút 💸 cạnh ô Tiền cọc + danh sách thả xuống */
+.pg-coc__nut{cursor:pointer;font-size:11.5px;font-weight:700;line-height:1;border-radius:6px;
+  padding:2px 6px;margin-left:5px;border:1px solid var(--gold-300);background:var(--gold-100);color:var(--gold-700)}
+.pg-coc__nut span{margin-left:3px;font-family:var(--font-mono,ui-monospace,monospace)}
+.pg-coc__nut--co{animation:pg-coc-goi 1.15s ease-in-out infinite}
+.pg-coc__nut--co:hover{animation:none;background:var(--gold-300);color:var(--ink)}
+.pg-coc__nut--bo{border-color:#E4B4A8;background:#FBEDE9;color:#B3402A}
+.pg-coc__nut--xem{font-weight:600}
+@keyframes pg-coc-goi{0%,100%{box-shadow:0 0 0 0 rgba(201,160,44,.55);transform:scale(1)}
+  50%{box-shadow:0 0 0 5px rgba(201,160,44,0);transform:scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.pg-coc__nut--co{animation:none;outline:2px solid var(--gold-500)}}
+/* Danh sách thả xuống: nổi NGAY DƯỚI nút 💸, rộng bằng khối TÍNH TỔNG (form đã position:relative),
+   nền xanh nhạt cùng tông với dòng hàng đã cọc; không đẩy các dòng bên dưới. */
+.pg-coc__ds{position:absolute;top: 140px;left:0;right:0;z-index:30;
+  border:1px solid #A8CDB3;border-radius:8px;background:var(--coc-xanh,#EAF5EC);
+  box-shadow:0 6px 18px rgba(28,25,23,.16);
+  padding:5px;margin:2px 0 4px;display:flex;flex-direction:column;gap:3px;max-height:200px;
+  overflow:auto;overscroll-behavior:contain}
+.pg-coc__dau{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;
+  letter-spacing:.04em;color:#2E7D46}
+.pg-coc__dong{cursor:pointer;border:0;background:none;color:var(--ink-500);font-size:12px;line-height:1;padding:2px 4px}
+.pg-coc__dong-p{cursor:pointer;display:grid;grid-template-columns:16px minmax(112px,1fr) auto auto;align-items:center;gap:6px;
+  text-align:left;font-size:12px;color:var(--ink-700);background:#fff;border:1px solid var(--line);
+  border-radius:6px;padding:4px 6px}
+.pg-coc__dong-p:hover{border-color:#7FB694;background:#DCEEE2}
+.pg-coc__dong-p.on{border-color:#2E7D46;background:#DCEEE2;color:#1F5C33;font-weight:600}
+.pg-coc__dong-p:disabled,.pg-coc__dong-p:disabled:hover{cursor:not-allowed;background:#f6f2ef;border-color:#e1d4ca;color:#8a8078;opacity:.75;pointer-events:auto}
+.pg-coc__dong-p:disabled .pg-coc__tick{color:#b27627}
+.pg-coc__tick{font-style:normal;color:#2E7D46}
+.pg-coc__mon{color:var(--ink-500);font-size:11px}
+.pg-coc__tien{font-weight:700}
+.pg-coc__trong{font-size:11.5px;color:var(--ink-500);margin:2px 0}
+.pg-coc__tong{font-size:11.5px;color:#1F5C33;border-top:1px dashed #A8CDB3;padding-top:4px}
+.pg-coc__loi{font-size:11px;color:#B3402A;margin:0 0 3px}
 
 /* PHƯƠNG THỨC THANH TOÁN */
 .pg-pay{display:flex;flex-direction:column;gap:5px;border-top:1px dashed var(--line);padding-top:6px;margin-top:2px}
@@ -1135,3 +1180,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* Invoice groups and payment details */
 .hd-transfer{display:block;color:#9b6b19;font-weight:700;white-space:nowrap;margin-top:4px}.hd-support{display:block;margin-top:4px}.hd-thau-preview{display:flex;justify-content:center;overflow:auto}.hd-member-actions{position:relative;text-align:left}.hd-member-actions summary{cursor:pointer;color:#78551c;font-size:12px;padding:6px}.hd-member-actions__item{display:flex;gap:5px;flex-wrap:wrap;padding:8px;border-top:1px solid var(--line)}.hd-member-actions__item>b{width:100%;font-size:11px}.hd-table .hd-money-buy i{max-width:140px;white-space:normal;vertical-align:middle}.hd-table .hd-double span+span{margin-top:4px}
+
+.pg-coc__money-error{display:flex;gap:8px;align-items:center;padding:4px 10px 9px;color:#92400e;font-size:11px}.pg-coc__money-error small{flex:1}.pg-coc__money-error button{border:1px solid #c4b5fd;border-radius:6px;padding:4px 7px;color:#6d28d9;background:#f5f3ff;white-space:nowrap}
+
+.pg-coc__ngay{display:flex;flex-direction:column;gap:3px;min-width:0}.pg-coc__ngay b{font-size:10px;white-space:nowrap}.pg-coc__ngay small{font-size:10px;font-weight:400}.dc-document-identity{padding:10px 14px;margin-bottom:12px;border:1px solid #ddd6fe;border-radius:10px;background:#f5f3ff;color:#5b21b6}.dc-document-identity small{display:block;margin-top:4px}.dc-invoice-code{color:#6d28d9}

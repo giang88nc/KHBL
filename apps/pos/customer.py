@@ -11,8 +11,11 @@ import os
 from pathlib import Path
 import re
 import threading
+from contextlib import contextmanager
+from functools import wraps
 
 from django.conf import settings
+from django.db import connection
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -20,6 +23,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from apps.pmv.client import PmvClient, PmvProcError
 
 from .vn_text import KY_TU_HONG, bo_dau, chuan_hoa, hoa_dau_tu
+from . import customer_phones as P
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,31 @@ class CustomerSaveError(Exception):
 SAVE_LOCK = threading.Lock()
 _SAVED_TOKENS = OrderedDict()
 _MAX_SAVED_TOKENS = 256
+
+
+@contextmanager
+def phone_write_lock(target):
+    """Khóa chung mọi worker KHBL, bao gồm sync và cập nhật ảnh giữ dữ liệu khách."""
+    name = "khbl:customer-write:" + target
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT GET_LOCK(%s, 10)", (name,))
+        if cursor.fetchone()[0] != 1:
+            raise CustomerSaveError("Một yêu cầu đang lưu khách; vui lòng thử lại.")
+    try:
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT RELEASE_LOCK(%s)", (name,))
+
+
+def serialized_write(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        client = kwargs.get("client") or PmvClient(tag="khach_luu")
+        kwargs["client"] = client
+        with phone_write_lock(client.target):
+            return fn(*args, **kwargs)
+    return wrapped
 
 IMAGE_FIELDS = {
     "anh_dai_dien": ("p_ImageData", "p_ImagePath", 1600, 380_000),
@@ -91,7 +120,7 @@ def duoc_sua(user):
     return quyen(user, "can_edit")
 
 
-def clean_form(post):
+def clean_form(post, *, allow_unknown_gender=False):
     """Chuẩn hóa và kiểm tra dữ liệu form. Trả ``(data, errors, warnings)``."""
     errors, warnings = [], []
 
@@ -112,17 +141,24 @@ def clean_form(post):
     if not name:
         errors.append("Chưa nhập họ tên khách")
 
-    raw_phone = (post.get("Phone") or "").strip()
-    phone = re.sub(r"[\s.()\-]", "", raw_phone)
-    if phone and (not phone.isdigit() or not 9 <= len(phone) <= 11):
-        errors.append("Số điện thoại phải gồm 9–11 chữ số")
+    phones = {}
+    for column, key, label in zip(P.COLUMNS, P.KEYS, ("SĐT chính", "SĐT 2", "SĐT 3")):
+        value = P.phone_key(post.get(column))
+        if value and not P.valid(value):
+            errors.append(label + " phải gồm đúng 10 chữ số")
+        phones[key] = value if column == "Phone" or column in post else None
+    entered = [v for v in phones.values() if v]
+    if len(entered) != len(set(entered)):
+        errors.append("Ba số điện thoại phải khác nhau")
 
     cmnd = re.sub(r"\s", "", post.get("CMND") or "")
     if cmnd and not re.fullmatch(r"(?:[0-9]{9}|[0-9]{12})", cmnd):
         errors.append("Số CCCD/CMND phải gồm đúng 9 hoặc 12 chữ số")
 
     gender = (post.get("Gender") or "").strip()
-    if gender not in ("0", "1"):
+    if allow_unknown_gender and not gender:
+        gender = None
+    elif gender not in ("0", "1"):
         errors.append("Chưa xác định giới tính — chọn theo thông tin khách cung cấp")
 
     birth = _date_vn(post.get("BirthDate"), "Ngày sinh", errors)
@@ -146,7 +182,7 @@ def clean_form(post):
     return {
         "cust_id": (post.get("CustID") or "").strip(),
         "name": name,
-        "phone": phone,
+        **phones,
         "cmnd": cmnd,
         "address": text("Address", "Địa chỉ", 500),
         "birth": birth,
@@ -208,15 +244,20 @@ def prepare_images(files):
 def duplicate_errors(client, data):
     """Kiểm tra sớm để báo rõ khách nào đang giữ số điện thoại/CCCD."""
     clauses, params = [], []
-    if data["phone"]:
-        clauses.append("Phone = ?")
-        params.append(data["phone"])
+    phones = {data.get(k) for k in P.KEYS} - {None, ""}
+    if len([data.get(k) for k in P.KEYS if data.get(k)]) != len(phones):
+        return ["Ba số điện thoại phải khác nhau"]
+    for phone in sorted(phones):
+        if not P.valid(phone):
+            return ["Số điện thoại phải gồm đúng 10 chữ số"]
+        clauses.append(P.exact_sql())
+        params.extend((phone,) * 3)
     if data["cmnd"]:
         clauses.append("CMND = ?")
         params.append(data["cmnd"])
     if not clauses:
         return []
-    sql = ("SELECT CustID, CustCode, CustName, Phone, CMND FROM I_CUSTOMER WITH (NOLOCK) "
+    sql = ("SELECT CustID, CustCode, CustName, Phone, GhiChu2, GhiChu3, CMND FROM I_CUSTOMER "
            "WHERE (" + " OR ".join(clauses) + ")")
     if data["cust_id"]:
         sql += " AND CustID <> ?"
@@ -225,19 +266,24 @@ def duplicate_errors(client, data):
     errors = []
     for row in rows:
         who = f"{row.get('CustCode') or row['CustID']} — {row.get('CustName') or 'khách đã có'}"
-        if data["phone"] and row.get("Phone") == data["phone"]:
-            errors.append(f"Số điện thoại {data['phone']} đã thuộc {who}")
+        for phone in sorted(phones & P.values(row)):
+            errors.append(f"Số điện thoại {phone} đã thuộc {who}")
         if data["cmnd"] and row.get("CMND") == data["cmnd"]:
             errors.append(f"CCCD/CMND {data['cmnd']} đã thuộc {who}")
     return list(dict.fromkeys(errors))
 
 
-def upsert(data, images, shop_id="", client=None):
+@serialized_write
+def upsert(data, images, shop_id="", client=None, *, on_created=None):
     """UPSERT khách, mở sổ điểm nếu mới, sau đó mới ghi ảnh. Phải gọi trong SAVE_LOCK."""
     client = client or PmvClient(tag="khach_luu")
     current = _current(client, data["cust_id"]) if data["cust_id"] else None
     if data["cust_id"] and not current:
         raise CustomerSaveError("Khách hàng không còn tồn tại; hãy đóng popup và tải lại danh sách")
+    data = dict(data)
+    for column, key in zip(P.COLUMNS, P.KEYS):
+        if data.get(key) is None:
+            data[key] = P.phone_key((current or {}).get(column))
     dup = duplicate_errors(client, data)
     if dup:
         raise CustomerSaveError("\n".join(dup))
@@ -253,9 +299,12 @@ def upsert(data, images, shop_id="", client=None):
     cust_code = (current or {}).get("CustCode") or _result_value(sets, "CustCode")
     if not cust_id:
         raise CustomerSaveError(f"{proc} không trả về mã khách; chưa thể xác nhận đã lưu")
+    if not current and on_created:
+        on_created(cust_id)
     saved = _current(client, cust_id)
     if not saved or saved.get("CustName") != data["name"] or (saved.get("Phone") or "") != data["phone"] \
-            or (saved.get("CMND") or "") != data["cmnd"]:
+            or (saved.get("CMND") or "") != data["cmnd"] \
+            or any((saved.get(column) or "") != data[key] for column, key in zip(P.COLUMNS[1:], P.KEYS[1:])):
         raise CustomerSaveError("PMV trả thành công nhưng dữ liệu đọc lại chưa khớp; vui lòng kiểm tra")
 
     warnings, incomplete = [], []
@@ -331,6 +380,7 @@ def delete(cust_id, client=None):
             "name": current.get("CustName") or ""}
 
 
+@serialized_write
 def cap_nhat_anh(cust_id, images, client=None):
     """CHỈ ĐỔI ẢNH (đại diện / CCCD) của khách ĐÃ CÓ — mọi thông tin khác đọc lại từ I_CUSTOMER và ghi y nguyên
     (proc I_CUSTOMER_Upd ghi cả 35 cột). images = dict như prepare_images. Dùng cho ô CCCD trên phiếu thâu (08/09/2026).
@@ -347,7 +397,7 @@ def cap_nhat_anh(cust_id, images, client=None):
     loai = (cu.get("CustTypeID") or "").strip().upper()
     data = {"cust_id": cust_id, "name": cu.get("CustName") or "", "phone": cu.get("Phone") or "", "cmnd": cu.get("CMND") or "",
             "address": cu.get("Address") or "", "birth": ngay(cu.get("BirthDate")),
-            "gender": "1" if cu.get("Gender") in (True, 1, "1", "True") else "0",
+            "gender": None if cu.get("Gender") is None else ("1" if cu.get("Gender") in (True, 1, "1", "True") else "0"),
             "issued": ngay(cu.get("NgayCap")), "issued_by": cu.get("NoiCap") or "", "email": cu.get("Email") or "",
             "notes": cu.get("Notes") or "", "cust_type": loai if loai in ("VIP", "VVIP", "CANHBAO") else "",
             "active": "1" if cu.get("Active") in (True, 1, "1") else "0"}
@@ -574,8 +624,9 @@ def _params(data, current, shop_id, client):
         "p_Masothue": current.get("Masothue") or "", "ShopID": shop_id or "",
         "p_ImageMatTruocCMND": None, "p_ImageMatSauCMND": None,
         "p_NgayCap": data["issued"] or ("01/01/1900" if data["cmnd"] else ""),
-        "p_NoiCap": data["issued_by"], "p_GhiChu2": current.get("GhiChu2") or "",
-        "p_GhiChu3": current.get("GhiChu3") or "", "p_ImagePath": None,
+        "p_NoiCap": data["issued_by"],
+        "p_GhiChu2": data.get("phone2") if data.get("phone2") is not None else current.get("GhiChu2") or "",
+        "p_GhiChu3": data.get("phone3") if data.get("phone3") is not None else current.get("GhiChu3") or "", "p_ImagePath": None,
         "p_ImagePathMatTruoc": None, "p_ImagePathMatSau": None,
         "p_ImageData": None, "p_ImageDataMatTruoc": None, "p_ImageDataMatSau": None,
         "p_Passport": current.get("Passport") or "",

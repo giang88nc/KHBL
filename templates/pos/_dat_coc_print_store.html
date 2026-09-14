@@ -1,0 +1,5 @@
+{% load pos_extras %}<section class="store-copy" aria-label="Bản tiệm giữ" data-store-copy>
+  <header><img src="{{ receipt_qr }}" alt="QR {{ pk }}"><div class="store-info"><b>{{ pk }}</b><span><strong>{{ h.CustName|default:h.CustID }}</strong> &nbsp; {{ h.Phone|default:'—' }}</span><span>Đặt: {{ h.TrnDate|date:'d/m/Y' }} · Hẹn: {{ work.promise_date|date:'d/m/Y'|default:'—' }}</span><span class="store-deposit">Cọc: <b>{{ h.TienCoc|tien_tran }} đ</b></span></div></header>
+  <div class="store-content" data-fit-area><table><tbody data-store-items>{% for row in view_lines %}<tr><td><b>{{ forloop.counter }}. {{ row.ProductDesc }}</b> · {{ row.GoldCode }} · {{ row.GoldWeight|floatformat:'3' }} {{ row.unit }}{% if row.SL > 1 %} · SL {{ row.SL }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  <footer class="store-employee">{{ work.responsible|default:'—' }}</footer>
+</section>

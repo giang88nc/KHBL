@@ -1,20 +1,24 @@
 {% extends "base.html" %}{% load static pos_extras %}
 {% block title %}Bảng giá{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/bang_gia.css' %}?v=20260908.sync-state1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/bang_gia.css' %}?v=20260912.local-prices">{% endblock %}
 {% block page_title %}Bảng giá vàng{% endblock %}
-{% block page_sub %}Sửa giá trực tiếp, ghim loại vàng và cập nhật cùng một lần.{% endblock %}
+{% block page_sub %}Quản lý giá mua vào và bán ra sử dụng trong hệ thống.{% endblock %}
 {% block page_tools %}
 <button id="gia-sync-pmv-report" class="khbl-btn khbl-btn--gold pg-gia__sync is-checking" type="button" hx-get="{% url 'pos:gia_sync_pmv_report_xem' %}" hx-target="#modal-root" title="Đối chiếu và đồng bộ PMV Report"><span class="pg-gia__sync-icon" data-sync-icon>…</span><span data-sync-label>KIỂM TRA REPORT</span></button>
 <button id="gia-sync-kk" class="khbl-btn khbl-btn--outline pg-gia__sync is-checking" type="button" hx-get="{% url 'pos:gia_sync_kk_xem' %}" hx-target="#modal-root" title="Đối chiếu và đồng bộ giá KK"><span class="pg-gia__sync-icon" data-sync-icon>…</span><span data-sync-label>KIỂM TRA KK</span></button>
 {% endblock %}
 {% block content %}
 <div class="pg-gia">
+  <section class="pg-gia__source-card">
+    <div><span class="pg-gia__eyebrow">GIÁ SỬ DỤNG TRONG HỆ THỐNG</span><strong>Chủ động cập nhật giá tại quầy</strong><p>Lưu riêng từng loại hoặc lưu tất cả thay đổi. Giá đã lưu áp dụng cho các phép tính mới.</p></div>
+    <div class="pg-gia__source-badges"><span>{{ prices|length }} loại vàng</span><span>Giá mua &amp; giá bán</span><span class="pg-gia__source-active">● Bảng giá chính</span></div>
+  </section>
   <section class="pg-gia__sync-state" aria-label="Trạng thái đồng bộ giá">
     <div id="gia-pmv-report-status" class="pg-gia__kk-wrap" data-status-url="{% url 'pos:gia_pmv_report_trang_thai' %}" data-sync-button="gia-sync-pmv-report" data-sync-source="REPORT" role="status">Đang kiểm tra PMV Report…</div>
     <div id="gia-kk-status" class="pg-gia__kk-wrap" data-status-url="{% url 'pos:gia_kk_trang_thai' %}" data-sync-button="gia-sync-kk" data-sync-source="KK" role="status">Đang kiểm tra giá KK…</div>
   </section>
   {% if price_error %}<div class="pg-gia__error" role="alert">{{ price_error }}</div>{% endif %}
-  {% if last_batch and last_batch.status != 'synced' %}
+  {% if last_batch and last_batch.status != 'synced' and last_batch.status != 'saved' %}
   <div class="pg-gia__result" role="alert">
     <div><b>Đã lưu MySQL nhưng chưa hoàn tất đồng bộ.</b><small>{{ last_batch.created_at|date:"d/m/Y H:i:s" }} · {{ last_batch.error }}</small></div>
     <form method="post" action="{% url 'pos:gia_dong_bo_lai' last_batch.id %}">{% csrf_token %}<button class="khbl-btn" type="submit">Thử lại</button></form>
@@ -22,19 +26,19 @@
   
   <form id="gia-form" method="post" action="{% url 'pos:gia_cap_nhat' %}">
     {% csrf_token %}<input type="hidden" name="edit_token" value="{{ edit_token }}">
-    <section class="khbl-card" aria-labelledby="gia-heading">
+    <section class="khbl-card pg-gia__editor" aria-labelledby="gia-heading">
       <div class="pg-gia__toolbar">
-        <div><h2 class="khbl-page__title">GIÁ HIỆN HÀNH</h2><p>Chỉnh trực tiếp, ghim dòng cần hiển thị rồi cập nhật một lần.</p></div>
+        <div><h2 class="khbl-page__title" id="gia-heading">CẬP NHẬT GIÁ</h2><p>Nhập số tiền bằng đồng · chọn Ghim để đưa lên bảng niêm yết.</p></div>
         <div class="pg-gia__actions">
           <button class="khbl-btn khbl-btn--outline" type="button" id="gia-view" data-board-url="{% url 'pos:gia_xem_bang' %}">XEM BẢNG</button>
-          <button class="khbl-btn khbl-btn--gold" type="submit" id="gia-submit" {% if not prices or write_lock %}disabled{% endif %}>CẬP NHẬT</button>
+          <button class="khbl-btn khbl-btn--gold" type="submit" id="gia-submit" {% if not prices %}disabled{% endif %}>LƯU TẤT CẢ</button>
         </div>
       </div>
       <div class="pg-gia__scroll"><table class="pg-gia__table">
         <caption class="sr">Chỉnh sửa giá mua, giá bán, ghim và thứ tự hiển thị</caption>
-        <thead><tr><th scope="col">Số thứ tự</th><th scope="col">Ghim bảng</th><th scope="col">Loại vàng</th><th scope="col" class="right pg-gia__buy">Giá mua (₫)<small>Tiệm mua vào</small></th><th scope="col" class="right">Giá bán (₫)<small>Tiệm bán ra</small></th><th scope="col" class="right">Chênh lệch</th><th scope="col">Cập nhật</th></tr></thead>
+        <thead><tr><th scope="col">Thứ tự</th><th scope="col">Ghim bảng</th><th scope="col">Loại vàng</th><th scope="col" class="right pg-gia__buy">Giá mua (₫)<small>Tiệm mua vào</small></th><th scope="col" class="right">Giá bán (₫)<small>Tiệm bán ra</small></th><th scope="col" class="right">Chênh lệch</th><th scope="col">Cập nhật</th><th scope="col">Thao tác</th></tr></thead>
         <tbody>{% for r in prices %}
-          <tr data-price-row data-search="{{ r.gold_type }} {{ r.gold_name }}">
+          <tr data-price-row data-gold-type="{{ r.gold_type }}" data-search="{{ r.gold_type }} {{ r.gold_name }}">
             <td><input type="hidden" name="row_id" value="{{ r.id }}"><input class="pg-gia__order num" type="number" name="position_{{ r.id }}" min="1" max="9999" step="1" required value="{{ r.position }}" aria-label="Số thứ tự {{ r.gold_name }}"></td>
             <td><label class="pg-gia__pin"><input type="checkbox" name="pinned_{{ r.id }}" {% if r.pinned %}checked{% endif %} aria-label="Ghim {{ r.gold_name }}"><span>Ghim</span></label></td>
             <th scope="row"><span class="pg-gia__gold">{{ r.gold_type }}</span><span class="pg-gia__name">{{ r.gold_name }}{% if not r.unit_choice %} · /{{ r.unit }}{% endif %}</span>{% if r.unit_choice %}<select class="pg-gia__unit" name="unit_{{ r.id }}" required aria-label="Đơn vị giá {{ r.gold_name }}"><option value="">Chọn đơn vị…</option><option value="gram" {% if r.unit == "gram" %}selected{% endif %}>Đồng/gram</option><option value="chỉ" {% if r.unit == "chỉ" %}selected{% endif %}>Đồng/chỉ</option></select>{% endif %}</th>
@@ -42,8 +46,9 @@
             <td class="right"><input class="pg-gia__amount num" name="sell_{{ r.id }}" data-amount="sell" inputmode="numeric" required pattern="[0-9]+|[0-9]{1,3}(\.[0-9]{3})+" maxlength="15" value="{% if r.sell_input != None %}{{ r.sell_input }}{% else %}{{ r.sell|tien_tran }}{% endif %}" aria-label="Giá bán {{ r.gold_name }}"></td>
             <td class="right num pg-gia__spread" data-spread>{{ r.spread|tien_tran }}</td>
             <td class="pg-gia__updated num">{{ r.effective_at|date:"H:i:s" }}<small>{{ r.effective_at|date:"d/m/Y" }}</small></td>
+            <td><button class="khbl-btn khbl-btn--outline pg-gia__save-row" type="submit" name="save_row" value="{{ r.id }}" formnovalidate aria-label="Lưu {{ r.gold_name }}">LƯU</button><small class="pg-gia__row-state" aria-live="polite">Đã lưu</small></td>
           </tr>
-        {% empty %}<tr><td colspan="7" class="pg-gia__empty">Chưa có giá hiện hành.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="8" class="pg-gia__empty">Chưa có giá hiện hành.</td></tr>{% endfor %}
         </tbody>
       </table></div>
       <div class="pg-gia__foot"><span id="gia-count" aria-live="polite">{{ prices|length }} loại vàng</span><span id="gia-edit-status" aria-live="polite">Xem bảng hiển thị các dòng đã ghim và lưu.</span></div>
@@ -64,4 +69,4 @@
   <div class="pg-gia-preview__viewport"><div class="pg-gia-preview__stage"><iframe id="gia-preview-frame" title="Bảng giá vàng Kim Hạnh II" width="1280" height="520"></iframe></div></div>
 </dialog>
 {% endblock %}
-{% block extra_js %}<script defer src="{% static 'js/bang_gia.js' %}?v=20260908.sync-state1"></script>{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/bang_gia.js' %}?v=20260912.local-prices"></script>{% endblock %}

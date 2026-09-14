@@ -1,0 +1,5 @@
+{% extends 'pos/_thau_cat_modal.html' %}
+{% block cat_ghi_chu %}<p class="dim" style="margin-top:8px;font-size:12px">Máy chủ chỉ xử lý tạm trong RAM, không lưu ảnh. Bấm “Dùng ảnh đã tách” để trở về popup chụp, sau đó LƯU VỀ MÁY.</p><p data-local-card-error role="alert"></p>{% endblock %}
+{% block cat_dong %}khblLocalCardClose(){% endblock %}
+{% block cat_luu %}<button class="khbl-btn khbl-btn--gold" type="button" data-local-card-apply>✓ Dùng ảnh đã tách</button>{% endblock %}
+{% block cat_script_extra %}<script>(()=>{const root=document.getElementById('kh-local-card-dialog');if(!root)return;root.querySelector('.khbl-modal__x').onclick=window.khblLocalCardClose;root.querySelector('.khbl-modal__veil').onclick=window.khblLocalCardClose;})();</script>{% endblock %}

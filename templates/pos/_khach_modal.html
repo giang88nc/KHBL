@@ -8,7 +8,9 @@
 {% block modal_body %}
 {% if k %}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
-    <div class="khbl-item__w"><span>Điện thoại</span><b class="mono">{{ k.Phone|default:"—" }}</b></div>
+    <div class="khbl-item__w"><span>SĐT chính</span><b class="mono">{{ k.Phone|default:"—" }}</b></div>
+    {% if k.GhiChu2 %}<div class="khbl-item__w"><span>SĐT 2</span><b class="mono">{{ k.GhiChu2 }}</b></div>{% endif %}
+    {% if k.GhiChu3 %}<div class="khbl-item__w"><span>SĐT 3</span><b class="mono">{{ k.GhiChu3 }}</b></div>{% endif %}
     <div class="khbl-item__w"><span>Mã khách</span><b class="mono">{{ k.CustCode|default:"—" }}</b></div>
     <div class="khbl-item__w"><span>CCCD/CMND</span><b class="mono">{{ k.CMND|default:"—" }}</b></div>
     <div class="khbl-item__w"><span>Điểm tích lũy</span><b>{{ k.Diem|floatformat:0 }}</b></div>

@@ -1,0 +1,8 @@
+<div id="dc-hero-kpis" class="dc-work-kpis dc-hero-badges" role="group" aria-label="Công việc theo phạm vi tìm kiếm"{% if kpi_oob %} hx-swap-oob="outerHTML"{% endif %}{% if not kpis %} hidden{% endif %}>
+{% if kpis %}
+  <button type="button" data-dc-work="pending" title="Lọc phiếu chưa giao"><b>{{ kpis.pending }}</b><span>Chưa giao</span></button>
+  <button type="button" data-dc-work="overdue" class="dc-kpi-urgent" title="Lọc phiếu quá hẹn"><b>{{ kpis.overdue }}</b><span>Quá hẹn</span></button>
+  <button type="button" data-dc-work="call" title="Lọc phiếu cần liên hệ"><b>{{ kpis.call }}</b><span>Cần liên hệ</span></button>
+  <button type="button" data-dc-work="money" title="Lọc phiếu cọc cần đối soát"><b>{{ kpis.money }}</b><span>Đối soát cọc</span></button>
+{% endif %}
+</div>

@@ -1,0 +1,62 @@
+/* BÁO CÁO (12/09/2026) — cùng ngôn ngữ vàng kim của KHBL, prefix .bc- để không đụng màn khác */
+.bc-page{display:grid;gap:12px;padding-bottom:22px;color:var(--ink-700,#3A3430)}
+.bc-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  padding:14px 20px;border:1px solid var(--line,#EAE4D6);border-radius:18px;
+  background:linear-gradient(115deg,#FBF7EC,#FDFCF9 60%,#F6EFDC)}
+.bc-heading{display:flex;align-items:center;gap:16px}
+.bc-eyebrow{font-size:10px;font-weight:800;letter-spacing:2px;color:var(--gold-700,#8C6A1D)}
+.bc-hero h1{font-size:25px;letter-spacing:1px;margin:4px 0;color:var(--ink,#1C1917)}
+.bc-hero p{margin:0;font-size:12.5px;color:var(--ink-500,#7A7168)}
+.bc-loc{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.bc-loc label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--ink-500,#7A7168)}
+.bc-loc input{border:1px solid var(--line,#EAE4D6);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px}
+.bc-ky{display:flex;gap:5px;flex-wrap:wrap}
+.bc-ky__n{cursor:pointer;font:inherit;font-size:12px;font-weight:700;padding:6px 11px;border-radius:8px;
+  border:1px solid var(--line,#EAE4D6);background:#fff;color:var(--ink-600,#5C554E)}
+.bc-ky__n:hover{border-color:var(--gold-300,#E4C56A);background:var(--gold-100,#F7EFD8)}
+.bc-ky__n.on{background:var(--gold-100,#F7EFD8);border-color:var(--gold-500,#C9A02C);color:var(--gold-700,#8C6A1D)}
+.bc-nut{cursor:pointer;font:inherit;font-size:13px;font-weight:700;padding:7px 15px;border-radius:8px;
+  border:1px solid var(--line,#EAE4D6);background:#fff}
+.bc-nut--chinh{background:var(--gold-500,#C9A02C);border-color:var(--gold-500,#C9A02C);color:#fff}
+.bc-ky-text{font-size:12px;color:var(--ink-500,#7A7168);margin:0}
+.bc-loi{padding:14px 16px;border:1px solid #E4B4A8;border-radius:10px;background:#FBEDE9;color:#8E2F22}
+
+/* ba con số doanh thu — cùng cỡ, không số nào "chính" hơn số nào */
+.bc-dt{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.bc-dt__o{border:1px solid var(--line,#EAE4D6);border-radius:14px;background:#fff;padding:13px 17px;
+  display:flex;flex-direction:column;gap:6px;box-shadow:0 4px 14px rgba(28,25,23,.05);border-top:3px solid var(--gold-300,#E4C56A)}
+.bc-dt__o span{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--gold-700,#8C6A1D)}
+.bc-dt__o b{font-size:clamp(20px,2vw,29px);letter-spacing:-.6px;font-variant-numeric:tabular-nums;color:var(--ink,#1C1917)}
+.bc-dt__o small{font-size:11.5px;color:var(--ink-500,#7A7168);line-height:1.45}
+.bc-dt__o--rong{border-top-color:var(--gold-500,#C9A02C)}
+.bc-dt__o--hh{border-top-color:#2E7D46}
+.bc-dt__o--hh span{color:#2E7D46}
+
+.bc-luoi{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bc-the{border:1px solid var(--line,#EAE4D6);border-radius:14px;background:#fff;padding:13px 17px}
+.bc-the h2{font-size:13px;letter-spacing:.06em;color:var(--gold-700,#8C6A1D);margin:0 0 9px}
+.bc-the h2 small{font-weight:500;color:var(--ink-500,#7A7168);letter-spacing:0;text-transform:none}
+.bc-bang{width:100%;border-collapse:collapse;font-size:13px}
+.bc-bang th{text-align:left;font-weight:600;color:var(--ink-600,#5C554E);padding:6px 4px;border-bottom:1px solid #F1EBDD}
+.bc-bang td{padding:6px 4px;border-bottom:1px solid #F1EBDD}
+.bc-bang--rong thead th{font-size:10.5px;letter-spacing:.05em;color:var(--gold-700,#8C6A1D);
+  background:var(--gold-100,#F7EFD8);white-space:nowrap}
+.bc-so{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bc-manh{font-weight:700}
+.bc-stt{color:var(--ink-500,#7A7168);width:28px}
+.bc-tong th,.bc-tong td{font-weight:800;color:var(--ink,#1C1917);border-top:1px solid var(--gold-300,#E4C56A)}
+.bc-ra{color:#B3402A}
+.bc-vao{color:#2E7D46}
+.bc-luu-y th,.bc-luu-y td{color:#C07A1A}
+.bc-ghi{font-size:11px;color:var(--ink-500,#7A7168);margin:7px 0 0;line-height:1.5}
+.bc-trong{text-align:center;color:var(--ink-500,#7A7168);padding:16px 0}
+.bc-cuon{overflow-x:auto}
+.bc-bang th small{display:block;font-weight:500;font-size:10px;color:var(--ink-500,#7A7168)}
+@media(max-width:1000px){.bc-dt,.bc-luoi{grid-template-columns:1fr}}
+
+/* Chi tiết theo nhóm hàng × loại vàng (12/09/2026): dòng nhóm đậm, dòng loại vàng thụt vào */
+.bc-bang--nhom tr.bc-nhom>th,.bc-bang--nhom tr.bc-nhom>td{background:var(--gold-100,#F7EFD8);font-weight:700;
+  border-top:1px solid var(--gold-300,#E4C56A)}
+.bc-bang--nhom tr.bc-nhom-con>th{font-weight:600;color:var(--ink-600,#5C554E);padding-left:14px}
+.bc-bang--nhom tr.bc-nhom-con>th::before{content:"└ ";color:var(--gold-300,#E4C56A)}
+.bc-dim{color:var(--ink-500,#7A7168);font-size:11.5px}

@@ -212,6 +212,9 @@ def user_delete(request, user_id):
 
 def status(request):
     """Trang trạng thái GĐ0: backup gần nhất, sức khỏe PMV, nhật ký + cảnh báo vượt quyền."""
+    from apps.pos.quyen import chan
+
+    chan(request, "HE_THONG")
     state = {s.key: s.value for s in PmvState.objects.all()}
     audits = PmvAudit.objects.all()[:30]
     so_blocked = PmvAudit.objects.filter(kind=PmvAudit.Kind.BLOCKED).count()

@@ -1,0 +1,15 @@
+{% load pos_extras %}{% comment %}
+Nút 💸 cạnh ô "Tiền cọc" ở khối TÍNH TỔNG (GĐ chốt 11/09/2026).
+  · chưa chọn khách / khách không có phiếu cọc chờ  → KHÔNG hiện gì
+  · khách có phiếu cọc chờ                          → 💸 nhấp nháy gây chú ý, kèm số phiếu
+  · đang áp phiếu                                   → ❌ bấm là gỡ, tiền cọc về 0
+Bấm 💸 mở danh sách ngay dưới (xem _ban_coc_ds.html). Mọi thứ đi qua HTMX, không giữ trạng thái ở JS.
+{% endcomment %}{% if coc_ids %}
+<button type="button" class="pg-coc__nut pg-coc__nut--bo" title="Gỡ {{ coc_ids|length }} phiếu cọc đang áp — tiền cọc về 0"
+        hx-post="{% url 'pos:ban_coc' %}" hx-vals='{"bo": "1"}' hx-swap="none">❌</button>
+<button type="button" class="pg-coc__nut pg-coc__nut--xem" title="Xem các phiếu cọc đang áp"
+        hx-post="{% url 'pos:ban_coc' %}" hx-vals='{"mo": "1"}' hx-swap="none">{{ coc_ids|length }} phiếu</button>
+{% elif coc_ds %}
+<button type="button" class="pg-coc__nut pg-coc__nut--co" title="Khách có {{ coc_ds|length }} phiếu đặt cọc đang chờ — bấm để áp vào đơn"
+        hx-post="{% url 'pos:ban_coc' %}" hx-vals='{"mo": "1"}' hx-swap="none">💸<span>{{ coc_ds|length }}</span></button>
+{% endif %}

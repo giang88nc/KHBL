@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% comment %}
+Trang 403 dùng chung (GĐ báo 13/09/2026): máy quầy chạy Edge chế độ --app KHÔNG có nút Back, gặp
+"403 Forbidden" trần của Django là cụt đường, phải tắt cửa sổ mở lại. Nay 403 nói rõ vì sao và có
+đường quay về + hướng dẫn xin quyền. Django tự dùng tệp này khi view ném PermissionDenied.
+{% endcomment %}
+{% block title %}Chưa được cấp quyền{% endblock %}
+{% block page_head %}{% endblock %}
+{% block content %}
+<section class="khbl-403">
+  <h1>Mục này chưa mở cho tài khoản của bạn</h1>
+  <p class="khbl-403__ly">{% if exception %}{{ exception }}{% else %}Bạn chưa được cấp quyền xem mục này.{% endif %}</p>
+  <p class="khbl-403__huong">Đang đăng nhập: <b>{{ user.username|default:"(chưa đăng nhập)" }}</b>.
+    Cần dùng mục này thì nhờ Giám đốc mở quyền: <b>HỆ THỐNG → Người dùng → nút Quyền</b> của tài khoản,
+    tick ô <b>Xem</b> ở danh mục tương ứng rồi Lưu — vào lại là được ngay, không phải khởi động lại máy.</p>
+  <div class="khbl-403__nut">
+    <a class="khbl-btn khbl-btn--gold" href="{% url 'pos:ban' %}">Về BÁN HÀNG</a>
+    <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:dashboard' %}">Về TỔNG QUAN</a>
+  </div>
+</section>
+<style>
+.khbl-403{max-width:640px;margin:34px auto;padding:26px 30px;border:1px solid var(--line,#EAE4D6);
+  border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(28,25,23,.06)}
+.khbl-403 h1{font-size:21px;margin:0 0 10px;color:var(--ink,#1C1917)}
+.khbl-403__ly{margin:0 0 12px;padding:10px 13px;border-radius:9px;background:#FBEDE9;color:#8E2F22;font-size:13.5px}
+.khbl-403__huong{margin:0 0 18px;font-size:13.5px;line-height:1.65;color:var(--ink-600,#5C554E)}
+.khbl-403__nut{display:flex;gap:10px;flex-wrap:wrap}
+</style>
+{% endblock %}

@@ -1,0 +1,2 @@
+{% if record.BillCode %}<small class="dc-receipt-code">Chứng từ cọc: {{ record.BillCode }}</small>{% endif %}
+{% for link in links %}<small class="dc-invoice-code" title="Liên kết với hóa đơn {{ link.TrnID }}">{% if link.Status == 'W' %}HĐ nháp{% else %}HĐ áp dụng{% endif %}: {{ link.invoice_bill_code|default:link.TrnID }}</small>{% endfor %}

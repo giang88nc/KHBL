@@ -1,0 +1,8 @@
+<section class="dc-editor-section dc-photos" {% if form %}id="dc-photo-fields" hx-preserve{% endif %}>
+<h3>Hình ảnh phiếu <small>2 hình mẫu · 2 hình thành phẩm</small></h3>
+<div class="dc-photo-grid">{% for photo in photos %}<div class="dc-photo" data-photo-slot="{{ photo.key }}">
+<b>{{ photo.label }}</b><div class="dc-photo-preview"><img {% if photo.url %}src="{{ photo.url }}"{% else %}hidden{% endif %} alt="{{ photo.label }}" data-dc-photo-preview><span {% if photo.url %}hidden{% endif %}>Chưa có hình</span></div>
+{% if form %}<input type="file" hidden name="photo_{{ photo.key }}" accept="image/jpeg,image/png,image/webp" data-dc-photo-input><input type="hidden" name="remove_photo_{{ photo.key }}" value="0">
+<div class="dc-photo-actions"><button type="button" data-dc-photo-pick="camera">Chụp</button><button type="button" data-dc-photo-pick="file">Chọn</button><button type="button" data-dc-photo-remove title="Bỏ hình" aria-label="Bỏ {{ photo.label }}">×</button></div>{% endif %}
+</div>{% endfor %}</div>{% if form %}<small>JPEG / PNG / WebP · tối đa 10 MB mỗi hình.</small>{% endif %}
+</section>

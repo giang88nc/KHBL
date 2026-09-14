@@ -3,6 +3,10 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
   còn lại   = tiền vàng mới − tiền vàng cũ
   khách trả = còn lại − bớt + công thêm + vàng thêm − cọc
 Ô nhập gửi khi rời ô (change). Thêm: gợi ý BỚT LẺ + phương thức thanh toán (tiền mặt / CK / thẻ).
+
+PHIẾU ĐẶT-CỌC (GĐ chốt 11/09/2026): danh sách phiếu cọc của khách nằm TRONG form này, ngay sau ô
+Tiền cọc, nên nó thả ra đúng dưới nút 💸, rộng bằng khối TÍNH TỔNG và nổi lên trên chứ không đẩy các
+dòng bên dưới (position:absolute trong .pg-tong__form).
 {% endcomment %}
 <section class="pg-box pg-box--tong">
   {# 08/09 chiều: nút ◀/▶ đóng-mở khối (JS ủy quyền ở ban.html — nút bị OOB thay mỗi thao tác) #}
@@ -33,15 +37,19 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
         <span>Tiền bớt <i class="tru">−</i></span>
         <input name="bot" id="o-bot" class="khbl-input khbl-money r" inputmode="numeric"
                value="{{ g.bot|tien_tran }}"></label>
-      <label class="pg-tong__r pg-tong__r--nhap">
-        <span>Tiền cọc <i class="tru">−</i></span>
+      <label class="pg-tong__r pg-tong__r--nhap pg-tong__r--coc">
+        <span>Cọc đã thu <i class="tru">−</i>
+          {% include "pos/_ban_coc_nut.html" %}</span>
         <input name="coc" class="khbl-input khbl-money r" inputmode="numeric"
+               {% if coc_ids %}readonly title="Đang áp {{ coc_ids|length }} phiếu cọc — gỡ phiếu thì mới sửa tay được"{% endif %}
                value="{{ g.coc|tien_tran }}"></label>
+      {% if coc_mo %}{% include "pos/_ban_coc_ds.html" %}{% endif %}
       <label class="pg-tong__r pg-tong__r--ghi">
         <span>Ghi chú</span>
         <input name="ghi_chu" class="khbl-input" maxlength="200" placeholder="ghi thêm nếu cần"
                value="{{ g.ghi_chu }}"></label>
     </form>
+    {% if coc_loi %}<p class="pg-coc__loi">{{ coc_loi }}</p>{% endif %}
 
     {# ── BỚT LẺ: gợi ý tối đa 3 mức để tròn chục nghìn, bấm là fill vào TIỀN BỚT ── #}
     <div class="pg-botle">
@@ -97,7 +105,7 @@ Cột 2 — TÍNH TỔNG. Công thức GĐ chốt 03/09/2026 (làm tròn hàng n
     {% if phieu_chot %}</fieldset>{% endif %}
 
     <div class="pg-tong__tra{% if t.khach_tra < 0 %} pg-tong__tra--am{% elif t.khach_tra > 0 %} pg-tong__tra--duong{% endif %}">
-      <span>TIỀN KHÁCH TRẢ</span>
+      <span>TIỀN KHÁCH TRẢ{% if coc_ids %} CÒN LẠI{% endif %}</span>
       <b class="mono">{{ t.khach_tra|tien }}</b>
     </div>
   </div>

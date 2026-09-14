@@ -3,12 +3,13 @@
 {% block modal_title %}{% if k %}Sửa khách hàng{% else %}Thêm khách hàng{% endif %}{% endblock %}
 
 {% block modal_body %}
-<form id="kh-form" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq"
+<form id="kh-form" data-phone-check="{% url 'pos:khach_kiem_sdt' %}" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq"
       hx-sync="this:drop" hx-disabled-elt="#kh-save-btn" enctype="multipart/form-data">
   {% csrf_token %}
   <input type="hidden" id="kh-cust-id" name="CustID" value="{{ k.CustID|default:'' }}">
   <input type="hidden" name="Active" value="{% if k %}{{ k.Active }}{% else %}1{% endif %}">
   <input type="hidden" name="save_token" value="{{ save_token }}">
+  {% if customer_version != None %}<input type="hidden" id="kh-customer-version" name="version" value="{{ customer_version }}">{% endif %}
 
   {# ── quét thẻ CCCD: máy quét gõ thẳng vào ô này, JS tự tách 7 trường ── #}
   <div class="kh-qr">
@@ -24,72 +25,79 @@
   <div id="kh-qr-preview" style="overflow:auto;max-height:260px"></div>
   <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-discard" hidden>Bỏ kết quả quét</button>
   <button class="khbl-btn khbl-btn--outline" type="button" id="kh-qr-more" hidden>Quét thêm để đối chiếu cùng thẻ</button>
-  <a class="khbl-btn khbl-btn--ghost" href="{% url 'pos:qr_learning' %}" target="_blank" rel="noopener">Dạy bộ đọc QR</a>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px">
-    <div class="khbl-field" style="grid-column:span 2">
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px">
+    <div class="khbl-field">
       <label>Họ và tên <span style="color:var(--flame-500)">*</span></label>
       <input class="khbl-input" name="CustName" id="f-ten" value="{{ k.CustName|default:'' }}" required>
     </div>
     <div class="khbl-field">
-      <label>Mã khách</label>
-      <input class="khbl-input mono" value="{{ k.CustCode|default:'— tự cấp khi lưu' }}" disabled>
-    </div>
-
-    <div class="khbl-field">
-      <label>Điện thoại</label>
-      <input class="khbl-input mono" name="Phone" id="f-dt" value="{% if k %}{{ k.Phone|default:'' }}{% else %}{{ goi_y_dt|default:'' }}{% endif %}" inputmode="tel" autocomplete="off"{% if goi_y_dt %} title="SĐT lấy từ ô tìm khách"{% endif %}>
-    </div>
-    <div class="khbl-field">
-      <label>CCCD / CMND</label>
-      <input class="khbl-input mono" name="CMND" id="f-cccd" value="{{ k.CMND|default:'' }}" inputmode="numeric" autocomplete="off">
+      <label for="f-gt">Giới tính</label>
+      <select class="khbl-select" name="Gender" id="f-gt" required>
+        <option value="" {% if not k or k.gioi_tinh == "Chưa xác định" %}selected{% endif %}>Chưa xác định — cần chọn trước khi lưu</option>
+        <option value="0" {% if k.gioi_tinh == "Nữ" %}selected{% endif %}>Nữ</option>
+        <option value="1" {% if k.gioi_tinh == "Nam" %}selected{% endif %}>Nam</option>
+      </select>
     </div>
     <div class="khbl-field">
       <label>Ngày sinh</label>
       <input class="khbl-input" type="date" name="BirthDate" id="f-sinh" value="{{ k.BirthDate|date:'Y-m-d' }}">
     </div>
 
-    <div class="khbl-field" style="grid-column:span 2">
-      <label>Địa chỉ</label>
-      <input class="khbl-input" name="Address" id="f-dc" value="{{ k.Address|default:'' }}">
-    </div>
     <div class="khbl-field">
-      <label for="f-gt">Giới tính</label>
-      <select class="khbl-select" name="Gender" id="f-gt" required>
-        <option value="" {% if not k %}selected{% endif %}>Chưa xác định — cần chọn trước khi lưu</option>
-        <option value="0" {% if k and k.gioi_tinh != "Nam" %}selected{% endif %}>Nữ</option>
-        <option value="1" {% if k.gioi_tinh == "Nam" %}selected{% endif %}>Nam</option>
-      </select>
+      <label>CCCD / CMND</label>
+      <input class="khbl-input mono" name="CMND" id="f-cccd" value="{{ k.CMND|default:'' }}" inputmode="numeric" autocomplete="off">
     </div>
-
     <div class="khbl-field">
       <label>Ngày cấp</label>
       <input class="khbl-input" type="date" name="NgayCap" id="f-cap" value="{{ k.NgayCap|date:'Y-m-d' }}">
     </div>
-    <div class="khbl-field" style="grid-column:span 2">
+    <div class="khbl-field">
       <label>Nơi cấp</label>
       <input class="khbl-input" name="NoiCap" value="{{ k.NoiCap|default:'Cục Cảnh Sát QLHC về TTXH' }}">
     </div>
 
     <div class="khbl-field">
+      <label for="f-dt">SĐT chính</label>
+      <input class="khbl-input mono" name="Phone" id="f-dt" value="{% if k %}{{ k.Phone|default:'' }}{% else %}{{ goi_y_dt|default:'' }}{% endif %}" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" title="Nhập đúng 10 chữ số" autocomplete="off">
+    </div>
+    <div class="khbl-field">
+      <label for="f-dt2">SĐT 2</label>
+      <input class="khbl-input mono" name="GhiChu2" id="f-dt2" value="{{ k.GhiChu2|default:'' }}" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" title="Nhập đúng 10 chữ số, khác SĐT chính" autocomplete="off">
+    </div>
+    <div class="khbl-field">
+      <label for="f-dt3">SĐT 3</label>
+      <input class="khbl-input mono" name="GhiChu3" id="f-dt3" value="{{ k.GhiChu3|default:'' }}" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" title="Nhập đúng 10 chữ số, khác SĐT chính và SĐT 2" autocomplete="off">
+    </div>
+    <div id="kh-phone-status" role="status" aria-live="polite" class="dim" style="grid-column:1 / -1;font-size:12px">Mỗi số gồm 10 chữ số. Ba số phải khác nhau và chưa thuộc khách khác.</div>
+
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Địa chỉ</label>
+      <input class="khbl-input" name="Address" id="f-dc" value="{{ k.Address|default:'' }}">
+    </div>
+    <div class="khbl-field">
       <label>Email</label>
       <input class="khbl-input" type="email" name="Email" value="{{ k.Email|default:'' }}">
     </div>
-    <div class="khbl-field" style="grid-column:span 2">
+    <div class="khbl-field" style="grid-column:span 3">
       <label>Ghi chú</label>
       <input class="khbl-input" name="Notes" value="{{ k.Notes|default:'' }}">
     </div>
-  </div>
 
-  <div class="khbl-field" style="margin-top:13px">
-    <label>Loại khách <span class="dim" style="font-weight:400;text-transform:none;letter-spacing:0">— mặc định Thường</span></label>
-    <div class="kh-loai">
-      {% for lt in loai_ds %}
-        <label {% if lt.ma == "CANHBAO" %}class="kh-loai--do"{% endif %}>
-          <input type="radio" name="CustType" value="{{ lt.ma }}"
-                 {% if k.loai.ma == lt.ma or not k and not lt.ma %}checked{% endif %}>{{ lt.ten }}
-        </label>
-      {% endfor %}
+    <div class="khbl-field">
+      <label>Mã khách</label>
+      <input class="khbl-input mono" value="{{ k.CustCode|default:'— tự cấp khi lưu' }}" disabled>
+    </div>
+    <div class="khbl-field" style="grid-column:span 2">
+      <label>Loại khách <span class="dim" style="font-weight:400;text-transform:none;letter-spacing:0">— mặc định Thường</span></label>
+      <div class="kh-loai">
+        {% for lt in loai_ds %}
+          <label {% if lt.ma == "CANHBAO" %}class="kh-loai--do"{% endif %}>
+            <input type="radio" name="CustType" value="{{ lt.ma }}"
+                   {% if k.loai.ma == lt.ma or not k and not lt.ma %}checked{% endif %}>{{ lt.ten }}
+          </label>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
@@ -145,24 +153,7 @@
     </p>
   </div>
 
-  <dialog class="kh-camera" id="kh-camera" aria-labelledby="kh-camera-title">
-    <div class="kh-camera__head">
-      <b id="kh-camera-title">Chụp ảnh</b>
-      <button type="button" class="kh-camera__x" data-camera-close aria-label="Đóng camera">×</button>
-    </div>
-    <div class="kh-camera__stage">
-      <video data-camera-video autoplay muted playsinline></video>
-      <img data-camera-preview alt="Ảnh vừa chụp" hidden>
-      <canvas data-camera-canvas hidden></canvas>
-    </div>
-    <p class="kh-camera__msg" data-camera-msg role="status" aria-live="polite">Đang mở camera…</p>
-    <div class="kh-camera__actions">
-      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-close>Đóng</button>
-      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-retake hidden>Chụp lại</button>
-      <button class="khbl-btn" type="button" data-camera-capture disabled>Chụp</button>
-      <button class="khbl-btn" type="button" data-camera-use hidden>Lưu ảnh</button>
-    </div>
-  </dialog>
+  {% include "pos/_customer_camera.html" %}
 
   <div id="kh-luu-kq"></div>
 </form>

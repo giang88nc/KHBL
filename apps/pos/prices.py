@@ -1,4 +1,4 @@
-"""Giá MySQL là nguồn chính; mỗi lần lưu tạo một phiên bản và một lô đồng bộ."""
+"""Giá MySQL là nguồn sử dụng; lưu trực tiếp độc lập với đồng bộ PMV."""
 import hashlib
 import json
 import logging
@@ -155,7 +155,7 @@ def apply_kk_sync(token, user):
             raise ValueError
     except (signing.BadSignature, KeyError, ValueError, TypeError) as exc:
         raise PriceError('Phiên duyệt SYNC KK đã hết hạn hoặc không hợp lệ. Hãy xem lại bảng giá.') from exc
-    with save_lock():
+    with save_lock(), transaction.atomic():
         rows = decorate(current_rows(lock=True))
         if fingerprint(rows) != data['fingerprint']:
             raise PriceError('Giá MySQL vừa thay đổi. Hãy xem lại chênh lệch trước khi SYNC.')
@@ -176,10 +176,7 @@ def apply_kk_sync(token, user):
                     'INSERT INTO gold_prices (gold_type,gold_name,buy,sell,effective_at,source,is_current) '
                     'VALUES (%s,%s,%s,%s,%s,%s,1)',
                     [item['gold_type'], row['gold_name'], item['buy'], item['sell'], now, 'kk:manual'])
-        from django.core.cache import cache
-        cache.delete('khbl:gia_mysql')
-        cache.delete('khbl:xrate')
-        cache.delete('khbl:gia_pmv_report_canh_bao:v1')
+        transaction.on_commit(clear_price_cache)
         return len(actual)
 
 
@@ -278,7 +275,7 @@ def apply_pmv_report_sync(token, user):
             raise ValueError
     except (signing.BadSignature, KeyError, ValueError, TypeError) as exc:
         raise PriceError('Phiên duyệt SYNC PMV Report đã hết hạn hoặc không hợp lệ. Hãy xem lại bảng giá.') from exc
-    with save_lock():
+    with save_lock(), transaction.atomic():
         rows = decorate(current_rows(lock=True))
         if fingerprint(rows) != data['local']:
             raise PriceError('Giá MySQL local vừa thay đổi. Hãy xem lại chênh lệch trước khi SYNC.')
@@ -314,10 +311,7 @@ def apply_pmv_report_sync(token, user):
                         'pinned': False, 'position': max_position,
                         'unit': GOLD_UNITS.get(item['gold_type'], 'chỉ'),
                     })
-        from django.core.cache import cache
-        cache.delete('khbl:gia_mysql')
-        cache.delete('khbl:xrate')
-        cache.delete('khbl:gia_pmv_report_canh_bao:v1')
+        transaction.on_commit(clear_price_cache)
         return len(actual)
 
 
@@ -391,23 +385,35 @@ def save_prices(post, user):
     with save_lock():
         previous = PriceBatch.objects.filter(pk=token['batch'], user=user).first()
         if previous:
+            previous.editor_replayed = True
+            previous.editor_rows = decorate(current_rows())
             return previous  # POST lặp không sinh thêm lịch sử hoặc ghi lại MSSQL.
-        if token['target'] != gateway.dich_hien_tai():
-            raise PriceError('Đích MSSQL đã thay đổi. Hãy tải lại trang trước khi cập nhật.')
-        if PmvState.get('pmv_write_lock') == '1':
-            raise PriceError('Kênh ghi đang khóa. Chưa lưu giá; hãy kiểm tra trang Hệ thống.')
         with transaction.atomic():
             rows = decorate(current_rows(lock=True))
             if fingerprint(rows) != token['fingerprint']:
                 raise PriceError('Giá hoặc cách ghim đã được thay đổi ở nơi khác. Hãy tải lại trang để lấy bản mới.')
-            cleaned = clean_rows(post, rows)
-            from .price_sync import GOLD_CODES
-            if any(r['gold_type'] not in GOLD_CODES for r in cleaned):
-                raise PriceError('Có loại vàng chưa được cấu hình mã MSSQL; chưa lưu lô giá.')
+            selected = post.get('save_row', '')
+            selected_rows = [r for r in rows if str(r['id']) == selected] if selected else rows
+            if not selected_rows:
+                raise PriceError('Không tìm thấy loại vàng cần lưu. Hãy tải lại bảng giá.')
+            selected_post = post.copy()
+            if selected:
+                selected_post.setlist('row_id', [selected])
+            cleaned = clean_rows(selected_post, selected_rows)
+            positions = {r['id']: r['position'] for r in rows}
+            positions.update({r['id']: r['position'] for r in cleaned})
+            if len(set(positions.values())) != len(positions):
+                raise PriceError('Số thứ tự bị trùng. Hãy dùng LƯU TẤT CẢ khi đổi vị trí các dòng.')
             now = timezone.localtime().replace(tzinfo=None)
             payload = []
             with connection.cursor() as cursor:
                 for row in cleaned:
+                    old = next(r for r in rows if r['id'] == row['id'])
+                    price_changed = any(row[k] != old[k] for k in ('buy', 'sell', 'unit'))
+                    if not price_changed:
+                        PriceDisplay.objects.update_or_create(gold_type=row['gold_type'], defaults={
+                            'pinned': row['pinned'], 'position': row['position'], 'unit': row['unit']})
+                        continue
                     cursor.execute('UPDATE gold_prices SET is_current=0 WHERE id=%s AND is_current=1', [row['id']])
                     if cursor.rowcount != 1:
                         raise PriceError('Giá vừa thay đổi; hãy tải lại trang.')
@@ -420,9 +426,17 @@ def save_prices(post, user):
                                     'buy': row['buy'], 'sell': row['sell'], 'unit': row['unit']})
                     PriceDisplay.objects.update_or_create(gold_type=row['gold_type'], defaults={
                         'pinned': row['pinned'], 'position': row['position'], 'unit': row['unit']})
-            batch = PriceBatch.objects.create(id=uuid.UUID(token['batch']), user=user, target=token['target'], payload=payload)
-        # MySQL đã COMMIT. Bất kỳ lỗi MSSQL nào đều để lại lô có thể thử lại.
-        return sync_batch(batch)
+            batch = PriceBatch.objects.create(id=uuid.UUID(token['batch']), user=user,
+                                             target='mysql', status='saved', payload=payload)
+            transaction.on_commit(clear_price_cache)
+        batch.editor_rows = decorate(current_rows())
+        return batch
+
+
+def clear_price_cache():
+    from django.core.cache import cache
+    cache.delete_many(['khbl:gia_mysql', 'khbl:xrate', 'khbl:loaide',
+                       'khbl:gia_pmv_report_canh_bao:v1'])
 
 
 def sync_batch(batch):

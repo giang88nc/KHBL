@@ -39,6 +39,7 @@
       }
     };
     checkSource();
+    window.addEventListener('gia:saved', checkSource);
     window.setInterval(checkSource, 10 * 60 * 1000);
   });
   const rows = [...form.querySelectorAll('[data-price-row]')];
@@ -49,24 +50,100 @@
     const sell = amount(row.querySelector('[data-amount="sell"]').value);
     row.querySelector('[data-spread]').textContent = Number.isFinite(buy) && Number.isFinite(sell) ? format(sell - buy) : '—';
   };
+  const statusLine = document.getElementById('gia-edit-status');
+  const rowValue = row => JSON.stringify([...row.querySelectorAll('input:not([type="hidden"]),select')].map(f => f.type === 'checkbox' ? f.checked : f.value));
+  const baseline = new Map(rows.map(row => [row, rowValue(row)]));
+  const refreshDirty = () => {
+    let count = 0;
+    rows.forEach(row => {
+      const dirty = rowValue(row) !== baseline.get(row);
+      row.classList.toggle('is-dirty', dirty);
+      row.querySelector('.pg-gia__row-state').textContent = dirty ? 'Chưa lưu' : 'Đã lưu';
+      if (dirty) count++;
+    });
+    statusLine.textContent = count ? `${count} loại có thay đổi chưa lưu` : 'Giá đã lưu được sử dụng cho các phép tính mới.';
+    return count;
+  };
+  const toast = (text, error = false) => {
+    const item = document.createElement('div');
+    item.className = error ? 'error' : 'success'; item.setAttribute('role', error ? 'alert' : 'status');
+    item.textContent = text;
+    document.getElementById('toast-root')?.append(item);
+    item.addEventListener('click', () => item.remove());
+    setTimeout(() => item.remove(), error ? 15000 : 5000);
+  };
   rows.forEach(updateSpread);
   form.addEventListener('input', event => {
-    document.getElementById('gia-edit-status').textContent = 'Có thay đổi chưa lưu · Bấm CẬP NHẬT để lưu toàn bộ.';
+    refreshDirty();
     const row = event.target.closest('[data-price-row]');
     if (row) updateSpread(row);
   });
   form.querySelectorAll('[data-amount]').forEach(field => field.addEventListener('blur', () => {
     const value = amount(field.value);
     if (Number.isFinite(value)) field.value = format(value);
+    refreshDirty();
   }));
-  form.addEventListener('submit', () => {
-    const button = document.getElementById('gia-submit');
-    button.disabled = true; button.textContent = 'Đang cập nhật…';
-    document.getElementById('gia-edit-status').textContent = 'Đang lưu MySQL và đồng bộ MSSQL…';
+  let saving = false;
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (saving) return;
+    const selected = event.submitter?.closest('[data-price-row]');
+    const targets = selected ? [selected] : rows;
+    for (const row of targets) {
+      for (const field of row.querySelectorAll('input,select')) if (!field.reportValidity()) return;
+    }
+    const data = new FormData(form);
+    if (selected) data.set('save_row', selected.querySelector('[name="row_id"]').value);
+    saving = true;
+    const controls = [...form.querySelectorAll('input,select,button')];
+    const wasDisabled = controls.map(f => f.disabled);
+    controls.forEach(f => f.disabled = true);
+    statusLine.textContent = 'Đang lưu giá…';
+    targets.forEach(row => row.classList.add('is-saving'));
+    try {
+      const response = await fetch(form.action, {method: 'POST', body: data, headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Chưa lưu được giá.');
+      form.querySelector('[name="edit_token"]').value = result.edit_token;
+      result.rows.forEach(saved => {
+        const row = rows.find(r => r.dataset.goldType === saved.gold_type);
+        if (!row || !targets.includes(row)) return;
+        const oldId = row.querySelector('[name="row_id"]').value;
+        row.querySelector('[name="row_id"]').value = saved.id;
+        row.querySelector('[name="save_row"]').value = saved.id;
+        for (const key of ['buy', 'sell', 'position', 'pinned', 'unit']) {
+          const field = row.querySelector(`[name="${key}_${oldId}"]`);
+          if (!field) continue;
+          field.name = `${key}_${saved.id}`;
+          if (key === 'pinned') field.checked = saved.pinned;
+          else field.value = ['buy', 'sell'].includes(key) ? format(Number(saved[key])) : saved[key];
+        }
+        const date = new Date(saved.effective_at);
+        const updated = row.querySelector('.pg-gia__updated');
+        updated.textContent = date.toLocaleTimeString('vi-VN');
+        const day = document.createElement('small'); day.textContent = date.toLocaleDateString('vi-VN'); updated.append(day);
+        baseline.set(row, rowValue(row)); updateSpread(row);
+        row.classList.add('is-saved'); setTimeout(() => row.classList.remove('is-saved'), 1800);
+      });
+      refreshDirty(); toast(result.message);
+      window.dispatchEvent(new Event('gia:saved'));
+      // Chỉ tải lại lịch sử; giữ nguyên các ô khác đang soạn.
+      fetch(location.href).then(r => r.text()).then(html => {
+        const history = new DOMParser().parseFromString(html, 'text/html').querySelector('.pg-gia__history');
+        const current = document.querySelector('.pg-gia__history');
+        if (history && current) { history.open = current.open; current.replaceWith(history); }
+      }).catch(() => {});
+    } catch (error) {
+      statusLine.textContent = 'Chưa xác nhận lưu. Dữ liệu đang nhập vẫn được giữ lại.';
+      toast(error.message || 'Không nhận được kết quả lưu. Hãy kiểm tra kết nối.', true);
+    } finally {
+      controls.forEach((f, i) => f.disabled = wasDisabled[i]);
+      targets.forEach(row => row.classList.remove('is-saving'));
+      saving = false;
+    }
   });
-  window.addEventListener('pageshow', () => {
-    const button = document.getElementById('gia-submit');
-    if (button.textContent === 'Đang cập nhật…') {button.disabled = false; button.textContent = 'CẬP NHẬT';}
+  window.addEventListener('beforeunload', event => {
+    if (saving || rows.some(row => rowValue(row) !== baseline.get(row))) {event.preventDefault(); event.returnValue = '';}
   });
 
   const open = document.getElementById('gia-view');

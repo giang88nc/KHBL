@@ -1,0 +1,18 @@
+  <dialog class="kh-camera" id="kh-camera" aria-labelledby="kh-camera-title">
+    <div class="kh-camera__head">
+      <b id="kh-camera-title">Chụp ảnh</b>
+      <button type="button" class="kh-camera__x" data-camera-close aria-label="Đóng camera">×</button>
+    </div>
+    <div class="kh-camera__stage">
+      <video data-camera-video autoplay muted playsinline></video>
+      <img data-camera-preview alt="Ảnh vừa chụp" hidden>
+      <canvas data-camera-canvas hidden></canvas>
+    </div>
+    <p class="kh-camera__msg" data-camera-msg role="status" aria-live="polite">Đang mở camera…</p>
+    <div class="kh-camera__actions">
+      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-close>Đóng</button>
+      <button class="khbl-btn khbl-btn--outline" type="button" data-camera-retake hidden>Chụp lại</button>
+      <button class="khbl-btn" type="button" data-camera-capture disabled>Chụp</button>
+      <button class="khbl-btn" type="button" data-camera-use hidden>Lưu ảnh</button>
+    </div>
+  </dialog>

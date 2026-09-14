@@ -164,6 +164,7 @@ def doc(trn_id, c=None):
         # Đọc bằng CÙNG hàm moc_khoa (SELECT → datetime) để so chuỗi với kiem_moc khớp kiểu (proc _Get trả khác dạng).
         "upd": str(c.moc_khoa("TRN_RT_BUYSELL", "TrnID", h["TrnID"]) or ""),
         "ban": ban, "doi": doi,
+        "coc_ids": [r['DatCocID'] for r in c.query('SELECT DatCocID FROM TRN_RT_BUYSELL_DatCoc WITH (NOLOCK) WHERE TrnID=?',(trn_id,))],
         "tong": tinh_tong(sum((x[0] for x in ban), Decimal(0)),
                           sum((x[0] for x in doi), Decimal(0)),
                           h.get("Discount"), h.get("TaskPriceAdd"),
@@ -263,7 +264,7 @@ def _tham_so(c, proc, **rieng):
 
 
 def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_id,
-        ghi_chu="", bot=0, cong_them=0, vang_them=0, coc=0, c=None):
+        ghi_chu="", bot=0, cong_them=0, vang_them=0, coc=0, c=None, on_created=None):
     """trn_id rỗng = TẠO MỚI, có trn_id = SỬA. Trả dict(trn_id, bill_code, tong).
 
     Sau khi ghi LUÔN đọc lại đối chiếu — proc có thể trả rc=0 mà không đổi gì (luật 2)."""
@@ -297,6 +298,7 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
         if rc != 0 or not moi:
             raise PmvProcError("TRN_RT_BUYSELL_Ins", rc, sets)
         trn_id = moi
+        if on_created: on_created(trn_id)
         # Proc Ins của vendor không nhận p_TienCoc (luôn ghi 0), dù PayAmount đã trừ cọc.
         # Upd có tham số này: bổ sung ngay rồi kiểm chứng cả cột cọc và tiền khách trả.
         if M.dec(coc):
@@ -335,15 +337,28 @@ def chot(trn_id, *, till_id, user_id, c=None):
     """DUYỆT (v5 pha 5): Complete → (kiểm chưa có sổ quỹ) → T_TILL_TXN_Proc → KIỂM 6 ĐIỂM.
     Idempotent: đơn đã C thì không Complete lại; đã có dòng sổ quỹ thì không Proc lần 2."""
     c = c or S.client("chot_hoa_don")
+    from .deposit_models import DepositMoneyOperation
+    if DepositMoneyOperation.objects.filter(target=c.target,invoice_id=trn_id,kind='unlink',
+            status__in=['running','uncertain']).exists():
+        raise ValueError('Hóa đơn đang phục hồi liên kết cọc; cần đối soát trước khi chốt.')
     from .deposit_money import invoice_deposit_guard
     deposit_header=c.query('SELECT CustID,TienCoc FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))
     if deposit_header:
         invoice_deposit_guard(c,trn_id,deposit_header[0]['TienCoc'],deposit_header[0]['CustID'])
+    from . import deposit_application as A, ban_coc as BC
+    linked = A.linked_ids(c,trn_id)
+    if linked:
+        err = BC.kiem_san_pham(c,linked,[{'row':r} for r in c.query(
+            'SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))])
+        if err: raise ValueError(err)
     from .deposit_operations import check_holds
     check_holds([r['ProductCode'] for r in c.query('SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))],c.target)
     st = (c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)) or [{}])[0].get("Status")
     if st != CHOT_ROI:
         c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")
+    if linked:
+        current=A.invoice(c,trn_id)
+        A.check(c,A.linked_ids(c,trn_id),current['CustID'],trn_id,current['TienCoc'],'C')
     # ⚠ Complete tự tạo dòng T_TILL_TXN CHỜ (Status 'U', TillID NULL); Proc mới gán két + 'P'.
     # Chỉ coi là "đã vào sổ quỹ" khi Status='P' — thấy dòng U mà bỏ qua Proc là đơn C không két (đã dính 06/09).
     da_vao_ket = c.query("SELECT TOP 1 1 AS co FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID = ? AND Status = 'P'",
@@ -365,6 +380,15 @@ def chot(trn_id, *, till_id, user_id, c=None):
                   "AND TillID IS NOT NULL", (trn_id,))
     if not quy:
         raise PmvProcError("T_TILL_TXN_Proc", -2, [{"loi": "Đã chốt nhưng sổ quỹ chưa vào KÉT (Status≠P) cho hóa đơn."}])
+    if linked: A.finish(c,trn_id)
+    # XẾP HÀNG ZNS (14/09/2026) — chỉ TẠO dòng chờ gửi, KHÔNG gửi tin. Đặt ở ĐÂY vì chỉ sau trọn
+    # 6 điểm kiểm hậu-DUYỆT mới chắc chắn "hóa đơn lập THÀNH CÔNG". import TRONG hàm để app oa lỗi
+    # nạp cũng không chặn bán; hàm tự nuốt mọi lỗi bên trong, except ở đây là lưới thứ hai.
+    try:
+        from apps.oa import xep_hang as XH
+        XH.xep_hang_hoa_don(trn_id, c=c)
+    except Exception:
+        pass
     return True
 
 
@@ -397,6 +421,16 @@ def mo_lai(trn_id, *, user_id, c=None):
                                       (trn_id,)) or [{}])[0].get("Status") == NHAP,
         p_TrnRefID=trn_id, pType="SRT", pCongNoBanLe=0, p_UserUpd=user_id,
         p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_Type="0" if da_vao_ket else "1")
+    from .deposit_application import linked_ids
+    from .deposit_completion import after_detach
+    after_detach(c,linked_ids(c,trn_id),str(user_id))
+    # Đơn về nháp ⇒ dòng ZNS đang chờ phải HỦY, nếu không sẽ thành tin mồ côi và được gửi khi
+    # Giám đốc duyệt bước 2. Hủy = CẬP NHẬT status='cancelled', KHÔNG xóa dòng.
+    try:
+        from apps.oa import xep_hang as XH
+        XH.huy_xep_hang(trn_id, "source_not_completed", c=c)
+    except Exception:
+        pass
     return True
 
 
@@ -411,12 +445,23 @@ def huy(trn_id, *, user_id, c=None):
     if st[0]["Status"] == CHOT_ROI:
         raise PmvProcError("TRN_RT_BUYSELL_Del", -1, [{
             "loi": "Hóa đơn ĐÃ THANH TOÁN — bước 1 bấm HỦY THANH TOÁN (đơn về chờ), bước 2 mới XÓA được."}])
+    from .deposit_application import linked_ids
+    deposits_to_release=linked_ids(c,trn_id)
     c.goi_co_khoa(
         "TRN_RT_BUYSELL_Del", bang="TRN_RT_BUYSELL", cot_id="TrnID", gia_tri=trn_id,
         kiem_tra=lambda cl: not cl.query(
             "SELECT TrnID FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'", (trn_id,)),
         p_TrnID=trn_id, p_UserUpd=user_id,
         p_TrnDateTime_Upd_GDN=PmvClient.MOC_TRONG, p_LogDel="0")
+    from .deposit_completion import after_detach
+    after_detach(c,deposits_to_release,str(user_id))
+    # Đơn bị XÓA ⇒ đổi lý do hủy sang 'source_deleted'. Móc này chỉ chạy sau khi đã qua mo_lai()
+    # (huy() từ chối đơn C) nên dòng thường ĐANG cancelled — huy_xep_hang vẫn cập nhật lý do.
+    try:
+        from apps.oa import xep_hang as XH
+        XH.huy_xep_hang(trn_id, "source_deleted", c=c)
+    except Exception:
+        pass
     return True
 
 

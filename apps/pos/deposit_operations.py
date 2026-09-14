@@ -25,7 +25,10 @@ def signature(items):
 
 def base_state(c, h, items):
     info = D.decorate(dict(h))
-    return DepositOrderState(target=c.target,trn_id=h['TrnID'],original_promise=info['promise_date'],
+    return DepositOrderState(target=c.target,trn_id=h['TrnID'],bill_code=h.get('BillCode') or '',
+                             trn_date=h.get('TrnDate'),trn_time=h.get('TrnTime') or '',
+                             cust_id=h.get('CustID') or '',emp_id=h.get('EmpID') or '',status=h.get('Status') or 'W',
+                             original_promise=info['promise_date'],
                              promise=info['promise_date'],employee_id=h.get('EmpID') or '',
                              employee_name=h.get('EmpName') or '',item_signature=signature(items))
 
@@ -44,6 +47,10 @@ def overlay(rows, target):
         s = states.get(r['TrnID'])
         r['holds'] = [h for h in holds if h.trn_id == r['TrnID']]
         if not s: continue
+        r['bank_status']=s.payment_plan.get('bank_status','')
+        r['bank_message']=s.payment_plan.get('bank_message','')
+        if s.extra_notes:
+            r['note']='\n'.join(filter(None,[r.get('note',''),D.O.parse_description(D.O.pack_description(None,s.extra_notes))['note']]))
         r.update(promise_date=s.promise,original_promise=s.original_promise,EmpID=s.employee_id,
                  responsible=s.employee_name or 'Chưa phân công',next_contact=s.next_contact,
                  last_contact=s.last_contact,contacted=s.contacted,work_note=s.note,
@@ -61,12 +68,18 @@ def overlay(rows, target):
             ready = sum(x.get('ready',0) for x in s.items)
             delivered = sum(x.get('delivered',0) for x in s.items)
             r['progress_text'] = f'{ready}/{total} sẵn sàng · {delivered}/{total} đã giao' if total else ''
-        # Một app khác đã kết thúc phiếu hoặc KHBL đã hủy: không khôi phục nhắc hẹn từ trạng thái cũ.
-        if r['mobile_order'] and r['source_status'] in ('C','D'):
+        # Nhận trạng thái mới từ Mobile, nhưng giữ quyết định NV đã cập nhật
+        # sau đó (s.status lưu trạng thái nguồn tại lần cập nhật tiến độ).
+        if r['mobile_order'] and r['source_status'] in ('C','D') and (not s.fulfilment or s.status!=r['source_status']):
             r['fulfilment']={'C':'delivered','D':'cancelled'}[r['source_status']]
             r['state_name']=W.FULFILMENT[r['fulfilment']]; r['next_contact']=None
         elif s.fulfilment=='cancelled':
             r['fulfilment']='cancelled'; r['state_name']=W.FULFILMENT['cancelled']; r['next_contact']=None
+        if r['fulfilment']=='cancelled' and s.cancellation_policy:
+            r['state_name']='Đã hủy - '+('hoàn cọc' if s.cancellation_policy=='refund' else 'không hoàn cọc')
+    for r in rows:
+        if r.get('application_applied'):
+            r.update(fulfilment='applied',state_name=W.FULFILMENT['applied'],next_contact=None)
     return rows
 
 
@@ -103,8 +116,9 @@ class QuoteForm(forms.Form):
 
 
 class CancelForm(forms.Form):
+    policy = forms.ChoiceField(label='Xử lý cọc',choices=[('keep','Không hoàn cọc'),('refund','Hoàn cọc')],initial='keep',required=False)
     reason = forms.CharField(label='Lý do hủy đơn',max_length=1000,widget=forms.Textarea(attrs={'rows':2}))
-    confirm = forms.BooleanField(label='Xác nhận hủy tiến độ đặt hàng; tiền cọc được xử lý riêng theo chứng từ')
+    confirm = forms.BooleanField(label='Xác nhận hủy đặt hàng; nhân viên tự kiểm soát việc hoàn cọc')
 
 
 @require_http_methods(['GET','POST'])
@@ -125,7 +139,8 @@ def action(request, pk, kind):
         current=s.fulfilment or initial_state
         employees=[]
         if kind=='contact':
-            employees=c.query('SELECT EmpID,EmpName FROM T_EMPLOYEE WITH (NOLOCK) ORDER BY EmpName')
+            from . import services as _S
+            employees=_S.nhan_vien_ban()   # xếp theo TÊN GỌI, dùng chung toàn hệ (13/09/2026)
             form=ContactForm(request.POST or None,initial={'employee':s.employee_id,'promise':s.promise,'next_contact':s.next_contact})
             form.fields['employee'].choices=[('','Chưa phân công')]+[(e['EmpID'],e['EmpName']) for e in employees]
         elif kind in ('hold','release'):
@@ -140,8 +155,8 @@ def action(request, pk, kind):
                 quantity=item.get('SL') or 1
                 previous=s.items[n] if s.item_signature==signature(items) and n<len(s.items) else {}
                 label=item.get('ProductDesc') or item.get('Notes') or f'Món {n+1}'
-                form.fields[f'ready_{n}']=forms.IntegerField(label=f'{label} · Sẵn sàng / {quantity}',min_value=0,max_value=quantity,initial=previous.get('ready',quantity if current in ('ready','delivered') else 0))
-                form.fields[f'delivered_{n}']=forms.IntegerField(label=f'{label} · Đã giao / {quantity}',min_value=0,max_value=quantity,initial=previous.get('delivered',quantity if current=='delivered' else 0))
+                form.fields[f'ready_{n}']=forms.IntegerField(label=f'{label} · Sẵn sàng / {quantity}',min_value=0,max_value=quantity,initial=previous.get('ready',quantity if current in ('ready','delivered','applied') else 0))
+                form.fields[f'delivered_{n}']=forms.IntegerField(label=f'{label} · Đã giao / {quantity}',min_value=0,max_value=quantity,initial=previous.get('delivered',quantity if current in ('delivered','applied') else 0))
             if s.item_signature and s.item_signature!=signature(items):
                 form.fields['accept_changed']=forms.BooleanField(label='Chi tiết đã đổi: xác nhận nhập lại tiến độ cho các món hiện tại')
             form.fields['note']=forms.CharField(label='Ghi chú bàn giao / nguyên nhân trễ',max_length=1000,required=False)
@@ -149,9 +164,12 @@ def action(request, pk, kind):
         if request.method=='POST' and form.is_valid():
             submitted=signing.loads(ctx['token'],salt='dc-ops',max_age=7200)
             if submitted!=stamp: raise ValueError('Phiếu vừa thay đổi. Đóng và mở lại popup.')
-            if current in ('cancelled','delivered') and kind in ('hold','progress'):
-                raise ValueError('Phiếu đã kết thúc; không thêm giữ hàng hoặc sửa tiến độ giao.')
-            if current=='delivered' and kind=='cancel': raise ValueError('Phiếu đã giao; cần chứng từ trả hàng, không hủy đặt hàng.')
+            # 11/09/2026: phiếu đã được một hóa đơn BÁN dùng thì khóa hẳn — tiền cọc đã cấn vào đơn đó.
+            from .ban_coc import da_dung
+            if da_dung(c.target,pk) and kind!='contact':
+                raise ValueError('Phiếu cọc đã dùng cho hóa đơn bán; không sửa tiến độ, giữ hàng hay hủy nữa.')
+            if current in ('cancelled','delivered','applied') and kind=='hold':
+                raise ValueError('Phiếu đã kết thúc; cập nhật tiến độ trước khi giữ hàng.')
             if kind=='hold' and not c.query("SELECT ProductCode FROM T_PRODUCT WITH (NOLOCK) WHERE ProductCode=? AND Status='I'",(form.cleaned_data['product'],)):
                 raise ValueError('Mã hàng không còn sẵn trong kho.')
             with transaction.atomic():
@@ -177,13 +195,14 @@ def action(request, pk, kind):
                         ready,delivered=data[f'ready_{n}'],data[f'delivered_{n}']
                         if delivered>ready: raise ValueError('Số đã giao không được lớn hơn số sẵn sàng.')
                         previous=s.items[n] if s.item_signature==signature(items) and n<len(s.items) else {}
-                        if delivered<previous.get('delivered',0): raise ValueError('Không giảm số đã giao; hàng khách trả cần chứng từ xử lý riêng.')
                         progress.append({'quantity':item.get('SL') or 1,'ready':ready,'delivered':delivered,'code':item['ProductCode']})
                     new='delivered' if all(i['delivered']==i['quantity'] for i in progress) else 'partial' if any(i['delivered'] for i in progress) else 'ready' if all(i['ready']==i['quantity'] for i in progress) else 'waiting'
                     if all(i['ready']==i['quantity'] for i in progress) and not s.ready_at:
                         s.ready_at=now; s.contacted=False
                     if new=='delivered' and current!='delivered': s.delivered_at=now; s.next_contact=None
-                    s.fulfilment=new; s.items=progress; s.item_signature=signature(items); s.note=data.get('note','')
+                    s.fulfilment=new; s.status=h['Status']; s.cancellation_policy=''; s.items=progress; s.item_signature=signature(items); s.note=data.get('note','')
+                    if new!='delivered': s.delivered_at=None
+                    if new not in ('ready','partial','delivered'): s.ready_at=None
                     for i in progress:
                         if i['code'] and i['delivered']==i['quantity']:
                             DepositStockHold.objects.filter(target=c.target,trn_id=pk,product_code=i['code'],active_key__isnull=False).update(active_key=None,released_at=now,released_by=request.user.username)
@@ -198,6 +217,8 @@ def action(request, pk, kind):
                     for key in ('quote_status','quote_amount','quote_terms'): setattr(s,key,data[key])
                 elif kind=='cancel':
                     s.fulfilment='cancelled'; s.next_contact=None; s.note=data['reason']
+                    s.status=h['Status']; s.cancellation_policy=data.get('policy') or 'keep'
+                    s.extra_notes=[*s.extra_notes,{'date':timezone.localdate().isoformat(),'text':data['reason']}]
                     from .deposit_models import DepositMoneyOperation
                     DepositMoneyOperation.objects.filter(target=c.target,trn_id=pk,kind='receive',status='queued').update(
                         status='cancelled',active_key=None,message='Dừng yêu cầu thu chưa thực hiện vì đặt hàng đã hủy.')

@@ -23,6 +23,7 @@ class DepositOperationsTests(TestCase):
                 'TienCoc':Decimal(1000),'CashPay':0,'CardPay':0,'ShopID':'','EmpID':'','EmpName':''}
         self.items=[{'ProductDesc':'Nhẫn','GoldCode':'18K','SL':2,'Size':'12','Notes':'SP:A1 | thử'}]
         for p in [patch.object(O,'PmvClient',return_value=self.c),patch.object(M,'PmvClient',return_value=self.c),patch.object(F,'PmvClient',return_value=self.c),
+                  patch('apps.pmv.gateway.pmv_deposit_zalo'),
                   patch.object(D,'header',side_effect=lambda *a:dict(self.h)),patch.object(D,'lines',side_effect=lambda *a:[dict(i) for i in self.items]),
                   patch('apps.pos.context_processors.S.thong_tin_tiem',return_value={}),patch('apps.pos.context_processors.gateway.mo_ta_dich',return_value='Bản thử')]:
             p.start(); self.addCleanup(p.stop)
@@ -70,6 +71,21 @@ class DepositOperationsTests(TestCase):
         self.assertEqual(DepositOrderState.objects.get().fulfilment,'cancelled')
         self.c.call.assert_not_called()
 
+    def test_cancel_after_completion_requires_reason_and_records_policy(self):
+        self.op('progress',{'ready_0':2,'delivered_0':2})
+        response=self.op('cancel',{'reason':'','policy':'refund','confirm':'on'})
+        self.assertNotIn('HX-Trigger',response)
+        response=self.op('cancel',{'reason':'Khách hủy đặt','policy':'keep','confirm':'on'})
+        self.assertIn('HX-Trigger',response)
+        state=DepositOrderState.objects.get();self.assertEqual(state.cancellation_policy,'keep')
+        self.assertEqual(state.extra_notes[-1]['text'],'Khách hủy đặt')
+        self.h['Status']='D'
+        self.op('progress',{'ready_0':2,'delivered_0':0})
+        rows=D.W.prepare({'headers':[self.h],'items':{'TRC1':[D.O.item_info(i) for i in self.items]}})
+        row=O.overlay(rows,'sandbox')[0]
+        self.assertEqual(row['fulfilment'],'ready')
+        self.c.call.assert_not_called()
+
     def test_changed_items_do_not_reuse_old_progress(self):
         self.op('progress',{'ready_0':2,'delivered_0':1})
         items=[D.O.item_info({**self.items[0],'ProductDesc':'Dây mới'})]
@@ -105,6 +121,9 @@ class DepositOperationsTests(TestCase):
         with patch.object(D.W,'read_snapshot',return_value=snapshot):
             token=self.client.get(url).context['token']
             data={'token':token,'day':timezone.localdate().isoformat(),'template':t.pk,'orders':['TRC1']}
+            preview=self.client.post(url,data)
+            self.assertEqual(DepositMessage.objects.count(),0)
+            data['confirmation']=preview.context['confirmation']
             for _ in range(2): self.client.post(url,data)
         self.assertEqual(DepositMessage.objects.count(),1)
         self.assertEqual(DepositMessage.objects.get().status,'waiting_template')
@@ -116,6 +135,51 @@ class DepositOperationsTests(TestCase):
             'scheduled_at':m.planned_day.isoformat()+'T10:00',**m.parameters})
         self.assertIn('HX-Trigger',response)
         m.refresh_from_db(); self.assertEqual(m.status,'waiting_template'); self.assertIsNotNone(m.scheduled_at)
+
+    def test_bulk_schedule_previews_both_receipts_then_waits_for_oa(self):
+        self.h['Status']='R'; template=self.template()
+        second={**self.h,'TrnID':'TRC2','CustName':'Khách hai'}
+        snapshot={'headers':[self.h,second],'items':{},'as_of':timezone.now()}
+        day=timezone.localdate()+dt.timedelta(days=1)
+        url=reverse('pos:dat_coc_compose')
+        with patch.object(D.W,'read_snapshot',return_value=snapshot),patch.object(M,'oa_request') as api:
+            token=self.client.get(url,{'orders':['TRC1','TRC2'],'day':str(day)}).context['token']
+            data={'token':token,'orders':['TRC1','TRC2'],'day':str(day),'template':template.pk,'scheduled_at':str(day)+'T10:00'}
+            preview=self.client.post(url,data)
+            self.assertEqual(len(preview.context['previews']),2)
+            self.assertEqual(DepositMessage.objects.count(),0)
+            data['confirmation']=preview.context['confirmation']
+            response=self.client.post(url,data)
+            self.assertIn('HX-Trigger',response)
+            self.assertEqual(DepositMessage.objects.filter(status='waiting_template',scheduled_at__isnull=False).count(),2)
+            api.assert_not_called()
+
+    def test_bulk_preview_invalidated_by_changed_phone_and_closed_order(self):
+        self.h['Status']='R'; template=self.template()
+        snapshot={'headers':[self.h],'items':{},'as_of':timezone.now()};url=reverse('pos:dat_coc_compose')
+        with patch.object(D.W,'read_snapshot',side_effect=lambda *a,**kw:snapshot):
+            data={'token':self.client.get(url).context['token'],'orders':['TRC1'],'day':str(timezone.localdate()),'template':template.pk}
+            data['confirmation']=self.client.post(url,data).context['confirmation']
+            self.h['Phone']='0907654321'
+            changed=self.client.post(url,data)
+            self.assertEqual(DepositMessage.objects.count(),0)
+            self.assertIn('confirmation',changed.context)
+            self.h['Status']='D'
+            response=self.client.post(url,data)
+            self.assertTrue(response.context['form'].errors)
+            self.assertEqual(DepositMessage.objects.count(),0)
+
+    def test_suggestion_remove_and_add_change_only_reminder_journal(self):
+        self.h['Status']='R';snapshot={'headers':[self.h],'items':{},'as_of':timezone.now()}
+        with patch.object(D.W,'read_snapshot',return_value=snapshot):
+            for kind in ('remove','add'):
+                url=reverse('pos:dat_coc_suggestion',args=[kind])
+                token=self.client.get(url,{'receipt':'TRC1','day':str(timezone.localdate())}).context['token']
+                result=self.client.post(url,{'token':token,'orders':['TRC1'],'day':str(timezone.localdate())})
+                self.assertIn('HX-Trigger',result)
+        self.assertEqual(DepositEvent.objects.filter(action__startswith='reminder_').count(),2)
+        self.c.call.assert_not_called()
+        self.assertFalse(DepositMessage.objects.exists())
 
     def test_delete_draft_keeps_audit_and_releases_dedupe(self):
         m=self.message(dedupe_key='test'); url=reverse('pos:dat_coc_message',args=[m.pk,'delete'])
@@ -206,10 +270,11 @@ class DepositOperationsTests(TestCase):
             F.execute(op)
         op.refresh_from_db(); self.assertEqual(op.status,'uncertain'); self.assertIsNotNone(op.active_key)
         called=[call.args[0] for call in self.c.call.call_args_list]
-        self.assertEqual(called,['TRN_DATCOC_Complete','CARDPAY_Ins'])
+        self.assertEqual(called,['TRN_DATCOC_Complete'])
+        self.c.update_deposit_money.assert_called_once()
         F.execute(op)
-        self.assertEqual(self.c.call.call_count,2)
-        self.assertIsNone(self.c.call.call_args.kwargs['p_ProductIDs'])
+        self.assertEqual(self.c.call.call_count,1)
+        self.c.update_deposit_money.assert_called_once()
 
     def test_successful_receive_is_posted_once_and_audited(self):
         self.h.update(ShopID='S1')
@@ -222,7 +287,8 @@ class DepositOperationsTests(TestCase):
         with patch.object(F,'financial',side_effect=[before,before,after]): F.execute(op)
         op.refresh_from_db(); self.assertEqual(op.status,'done'); self.assertIsNone(op.active_key)
         self.assertEqual(DepositEvent.objects.get().action,'money_receive')
-        F.execute(op); self.assertEqual(self.c.call.call_count,3)
+        F.execute(op); self.assertEqual(self.c.call.call_count,2)
+        self.c.update_deposit_money.assert_called_once()
 
     def test_money_stamp_detects_status_change_without_updated_timestamp(self):
         self.assertNotEqual(F.money_stamp(self.c,self.h),F.money_stamp(self.c,{**self.h,'Status':'P'}))

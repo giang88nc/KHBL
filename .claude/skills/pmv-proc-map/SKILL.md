@@ -5,6 +5,8 @@ description: Bản đồ "API" của PMVGoldRT — stored proc + bảng trực t
 
 # PMV-PROC-MAP — tài liệu API duy nhất của PMVGoldRT
 
+Với nghiệp vụ **UPSERT khách từ webapp** (kể cả cầm đồ/trang khác), đọc thêm [upsert-customer](../upsert-customer/SKILL.md): service dùng chung, ba SĐT, ảnh CCCD, chống trùng, partial/retry và khác biệt rule webapp/PMV. Bản đồ proc ở đây không thay thế hợp đồng lưu khách đó.
+
 Vendor KHÔNG có tài liệu API. Toàn bộ tri thức dưới đây tự khảo sát 02/09/2026 bằng
 3 script trong `tools/khaosat/` (chỉ-đọc, chạy lại được bất cứ lúc nào): đọc source
 1.049 proc + soi cache thực thi (dm_exec_query_stats) + truy vết hóa đơn thật.

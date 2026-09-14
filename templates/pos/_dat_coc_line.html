@@ -1,16 +1,13 @@
 <div class="dc-line dc-row-sp">
-{{ item.Mode }}{{ item.TotalWeight }}{{ item.DisplayUnits }}<span hidden>{{ item.DELETE }}</span>
-<div class="dc-row-top"><span class="dc-row-source">Hàng đặt</span><button type="button" class="dc-row-remove" data-dc-remove-line aria-label="Bỏ món khỏi phiếu" title="Bỏ món">×</button></div>
+{{ item.Mode }}{{ item.TotalWeight }}{{ item.DisplayUnits }}{{ item.DiamondWeight }}{{ item.SL }}{{ item.Notes }}<span hidden>{{ item.DELETE }}</span>
 <div class="dc-row-grid">
 <label class="dc-row-code">Mã SP{{ item.ProductCode }}{{ item.ProductCode.errors }}</label>
-<label class="dc-row-name">Tên SP <b class="dc-required">*</b>{{ item.ProductDesc }}{{ item.ProductDesc.errors }}</label>
+<label class="dc-row-name">Tên SP <b class="dc-required">*</b> <small data-dc-quantity></small>{{ item.ProductDesc }}{{ item.ProductDesc.errors }}</label>
 <label>Loại <b class="dc-required">*</b>{{ item.GoldCode }}{{ item.GoldCode.errors }}</label>
-<label>TL vàng <span data-dc-unit>chỉ</span>{{ item.GoldWeight }}{{ item.GoldWeight.errors }}</label>
-<label>TL hột <span data-dc-unit>chỉ</span>{{ item.DiamondWeight }}{{ item.DiamondWeight.errors }}</label>
+<label>TL vàng <b class="dc-required">*</b> <span data-dc-unit>chỉ</span>{{ item.GoldWeight }}{{ item.GoldWeight.errors }}</label>
 <label>Size{{ item.Size }}{{ item.Size.errors }}</label>
-<label>SL{{ item.SL }}{{ item.SL.errors }}</label>
+<label class="dc-row-task">Công (₫){{ item.TaskPrice }}{{ item.TaskPrice.errors }}</label>
 <div class="dc-row-subtotal"><span>Tạm tính (₫)</span><output data-dc-row-total>—</output></div>
-<label class="dc-row-note">Ghi chú món{{ item.Notes }}{{ item.Notes.errors }}</label>
-<label class="dc-row-task">Tiền công / món (₫){{ item.TaskPrice }}{{ item.TaskPrice.errors }}</label>
+<button type="button" class="dc-row-remove" data-dc-remove-line aria-label="Bỏ món khỏi phiếu" title="Bỏ món">×</button>
 </div><div class="dc-stock-results" aria-live="polite"></div>{{ item.non_field_errors }}{{ item.TotalWeight.errors }}{{ item.Mode.errors }}
 </div>

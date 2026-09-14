@@ -1,0 +1,38 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}{% comment %}
+POPUP XÁC NHẬN XÓA PHIẾU ĐẶT-CỌC (GĐ chốt 11/09/2026) — cùng khuôn với popup xác nhận của màn bán:
+nói rõ PHIẾU · KHÁCH · TIỀN CỌC · NGƯỜI THAO TÁC · HẬU QUẢ rồi mới tới ô PASSCODE.
+Bấm XÓA ở danh sách là mở thẳng popup này, không phải mở phiếu rồi mới tìm nút xóa.
+Sai mã / vướng chốt chặn → popup render lại kèm lỗi; xóa xong → đóng popup + làm mới danh sách.
+{% endcomment %}
+{% block modal_style %}width:min(470px,94vw){% endblock %}
+{% block modal_title %}🗑 XÓA PHIẾU ĐẶT-CỌC{% endblock %}
+{% block modal_body %}
+  {% if chan %}
+    <div class="khbl-alert khbl-alert--do">{{ chan }}</div>
+  {% else %}
+  <form id="xn-form" hx-post="{% url 'pos:dat_coc_xoa' pk %}" hx-target="#modal-root" hx-swap="innerHTML"
+        hx-sync="this:drop" autocomplete="off" class="xn">
+    {% csrf_token %}
+    <div class="xn__grid">
+      <span>Phiếu</span><b class="mono">{{ h.TrnID }}</b>
+      <span>Khách</span><b>{{ h.CustName|default:"(không rõ)" }}</b>
+      <span>Tiền cọc</span><b>{{ h.TienCoc|tien }}{% if has_money %} · đã ghi tiền{% endif %}</b>
+      <span>Số món</span><b>{{ so_mon }} món{% if has_activity %} · đã có lịch sử vận hành{% endif %}</b>
+      <span>Người thao tác</span><b>{{ nguoi }} <i class="mono dim">({{ username }})</i> · {{ luc|date:"H:i d/m/Y" }}</b>
+    </div>
+    <div class="khbl-alert khbl-alert--do" style="margin:0 0 10px">
+      Xóa hẳn phiếu khỏi PMV, không hoàn tác được. Hàng đang giữ trả về kho; chỉ còn lại nhật ký thao tác.
+    </div>
+    {% if loi %}<div class="khbl-alert khbl-alert--do" style="margin:0 0 10px">{{ loi }}</div>{% endif %}
+    <label class="khbl-field"><span class="xn__lb"></span>
+      <input class="khbl-input mono" type="password" name="passcode" id="xn-passcode" required autofocus
+             inputmode="numeric" placeholder="nhập passcode rồi Enter"
+             style="font-size:18px;letter-spacing:.2em;text-align:center"></label>
+  </form>
+  <script>(function(){var i=document.getElementById("xn-passcode");if(i)setTimeout(function(){i.focus()},30)})();</script>
+  {% endif %}
+{% endblock %}
+{% block modal_foot %}
+  <button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+  {% if not chan %}<button id="xn-ok" class="khbl-btn khbl-btn--nguy" type="submit" form="xn-form">🗑 XÁC NHẬN XÓA</button>{% endif %}
+{% endblock %}

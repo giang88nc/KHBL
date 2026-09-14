@@ -22,6 +22,7 @@ from apps.pmv.client import PmvClient
 from . import deposits as D, deposit_workspace as W
 from .deposit_operations import overlay
 from .deposit_models import DepositMessage, DepositMessageTemplate, DepositEvent
+from . import deposit_reminders as R
 
 STATUSES={'draft':'Bản nháp','waiting_template':'Chờ duyệt mẫu OA','scheduled':'Đã lên lịch',
           'sending':'Đang gửi','sent':'OA đã nhận tin','failed':'Gửi lỗi','uncertain':'Cần kiểm tra kết quả',
@@ -74,7 +75,7 @@ def validate_provider_parameters(template, message, info):
 
 
 class QueueFilter(forms.Form):
-    day=forms.DateField(label='Ngày trong lịch gửi',widget=forms.DateInput(attrs={'type':'date'},format='%Y-%m-%d'))
+    day=forms.DateField(label='Ngày xem / lịch gửi',widget=forms.DateInput(attrs={'type':'date'},format='%Y-%m-%d'))
     status=forms.ChoiceField(label='Trạng thái',required=False,choices=[('','Tất cả'),*STATUSES.items()])
     q=forms.CharField(label='Khách / SĐT / phiếu',required=False,max_length=100)
 
@@ -108,7 +109,13 @@ def listing(request):
     params=request.GET.copy(); params.setdefault('day',timezone.localdate().isoformat())
     form=QueueFilter(params)
     rows=DepositMessage.objects.none()
+    suggested=[]; suggestion_error=''
     if form.is_valid():
+        try:
+            source=W.classify(overlay(W.prepare(W.read_snapshot(c)),c.target))
+            suggested=R.suggestions(source,c.target,form.cleaned_data['day'],form.cleaned_data['q'])
+        except Exception:
+            suggestion_error='Chưa tải được phiếu để gợi ý. Hãy tải lại danh sách.'
         rows=DepositMessage.objects.filter(target=c.target,planned_day=form.cleaned_data['day']).select_related('template').order_by('scheduled_at','id')
         if form.cleaned_data['status']: rows=rows.filter(status=form.cleaned_data['status'])
         else: rows=rows.exclude(status='cancelled')
@@ -118,10 +125,44 @@ def listing(request):
     pager=Paginator(rows,30).get_page(request.GET.get('page',1))
     for row in pager: row.state_name=STATUSES.get(row.status,row.status)
     return render(request,'pos/_dat_coc_messages.html' if request.headers.get('HX-Request') else 'pos/dat_coc.html',{'message_form':form,'queue':pager,'pager':pager,
-        'nav_active':'datcoc',
+        'nav_active':'datcoc','suggestions':suggested,'suggestion_error':suggestion_error,
         'tab':'notifications','tabs':D.O.TABS,'templates':DepositMessageTemplate.objects.all(),
         'can_edit':D.allowed(request.user,'can_edit'),'can_approve':D.allowed(request.user,'can_approve'),
         'oa_connected':bool(getattr(settings,'DATCOC_OA_ACCESS_TOKEN',''))})
+
+
+@require_http_methods(['GET','POST'])
+def suggestion_edit(request, kind):
+    if kind not in ('add','remove'): raise Http404
+    D.authorize(request,'can_edit')
+    c=PmvClient(tag='datcoc-reminder-list')
+    rows=W.classify(overlay(W.prepare(W.read_snapshot(c,refresh=True)),c.target))
+    active={r['TrnID']:r for r in rows if r['active']}
+    params=request.POST if request.method=='POST' else request.GET
+    q=params.get('q','').strip().casefold()
+    choices=[(pk,f"{pk} · {r.get('CustName') or ''} · {r.get('Phone') or ''}") for pk,r in active.items()
+             if (kind=='remove' and pk==params.get('receipt')) or (kind=='add' and (not q or q in f"{pk} {r.get('CustName')} {r.get('Phone')}".casefold()))]
+    # On POST validate against all current active receipts, not just the search page.
+    if request.method=='POST': choices=[(pk,pk) for pk in active]
+    class SuggestionForm(forms.Form):
+        day=forms.DateField(widget=forms.HiddenInput,initial=params.get('day') or timezone.localdate())
+        orders=forms.MultipleChoiceField(label='Chọn phiếu', choices=choices[:200] if request.method=='GET' else choices,
+                                         widget=forms.CheckboxSelectMultiple, initial=[params.get('receipt')] if kind=='remove' else [])
+    form=SuggestionForm(request.POST or None)
+    ctx={'title':'Thêm phiếu nhắc' if kind=='add' else 'Bỏ phiếu khỏi gợi ý ngày này','form':form,
+         'reminder_search':kind=='add','search_query':params.get('q',''),'search_day':params.get('day',''),
+         'token':params.get('token') or signing.dumps({'target':c.target,'kind':kind},salt='dc-suggestion')}
+    if request.method=='POST' and form.is_valid():
+        try:
+            if signing.loads(ctx['token'],salt='dc-suggestion',max_age=7200)!={'target':c.target,'kind':kind}: raise ValueError('Phiên dữ liệu đã thay đổi.')
+            if len(form.cleaned_data['orders'])>200: raise ValueError('Mỗi lượt tối đa 200 phiếu.')
+            with transaction.atomic():
+                for pk in form.cleaned_data['orders']:
+                    DepositEvent.objects.create(target=c.target,trn_id=pk,action='reminder_'+kind,
+                        username=request.user.username,token=uuid.uuid4().hex,data={'day':form.cleaned_data['day'].isoformat()})
+            return saved('Đã thêm phiếu nhắc.' if kind=='add' else 'Đã bỏ khỏi gợi ý ngày đã chọn.')
+        except (ValueError,signing.BadSignature) as exc: ctx['error']=str(exc)
+    return render(request,'pos/_dat_coc_action.html',ctx)
 
 
 @require_http_methods(['GET','POST'])
@@ -174,38 +215,71 @@ def approve_template(request,pk):
 @require_http_methods(['GET','POST'])
 def compose(request):
     D.authorize(request,'can_edit')
-    c=PmvClient(tag='datcoc-compose'); snapshot=W.read_snapshot(c)
+    c=PmvClient(tag='datcoc-compose'); snapshot=W.read_snapshot(c,refresh=request.method=='POST')
     rows=W.classify(overlay(W.prepare(snapshot),c.target))
     day_text=request.POST.get('day') or request.GET.get('day') or timezone.localdate().isoformat()
     try: day=dt.date.fromisoformat(day_text)
     except ValueError: day=timezone.localdate()
-    eligible=[r for r in rows if r['active'] and (r['fulfilment']=='ready' or r['promise_date']==day)]
+    eligible=[r for r in rows if r['active']]
+    selected=request.POST.getlist('orders') if request.method=='POST' else request.GET.getlist('orders')
+    if request.method=='GET' and not selected:
+        selected=[r['TrnID'] for r in R.suggestions(rows,c.target,day)]
+    eligible=[r for r in eligible if r['TrnID'] in selected]
     selected_day=day
     class ComposeForm(forms.Form):
         day=forms.DateField(label='Ngày trong lịch gửi',initial=selected_day,widget=forms.DateInput(attrs={'type':'date'},format='%Y-%m-%d'))
         template=forms.ModelChoiceField(label='Mẫu tin',queryset=DepositMessageTemplate.objects.all())
-        orders=forms.MultipleChoiceField(label='Chọn phiếu cần soạn (hàng sẵn hoặc hẹn ngày đã chọn)',choices=[(r['TrnID'],f"{r.get('CustName') or ''} · {r['TrnID']} · {r.get('Phone') or 'Chưa có SĐT'}") for r in eligible],widget=forms.CheckboxSelectMultiple)
+        scheduled_at=forms.DateTimeField(label='Giờ gửi chung (để trống: lưu bản soạn)',required=False,
+            widget=forms.DateTimeInput(attrs={'type':'datetime-local'},format='%Y-%m-%dT%H:%M'))
+        orders=forms.MultipleChoiceField(label='Phiếu đã chọn',choices=[(r['TrnID'],f"{r.get('CustName') or ''} · {r['TrnID']} · {r.get('Phone') or 'Chưa có SĐT'}") for r in eligible],widget=forms.CheckboxSelectMultiple,initial=selected)
     form=ComposeForm(request.POST or None)
-    ctx={'title':'Soạn danh sách thông báo','pk':'','form':form,'token':request.POST.get('token') or signing.dumps({'target':c.target,'nonce':uuid.uuid4().hex},salt='dc-compose')}
+    form.fields['template'].label_from_instance=lambda obj: f"{obj.name} · {'OA đã duyệt' if obj.status=='approved' else 'Chờ OA duyệt'}"
+    ctx={'title':'Soạn cùng một mẫu OA','pk':'','form':form,'submit_label':'Xem trước',
+         'token':request.POST.get('token') or signing.dumps({'target':c.target,'nonce':uuid.uuid4().hex},salt='dc-compose')}
     if request.method=='POST' and form.is_valid():
         try:
             if signing.loads(ctx['token'],salt='dc-compose',max_age=7200)['target']!=c.target: raise ValueError('Đích dữ liệu đã thay đổi.')
             if len(form.cleaned_data['orders'])>200: raise ValueError('Mỗi lượt tối đa 200 phiếu.')
             template=form.cleaned_data['template']; planned=form.cleaned_data['day']; count=0
+            scheduled=form.cleaned_data['scheduled_at']
+            if scheduled:
+                D.authorize(request,'can_approve')
+                if scheduled<=timezone.now(): raise ValueError('Chọn giờ gửi trong tương lai.')
+                if timezone.localtime(scheduled).date()!=planned: raise ValueError('Giờ gửi phải thuộc ngày đã chọn.')
+                if not 8<=timezone.localtime(scheduled).hour<21: raise ValueError('Chọn giờ gửi từ 08:00 đến trước 21:00.')
+            prepared=[]
+            for r in eligible:
+                if r['TrnID'] not in form.cleaned_data['orders']: continue
+                params={'customer':r.get('CustName') or 'Quý khách','bill':r['TrnID'],
+                        'promise':r['promise_date'].strftime('%d/%m/%Y') if r['promise_date'] else 'xin liên hệ tiệm',
+                        'deposit':format(r.get('TienCoc') or 0,',.0f').replace(',','.'),'store':'KIM HẠNH 2'}
+                phone=phone_number(r.get('Phone')) if scheduled else r.get('Phone') or ''
+                prepared.append({'row':r,'params':params,'phone':phone,'body':render_body(template,params)})
+            signature=digest(json.dumps({'target':c.target,'day':str(planned),'at':str(scheduled),
+                'template':[template.pk,template.version,template.status,template.body],
+                'messages':[(p['row']['TrnID'],p['phone'],p['body']) for p in prepared]},ensure_ascii=False))
+            confirmation=request.POST.get('confirmation','')
+            if not confirmation or signing.loads(confirmation,salt='dc-compose-preview',max_age=7200)!=signature:
+                ctx.update(previews=prepared,confirmation=signing.dumps(signature,salt='dc-compose-preview'),
+                           submit_label='Xác nhận lên lịch' if scheduled else 'Lưu bản soạn')
+                return render(request,'pos/_dat_coc_action.html',ctx)
             with transaction.atomic():
-                for r in eligible:
-                    if r['TrnID'] not in form.cleaned_data['orders']: continue
-                    params={'customer':r.get('CustName') or 'Quý khách','bill':r.get('BillCode') or r['TrnID'],
-                            'promise':r['promise_date'].strftime('%d/%m/%Y') if r['promise_date'] else 'xin liên hệ tiệm',
-                            'deposit':format(r.get('TienCoc') or 0,',.0f'),'store':'KIM HẠNH 2'}
-                    body=render_body(template,params)
+                # Serialise batch composition across templates and users.
+                list(DepositMessageTemplate.objects.select_for_update().order_by('pk').values_list('pk',flat=True))
+                fresh_template=DepositMessageTemplate.objects.get(pk=template.pk)
+                if (fresh_template.version,fresh_template.status)!=(template.version,template.status): raise ValueError('Mẫu vừa thay đổi. Xem trước lại.')
+                for prepared_row in prepared:
+                    r=prepared_row['row']; params=prepared_row['params']; body=prepared_row['body']
+                    existing=DepositMessage.objects.filter(target=c.target,trn_id=r['TrnID'])
+                    if existing.filter(status__in=R.PENDING).exists() or existing.filter(status='sent',planned_day=planned).exists(): continue
                     key=digest(f'{c.target}|{r["TrnID"]}|{planned}|{template.pk}')
                     _,created=DepositMessage.objects.get_or_create(dedupe_key=key,defaults={'target':c.target,'trn_id':r['TrnID'],
-                        'customer_name':r.get('CustName') or '', 'phone':r.get('Phone') or '', 'template':template,
+                        'customer_name':r.get('CustName') or '', 'phone':prepared_row['phone'], 'template':template,
                         'template_version':template.version,'body':body,'parameters':params,'planned_day':planned,
-                        'status':'draft' if template.status=='approved' else 'waiting_template','purpose':'ready' if r['fulfilment']=='ready' else 'appointment','username':request.user.username})
+                        'scheduled_at':scheduled,
+                        'status':('scheduled' if scheduled else 'draft') if template.status=='approved' else 'waiting_template','purpose':'ready' if r['fulfilment']=='ready' else 'appointment','username':request.user.username})
                     count+=created
-            return saved(f'Đã soạn {count} tin mới. Các phiếu đã có tin cùng ngày/mẫu được bỏ qua.')
+            return saved(f'Đã lưu {count} tin mới. Phiếu đã có tin chờ hoặc đã gửi trong ngày được bỏ qua.' + (' Mẫu chưa được OA duyệt: tin tiếp tục chờ.' if template.status!='approved' else ''))
         except (ValueError,signing.BadSignature) as exc: ctx['error']=str(exc)
     return render(request,'pos/_dat_coc_action.html',ctx)
 
@@ -259,6 +333,7 @@ def edit(request,pk,kind):
 
 def send_due(target):
     now=timezone.now()
+    R.sync_descriptions(target)
     # Tiến trình chết khi đang gọi OA: không phát lại tự động.
     DepositMessage.objects.filter(target=target,status='sending',claimed_at__lt=now-dt.timedelta(minutes=5)).update(status='uncertain',error='Tiến trình gửi bị gián đoạn; kiểm tra OA bằng tracking_id.')
     if target!='kk' or not getattr(settings,'DATCOC_OA_ACCESS_TOKEN',''): return 0
@@ -298,8 +373,10 @@ def send_due(target):
         except Exception as exc:
             message.status='uncertain' if attempted else 'blocked'
             message.error=str(exc) if isinstance(exc,ValueError) else 'Không xác định kết quả kết nối OA. Không tự gửi lại.'
-        message.version+=1; message.save()
-        DepositEvent.objects.create(target=target,trn_id=message.trn_id,action='message_result',username='scheduler',
-            token=uuid.uuid4().hex,note=STATUSES[message.status],data={'message_id':message.pk,'tracking_id':str(message.tracking_id),
-            'provider_message_id':message.provider_message_id,'error':message.error})
+        with transaction.atomic():
+            message.version+=1; message.save()
+            DepositEvent.objects.create(target=target,trn_id=message.trn_id,action='message_result',username='scheduler',
+                token=uuid.uuid4().hex,note=STATUSES[message.status],data={'message_id':message.pk,'tracking_id':str(message.tracking_id),
+                'provider_message_id':message.provider_message_id,'error':message.error})
+            if message.status=='sent': R.record_sent(message,current)
     return count

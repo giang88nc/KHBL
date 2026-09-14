@@ -233,6 +233,9 @@
     showToast(detail.message || "Đã lưu khách hàng", "success");
     (detail.warnings || []).forEach(function (warning) { showToast(warning, "warning"); });
   });
+  document.addEventListener("customerSyncDone", function (e) {
+    showToast(e.detail.message, e.detail.failed ? "warning" : "success");
+  });
 
   /* Xóa khách xong: đóng popup, tải lại danh sách GIỮ bộ lọc (không reload trang), toast. */
   document.addEventListener("khachDeleted", function (e) {
@@ -676,4 +679,49 @@
     } catch (_) {}
   });
   window.khblGiuO = true;
+})();
+
+/* Ba số điện thoại: phản hồi sớm, server kiểm lại trong khóa trước khi ghi. */
+(function () {
+  let timer, generation = 0;
+  document.addEventListener("input", function (event) {
+    const input = event.target;
+    if (!input.matches || !input.matches("#kh-form [name=Phone], #kh-form [name=GhiChu2], #kh-form [name=GhiChu3]")) return;
+    const form = input.closest("form"), status = form.querySelector("#kh-phone-status");
+    const fields = ["Phone", "GhiChu2", "GhiChu3"].map(name => form.elements[name]);
+    const version = ++generation;
+    clearTimeout(timer);
+    fields.forEach(field => field.setCustomValidity(""));
+    const filled = fields.filter(field => field.value);
+    if (filled.some(field => !/^[0-9]{10}$/.test(field.value))) {
+      status.textContent = "Số điện thoại phải gồm đúng 10 chữ số."; return;
+    }
+    if (new Set(filled.map(field => field.value)).size !== filled.length) {
+      input.setCustomValidity("Ba số điện thoại phải khác nhau");
+      status.textContent = "Ba số điện thoại phải khác nhau."; return;
+    }
+    if (!filled.length) { status.textContent = "Có thể nhập tối đa 3 số điện thoại khác nhau."; return; }
+    status.textContent = "Đang kiểm tra số điện thoại…";
+    timer = setTimeout(async function () {
+      try {
+        const results = await Promise.all(filled.map(async function (field) {
+          const query = new URLSearchParams({phone: field.value, cust_id: form.elements.CustID.value});
+          const response = await fetch(form.dataset.phoneCheck + "?" + query, {cache: "no-store"});
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Chưa kiểm tra được SĐT.");
+          return {field, matches: data.matches};
+        }));
+        if (version !== generation || !form.isConnected) return;
+        const messages = [];
+        results.forEach(function ({field, matches}) {
+          if (!matches.length) return;
+          const message = field.value + " đã thuộc " + matches.map(row => (row.CustCode || row.CustID) + " — " + row.CustName).join("; ");
+          field.setCustomValidity(message); messages.push(message);
+        });
+        status.textContent = messages.length ? messages.join(". ") : "Các số điện thoại chưa thuộc khách khác. Hệ thống sẽ kiểm tra lại khi lưu.";
+      } catch (error) {
+        if (version === generation && form.isConnected) status.textContent = error.message;
+      }
+    }, 300);
+  });
 })();

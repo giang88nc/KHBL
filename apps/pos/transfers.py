@@ -87,6 +87,8 @@ def listing(data, page):
 
 @require_GET
 def transfers(request):
+    from .quyen import chan
+    chan(request, "CHUYEN_KHOAN")
     params = request.GET.copy()
     for name in ("d1", "d2"):
         if name not in params:

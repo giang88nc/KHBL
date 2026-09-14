@@ -19,7 +19,7 @@ from apps.pmv.models import pmv_user_for_web_user
 from . import deposits as D, deposit_workspace as W
 from .deposit_models import DepositMoneyOperation as Operation, DepositOrderState, DepositEvent
 
-STATES={'queued':'Chờ đối soát ngân hàng','running':'Đang ghi PMV','done':'Đã xác minh',
+STATES={'queued':'Chờ đối soát ngân hàng','running':'Đang ghi PMV','linked':'Đã liên kết · chờ chốt','done':'Đã xác minh',
         'blocked':'Cần kiểm tra','uncertain':'Chưa rõ kết quả · không ghi lại','cancelled':'Đã hủy yêu cầu'}
 
 
@@ -31,8 +31,8 @@ def financial(c, pk):
     h=D.header(c,pk)
     if not h: raise ValueError('Phiếu không còn tồn tại.')
     tx=c.query('SELECT TillTxnID,TillID,Status,TrnTotalAmount FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID=?',(pk,))
-    links=c.query('SELECT d.TrnID,b.Status,b.TienCoc,b.CustID FROM TRN_RT_BUYSELL_DatCoc d WITH (NOLOCK) '
-                  'JOIN TRN_RT_BUYSELL b WITH (NOLOCK) ON b.TrnID=d.TrnID WHERE d.DatCocID=? AND b.IsDel=\'0\'',(pk,))
+    links=c.query('SELECT d.TrnID,b.BillCode invoice_bill_code,b.Status,b.TienCoc,b.CustID FROM TRN_RT_BUYSELL_DatCoc d WITH (NOLOCK) '
+                  'LEFT JOIN TRN_RT_BUYSELL b WITH (NOLOCK) ON b.TrnID=d.TrnID AND b.IsDel=\'0\' WHERE d.DatCocID=?',(pk,))
     changes=c.query('SELECT TrnID FROM TRN_RT_CHANGE_DatCoc WITH (NOLOCK) WHERE DatCocID=?',(pk,))
     amount=Decimal(h.get('TienCoc') or 0); cash=Decimal(h.get('CashPay') or 0); bank=Decimal(h.get('CardPay') or 0)
     posted=len(tx)==1 and tx[0]['Status']=='P' and bool(tx[0]['TillID']) and tx[0]['TrnTotalAmount'] is not None
@@ -40,8 +40,19 @@ def financial(c, pk):
     if valid:
         detail=c.query('SELECT Amount,CrDr,GoldCcy FROM T_TILL_TXN_DETAIL WITH (NOLOCK) WHERE TillTxnID=?',(tx[0]['TillTxnID'],))
         valid=len(detail)==1 and detail[0]['Amount'] is not None and detail[0]['Amount']==cash and detail[0]['CrDr']=='+' and detail[0]['GoldCcy']=='VND'
-    applied=valid and len(links)==1 and not changes and links[0]['Status']=='C' and links[0]['TienCoc']==amount and links[0]['CustID']==h['CustID']
-    confirmed=valid and not changes and (not links or applied)
+    # 11/09/2026: MỘT hóa đơn cấn được NHIỀU phiếu cọc (GĐ chốt) → so Tiền cọc hóa đơn với TỔNG các
+    # phiếu gắn vào nó, không so với riêng phiếu này như trước. Phiếu cọc cũ chưa qua két vẫn tính là
+    # đã áp dụng (xem chung_tu_cu_du_dung) — nếu không thì bán xong màn ĐẶT-CỌC vẫn báo còn số dư.
+    tong_lk=Decimal(0)
+    if links:
+        r=c.query('SELECT ISNULL(SUM(d.TienCoc),0) t FROM TRN_RT_BUYSELL_DatCoc l WITH (NOLOCK) '
+                  'JOIN TRN_DATCOC d WITH (NOLOCK) ON d.TrnID=l.DatCocID WHERE l.TrnID=?',(links[0]['TrnID'],))
+        tong_lk=Decimal(r[0]['t'] or 0) if r else Decimal(0)
+    applied=valid and h['Status']=='C' and len(links)==1 and not changes and links[0]['Status']=='C' and links[0]['TienCoc']==tong_lk and links[0]['CustID']==h['CustID']
+    if applied:
+        invoice_tx=c.query('SELECT Status,TillID FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID=?',(links[0]['TrnID'],))
+        applied=len(invoice_tx)==1 and invoice_tx[0]['Status']=='P' and bool(invoice_tx[0]['TillID'])
+    confirmed=valid and not changes and ((not links and h['Status']=='P') or applied)
     refunded=False
     if not tx and not links and not changes and h['Status']=='W' and cash==bank==0:
         latest=Operation.objects.filter(target=c.target,trn_id=pk,status='done').order_by('-id').first()
@@ -108,7 +119,7 @@ def execute(op):
     try:
         f=financial(c,op.trn_id); validate_operation(op,f)
         if money_stamp(c,f['h'])!=op.evidence['stamp']: raise ValueError('Phiếu đã thay đổi từ khi lập yêu cầu.')
-        bank=bank_evidence(op,f['h'])
+        bank=None if op.kind=='receive' and op.evidence.get('staff_confirmed') else bank_evidence(op,f['h'])
     except ValueError as exc:
         op.message=str(exc); op.save(update_fields=['message']); return op
     # Reserve evidence and operation in one local transaction; never reuse a bank notification.
@@ -140,9 +151,7 @@ def execute(op):
             c.call('TRN_DATCOC_Complete',write=True,p_TrnID=op.trn_id,p_UserID=op.user_id)
             tx=c.query('SELECT TillTxnID,Status,TrnTotalAmount FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID=?',(op.trn_id,))
             if len(tx)!=1 or tx[0]['Status']!='U' or tx[0]['TrnTotalAmount']!=op.amount: raise ValueError('Quỹ chưa tạo đúng tổng cọc.')
-            # NULL là bắt buộc; chuỗi rỗng làm proc vendor rẽ sai nhánh SRT.
-            c.call('CARDPAY_Ins',write=True,day_du=True,p_TrnID=op.trn_id,p_TillID=op.till_id,p_TillTxnID=tx[0]['TillTxnID'],
-                p_TypeTrade='TDC',p_ProductIDs=None,p_CardAmounts=None,p_Amount=format(op.bank,'f'),p_AmountTra=format(op.cash,'f'),p_List='<NewDataSet/>')
+            c.update_deposit_money(D.header(c,op.trn_id),op.cash,op.bank,till_id=op.till_id)
             detail=c.query('SELECT Amount,CrDr,GoldCcy FROM T_TILL_TXN_DETAIL WITH (NOLOCK) WHERE TillTxnID=?',(tx[0]['TillTxnID'],))
             if len(detail)!=1 or detail[0]['Amount'] is None or detail[0]['Amount']!=op.cash or detail[0]['CrDr']!='+' or detail[0]['GoldCcy']!='VND':
                 raise ValueError('Chi tiết quỹ không khớp; dừng trước khi ghi số dư két.')
@@ -161,18 +170,22 @@ def execute(op):
         D.log.exception('Thao tác tiền cọc chưa xác định kết quả')
         op.status='uncertain'; op.message='Dừng ghi lại. Kiểm tra chứng từ PMV theo mã phiếu và nhật ký thao tác.'
     op.save(); log_event(op); W.invalidate(op.target)
+    if op.kind=='receive' and op.status=='done' and op.evidence.get('reconcile_later'):
+        from .deposit_bank import enable_reconcile
+        enable_reconcile(op)
     return op
 
 
 class MoneyForm(forms.Form):
-    cash=forms.DecimalField(label='Tiền mặt (₫)',min_value=0,max_digits=18,decimal_places=3)
-    bank=forms.DecimalField(label='Chuyển khoản (₫)',min_value=0,max_digits=18,decimal_places=3)
+    cash=forms.DecimalField(label='Tiền mặt (₫)',min_value=0,max_digits=18,decimal_places=3,widget=D.MoneyInput)
+    bank=forms.DecimalField(label='Chuyển khoản (₫)',min_value=0,max_digits=18,decimal_places=3,widget=D.MoneyInput)
     note=forms.CharField(label='Diễn giải chứng từ',max_length=500,widget=forms.Textarea(attrs={'rows':2}))
     confirm=forms.BooleanField(label='Xác nhận tiền mặt thực thu/hoàn; phần CK chỉ ghi PMV sau khi tự đối soát khớp ngân hàng')
 
 
 @require_http_methods(['GET','POST'])
 def action(request,pk,kind):
+    if kind=='release': return release_action(request,pk)
     if kind not in ('receive','refund','history','cancel'): raise Http404
     D.authorize(request,'can_view' if kind=='history' else 'can_approve')
     c=PmvClient(tag='datcoc-money-view:'+request.user.username)
@@ -180,13 +193,21 @@ def action(request,pk,kind):
     try:
         f=financial(c,pk)
         operations=list(Operation.objects.filter(target=c.target,trn_id=pk).order_by('-id')[:30])
-        for op in operations: op.state_name=STATES.get(op.status,op.status)
-        ctx.update(financial=f,operations=operations)
+        for op in operations:
+            op.state_name=STATES.get(op.status,op.status)
+            op.kind_name='Đối soát CK / phân bổ cọc' if op.kind=='bank_reconcile' else op.kind
+        ctx.update(financial=f,operations=operations,can_approve=D.allowed(request.user,'can_approve'))
+        local=DepositOrderState.objects.filter(target=c.target,trn_id=pk).first()
+        ctx['bank_reconcile_message']=local.payment_plan.get('bank_message','') if local else ''
+        if len(f['links'])==1 and f['links'][0]['Status']=='W': ctx['can_release']=True
         if kind=='history': return render(request,'pos/_dat_coc_money.html',ctx)
         if kind=='cancel':
             form=forms.Form(request.POST or None)
         else:
-            form=MoneyForm(request.POST or None,initial={'cash':f['cash'] if kind=='refund' else f['amount'],'bank':f['bank'] if kind=='refund' else 0})
+            state=DepositOrderState.objects.filter(target=c.target,trn_id=pk).first()
+            plan=state.payment_plan if state else {}
+            form=MoneyForm(request.POST or None,initial={'cash':f['cash'] if kind=='refund' else plan.get('cash',f['amount']),
+                           'bank':f['bank'] if kind=='refund' else plan.get('bank',0)})
         stamp={**money_stamp(c,f['h']),'kind':kind,'nonce':uuid.uuid4().hex}
         ctx.update(form=form,token=request.POST.get('token') or signing.dumps(stamp,salt='dc-money'))
         if request.method=='POST' and form.is_valid():
@@ -204,7 +225,8 @@ def action(request,pk,kind):
                 data=form.cleaned_data
                 op=Operation(target=c.target,trn_id=pk,kind=kind,amount=f['amount'],cash=data['cash'],bank=data['bank'],
                     user_id=pu.user_id,till_id=pu.till_id,username=request.user.username,active_key=c.target+':'+pk,
-                    token=hashlib.sha256(ctx['token'].encode()).hexdigest(),evidence={'stamp':money_stamp(c,f['h']),'note':data['note']})
+                    token=hashlib.sha256(ctx['token'].encode()).hexdigest(),evidence={'stamp':money_stamp(c,f['h']),'note':data['note'],
+                        **({'staff_confirmed':True,'reconcile_later':True,'money_policy':'fixed_total_v1'} if kind=='receive' else {})})
                 validate_operation(op,f)
                 from .deposit_operations import base_state
                 with transaction.atomic():
@@ -226,80 +248,95 @@ def action(request,pk,kind):
 
 def process_queue(target):
     from django.contrib.auth import get_user_model
+    from . import deposit_application as A
+    for pending in Operation.objects.filter(target=target,kind='apply',status__in=['linked','running','uncertain']).order_by('id')[:30]:
+        if pending.created_at>timezone.now()-dt.timedelta(minutes=2): continue
+        try: A.reconcile(PmvClient(target,tag='coc-reconcile'),pending)
+        except Exception: D.log.exception('Đối soát liên kết cọc; không phát lại thao tác PMV')
     Operation.objects.filter(target=target,status='running',created_at__lt=timezone.now()-dt.timedelta(minutes=5)).update(status='uncertain',message='Tiến trình gián đoạn; cần kiểm tra PMV, không tự ghi lại.')
     count=0
-    for op in Operation.objects.filter(target=target,status='queued').order_by('id')[:30]:
+    for op in Operation.objects.filter(target=target,kind__in=['receive','refund'],status='queued').order_by('id')[:30]:
         user=get_user_model().objects.filter(username=op.username,is_active=True).first()
         pu=pmv_user_for_web_user(user) if user else None
-        if not user or not D.allowed(user,'can_approve') or not pu or pu.user_id!=op.user_id or pu.till_id!=op.till_id:
+        permission = 'can_edit' if op.kind=='receive' and op.evidence.get('staff_confirmed') else 'can_approve'
+        if not user or not D.allowed(user,permission) or not pu or pu.user_id!=op.user_id or pu.till_id!=op.till_id:
             op.status='blocked'; op.message='Quyền hoặc liên kết két của người lập đã thay đổi.'; op.save(); continue
         if op.created_at<timezone.now()-dt.timedelta(days=3):
             op.status='blocked'; op.message='Quá 3 ngày chưa đối soát; cần kiểm tra yêu cầu.'; op.save(); continue
         try: count+=execute(op).status=='done'
         except Exception: D.log.exception('Đối soát cọc tự động')
+    from .deposit_bank import process_bank
+    if target=='kk': count += process_bank()
+    from .deposit_completion import process
+    process(PmvClient(target,tag='dc-completion'))
     return count
 
 
+def chung_tu_cu_du_dung(f):
+    """Chỉ nhận diện cọc cũ để đối soát; KHÔNG dùng làm điều kiện cho phép chốt PMV."""
+    return (not f['tx'] and f['amount']>0 and f['cash']+f['bank']==f['amount']
+            and (f['h'].get('Status') or '').strip() in ('W','R'))
+
+
 def invoice_deposit_guard(c,invoice_id,amount,cust_id):
-    linked=c.query('SELECT DatCocID FROM TRN_RT_BUYSELL_DatCoc WITH (NOLOCK) WHERE TrnID=?',(invoice_id,))
-    if not linked: return
-    funds=[financial(c,r['DatCocID']) for r in linked]
-    if any(not f['valid'] or f['changes'] or len(f['links'])!=1 or f['h']['CustID']!=cust_id for f in funds):
-        raise ValueError('Chứng từ cọc liên kết hóa đơn không còn hợp lệ; cần đối soát trước khi sửa/chốt.')
-    if sum((f['amount'] for f in funds),Decimal(0))!=Decimal(amount or 0):
-        raise ValueError('Tiền cọc hóa đơn phải khớp tổng phiếu cọc đã liên kết.')
+    from . import deposit_application as A
+    ids=A.linked_ids(c,invoice_id)
+    if not ids: return
+    h=A.invoice(c,invoice_id)
+    A.check(c,ids,cust_id,invoice_id,amount,h['Status'])
 
 
 @require_http_methods(['GET','POST'])
 def apply_to_invoice(request,pk):
     D.authorize(request,'can_approve')
+    from . import ban_coc as BC, deposit_application as A
     c=PmvClient(tag='datcoc-apply:'+request.user.username)
     class ApplyForm(forms.Form):
-        invoice=forms.CharField(label='Mã TrnID hóa đơn bán đang lưu tạm',max_length=15)
-        confirm=forms.BooleanField(label='Hóa đơn cùng khách đã nhập đúng tiền cọc để giảm tiền khách trả')
+        invoice=forms.CharField(label='Mã hóa đơn bán lưu tạm',max_length=15)
+        confirm=forms.BooleanField(label='Xác nhận liên kết cọc vào hóa đơn cùng khách, chưa thanh toán')
     form=ApplyForm(request.POST or None)
-    ctx={'pk':pk,'title':'Cấn cọc vào hóa đơn','form':form}
+    ctx={'pk':pk,'title':'Liên kết cọc · chờ chốt hóa đơn','form':form}
     try:
         f=financial(c,pk)
-        ctx['token']=request.POST.get('token') or signing.dumps({**money_stamp(c,f['h']),'nonce':uuid.uuid4().hex},salt='dc-apply')
+        ctx['token']=request.POST.get('token') or signing.dumps(money_stamp(c,f['h']),salt='dc-apply')
         if request.method=='POST' and form.is_valid():
-            stamp=signing.loads(ctx['token'],salt='dc-apply',max_age=7200); stamp.pop('nonce',None)
-            if stamp!=money_stamp(c,f['h']): raise ValueError('Phiếu cọc vừa thay đổi. Mở lại popup.')
-            if not f['valid'] or f['h']['Status']!='P' or f['links'] or f['changes']: raise ValueError('Cần cọc đã thu quỹ và chưa liên kết hóa đơn nào.')
-            invoice=form.cleaned_data['invoice']
-            inv=c.query("SELECT TrnID,Status,CustID,TienCoc,PayAmount,SellTotalAmount,BuyTotalAmount,Discount,TaskPriceAdd,AddMoney,TrnDateTime_Upd FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=? AND IsDel='0'",(invoice,))
-            if not inv or inv[0]['Status']!='W' or inv[0]['CustID']!=f['h']['CustID']: raise ValueError('Hóa đơn phải còn lưu tạm và cùng khách hàng.')
-            inv=inv[0]
-            from .bill import tinh_tong
-            expected=tinh_tong(inv['SellTotalAmount'],inv['BuyTotalAmount'],inv['Discount'],inv['TaskPriceAdd'],inv['AddMoney'],f['amount'])['khach_tra']
-            if inv['TienCoc']!=f['amount'] or inv['PayAmount']!=expected or expected<0:
-                raise ValueError('Nhập đúng tiền cọc trên hóa đơn bán trước khi liên kết; tiền khách trả sau cấn phải không âm.')
-            if c.query('SELECT DatCocID FROM TRN_RT_BUYSELL_DatCoc WITH (NOLOCK) WHERE TrnID=?',(invoice,)):
-                raise ValueError('Hóa đơn đã liên kết phiếu cọc. Không ghi đè danh sách cọc.')
-            pu=pmv_user_for_web_user(request.user)
-            if not pu: raise ValueError('Tài khoản chưa liên kết PMV.')
-            with transaction.atomic():
-                # Unique invoice token serializes concurrent attempts to bind a different deposit to the same invoice.
-                op=Operation.objects.create(target=c.target,trn_id=pk,kind='apply',amount=f['amount'],cash=f['cash'],bank=f['bank'],
-                    invoice_id=invoice,bank_key=c.target+':invoice:'+invoice,active_key=c.target+':'+pk,status='running',
-                    token=hashlib.sha256(ctx['token'].encode()).hexdigest(),user_id=pu.user_id,till_id=pu.till_id,username=request.user.username,
-                    evidence={'before':safe_data(f),'invoice':safe_data(inv)})
-            try:
-                check=financial(c,pk)
-                if money_stamp(c,check['h'])!=stamp or check['links'] or check['changes']: raise ValueError('Cọc vừa đổi trước khi liên kết.')
-                current=c.query('SELECT TrnDateTime_Upd,Status,TienCoc,PayAmount,CustID FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?',(invoice,))
-                if not current or any(current[0][k]!=inv[k] for k in current[0]): raise ValueError('Hóa đơn vừa thay đổi.')
-                c.call('TRN_RT_BUYSELL_DatCoc_Ins',write=True,p_TrnID=invoice,p_IDCoc=pk)
-                links=c.query('SELECT DatCocID FROM TRN_RT_BUYSELL_DatCoc WITH (NOLOCK) WHERE TrnID=?',(invoice,))
-                if links!=[{'DatCocID':pk}]: raise ValueError('Chưa xác nhận liên kết.')
-                op.status='done'; op.active_key=None; op.completed_at=timezone.now(); op.message='Đã liên kết; cọc được sử dụng khi hóa đơn bán hoàn tất.'
-            except Exception:
-                D.log.exception('Liên kết cọc chưa xác định'); op.status='uncertain'; op.message='Kiểm tra liên kết cọc trên PMV trước khi thao tác tiếp.'
-            op.save(); log_event(op); W.invalidate(c.target)
+            if signing.loads(ctx['token'],salt='dc-apply',max_age=7200)!=money_stamp(c,f['h']):
+                raise ValueError('Phiếu đã thay đổi; mở lại popup.')
+            invoice=form.cleaned_data['invoice'];inv=A.invoice(c,invoice)
+            ids=A.linked_ids(c,invoice)
+            if pk not in ids: ids.append(pk)
+            A.check(c,ids,inv['CustID'],invoice,inv['TienCoc'])
+            _,error=BC.lien_ket(c,invoice,ids,inv['CustID'],request.user)
+            if error: raise ValueError(error)
             from .deposit_messages import saved
-            return saved(op.message,'success' if op.status=='done' else 'error')
+            W.invalidate(c.target)
+            return saved('Đã liên kết cọc. Chỉ ghi đã sử dụng khi hóa đơn chốt và chứng từ quỹ khớp.','success')
     except (ValueError,signing.BadSignature) as exc: ctx['error']=str(exc)
-    except IntegrityError: ctx['error']='Cọc hoặc hóa đơn đã có yêu cầu liên kết. Kiểm tra chứng từ hiện tại.'
     except Exception:
-        D.log.exception('Cấn tiền cọc'); ctx['error']='Chưa liên kết được hóa đơn. Kiểm tra dữ liệu trước khi thử lại.'
+        D.log.exception('Liên kết cọc');ctx['error']='Chưa xác định kết quả; xem Chứng từ cọc trước khi thử lại.'
+    return render(request,'pos/_dat_coc_action.html',ctx)
+
+
+def release_action(request,pk):
+    D.authorize(request,'can_approve')
+    from . import deposit_application as A
+    c=PmvClient(tag='datcoc-release:'+request.user.username)
+    class ReleaseForm(forms.Form):
+        confirm=forms.BooleanField(label='Gỡ toàn bộ cọc khỏi hóa đơn nháp và tính lại tiền khách trả; không thu/hoàn tiền')
+    form=ReleaseForm(request.POST or None)
+    ctx={'pk':pk,'title':'Phục hồi liên kết hóa đơn nháp','form':form}
+    try:
+        f=financial(c,pk)
+        if len(f['links'])!=1: raise ValueError('Cần đúng một hóa đơn liên kết để phục hồi.')
+        invoice=f['links'][0]['TrnID'];snapshot=A.release_snapshot(c,invoice)
+        ctx['title']='Gỡ cọc khỏi '+invoice
+        ctx['token']=request.POST.get('token') or signing.dumps(snapshot,salt='dc-release')
+        if request.method=='POST' and form.is_valid():
+            expected=signing.loads(ctx['token'],salt='dc-release',max_age=1800)
+            op=A.release(c,invoice,request.user,expected)
+            from .deposit_messages import saved
+            return saved(op.message+' Mở lại hóa đơn từ danh sách trước khi bán tiếp.','success')
+    except (ValueError,signing.BadSignature) as exc: ctx['error']=str(exc)
+    except Exception:
+        D.log.exception('Phục hồi liên kết cọc');ctx['error']='Phục hồi chưa xác định kết quả; cần kiểm tra trước khi chốt hóa đơn.'
     return render(request,'pos/_dat_coc_action.html',ctx)

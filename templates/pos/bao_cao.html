@@ -1,0 +1,32 @@
+{% extends 'base.html' %}{% load static %}{% comment %}
+TRANG BÁO CÁO (GĐ chốt 12/09/2026) — khung ngoài: tiêu đề, nút kỳ nhanh, hai ô ngày.
+Phần SỐ LIỆU nằm ở _bao_cao_so_lieu.html để HTMX chỉ thay đúng phần đó khi đổi kỳ.
+Ba con số doanh thu (thực · ròng · HH) do GĐ chốt — xem docstring apps/pos/bao_cao.py.
+{% endcomment %}
+{% block title %}BÁO CÁO{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/bao_cao.css' %}?v=20260912.1">{% endblock %}
+{% block page_head %}{% endblock %}
+{% block content %}
+<section class="bc-page">
+  <header class="bc-hero">
+    <div class="bc-heading">
+      <img src="{% static 'img/ico/baocao.png' %}" width="62" height="62" alt="">
+      <div><span class="bc-eyebrow">SỐ LIỆU KINH DOANH</span><h1>BÁO CÁO</h1>
+        <p>Bán · thâu · cân đối vàng · nhân viên — đọc thẳng từ máy KK.</p></div>
+    </div>
+    <form id="bc-loc" class="bc-loc" hx-get="{% url 'pos:bao_cao' %}" hx-target="#bc-so-lieu"
+          hx-swap="innerHTML" hx-indicator="#bc-cho">
+      <div class="bc-ky">
+        {% for ma, nhan in kys %}
+        <button type="submit" name="ky" value="{{ ma }}" class="bc-ky__n{% if ky == ma %} on{% endif %}">{{ nhan }}</button>
+        {% endfor %}
+      </div>
+      <label>Từ ngày<input type="date" name="d1" value="{{ d1 }}" max="{{ hom_nay }}"></label>
+      <label>Đến ngày<input type="date" name="d2" value="{{ d2 }}" max="{{ hom_nay }}"></label>
+      <button class="bc-nut bc-nut--chinh" type="submit">Xem</button>
+      <span id="bc-cho" class="htmx-indicator">Đang tổng hợp…</span>
+    </form>
+  </header>
+  <div id="bc-so-lieu">{% include 'pos/_bao_cao_so_lieu.html' %}</div>
+</section>
+{% endblock %}
