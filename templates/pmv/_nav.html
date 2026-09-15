@@ -5,6 +5,7 @@
 <a href="{% url 'pmv:hist' %}" {% if route == 'hist' %}aria-current="page"{% endif %}>Kho lịch sử</a>
 <a href="{% url 'pmv:gdb_mau' %}" {% if route == 'gdb_mau' %}aria-current="page"{% endif %}>Mẫu in GĐB</a>
 <a href="{% url 'pmv:deposit_print_config' %}" {% if route == 'deposit_print_config' %}aria-current="page"{% endif %}>Mẫu in CỌC</a>
+{% if quyen_muc.HE_THONG %}<a href="{% url 'pmv:gcd_mau' %}" {% if route == 'gcd_mau' %}aria-current="page"{% endif %}>Mẫu in GCD</a>{% endif %}
 <details class="sys-nav-tools" {% if route == 'diff' or route == 'behavior' or route == 'quy_trinh' or route == 'quy_trinh_detail' or route == 'qr_learning' %}data-active="true"{% endif %}>
 <summary>Công cụ kỹ thuật</summary><div>
 <a href="{% url 'pos:qr_learning' %}" {% if route == 'qr_learning' %}aria-current="page"{% endif %}>QR CCCC</a>

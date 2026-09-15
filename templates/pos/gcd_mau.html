@@ -1,0 +1,178 @@
+{% extends "pmv/base.html" %}{% load static %}
+{% comment %}
+TRANG CẤU HÌNH MẪU IN GIẤY CẦM ĐỒ (GCD) — /he-thong/mau-in-gcd/ (GĐ chốt 15/09/2026).
+
+Nơi GHI DUY NHẤT của 3 khoá trong khj_bl.pmv_state:
+  · gcd_layout  — bố cục 17 khối + thiết lập máy in (_in) + nội dung (_ct) + nền xem trước (_nen)
+  · may_in_ds   — SỔ MÁY IN dùng chung cho cả 3 mẫu in (GĐB · CỌC · GCD), bản KHAI TAY
+  · gcd_may_in  — MÁY IN THẬT đang chọn cho GCD (tìm bằng PowerShell Get-Printer trên máy chủ);
+                  ghi qua 2 endpoint RIÊNG tim-may-in/ · chon-may-in/, không đi chung nút LƯU MẪU
+                  ⇒ chọn máy in không bao giờ chạm vào bố cục đã căn từng milimet
+Việc IN THẬT nằm bên KHCD https://localhost:8200/camdo/lap-phieu — KHCD chỉ SELECT chéo DB, chỉ đọc.
+
+DỮ LIỆU XEM TRƯỚC LÀ MẪU CỨNG (view `_du_lieu_mau`). Trang này KHÔNG truy vấn khj_cd — giữ một chiều.
+
+BẨY ĐÃ TRÁNH:
+  · `<style id="gcd-layout-css">` đặt trong thân trang nên đứng SAU khbl.css ⇒ @page của css_in()
+    thắng `@media print{@page{size:A5 portrait}}` có sẵn trong khbl.css (dành cho GĐB, tờ DỌC).
+  · Ảnh nền là phần tử riêng `.gcd-nen.no-print`, KHÔNG phải background của tờ ⇒ không bao giờ in ra.
+  · Chú thích gom hết ở ĐẦU TỆP bằng {% comment %} — `{# #}` nhiều dòng bị Django in nguyên văn ra
+    màn hình (check khbl.E001 chặn).
+{% endcomment %}
+{% block title %}Mẫu in Giấy cầm đồ{% endblock %}
+{% block page_title %}Mẫu in GIẤY CẦM ĐỒ (A5 nằm ngang){% endblock %}
+{% block page_sub %}Giấy ĐÃ IN SẴN — chỉ in CHỮ vào ô, <b>không bao giờ in ảnh nền</b> · kéo-thả khối hoặc nhập số · in thật ở <b>KHCD /camdo/lap-phieu</b>{% endblock %}
+{% block system_head %}<link rel="stylesheet" href="{% static 'css/gcd_mau.css' %}?v=1">{% endblock %}
+{% block page_tools %}
+  <a class="khbl-btn khbl-btn--outline" href="?{% if dai %}{% else %}dai=1{% endif %}">{% if dai %}Dữ liệu mẫu thường{% else %}Thử trường hợp DÀI NHẤT{% endif %}</a>
+  {% if duoc_sua %}
+  <button class="khbl-btn khbl-btn--outline" type="button" id="gcdm-reset">↺ Mặc định</button>
+  <button class="khbl-btn khbl-btn--outline" type="button" id="gcdm-print">🖨 In thử (giấy trắng)</button>
+  <button class="khbl-btn khbl-btn--gold" type="button" id="gcdm-save">💾 LƯU MẪU</button>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div id="gcdm-status" class="no-print">Kéo khối trên tờ giấy, hoặc nhập số bên phải. Bấm LƯU MẪU thì KHCD in theo ngay.</div>
+{% if not duoc_sua %}<div class="gcdm-warn no-print"><b>Tài khoản này chỉ được XEM.</b> Nút Lưu / Mặc định đã ẩn để máy quầy không đâm vào trang 403 (Edge kiosk không có nút Back). Cần chỉnh mẫu thì xin cấp quyền <b>SỬA</b> ở danh mục HỆ THỐNG.</div>{% endif %}
+<div class="gcdm-info no-print"><b>In thử phải in trên GIẤY TRẮNG A5 trước.</b> Úp tờ in thử lên tờ in sẵn chỉ phát hiện được <i>lệch</i>, KHÔNG phát hiện được máy in <i>thu nhỏ</i> (mục “Fit to page / Vừa khổ giấy” trong driver in ra 94–96%). Đo bằng thước: nếu bề ngang tờ in ra không đúng <b>Rộng tờ giấy</b> đã khai thì TẮT fit-to-page trước, đừng đi chỉnh lệch mm.</div>
+
+<div class="gcdm">
+  <div class="gcdm-paper">
+    <div class="gcdm-zoom no-print">
+      <label>Thu phóng xem trước <select id="gcdm-k"><option value="0">Vừa khung</option><option value="1">100 % (đúng mm thật)</option><option value="0.75">75 %</option><option value="0.5">50 %</option></select></label>
+      <label><input type="checkbox" id="gcdm-nen-hien" checked> Hiện ảnh nền tờ giấy</label>
+      <span class="gcdm-badge">Ảnh nền KHÔNG BAO GIỜ được in</span>
+    </div>
+    {% for k in khoi_mau %}{% if k.dai %}<div class="gcdm-warn no-print">⚠ <b>{{ k.ten }}</b> quá dài kể cả sau khi co chữ hết bậc — soi bằng mắt trước khi in, hoặc nới ô <b>Cao %</b> cho xuống dòng.</div>{% endif %}{% endfor %}
+    <div class="gcdm-vp" id="gcdm-vp"><div class="gcdm-scale" id="gcdm-scale">
+      <style id="gcd-layout-css">{{ gcd_css }}</style>
+      {% include "pos/_gcd_a5.html" %}
+    </div></div>
+  </div>
+
+  <aside class="gcdm-panel no-print">
+    <div class="gcdm-head"><span title="Bỏ tick = KHÔNG IN khối này">In</span><span>KHỐI</span><span>Trái %</span><span>Trên %</span><span>Rộng %</span><span>Cao %</span><span>Chữ pt</span></div>
+    {% for b in blocks %}
+    <div class="gcdm-row" data-key="{{ b.key }}" title="{{ b.sel }}">
+      <input type="checkbox" data-p="an" aria-label="{{ b.ten }}: có in">
+      <b>{{ b.ten }}</b>
+      <input type="number" step="0.1" min="0" max="100" data-p="left" aria-label="{{ b.ten }}: trái">
+      <input type="number" step="0.1" min="0" max="100" data-p="top" aria-label="{{ b.ten }}: trên">
+      <input type="number" step="0.1" min="1" max="100" data-p="w" aria-label="{{ b.ten }}: rộng">
+      <input type="number" step="0.1" min="0.5" max="100" data-p="h" aria-label="{{ b.ten }}: cao">
+      <input type="number" step="0.5" min="3" max="30" data-p="fs" aria-label="{{ b.ten }}: cỡ chữ">
+    </div>
+    {% endfor %}
+
+    <div class="gcdm-box">
+      <div class="gcdm-box__t">TỜ GIẤY THẬT · ĐO BẰNG THƯỚC</div>
+      <div class="gcdm-grid2">
+        <label>Rộng tờ giấy (mm)<input type="number" step="0.5" min="80" max="420" data-in="kho_w"></label>
+        <label>Cao tờ giấy (mm)<input type="number" step="0.5" min="60" max="420" data-in="kho_h"></label>
+      </div>
+      <p class="gcdm-note">A5 chuẩn là 210 × 148. Ảnh quét tờ thật có tỷ lệ 1,433 chứ không phải 1,419 (lệch ~2 mm) — nhà in xén tay. <b>Đo tờ giấy in sẵn rồi nhập đúng số ở đây</b>, cả hệ toạ độ ăn theo hai số này.</p>
+    </div>
+
+    <div class="gcdm-box">
+      <div class="gcdm-box__t">MÁY IN · ĐẶT TỜ GCD TRÊN TRANG IN</div>
+      <div class="gcdm-grid2">
+        <label>Khổ gửi máy in<select data-in="kho">
+          <option value="A5N">Đúng tờ giấy (khuyến nghị)</option>
+          <option value="auto">Theo máy in đang chọn</option>
+          <option value="A4N">A4 nằm ngang</option>
+          <option value="A5D">A5 đứng</option>
+          <option value="A4D">A4 đứng</option>
+          <option value="Letter">Letter nằm ngang</option>
+        </select></label>
+        <label>Canh ngang<select data-in="canh"><option value="giua">Giữa trang</option><option value="trai">Sát mép trái</option></select></label>
+        <label>Lệch ngang (mm)<input type="number" step="0.5" min="-80" max="80" data-in="dx"></label>
+        <label>Lệch dọc (mm)<input type="number" step="0.5" min="-80" max="80" data-in="dy"></label>
+        <label>Tỷ lệ in (%)<input type="number" step="1" min="50" max="150" data-in="ty_le"></label>
+        <label>Máy in dùng cho GCD<select data-in="may_in" id="gcdm-mayin-chon"></select></label>
+      </div>
+      <p class="gcdm-note">Để <b>auto</b> rất nguy hiểm với tờ NẰM NGANG: máy in đang để A5 <i>đứng</i> thì khung chỉ rộng 148 mm, tờ 210 mm <b>tràn ra ngoài hoặc vỡ thành 2 trang</b>. Mặc định là “Đúng tờ giấy”.</p>
+    </div>
+
+    <div class="gcdm-box">
+      <div class="gcdm-box__t">NỘI DUNG IN</div>
+      <label>Số tiền cầm in ra<select data-ct="tien">
+        <option value="du_hien_tai">Dư gốc hiện tại (giống trang in cũ)</option>
+        <option value="goc_ban_dau">Gốc ban đầu</option>
+      </select></label>
+      <p class="gcdm-note"><b>Chờ Giám đốc chốt.</b> Trang in cũ của KHCD đang in <i>dư gốc hiện tại</i> và ghi hẳn câu đó trên phiếu. Nếu đổi sang <i>gốc ban đầu</i> thì hai đường in sẽ đưa ra HAI CON SỐ KHÁC NHAU cho cùng một phiếu đã đóng lời một phần — phải dán nhãn “bản nội bộ” cho trang in cũ trước khi đổi.</p>
+    </div>
+
+    <div class="gcdm-box">
+      <div class="gcdm-box__t">HIỆU CHỈNH ẢNH NỀN XEM TRƯỚC</div>
+      <div class="gcdm-grid2">
+        <label>Dời ngang %<input type="number" step="0.5" min="-30" max="30" data-nen="x"></label>
+        <label>Dời dọc %<input type="number" step="0.5" min="-30" max="30" data-nen="y"></label>
+        <label>Rộng %<input type="number" step="0.5" min="50" max="200" data-nen="w"></label>
+        <label>Cao %<input type="number" step="0.5" min="50" max="200" data-nen="h"></label>
+      </div>
+      <p class="gcdm-note">Chỉ ảnh hưởng MÀN HÌNH này — <b>không bao giờ lọt vào CSS in</b>, KHCD đọc xong bỏ qua. Đây là van an toàn cho sai số quét ảnh, KHÔNG phải công cụ căn chính: căn theo <b>số đo thước trên tờ giấy thật</b>, nếu phải kéo ảnh nhiều thì ảnh quét đang lệch, nên xén lại ảnh một lần cho xong.</p>
+    </div>
+
+    <div class="gcdm-box" id="gcdm-mi2">
+      <div class="gcdm-box__t">MÁY IN THẬT TRÊN MÁY CHỦ — TÌM · CHỌN · LƯU</div>
+      <div class="gcdm-mi2__now">
+        <span>Đang chọn:</span>
+        <b id="gcdm-mi2-ten">{% if may_in_that.ten %}{{ may_in_that.ten }}{% else %}— chưa chọn máy in —{% endif %}</b>
+        <i id="gcdm-mi2-phu">{% if may_in_that.ten %}{% if may_in_that.cong %}cổng {{ may_in_that.cong }} · {% endif %}lưu lúc {{ may_in_that.luc }}{% if may_in_that.boi %} bởi {{ may_in_that.boi }}{% endif %}{% if may_in_that.ao %} · ⚠ đây là MÁY IN ẢO, in ra tệp chứ không ra giấy{% endif %}{% else %}Để trống = mỗi lần in đều mở hộp thoại in của trình duyệt để tự chọn máy in.{% endif %}</i>
+      </div>
+      {% if duoc_sua %}
+      <div class="gcdm-mi2__bar">
+        <button class="khbl-btn khbl-btn--outline" type="button" id="gcdm-mi2-tim">🔍 Tìm máy in</button>
+        <button class="khbl-btn khbl-btn--outline" type="button" id="gcdm-mi2-bo">✕ Bỏ chọn</button>
+        <span id="gcdm-mi2-bao"></span>
+      </div>
+      {% endif %}
+      <div class="gcdm-mi2__ds" id="gcdm-mi2-ds"></div>
+
+      <div class="gcdm-mi2__tt{% if not may_in_tinh_trang.san_sang %} is-thieu{% endif %}">
+        <b>{% if may_in_tinh_trang.san_sang %}✔ Máy chủ tự đẩy bản in ra máy in được{% else %}Lần in hôm nay VẪN mở hộp thoại in của trình duyệt{% endif %}</b>
+        <div>{{ may_in_tinh_trang.loi_nhan }}</div>
+        {% if may_in_tinh_trang.thieu %}
+        <div>Máy chủ còn thiếu:
+          <ul>{% for t in may_in_tinh_trang.thieu %}<li>{{ t }}</li>{% endfor %}</ul>
+          Có đủ những thứ trên mới bật được kiểu in <b>bấm một cái là phiếu ra thẳng máy in đã chọn</b>. Chưa có thì vẫn in được bình thường, chỉ là qua hộp thoại.
+        </div>
+        {% endif %}
+      </div>
+      <p class="gcdm-note">Máy chủ <b>chưa cắm máy in nào</b> nên danh sách tìm được hôm nay toàn <b>máy in ảo</b> (in ra tệp PDF/XPS/OneNote, và máy in của phiên Remote Desktop) — hệ thống đánh dấu sẵn <span class="gcdm-badge">ẢO</span> để khỏi chọn nhầm; <b>đó là bình thường, không phải lỗi</b>. Cài máy in thật lên máy chủ là nó tự hiện ra. Khác với <b>SỔ MÁY IN</b> bên dưới (bản khai tay các đường in dự kiến, đang chưa nối) — ô này là máy in <b>Windows thật</b> mà máy chủ đọc được.</p>
+    </div>
+
+    <div class="gcdm-box">
+      <div class="gcdm-box__t">SỔ MÁY IN (dùng chung GĐB · CỌC · GCD)</div>
+      <div class="gcdm-mi" id="gcdm-mi"></div>
+      {% if duoc_sua %}<button class="khbl-btn khbl-btn--outline" type="button" id="gcdm-mi-them" style="margin-top:6px">+ Thêm máy in</button>{% endif %}
+      <p class="gcdm-note"><b>Ô “Máy in” là NHÃN CẤU HÌNH cho người vận hành, chưa điều khiển được thiết bị.</b> Trang web không có cách nào ra lệnh cho trình duyệt in vào một máy in cụ thể — đó là rào bảo mật cố ý của trình duyệt. Hiện KHCD in bằng Edge <code>--kiosk-printing</code> ⇒ ra <b>máy in mặc định của Windows trên chính máy quầy</b>. Chỉ cách <b>Trình duyệt máy quầy in</b> là đang chạy thật; các cách còn lại lưu được nhưng <span class="gcdm-badge">chưa nối</span> — cần máy in mạng và câu trả lời của GĐ (xem ghi chú bàn giao) mới nối được.</p>
+    </div>
+
+    <p class="gcdm-note">• Bấm khối trên tờ giấy để chọn, <b>kéo</b> để dời; phím <b>← ↑ → ↓</b> dời 0,2 % (giữ Shift = 1 %).<br>
+    • Bỏ tick cột <b>In</b> = khối không in ra; trên bản xem trước khối đó vẫn hiện MỜ để còn kéo được.<br>
+    • 4 khối tắt sẵn: <b>Chi tiết cuống</b>, <b>Tên khách dưới chữ ký</b>, <b>Dấu trạng thái</b>, <b>Giấy tờ giữ</b> (dòng cuối nằm cách mép dưới ~4 mm, lọt vùng máy in không in được — bật sau khi in thử đúng máy in thật).</p>
+  </aside>
+</div>
+
+{{ layout|json_script:'gcdm-state' }}
+{{ mac_dinh|json_script:'gcdm-defaults' }}
+{{ may_in|json_script:'gcdm-mayin' }}
+{{ may_in_mac_dinh|json_script:'gcdm-mayin-defaults' }}
+{{ may_in_that|json_script:'gcdm-mi2-state' }}
+{{ sel|json_script:'gcdm-sel' }}
+{{ kho|json_script:'gcdm-kho' }}
+{{ cach_in|json_script:'gcdm-cach' }}
+{{ cach_chay_that|json_script:'gcdm-cach-that' }}
+<div id="gcdm-cfg"
+     data-url="{% url 'pmv:gcd_mau' %}"
+     data-url-tim="{% url 'pmv:gcd_may_in_tim' %}"
+     data-url-chon="{% url 'pmv:gcd_may_in_luu' %}"
+     data-nen="{% static 'img/GCD.jpg' %}"
+     data-kho-to="{{ kho_to }}"
+     data-sua="{% if duoc_sua %}1{% else %}0{% endif %}"
+     hidden>{% csrf_token %}</div>
+{% endblock %}
+
+{% block extra_js %}<script defer src="{% static 'js/gcd_mau.js' %}?v=1"></script>{% endblock %}

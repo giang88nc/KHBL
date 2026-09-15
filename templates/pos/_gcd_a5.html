@@ -1,0 +1,23 @@
+{% comment %}
+TỜ GIẤY CẦM ĐỒ A5 NẰM NGANG — bản XEM TRƯỚC của trang cấu hình /he-thong/mau-in-gcd/ (15/09/2026).
+
+Markup này là BẢN MẪU cho trang in thật bên KHCD (loan_print_gcd.html): cùng class, cùng data-gcd.
+Sửa ở đây thì phải chép sang KHCD, và ngược lại — bộ kiểm so TẬP HỢP data-gcd với gcd_layout.BLOCKS.
+
+BA ĐIỀU KHÔNG ĐƯỢC ĐỘNG VÀO:
+  · Ảnh nền là phần tử RIÊNG `.gcd-nen.no-print`, KHÔNG phải background của `.gcd-a5`.
+    (Rule `body.x .gcd-a5{background:...}` có độ đặc hiệu cao hơn rule chống in ⇒ nền sẽ IN RA
+    TỜ GIẤY IN SẴN. Phần tử riêng thì `display:none` lúc in là diệt hẳn.)
+  · Tờ giấy ở trang cấu hình mang class `gcd-sua` — nhờ đó khối đang TẮT vẫn hiện MỜ để kéo được,
+    còn khi in (`.gcd-a5` không có `gcd-sua`) thì `display:none`. Trang in KHCD KHÔNG gắn class này.
+  · Vị trí / cỡ chữ KHÔNG khai ở đây. Tất cả do `gcd_layout.css()` sinh ra và chèn SAU khbl.css.
+    Ở đây chỉ khai cách chữ NGỒI trong hộp (căn đáy để ngồi trên dòng kẻ chấm in sẵn).
+{% endcomment %}
+<section class="gcd-a5 gcd-sua" id="gcd-to">
+  <div class="gcd-nen no-print" id="gcd-nen" aria-hidden="true"></div>
+  {% for k in khoi_mau %}
+  <div class="{{ k.cls }} gcd-o {{ k.co }}" data-gcd="{{ k.key }}" title="{{ k.ten }}">
+    {% if k.dong %}{% for d in k.dong %}<div>{{ d }}</div>{% endfor %}{% else %}{{ k.text }}{% endif %}
+  </div>
+  {% endfor %}
+</section>

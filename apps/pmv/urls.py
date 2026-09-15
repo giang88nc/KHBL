@@ -3,12 +3,20 @@ from django.urls import path
 from . import views
 from apps.pos.views import gdb_mau
 from apps.pos.deposit_print_config import config as deposit_print_config
+from apps.pos.gcd_print_config import config as gcd_mau
+from apps.pos.gcd_print_config import may_in_luu as gcd_may_in_luu
+from apps.pos.gcd_print_config import may_in_tim as gcd_may_in_tim
 
 app_name = "pmv"
 
 urlpatterns = [
     path("mau-in-gdb/", gdb_mau, name="gdb_mau"),
     path("mau-in-coc/", deposit_print_config, name="deposit_print_config"),
+    # Mẫu in GIẤY CẦM ĐỒ (A5 NGANG, 15/09/2026) — cấu hình ở KHBL, in thật ở KHCD :8200
+    path("mau-in-gcd/", gcd_mau, name="gcd_mau"),
+    # MÁY IN THẬT cho GCD — tìm (PowerShell Get-Printer) và chọn/bỏ chọn, ghi khoá riêng gcd_may_in
+    path("mau-in-gcd/tim-may-in/", gcd_may_in_tim, name="gcd_may_in_tim"),
+    path("mau-in-gcd/chon-may-in/", gcd_may_in_luu, name="gcd_may_in_luu"),
     path("", views.status, name="status"),
     path("nguoi-dung/", views.user_list, name="user_list"),
     path("nguoi-dung/them/", views.user_form, name="user_create"),

@@ -388,6 +388,102 @@ máy in đang chọn) + `.gdb-a5{top:0;margin:0 auto}` (ghim SÁT MÉP TRÊN, ca
 Smoke_ui 7c → 6 kịch bản (142 PASS).
 (Lịch sử 07/09 chiều — đã thay: ĐÃ CHỐT = 🗑 HỦY HÓA ĐƠN · ↩ HỦY THANH TOÁN · 🔓 SỬA ĐƠN · 🖨 IN.)
 
+**MẪU IN GIẤY CẦM ĐỒ — GCD, A5 NẰM NGANG (GĐ chốt 15/09/2026)**: cấu hình TẬP TRUNG ở KHBL
+`/he-thong/mau-in-gcd/`, **IN THẬT ở KHCD** `https://localhost:8200/camdo/lap-phieu`. Giấy **ĐÃ IN SẴN** → chỉ in
+CHỮ vào ô, **TUYỆT ĐỐI KHÔNG in ảnh nền**; `static/img/GCD.jpg` (⚠ tên tệp CHỮ HOA) chỉ làm NỀN XEM TRƯỚC.
+Tệp mới: **`apps/pos/gcd_layout.py`** (KEY `gcd_layout` · 17 KHỐI · `mac_dinh/load/save/css/css_in` · sổ máy in) ·
+`apps/pos/gcd_print_config.py` (view) · **`apps/pos/gcd_may_in.py`** (KEY `gcd_may_in` — tìm/chọn máy in thật, 15/09) ·
+`templates/pos/gcd_mau.html` + `templates/pos/_gcd_a5.html` ·
+`static/css/gcd_mau.css` · `static/js/gcd_mau.js` · `apps/pos/management/commands/smoke_gcd.py` ·
+url `pmv:gcd_mau` + link nav "Mẫu in GCD" (bọc `{% if quyen_muc.HE_THONG %}`). KHÔNG đụng 2 mẫu in cũ.
+**TỜ GIẤY**: cuống trái (chỉ "SỐ:" ×2, còn lại trắng) + thân phải 6 dòng kẻ chấm ⇒ **KHÔNG có bảng món nhiều dòng**
+(món gộp 1 dòng), **KHÔNG có ô cho lãi/tủ/SĐT/ghi chú** — chỉ nằm ở khối `cuong_chi_tiet` TẮT SẴN trên cuống.
+4 khối `an:1` mặc định: `cuong_chi_tiet · khach_ky · trang_thai · giay_to` (riêng `giay_to` tắt vì dòng cuối nằm cách
+mép dưới ~4mm, lọt vùng chết cơ khí 4,2–6,4mm của máy in — `@page margin:0` KHÔNG mở được vùng đó).
+**BA KHOÁ trong `pmv_state`** (key-value, KHÔNG cần DDL/migration): `gcd_layout` (bố cục + `_in` máy in + `_ct` nội
+dung + `_nen` nền xem trước) · **`may_in_ds` = SỔ MÁY IN khai tay, dùng chung cả 3 mẫu in** — tách ra để đổi máy in chỉ
+sửa MỘT dòng thay vì 3 khoá · **`gcd_may_in` = MÁY IN WINDOWS THẬT đang chọn** (thêm 15/09, xem khối TÌM · CHỌN · LƯU
+MÁY IN bên dưới). Chiều dữ liệu MỘT CHIỀU, không HTTP: KHBL `PmvState.set` là **người ghi duy nhất** → KHCD
+`SELECT` chéo DB (`khj_admin` đọc được `khj_bl`) + cache tệp; KHCD **không bao giờ UPDATE**.
+⚠ **5 BẪY ĐÃ XỬ, ĐỪNG GỠ**: (1) `css()` **tự sinh `position:relative`** cho `.gcd-a5` — KHCD không có khbl.css, thiếu
+dòng này là 17 khối absolute neo vào viewport, vỡ sạch. (2) **Nền KHÔNG BAO GIỜ là `background` của `.gcd-a5`** mà là
+phần tử riêng `.gcd-nen.no-print` + `css_in()` sinh `display:none` khi in — rule `body.x .gcd-a5{background}` có độ đặc
+hiệu (0,2,0) THẮNG rule chống in (0,1,0) ⇒ nền in ra giấy in sẵn; cũng **cấm `print-color-adjust:exact`** (chính là
+công tắc ép trình duyệt in nền). (3) **KHÔNG mượn `G.IN_KHO`/`G.css_in()` của `gdb_layout`** — dict đó không có khổ
+NGANG, gọi vào trả `auto` mà không báo lỗi → tờ 210mm tràn/vỡ 2 trang trên máy in đang để A5 dọc; GCD khai `IN_KHO`
+riêng, mặc định **`A5N` = `@page{size:<kho_w>mm <kho_h>mm}`**, KHÔNG dùng `auto` như GĐB. (4) **KHỔ GIẤY LÀ THAM SỐ**
+`_in.kho_w/kho_h` mm: ảnh quét tỷ lệ 1,4327 ≠ A5 chuẩn 1,4189 (lệch ~2mm — nhà in xén tay) ⇒ **phải đo tờ thật bằng
+thước rồi nhập**, cả hệ toạ độ ăn theo 2 số đó; `_nen` chỉ là van an toàn cho ảnh lệch, **không bao giờ lọt vào CSS in**.
+(5) **WYSIWYG khổ NGANG**: tờ 210mm ≈ 794px rộng hơn khung → `max-width:100%` làm hình học co mà `pt` KHÔNG co ⇒ chữ
+to giả; `gcd_mau.css` **gỡ `max-width` cho bản xem trước** (`.gcdm-scale .gcd-a5{max-width:none}`) và thu cả cụm bằng
+`transform:scale(--gcd-k)`. Kèm bẫy cũ tái gặp: khbl.css đang có sẵn `@page A5 portrait` + `@page A4 landscape`, nên
+`<style id="gcd-layout-css">` phải đứng **SAU** khbl.css (smoke kiểm thứ tự này).
+**KHÁC 2 TRANG CŨ**: dùng biến thể **GĐB (include thẳng partial)**, KHÔNG iframe kiểu CỌC — KHCD đặt
+`X-Frame-Options: DENY` + `frame-ancestors 'none'`, nhúng được thì phải hạ 2 header bảo mật cho origin khác, không
+đáng · cột **In ✔/✘ từng khối** (`an`; khối tắt vẫn hiện MỜ ở trang cấu hình nhờ `.gcd-sua`, chỉ `display:none` lúc in
+— tắt mà biến mất thì không kéo được nữa) · dữ liệu xem trước là **MẪU CỨNG**, KHBL **không truy vấn `khj_cd`** · nút
+**"Thử trường hợp DÀI NHẤT"** (`?dai=1`: địa chỉ 65 ký tự, 5 món, 550.000.000) vì mẫu ngắn không bao giờ lộ tràn ·
+**bậc thang co chữ do SERVER chọn** (`lop_co()` → class `gcd-co-2/-3` = 88%/76%, không JS nên không dính CSP của KHCD;
+hết bậc thì XUỐNG DÒNG, **cấm `overflow:hidden` cấp khối** — cắt cụt tên khách trên chứng từ pháp lý là lỗi nặng;
+`overflow:hidden` chỉ ở CẤP TỜ để chữ tràn không đẻ trang 2 ăn thêm tờ giấy in sẵn) · quyền theo khuôn CỌC
+(GET `can_view` / POST `can_edit`), **tài khoản chỉ-XEM vẫn mở được trang, nút LƯU ẩn** (máy quầy Edge kiosk không có
+nút Back, gặp 403 là phải tắt cửa sổ — `kimhanh2` hiện đúng cảnh này: HE_THONG có XEM, KHÔNG có SỬA).
+**MÁY IN — nói thẳng trên giao diện**: trang web **KHÔNG ra lệnh được cho trình duyệt in vào máy in X** (không có API
+web nào, rào bảo mật cố ý); `--kiosk-printing` chỉ bỏ hộp thoại và in ra **máy in mặc định của Windows trên chính máy
+quầy**. Máy chủ hiện **không có máy in vật lý nào** (`Get-Printer` chỉ trả máy in ảo + cổng TS00x của phiên RDP). ⇒ ô
+"Máy in" lượt này là **NHÃN CẤU HÌNH**; sổ lưu sẵn `cach` = `trinh_duyet` (chạy thật) · `ipp`/`raw9100`/`windows`/`agent`
+(lưu được, badge "chưa nối"). Đổi cách in sau này = thêm MỘT nhánh `if` trong `gui_lenh_in(ban)`, không đụng bố cục.
+**TÌM · CHỌN · LƯU MÁY IN (GĐ chốt 15/09/2026)** — "tìm → chọn → lưu máy in vào cấu hình để sử dụng → nếu không gọi
+được máy in đó thì trình duyệt tự điều hướng chọn máy in". Tệp mới **`apps/pos/gcd_may_in.py`** + 2 view/URL RIÊNG
+`pmv:gcd_may_in_tim` (`…/mau-in-gcd/tim-may-in/`) · `pmv:gcd_may_in_luu` (`…/chon-may-in/`), cả hai POST + `can_edit`
+(tìm có CHẠY LỆNH hệ điều hành ⇒ tài khoản chỉ-XEM bị 403). Khối UI mới đứng TRÊN "Sổ máy in" trong `gcd_mau.html`
+(+ `.gcdm-mi2__*` trong `gcd_mau.css`, khối JS "MÁY IN THẬT" trong `gcd_mau.js`).
+· **TÌM** = `subprocess` gọi **PowerShell `Get-Printer`** (+ `Win32_Printer.Default` để biết máy in mặc định) — KHÔNG
+cài gói, KHÔNG tải gì; chờ 8s, **nuốt mọi lỗi**: timeout / không có PowerShell / không có máy in đều trả danh sách
+rỗng kèm CÂU GIẢI THÍCH, không bao giờ nổ 500. ⚠ `ConvertTo-Json` của PowerShell 5.1 **bỏ lớp mảng khi chỉ có 1 máy
+in** ⇒ Python nhận cả `{"ds":{…}}` lẫn `{"ds":[…]}`. Máy in **ẢO** (Print to PDF/XPS/OneNote, cổng `PORTPROMPT:`/`nul:`,
+driver `Remote Desktop Easy Print`, cổng `TS00x` của phiên RDP) bị **đánh dấu đỏ "ẢO" + ghi lý do** — máy chủ này
+KHÔNG có máy in vật lý nên hôm nay danh sách toàn máy in ảo, **đó là bình thường, không phải lỗi**; cài máy in thật
+lên máy chủ là tự hiện ra.
+· **KHOÁ THỨ BA `gcd_may_in`** (1 dòng, `{phien_ban, ten, cong, ao, ghi_chu, luc, boi}`; `ten` = TÊN MÁY IN WINDOWS
+CHÍNH XÁC, **rỗng = bỏ chọn = luôn mở hộp thoại in của trình duyệt**; `ten` rỗng thì XOÁ HÀNG). Vì sao KHÔNG gộp:
+(1) gộp vào `gcd_layout` thì mỗi lần chọn máy in là một lần có cơ hội ghi đè **bố cục GĐ căn từng milimet** — tách ra
+thì chọn máy in KHÔNG BAO GIỜ chạm bố cục (smoke có hẳn kịch bản đối chiếu chuỗi trước/sau); (2) `may_in_ds` là bản
+KHAI TAY các đường in dự kiến (ipp/raw9100/agent — đang "chưa nối") dùng chung 3 mẫu in, khác hẳn khái niệm; (3) hợp
+đồng cho KHCD gọn nhất: **đọc MỘT khoá, lấy MỘT chuỗi `ten`**, không phải tra id chéo 2 khoá. POST thiếu khoá `may_in`
+→ **400** (muốn bỏ chọn phải nói thẳng `bo_chon: true`) — cùng cái bẫy "ghi thiếu = xoá sạch" đã xử ở POST bố cục.
+· **SỰ THẬT ĐANG HIỂN THỊ THẲNG TRÊN TRANG** (`tinh_trang()` dò máy chủ mỗi lần mở): muốn máy chủ tự đẩy bản in cần ĐỦ
+2 mảnh — (1) dựng bản in thành PDF: **Edge CÓ** (`C:\Program Files (x86)\…\msedge.exe`, chạy `--headless --print-to-pdf`
+nên PDF dựng từ CHÍNH trang in KHCD, khớp tuyệt đối bản xem trước — đừng dựng bằng thư viện khác, sẽ thành bản vẽ thứ
+ba lệch nhau); (2) đẩy PDF ra máy in: **CHƯA CÓ** (không SumatraPDF/PDFtoPrinter/Acrobat/Foxit, `pywin32` chưa cài ở
+cả 2 venv). ⇒ **đường RƠI VỀ HỘP THOẠI TRÌNH DUYỆT là đường CHẠY THẬT HẰNG NGÀY**, không phải dự phòng hiếm dùng:
+trang nói rõ bằng lời dễ hiểu ("dù đã chọn máy in, mỗi lần in vẫn mở hộp thoại… phiếu vẫn ra giấy bình thường, chỉ là
+bấm thêm một bước") + liệt kê CÒN THIẾU GÌ. KHCD đọc `gcd_may_in`: `ten` rỗng → trả cờ cho trang tự gọi hộp thoại in;
+`ten` có mà in hụt ở BẤT KỲ bước nào → **cùng cờ đó**, người dùng luôn in được.
+**CHỜ GĐ CHỐT**: (a) đo tờ giấy in sẵn rộng × cao bao nhiêu mm; (b) driver máy in có đang bật "Fit to page" không
+(bật thì in ra 94–96%, úp giấy không bao giờ khớp mà cứ đi chỉnh lệch mm); (c) ~~"chọn máy in" ghi nhớ giúp hay máy
+chủ tự đẩy~~ **ĐÃ CHỐT 15/09**: ghi nhớ + thử đẩy, hụt thì rơi về hộp thoại trình duyệt (xem khối trên); (d) **số tiền in ra**: `_ct.tien` mặc định `du_hien_tai`
+để ĐÚNG BẰNG số trang in cũ của KHCD đang in — đổi sang `goc_ban_dau` thì hai đường in ra HAI con số khác nhau cho
+cùng một phiếu đã đóng lời một phần, phải dán nhãn "bản nội bộ" cho trang in cũ trước.
+**Bộ kiểm `manage.py smoke_gcd` — 70 kịch bản PASS** (50 lúc dựng + **20 phần MÁY IN 15/09/2026**): mặc định hợp lệ
+hình học · CSS A5 ngang · chống in nền · khối tắt · ép giới hạn / NaN / khoá lạ · khổ giấy tham số · sổ máy in (chuẩn
+hoá id, khử trùng, cách lạ) · trang
+GET 200 + **đủ đúng 17 `data-gcd` trên HTML ĐÃ RENDER** (so tập hợp với `BLOCKS` — chỉ so `css()` hai bên thì template
+quên một `data-gcd` vẫn PASS mà khối đó không bao giờ được định vị) · POST lưu/reset/400 · rào quyền chỉ-XEM ·
+**gdb_layout + deposit_print_layout giữ NGUYÊN VĂN** · TỰ DỌN **3 khoá** (`gcd_layout` · `may_in_ds` · `gcd_may_in`)
+về đúng trạng thái trước khi chạy (nhớ cả việc hàng đã tồn tại hay chưa).
+Phần MÁY IN kiểm: nhận dạng máy in ảo (in-ra-tệp · phiên RDP · máy in thật thì KHÔNG) · `tim()` chạy THẬT trên máy này
+không ném lỗi + đủ trường + có câu giải thích khi không có máy in thật · `tinh_trang()` nói đúng sự thật (đủ 2 mảnh mới
+"sẵn sàng") · lưu/bỏ ký tự điều khiển trong tên/cắt độ dài/ghi ai-lúc-nào · bỏ chọn = xoá hàng · **dữ liệu hỏng trong
+DB → coi như chưa chọn, không nổ** · POST tìm/chọn/bỏ chọn/400/405 · chỉ-XEM bị 403 · và kịch bản cốt lõi **"chọn máy
+in KHÔNG đụng `gcd_layout` lẫn `may_in_ds`"**.
+⚠ `handle()` mở đầu bằng `reconfigure(errors="replace")` cho stdout/stderr — chữ Việt in ra khi bị hứng vào TỆP sẽ
+dùng cp1252 và giết lệnh giữa chừng (đúng bẫy đã ghi ở CLAUDE.md của KHJ, từng làm scheduler chết âm thầm).
+⚠ Bẫy bộ kiểm bắt được: `_ma()` từng lọc bằng `str.isalnum()` — `'ầ'.isalnum()` là **True** nên "Quầy CĐ" ra id
+"quầycđ"; nay NFD bỏ dấu + đổi tay `đ`→`d` rồi chỉ giữ `a-z0-9_-`.
+⚠ Chú thích template KHBL: `{% comment %}` gom ở ĐẦU tệp (check khbl.E001). **Đừng mang luật này sang KHCD** —
+KHCD là Flask/Jinja2, `{% comment %}` là `TemplateSyntaxError`, còn `{# #}` nhiều dòng của Jinja thì ĐÚNG đắn.
+
 **BẢNG `gold_bill` + NV HỖ TRỢ (GĐ chốt 08/09/2026)** — model `GoldBill` (migration pos-0005), thuật toán
 **`apps/pos/gold_bill.py`**. 1 dòng = 1 đơn (unique `trn_id`). KHÔNG phải bản sao KK (HIST đã có) — vai trò: (1) dữ
 liệu KK không có chỗ: **`emp_sup_id` NV hỗ trợ**, tách **tiền mặt/CK/thẻ + bank_id**, `so_lan_in`, `user_web`; (2)

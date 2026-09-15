@@ -1,0 +1,134 @@
+/* ──────────────────────────────────────────────────────────────────────────────────────────────
+   MẪU IN GIẤY CẦM ĐỒ (GCD) — A5 NẰM NGANG. Nạp ở /he-thong/mau-in-gcd/ (15/09/2026).
+
+   PHẦN A = TỜ GIẤY. Dùng chung với trang in thật bên KHCD — sửa ở đây thì CHÉP SANG KHCD.
+            Ở đây KHÔNG khai left/top/width/height/font-size của khối: những thứ đó do
+            apps/pos/gcd_layout.css() sinh và chèn SAU tệp này.
+   PHẦN B = chỉ của TRANG CẤU HÌNH (kéo-thả, bảng số, sổ máy in). KHCD không cần.
+   ────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* ══ PHẦN A — TỜ GIẤY ══════════════════════════════════════════════════════════════════════ */
+/* .gcd-a5 lấy position/width/aspect-ratio từ CSS sinh ra; ở đây chỉ là màu nền trắng + đổ bóng. */
+.gcd-a5{background:#fff;color:#000;font-family:"Times New Roman",serif;line-height:1.1;
+  box-shadow:0 8px 24px rgba(50,37,17,.18)}
+
+/* ẢNH NỀN XEM TRƯỚC — phần tử RIÊNG, luôn mang class no-print. Không bao giờ là background của tờ. */
+.gcd-nen{position:absolute;inset:0;z-index:0;background-repeat:no-repeat;background-position:0 0;
+  background-size:100% 100%;opacity:.85;pointer-events:none}
+
+/* Chữ NGỒI TRÊN dòng kẻ chấm in sẵn: căn đáy hộp + chừa 2% cho đuôi chữ (g, y, q). */
+.gcd-o{z-index:1;display:flex;flex-direction:column;justify-content:flex-end;
+  padding-bottom:.18em;overflow-wrap:anywhere;word-break:break-word}
+.gcd-a5__cuong-chi-tiet{justify-content:flex-start;line-height:1.35}
+.gcd-a5__ky-han,.gcd-a5__ngay-lap,.gcd-a5__ngay-hen,.gcd-a5__nam{text-align:center}
+.gcd-a5__so-tien-so{font-weight:700}
+.gcd-a5__so-tien-chu{font-style:italic}
+.gcd-a5__nhan-vien,.gcd-a5__khach-ky{text-align:center;font-weight:700}
+.gcd-a5__trang-thai{text-align:center;font-weight:700;letter-spacing:.06em;color:#B3402A}
+
+/* ══ PHẦN B — TRANG CẤU HÌNH ═══════════════════════════════════════════════════════════════ */
+.gcdm{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;align-items:start}
+@media(max-width:1280px){.gcdm{grid-template-columns:1fr}}
+
+/* WYSIWYG khổ NGANG: tờ rộng 210mm ≈ 794px, gần như luôn rộng hơn cột xem trước. Nếu chỉ để
+   max-width:100% thì HÌNH HỌC co theo % còn CỠ CHỮ khai bằng pt KHÔNG co ⇒ chữ to giả, tràn giả,
+   và người dùng đi sửa cái không hỏng. Nên: thu cả cụm bằng transform scale (JS đặt --gcd-k). */
+.gcdm-paper{padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  overflow:hidden}
+.gcdm-vp{position:relative;overflow:hidden}
+.gcdm-scale{transform:scale(var(--gcd-k,1));transform-origin:top left;width:max-content}
+/* ⚠ GỠ `max-width:100%` mà css() sinh ra — ĐÚNG cái bẫy WYSIWYG nói ở trên: khi nó ăn, tờ giấy co
+   theo khung (hình học co) nhưng cỡ chữ khai bằng pt thì KHÔNG co ⇒ chữ to giả. Ở trang cấu hình tờ
+   luôn giữ đúng bề rộng mm thật, việc thu cho vừa khung là của transform scale. (Rule `max-width` bên
+   css() giữ nguyên cho KHCD — ở đó nó là lưới an toàn cho màn hình hẹp.) */
+.gcdm-scale .gcd-a5{max-width:none!important}
+.gcdm-paper .gcd-a5{margin:0;user-select:none}
+.gcdm-paper [data-gcd]{outline:1px dashed rgba(179,64,42,.45);cursor:move}
+.gcdm-paper [data-gcd]:hover{background:rgba(179,64,42,.05)}
+.gcdm-paper [data-gcd].is-sel{outline:2px solid #B3402A;background:rgba(179,64,42,.1)}
+.gcdm-zoom{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--ink-600);
+  margin-bottom:8px;flex-wrap:wrap}
+
+.gcdm-panel{position:sticky;top:10px;border:1px solid var(--line);border-radius:8px;
+  background:var(--white);padding:10px 10px 8px;font-size:12.5px;
+  max-height:calc(100vh - 140px);overflow:auto}
+.gcdm-head,.gcdm-row{display:grid;grid-template-columns:26px minmax(0,1fr) repeat(5,50px);gap:4px;
+  align-items:center;padding:4px}
+.gcdm-head{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--ink-400);
+  border-bottom:1px solid var(--line)}
+.gcdm-head span:nth-child(n+3){text-align:right}
+.gcdm-row{border-bottom:1px solid var(--line);cursor:pointer}
+.gcdm-row:hover{background:var(--surface)}
+.gcdm-row.is-sel{background:var(--gold-100)}
+.gcdm-row.is-an b{color:var(--ink-400);text-decoration:line-through}
+.gcdm-row b{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcdm-row input[type=number]{width:100%;padding:3px 4px;font-size:12px;text-align:right;
+  border:1px solid var(--line);border-radius:4px;background:var(--white)}
+.gcdm-row input[type=checkbox]{justify-self:center}
+
+.gcdm-box{margin-top:12px;padding:8px 4px 4px;border-top:2px solid var(--line)}
+.gcdm-box__t{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--gold-700);
+  margin-bottom:6px}
+.gcdm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.gcdm-box label{display:grid;gap:2px;font-size:11px;color:var(--ink-600)}
+.gcdm-box select,.gcdm-box input{padding:3px 5px;font-size:12px;border:1px solid var(--line);
+  border-radius:4px;background:var(--white);font-family:inherit}
+
+/* SỔ MÁY IN */
+.gcdm-mi{display:grid;gap:6px}
+.gcdm-mi__row{display:grid;grid-template-columns:18px minmax(0,1fr) 16px;gap:6px;align-items:start;
+  border:1px solid var(--line);border-radius:6px;padding:6px;background:var(--surface)}
+.gcdm-mi__row.is-tat{opacity:.55}
+.gcdm-mi__row input,.gcdm-mi__row select{width:100%;margin-bottom:4px}
+.gcdm-mi__x{border:0;background:none;color:#B3402A;cursor:pointer;font-size:14px;line-height:1}
+.gcdm-badge{display:inline-block;font-size:10px;padding:0 6px;border-radius:99px;
+  background:#FDF2F0;color:#B3402A;border:1px solid #E3B9AC}
+
+/* MÁY IN THẬT — tìm (PowerShell Get-Printer) · chọn · lưu khoá riêng gcd_may_in (15/09/2026).
+   Máy in ẢO (PDF/XPS/OneNote/Remote Desktop) làm MỜ + gắn nhãn đỏ: vẫn chọn được nhưng nhìn là biết. */
+.gcdm-mi2__now{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:12px;
+  color:var(--ink-600);margin-bottom:6px}
+.gcdm-mi2__now b{font-size:13px;color:var(--gold-700)}
+.gcdm-mi2__now i{flex:1 1 100%;font-style:normal;font-size:11px}
+.gcdm-mi2__bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.gcdm-mi2__bar span{font-size:11px;color:var(--ink-600)}
+.gcdm-mi2__bar span.is-loi{color:#B3402A}
+.gcdm-mi2__ds{display:grid;gap:4px}
+.gcdm-mi2__ds:not(:empty){margin-top:8px}
+.gcdm-mi2__row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;align-items:center;
+  padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--white);font-size:12px}
+.gcdm-mi2__row.is-ao{background:var(--surface);opacity:.82}
+.gcdm-mi2__row.is-chon{border-color:var(--gold-500);background:var(--gold-100)}
+.gcdm-mi2__row .khbl-btn{padding:2px 4px;font-size:11px;width:100%}
+.gcdm-mi2__row .gcdm-badge{background:var(--gold-100);color:var(--gold-700);border-color:var(--line)}
+.gcdm-mi2__row .gcdm-badge.is-ao{background:#FDF2F0;color:#B3402A;border-color:#E3B9AC}
+.gcdm-mi2__phu{font-size:10.5px;color:var(--ink-600);line-height:1.45}
+.gcdm-mi2__trong,.gcdm-mi2__loi{font-size:11.5px;line-height:1.5;padding:6px 8px;border-radius:6px}
+.gcdm-mi2__trong{background:var(--gold-100);color:var(--gold-700)}
+.gcdm-mi2__loi{background:#FDF2F0;color:#8A2D19;border:1px solid #E3B9AC}
+.gcdm-mi2__tt{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:11.5px;line-height:1.55;
+  background:#EFF6F1;color:#265F38;border:1px solid #CBE3D4}
+.gcdm-mi2__tt.is-thieu{background:var(--gold-100);color:var(--gold-700);border-color:var(--line)}
+.gcdm-mi2__tt ul{margin:4px 0;padding-left:18px}
+
+.gcdm-note{font-size:11.5px;color:var(--ink-600);line-height:1.5;margin:8px 0 0}
+.gcdm-warn{padding:8px 12px;border-radius:6px;background:#FDF2F0;color:#8A2D19;
+  border:1px solid #E3B9AC;font-size:12.5px;margin-bottom:10px}
+.gcdm-info{padding:8px 12px;border-radius:6px;background:var(--gold-100);color:var(--gold-700);
+  border:1px solid var(--line);font-size:12.5px;margin-bottom:10px}
+#gcdm-status{padding:8px 12px;border-radius:6px;background:var(--gold-100);color:var(--gold-700);
+  font-size:12.5px;margin-bottom:10px}
+#gcdm-status.error{background:#FDF2F0;color:#8A2D19}
+
+/* IN THỬ từ chính trang này (giấy TRẮNG A5, để căn lề): bỏ hết khung quản trị, tờ giấy về đúng
+   kích thước mm thật (bỏ transform thu phóng của màn hình). @page do gcd_layout.css_in() quyết định
+   — KHÔNG khai lại ở đây (GĐB từng khai @page A5 cứng → máy in Letter/A4 canh giữa, tờ tụt gấp đôi).
+   JS gỡ class `gcd-sua` trước khi in nên khối TẮT không in ra, đúng như lúc KHCD in thật. */
+@media print{
+  .sys-heading,.sys-nav,.khbl-page__head{display:none!important}
+  .gcdm{display:block!important;gap:0!important}
+  .gcdm-paper{padding:0!important;border:0!important;background:none!important;overflow:visible!important}
+  .gcdm-vp{overflow:visible!important;height:auto!important}
+  .gcdm-scale{transform:none!important;width:auto!important}
+  .gcd-a5{box-shadow:none!important}
+}
