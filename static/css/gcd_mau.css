@@ -19,6 +19,10 @@
 /* Chữ NGỒI TRÊN dòng kẻ chấm in sẵn: căn đáy hộp + chừa 2% cho đuôi chữ (g, y, q). */
 .gcd-o{z-index:1;display:flex;flex-direction:column;justify-content:flex-end;
   padding-bottom:.18em;overflow-wrap:anywhere;word-break:break-word}
+/* MÃ VẠCH là thẻ <img>, KHÔNG mang class .gcd-o ⇒ phải nâng riêng, nếu không nó nằm cùng tầng
+   với ảnh nền và chỉ "may mà" hiện lên nhờ thứ tự DOM. Đúng rule KHCD đang dùng lúc in
+   (khcd/static/gcd-print.css). Hình dáng ảnh vẫn do gcd_layout.CSS_ANH sinh — đừng gộp 2 chỗ. */
+.gcd-a5 .gcd-anh{z-index:1}
 .gcd-a5__cuong-chi-tiet{justify-content:flex-start;line-height:1.35}
 .gcd-a5__ky-han,.gcd-a5__ngay-lap,.gcd-a5__ngay-hen,.gcd-a5__nam{text-align:center}
 .gcd-a5__so-tien-so{font-weight:700}
@@ -114,6 +118,9 @@
 .gcdm-note{font-size:11.5px;color:var(--ink-600);line-height:1.5;margin:8px 0 0}
 .gcdm-warn{padding:8px 12px;border-radius:6px;background:#FDF2F0;color:#8A2D19;
   border:1px solid #E3B9AC;font-size:12.5px;margin-bottom:10px}
+/* Mức NHẮC (vạch hẹp 0,15–0,19 mm): vẫn quét được, chỉ cần thử tờ đầu — nền xám để không
+   kêu to bằng mức NẶNG (dưới 0,15 mm, giữ nền đỏ ở trên). */
+.gcdm-warn--nhe{background:#F5F4F1;color:#4A443B;border-color:var(--line)}
 .gcdm-info{padding:8px 12px;border-radius:6px;background:var(--gold-100);color:var(--gold-700);
   border:1px solid var(--line);font-size:12.5px;margin-bottom:10px}
 #gcdm-status{padding:8px 12px;border-radius:6px;background:var(--gold-100);color:var(--gold-700);

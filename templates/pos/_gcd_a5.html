@@ -12,12 +12,21 @@ BA ĐIỀU KHÔNG ĐƯỢC ĐỘNG VÀO:
     còn khi in (`.gcd-a5` không có `gcd-sua`) thì `display:none`. Trang in KHCD KHÔNG gắn class này.
   · Vị trí / cỡ chữ KHÔNG khai ở đây. Tất cả do `gcd_layout.css()` sinh ra và chèn SAU khbl.css.
     Ở đây chỉ khai cách chữ NGỒI trong hộp (căn đáy để ngồi trên dòng kẻ chấm in sẵn).
+
+KHỐI ẢNH (mã vạch Số biên nhận, 16/09/2026): khối nào có `k.anh` thì render thẳng thẻ <img> mang
+data-gcd — KHÔNG bọc thêm <div>, để `gcd_layout.css()` neo vị trí vào chính thẻ ảnh (đúng cách Giấy
+đảm bảo làm). Ảnh là PNG data URI do apps/pos/ma_vach.py vẽ; hình dáng ảnh do class `.gcd-anh` trong
+CSS SINH RA quyết định, không phải static/css. `draggable="false"` để trình duyệt đừng cướp thao tác
+kéo khối bằng hành vi kéo-thả ảnh mặc định của nó.
 {% endcomment %}
 <section class="gcd-a5 gcd-sua" id="gcd-to">
   <div class="gcd-nen no-print" id="gcd-nen" aria-hidden="true"></div>
-  {% for k in khoi_mau %}
+  {% for k in khoi_mau %}{% if k.anh %}
+  <img class="{{ k.cls }} gcd-anh" data-gcd="{{ k.key }}" src="{{ k.anh }}" draggable="false"
+       title="{{ k.ten }}" alt="Mã vạch Code 39: {{ k.text }}">
+  {% else %}
   <div class="{{ k.cls }} gcd-o {{ k.co }}" data-gcd="{{ k.key }}" title="{{ k.ten }}">
     {% if k.dong %}{% for d in k.dong %}<div>{{ d }}</div>{% endfor %}{% else %}{{ k.text }}{% endif %}
   </div>
-  {% endfor %}
+  {% endif %}{% endfor %}
 </section>

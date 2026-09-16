@@ -30,6 +30,7 @@ from django.views.decorators.http import require_http_methods
 
 from . import gcd_layout as L
 from . import gcd_may_in as MI
+from . import ma_vach as MV
 from . import quyen as Q
 
 logger = logging.getLogger(__name__)
@@ -97,12 +98,19 @@ def _du_lieu_mau(dai=False):
         "khach_ky": m["khach_ten"],
         "trang_thai": m["trang_thai"],
         "giay_to": m["giay_to"],
+        # MÃ VẠCH: text = ĐÚNG chuỗi số máy quét sẽ đọc ra (CD26090100012 → 26090100012), dùng luôn
+        # làm `alt` để người xem đối chiếu được. Dựng bằng cùng hàm KHCD dùng lúc in ⇒ xem trước
+        # không nói dối.
+        "ma_phieu_vach": MV.so_ma_vach(m["sku"]),
     }
     o = []
     for b in L.BLOCKS:
         v = gia_tri.get(b["key"], "")
         o.append({"key": b["key"], "ten": b["ten"], "text": v, "cls": b["sel"].lstrip("."),
                   "dong": v.split("\n") if b["key"] == "cuong_chi_tiet" else [],
+                  # ẢNH THẬT, không phải ô trống: có vẽ ra vạch thì GĐ mới thấy được mã vạch có bị
+                  # bóp quá hẹp / đè lên chữ in sẵn hay không TRƯỚC khi đem in.
+                  "anh": MV.anh_ma_vach(v) if b["key"] == "ma_phieu_vach" else "",
                   "co": L.lop_co(b["key"], v), "dai": L.qua_dai(b["key"], v)})
     return o
 
@@ -135,8 +143,23 @@ def config(request):
     layout = L.load()
     dai = request.GET.get("dai") == "1"
     sua = Q.duoc(request.user, "HE_THONG", "can_edit")
+    # CẢNH BÁO BỀ RỘNG MÃ VẠCH ngay tại ĐÂY — nơi Giám đốc kéo-thả căn chỉnh. Trước đây cảnh báo
+    # chỉ có ở trang in bên KHCD, tức là chỉ thấy SAU khi đã in ra giấy: căn hẹp quá thì mãi tới
+    # lúc cầm tờ giấy quét không ra mới biết. Đo theo ĐÚNG mã mẫu đang hiện trên bản xem trước.
+    _v = (layout.get("ma_phieu_vach") or L.mac_dinh()["ma_phieu_vach"])
+    # Bề ngang tờ THẬT (mm) — không lấy hằng 210: GĐ đo lại tờ in sẵn rồi sửa kho_w thì vạch hẹp đi
+    # theo, cảnh báo phải chạy trên số đang dùng chứ không phải số mặc định.
+    _giay_w = (layout.get(L.IN_KEY) or {}).get("kho_w") or L.PAPER_W_MM
+    _ma_mau = next((k["text"] for k in _du_lieu_mau(dai) if k["key"] == "ma_phieu_vach"), "")
+    _muc, _cau = MV.canh_bao_vach(_ma_mau, _v.get("w") or 0, _giay_w)
     return render(request, "pos/gcd_mau.html", {
         "nav_active": "hethong",
+        "vach_muc": _muc, "vach_cau": _cau,
+        # JS tính lại NGAY khi kéo-thả / gõ số (chưa Lưu đã thấy) — đưa sang 3 tham số dạng CHUỖI.
+        # ⚠ Số thực để Django render thẳng sẽ bị bản địa hoá thành "0,19" rồi parseFloat cắt còn 0.
+        "vach_so": _ma_mau,
+        "vach_thu": "%g" % MV.VACH_HEP_CAN_THU_MM,
+        "vach_min": "%g" % MV.VACH_HEP_TOI_THIEU_MM,
         "blocks": L.BLOCKS,
         "khoi_mau": _du_lieu_mau(dai),
         "dai": dai,

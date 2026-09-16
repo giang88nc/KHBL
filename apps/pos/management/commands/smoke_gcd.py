@@ -10,9 +10,12 @@ KHÔNG bao giờ chạm 2 khoá đang chạy thật `gdb_layout` / `deposit_prin
 ⚠ KHÔNG chạy bằng unittest/pytest ở gốc dự án (đã từng xoá sạch 355.918 dòng DB thật) — đây là một
 lệnh manage.py bình thường, đọc/ghi đúng 2 khoá key-value rồi trả lại.
 """
+import ast
+import base64
 import json
 import re
 import sys
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -22,6 +25,7 @@ from django.test import Client
 from apps.pmv.models import PmvState
 from apps.pos import gcd_layout as L
 from apps.pos import gcd_may_in as MI
+from apps.pos import ma_vach as MV
 
 URL = "/he-thong/mau-in-gcd/"
 URL_TIM = URL + "tim-may-in/"
@@ -83,8 +87,8 @@ class Command(BaseCommand):
         try:
             # ── 1. MẶC ĐỊNH phải hợp lệ về hình học ──
             md = L.mac_dinh()
-            check("17 khối + 3 khoá phụ (_in/_ct/_nen)",
-                  len(L.BLOCKS) == 17 and all(k in md for k in (L.IN_KEY, L.CT_KEY, L.NEN_KEY)))
+            check("18 khối + 3 khoá phụ (_in/_ct/_nen)",
+                  len(L.BLOCKS) == 18 and all(k in md for k in (L.IN_KEY, L.CT_KEY, L.NEN_KEY)))
             loi = [b["key"] for b in L.BLOCKS
                    if md[b["key"]]["left"] + md[b["key"]]["w"] > 100.01
                    or md[b["key"]]["top"] + md[b["key"]]["h"] > 100.01]
@@ -111,8 +115,8 @@ class Command(BaseCommand):
                   ".gcd-a5:not(.gcd-sua) .gcd-a5__giay-to{display:none!important}" in css
                   and ".gcd-a5.gcd-sua .gcd-a5__giay-to{opacity:.3!important" in css)
             check("bậc thang co chữ sinh sẵn cho MỌI khối",
-                  css.count(".gcd-co-2{font-size:calc(") == 17 and css.count(".gcd-co-3{font-size:calc(") == 17)
-            check("mỗi khối đúng 1 rule vị trí", css.count("{position:absolute!important;") == 17)
+                  css.count(".gcd-co-2{font-size:calc(") == 18 and css.count(".gcd-co-3{font-size:calc(") == 18)
+            check("mỗi khối đúng 1 rule vị trí", css.count("{position:absolute!important;") == 18)
 
             # ── 3. lop_co / qua_dai ──
             check("co chữ: ngắn = không co · vừa = bậc 2 · dài = bậc 3",
@@ -120,6 +124,178 @@ class Command(BaseCommand):
                   and L.lop_co("mon_hang", "x" * 90) == "gcd-co-3" and L.lop_co("ma_phieu", "x" * 90) == "")
             check("vượt cả bậc cuối → cờ cảnh báo", L.qua_dai("mon_hang", "x" * 200)
                   and not L.qua_dai("mon_hang", "x" * 60))
+
+            # ── 3b. MÃ VẠCH SỐ BIÊN NHẬN (16/09/2026) ──
+            # Mã vạch là thứ MÁY đọc: sai thì không ai nhìn ra bằng mắt, tới lúc quầy quét mới biết.
+            # Nên kiểm tới tận byte của ảnh chứ không chỉ kiểm "có khối trong danh sách".
+            mv = L.BLOCK_MAP.get("ma_phieu_vach")
+            check("có khối mã vạch trong bộ MẶC ĐỊNH, BẬT SẴN, đứng NGAY TRÊN khối ma_phieu",
+                  bool(mv) and md["ma_phieu_vach"]["an"] == 0
+                  and [x["key"] for x in L.BLOCKS].index("ma_phieu_vach")
+                  == [x["key"] for x in L.BLOCKS].index("ma_phieu") - 1, str(mv))
+            check("BỘ SỐ MẶC ĐỊNH mã vạch ĐÚNG như đã bàn giao cho KHCD (77.4 · 5.6 · 18.8 · 6.0)",
+                  mv and (mv["left"], mv["top"], mv["w"], mv["h"]) == (77.4, 5.6, 18.8, 6.0)
+                  and mv["sel"] == ".gcd-a5__ma-vach", str(mv))
+            # Ba con số này ĐO BẰNG MÁY trên GCD.jpg (xem chú thích khối): chữ đỏ "KIM HẠNH II" hết
+            # ở 77,1% · dòng "ĐC:" bắt đầu 12,4% · mép phải phải chừa vùng chết máy in 4–6mm.
+            # Kéo khối ra ngoài 3 mốc này là ĐÈ LÊN CHỮ IN SẴN ⇒ máy quét câm mà không báo gì.
+            check("mã vạch không đè chữ in sẵn: phải 77,1% · trên 12,4% · chừa mép ≥4mm",
+                  mv and mv["left"] >= 77.1 and mv["top"] + mv["h"] <= 12.4
+                  and mv["left"] + mv["w"] <= 96.5 and mv["top"] >= 4.9)
+            # Vạch hẹp = (rộng ô × tỷ lệ phần vạch) ÷ số mô-đun hẹp. Dưới ~0,15mm là chắc chắn câm.
+            mm_hep = (210 * mv["w"] / 100) * (828 / 908) / 207 if mv else 0
+            check("bề rộng ô đủ để vạch hẹp ≥ 0,15mm (11 chữ số, tính cả quiet-zone)",
+                  mm_hep >= 0.15, f"{mm_hep:.3f}mm")
+
+            # SỐ mà mã vạch mang — HỢP ĐỒNG với KHCD, hai bên phải ra cùng một chuỗi.
+            check("so_ma_vach: bỏ tiền tố chữ, GIỮ ĐỦ 11 chữ số, KHÔNG rút gọn 9 số như GĐB",
+                  MV.so_ma_vach("CD26090100012") == "26090100012"
+                  and len(MV.so_ma_vach("CD26090100012")) == 11,
+                  MV.so_ma_vach("CD26090100012"))
+            check("so_ma_vach: chạy lại trên chính kết quả vẫn ra thế (tra ngược an toàn)",
+                  MV.so_ma_vach(MV.so_ma_vach("CD26090100012")) == "26090100012")
+            check("so_ma_vach: rỗng/None/toàn chữ → chuỗi rỗng, KHÔNG nổ lỗi",
+                  MV.so_ma_vach("") == "" and MV.so_ma_vach(None) == ""
+                  and MV.so_ma_vach("CD-/ .") == "")
+            check("so_ma_vach: 2 phiếu khác nhau KHÔNG bao giờ ra cùng một số",
+                  MV.so_ma_vach("CD26090100012") != MV.so_ma_vach("CD26090100013"))
+
+            def png(data_uri):
+                """Bóc byte ảnh ra khỏi data URI (trả b'' nếu không phải PNG data URI)."""
+                dau = "data:image/png;base64,"
+                if not str(data_uri or "").startswith(dau):
+                    return b""
+                try:
+                    return base64.b64decode(data_uri[len(dau):], validate=True)
+                except (ValueError, TypeError):
+                    return b""
+
+            anh = MV.png_code39("26090100012")
+            byte = png(anh)
+            check("png_code39: trả ĐÚNG data URI PNG, giải mã base64 được, có chữ ký PNG thật",
+                  bool(byte) and byte[:8] == b"\x89PNG\r\n\x1a\n", anh[:40])
+            rong = int.from_bytes(byte[16:20], "big") if len(byte) > 20 else 0
+            cao = int.from_bytes(byte[20:24], "big") if len(byte) > 24 else 0
+            check("png_code39: ảnh có kích thước thật (cao 96px, rộng đủ 11 số + quiet-zone)",
+                  cao == 96 and rong == 908, f"{rong}x{cao}")
+            check("png_code39: MÃ RỖNG / None / toàn chữ cái → vẫn ra PNG hợp lệ, KHÔNG nổ lỗi",
+                  all(png(MV.png_code39(x))[:8] == b"\x89PNG\r\n\x1a\n"
+                      for x in ("", None, "CD", "  ", "-/.")))
+            check("png_code39: cùng đầu vào → CÙNG MỘT chuỗi (KHBL và KHCD không thể lệch nhau)",
+                  MV.png_code39("26090100012") == anh)
+            check("png_code39: mã khác nhau → ảnh khác nhau (không phải ảnh giả cố định)",
+                  MV.png_code39("26090100013") != anh
+                  and len(png(MV.png_code39("2609010001"))) != len(byte))
+            check("png_code39: thêm 1 chữ số thì ảnh rộng thêm đúng 1 ký tự Code 39 (64px)",
+                  int.from_bytes(png(MV.png_code39("260901000123"))[16:20], "big") - rong == 64)
+
+            # GIẤY ĐẢM BẢO phải y hệt trước khi tách module — nó đang chạy thật, đã quét được.
+            from apps.pos import views as V
+            check("Giấy đảm bảo dùng ĐÚNG module chung, không còn bản Code 39 thứ hai",
+                  V._codebar is MV.png_code39
+                  and V._codebar(V._ma_gdb("26-09-07-000006")) == MV.png_code39("260907006"))
+
+            # CSS khối ảnh: PHẢI do css() sinh (để KHCD có luôn) và JS kéo-thả phải có BẢN SAO y hệt.
+            check("css() sinh rule khối ảnh (.gcd-anh) — KHCD không cần chép tay static/css",
+                  L.CSS_ANH in css and "object-fit:fill" in L.CSS_ANH
+                  and "image-rendering:pixelated" in L.CSS_ANH)
+            js = (settings.BASE_DIR / "static" / "js" / "gcd_mau.js").read_text(encoding="utf-8")
+            check("static/js/gcd_mau.js giữ BẢN SAO ĐÚNG TỪNG KÝ TỰ của CSS_ANH "
+                  "(thiếu là mã vạch xẹp mất lúc kéo-thả)", L.CSS_ANH in js)
+
+            # ── 3b. CẢNH BÁO VẠCH QUÁ HẸP — phải kêu NGAY Ở TRANG CĂN ──
+            # Mã vạch chỉ có một con số quyết định quét được hay không: bề rộng VẠCH HẸP. Trước
+            # 16/09/2026 toàn bộ phép đo này nằm bên KHCD ⇒ GĐ kéo khối hẹp lại, Lưu, in ra giấy,
+            # rồi cầm tờ phiếu quét không ra mới biết. Nay đo ngay lúc căn, cả server lẫn JS.
+            check("hai ngưỡng: mức PHẢI SỬA (0,15) thấp hơn mức thoải mái (0,19)",
+                  MV.VACH_HEP_TOI_THIEU_MM < MV.VACH_HEP_CAN_THU_MM
+                  and (MV.VACH_HEP_TOI_THIEU_MM, MV.VACH_HEP_CAN_THU_MM) == (0.15, 0.19))
+            rong_md = L.BLOCK_MAP["ma_phieu_vach"]["w"]
+            mm_md = MV.vach_hep_mm("CD26090100012", rong_md, L.PAPER_W_MM)
+            check("bố cục MẶC ĐỊNH (rộng 18.8% · tờ 210mm · mã 11 số) → vạch hẹp ≈ 0,174 mm",
+                  abs(mm_md - 0.1739) < 0.0005, f"{mm_md:.4f}")
+            check("0,174 mm nằm GIỮA hai ngưỡng → mức 'nhac' (dải xám nhắc quét thử), KHÔNG kêu đỏ",
+                  MV.canh_bao_vach("CD26090100012", rong_md, L.PAPER_W_MM)[0] == "nhac")
+            check("bóp còn 8% → mức 'nang' + câu bảo NỚI RỘNG trước khi in",
+                  MV.canh_bao_vach("CD26090100012", 8, L.PAPER_W_MM)[0] == "nang"
+                  and "Nới ô Rộng %" in MV.canh_bao_vach("CD26090100012", 8, L.PAPER_W_MM)[1])
+            check("nới đủ rộng (30%) → IM LẶNG, không dải nào",
+                  MV.canh_bao_vach("CD26090100012", 30, L.PAPER_W_MM) == ("", ""))
+            check("mã DÀI hơn thì vạch hẹp MỎNG đi (đo theo từng phiếu, không đo một lần)",
+                  MV.vach_hep_mm("CD2609010001234", rong_md, L.PAPER_W_MM) < mm_md)
+            check("tờ giấy HẸP hơn thì vạch hẹp mỏng theo (cảnh báo chạy trên kho_w thật)",
+                  MV.vach_hep_mm("CD26090100012", rong_md, 148) < mm_md)
+            check("mã KHÔNG có chữ số → không in vạch → KHÔNG báo động",
+                  MV.vach_hep_mm("CD-/ .", rong_md, L.PAPER_W_MM) == 0.0
+                  and MV.canh_bao_vach("CD-/ .", rong_md, L.PAPER_W_MM) == ("", ""))
+            check("rộng/khổ là rác (None, chữ) → trả 0, KHÔNG nổ lỗi giữa trang cấu hình",
+                  MV.vach_hep_mm("CD26090100012", None, L.PAPER_W_MM) == 0.0
+                  and MV.vach_hep_mm("CD26090100012", rong_md, "abc") == 0.0)
+            # JS phải ra ĐÚNG con số đó lúc kéo-thả, và phải LẤY NGƯỠNG TỪ SERVER chứ không chép số.
+            check("gcd_mau.js có bản sao công thức đơn vị Code 39 (15/ký tự + ngăn cách + quiet 20)",
+                  "kyTu * 15 + (kyTu - 1) + 20" in js)
+            check("gcd_mau.js ĐỌC ngưỡng từ data-vach-* chứ không chép cứng 0.19 / 0.15 "
+                  "(sửa ngưỡng ở Python là trang đổi theo)",
+                  "cfg.dataset.vachThu" in js and "cfg.dataset.vachMin" in js
+                  and "0.19" not in js and "0.15" not in js)
+            check("gcd_mau.js vẽ lại dải cảnh báo trong apply() — kéo chuột là thấy ngay",
+                  "veVach();" in js and "function veVach()" in js)
+            # VẼ HAY KHÔNG VẼ: phải giống hệt trang in thật. png_code39('') cố ý vẽ mã số 0 nên gọi
+            # thẳng nó ở bản xem trước là thấy mã vạch trong khi tờ in ra bỏ trống.
+            check("anh_ma_vach: mã KHÔNG có chữ số → KHÔNG vẽ (giống khcd/ma_vach.anh_ma_vach), "
+                  "chứ không vẽ mã của số 0",
+                  MV.anh_ma_vach("CD-/ .") == "" and MV.anh_ma_vach("") == ""
+                  and MV.png_code39("") == MV.png_code39("0"))
+            check("anh_ma_vach: mã có số → ĐÚNG ảnh của png_code39 (không phải ảnh thứ hai)",
+                  MV.anh_ma_vach("CD26090100012") == MV.png_code39("26090100012"))
+
+            # ── 3c. ĐỐI CHIẾU THẲNG SANG KHO KHCD (bên in thật) ──
+            # Hai kho là 2 dự án rời, không import được nhau (KHCD là Flask). Đọc TỆP rồi so.
+            khcd = Path(r"D:/PYTHON/KHCD/khcd")
+            if not (khcd / "gcd_layout.py").exists():
+                self.stdout.write("  (bỏ qua 3 kịch bản đối chiếu KHCD — không thấy D:/PYTHON/KHCD)")
+            else:
+                def hang_so(tep, ten):
+                    """Đọc một hằng trong tệp KHCD mà KHÔNG import (tệp đó cần Flask)."""
+                    cay = ast.parse((khcd / tep).read_text(encoding="utf-8"))
+                    for n in cay.body:
+                        if isinstance(n, ast.Assign) and any(
+                                isinstance(t, ast.Name) and t.id == ten for t in n.targets):
+                            return ast.literal_eval(n.value)
+                        if (isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Tuple)
+                                and any(getattr(e, "id", "") == ten for e in n.targets[0].elts)):
+                            i = [e.id for e in n.targets[0].elts].index(ten)
+                            return ast.literal_eval(n.value.elts[i])
+                    raise KeyError(ten)
+
+                kb = hang_so("gcd_layout.py", "BLOCKS")
+                # KHÔNG so 'sel': KHCD cố ý chọn [data-gcd="key"] còn KHBL dùng lớp .gcd-a5__*.
+                # Cái ĐI QUA pmv_state là cụm 6 số theo `key` — đó mới là thứ phải trùng từng con.
+                truong = ("key", "left", "top", "w", "h", "fs", "an")
+                gon = lambda ds: [tuple(b[t] for t in truong) for b in ds]
+                check("18 khối của KHCD TRÙNG KHÍT KHBL: thứ tự · tên khoá · 6 số mặc định "
+                      "(lệch một số là bản xem trước nói dối tờ in ra)",
+                      gon(kb) == gon(L.BLOCKS),
+                      str([a for a, b in zip(gon(kb), gon(L.BLOCKS)) if a != b])[:300])
+                check("KHCD đo tờ giấy CÙNG kích thước mặc định 210 × 148",
+                      hang_so("gcd_layout.py", "PAPER_W_MM") == L.PAPER_W_MM
+                      and hang_so("gcd_layout.py", "PAPER_H_MM") == L.PAPER_H_MM)
+                check("KHCD dùng CÙNG hai ngưỡng vạch hẹp (0,19 / 0,15) — hai bên không được lệch",
+                      hang_so("ma_vach.py", "VACH_HEP_CAN_THU_MM") == MV.VACH_HEP_CAN_THU_MM
+                      and hang_so("ma_vach.py", "VACH_HEP_TOI_THIEU_MM") == MV.VACH_HEP_TOI_THIEU_MM)
+                # VÙNG SAO CHÉP: bên KHCD đã có bài kiểm sha256, nhưng bộ kiểm KHBL cũng phải bắt
+                # được — sửa thuật toán ở ĐÂY mà quên chép sang đó là hai tờ giấy khác nhau.
+                moc_het = "# ═══ HẾT VÙNG SAO CHÉP ═══"
+                moc_dau = "# ═══ BẮT ĐẦU VÙNG SAO CHÉP — KHÔNG SỬA MỘT KÝ TỰ ═══"
+                nguon = (settings.BASE_DIR / "apps" / "pos" / "ma_vach.py").read_text(encoding="utf-8")
+                ban_sao = (khcd / "ma_vach.py").read_text(encoding="utf-8")
+                vung_bl = nguon[nguon.index("CODE39 = {"):].split("\n" + moc_het, 1)[0].rstrip("\n")
+                vung_cd = ban_sao.split(moc_dau + "\n", 1)[-1].split("\n" + moc_het, 1)[0]
+                check("KHBL đã ĐÓNG vùng sao chép bằng dòng mốc (viết thêm hàm ở cuối tệp không "
+                      "còn làm bài kiểm bên KHCD đỏ oan)", moc_het in nguon)
+                check("VÙNG SAO CHÉP của KHCD giống KHBL ĐÚNG TỪNG KÝ TỰ (sửa bên này phải chép "
+                      "ngay sang bên kia)", vung_bl == vung_cd,
+                      f"KHBL {len(vung_bl)} ký tự · KHCD {len(vung_cd)} ký tự")
 
             # ── 4. save/load: ép giới hạn, bỏ rác, không ghi rác vào DB ──
             lay = L.save({"mon_hang": {"left": 12.345, "fs": 99}, "khach_ten": {"an": 1},
@@ -187,8 +363,33 @@ class Command(BaseCommand):
             b = body(r)
             check("GET trang mở được (200)", r.status_code == 200, f"status={r.status_code}")
             co = set(re.findall(r'data-gcd="([a-z0-9_]+)"', b))
-            check("HTML render có ĐỦ và ĐÚNG 17 data-gcd (khớp BLOCKS, không thiếu không thừa)",
+            check("HTML render có ĐỦ và ĐÚNG 18 data-gcd (khớp BLOCKS, không thiếu không thừa)",
                   co == {x["key"] for x in L.BLOCKS}, str(co ^ {x["key"] for x in L.BLOCKS}))
+            # Mã vạch trên trang cấu hình phải là ẢNH THẬT: ô trống thì GĐ căn xong mới phát hiện
+            # mã bị bóp hẹp / đè chữ in sẵn — lúc đó giấy đã in ra rồi.
+            img = re.search(r'<img[^>]+data-gcd="ma_phieu_vach"[^>]*>', b)
+            check("xem trước có THẺ ẢNH mã vạch mang data-gcd (kéo-thả được như mọi khối)", bool(img))
+            check("ảnh mã vạch là PNG data URI THẬT, không phải ô trống",
+                  bool(img) and 'src="data:image/png;base64,' in img.group(0)
+                  and len(img.group(0)) > 400, (img.group(0)[:120] if img else ""))
+            check("ảnh mã vạch mang class .gcd-anh + alt là ĐÚNG số máy quét sẽ đọc + không bị "
+                  "trình duyệt cướp thao tác kéo",
+                  bool(img) and "gcd-anh" in img.group(0) and 'draggable="false"' in img.group(0)
+                  and "26090100012" in img.group(0))
+            check("số trên mã vạch KHỚP số biên nhận in ở ô SỐ: (quét ra tra đúng phiếu)",
+                  "CD26090100012" in b and MV.so_ma_vach("CD26090100012") in (img.group(0) if img else ""))
+            # Dải cảnh báo vạch hẹp: bố cục mặc định cho 0,174 mm ⇒ trang PHẢI hiện dòng xám.
+            dai_vach = re.search(r'<div class="gcdm-warn[^"]*"\s+id="gcdm-vach"[^>]*>([^<]*)<',
+                                 b, re.S)
+            check("trang cấu hình HIỆN dải nhắc vạch hẹp với bố cục mặc định (không hidden)",
+                  bool(dai_vach) and "hidden" not in dai_vach.group(0)
+                  and "QUÉT THỬ" in dai_vach.group(1), (dai_vach.group(0)[:160] if dai_vach else "KHÔNG THẤY"))
+            check("dải nhắc là mức XÁM (gcdm-warn--nhe), không phải dải đỏ báo động",
+                  bool(dai_vach) and "gcdm-warn--nhe" in dai_vach.group(0))
+            check("ngưỡng gửi sang JS ở dạng CHẤM thập phân — số bản địa hoá 0,19 sẽ bị parseFloat "
+                  "cắt còn 0 rồi cảnh báo im luôn",
+                  'data-vach-thu="0.19"' in b and 'data-vach-min="0.15"' in b
+                  and 'data-vach-so="26090100012"' in b)
             check("có <style id=gcd-layout-css> + bảng chỉnh + ảnh nền tách riêng",
                   'id="gcd-layout-css"' in b and 'class="gcdm-row"' in b
                   and 'class="gcd-nen no-print"' in b and "img/GCD.jpg" in b)

@@ -3,7 +3,7 @@
 TRANG CẤU HÌNH MẪU IN GIẤY CẦM ĐỒ (GCD) — /he-thong/mau-in-gcd/ (GĐ chốt 15/09/2026).
 
 Nơi GHI DUY NHẤT của 3 khoá trong khj_bl.pmv_state:
-  · gcd_layout  — bố cục 17 khối + thiết lập máy in (_in) + nội dung (_ct) + nền xem trước (_nen)
+  · gcd_layout  — bố cục 18 khối + thiết lập máy in (_in) + nội dung (_ct) + nền xem trước (_nen)
   · may_in_ds   — SỔ MÁY IN dùng chung cho cả 3 mẫu in (GĐB · CỌC · GCD), bản KHAI TAY
   · gcd_may_in  — MÁY IN THẬT đang chọn cho GCD (tìm bằng PowerShell Get-Printer trên máy chủ);
                   ghi qua 2 endpoint RIÊNG tim-may-in/ · chon-may-in/, không đi chung nút LƯU MẪU
@@ -44,6 +44,8 @@ BẨY ĐÃ TRÁNH:
       <label><input type="checkbox" id="gcdm-nen-hien" checked> Hiện ảnh nền tờ giấy</label>
       <span class="gcdm-badge">Ảnh nền KHÔNG BAO GIỜ được in</span>
     </div>
+    <div class="gcdm-warn{% if vach_muc == 'nhac' %} gcdm-warn--nhe{% endif %} no-print"
+         id="gcdm-vach"{% if not vach_muc %} hidden{% endif %}>⚠ {{ vach_cau }}</div>
     {% for k in khoi_mau %}{% if k.dai %}<div class="gcdm-warn no-print">⚠ <b>{{ k.ten }}</b> quá dài kể cả sau khi co chữ hết bậc — soi bằng mắt trước khi in, hoặc nới ô <b>Cao %</b> cho xuống dòng.</div>{% endif %}{% endfor %}
     <div class="gcdm-vp" id="gcdm-vp"><div class="gcdm-scale" id="gcdm-scale">
       <style id="gcd-layout-css">{{ gcd_css }}</style>
@@ -171,6 +173,9 @@ BẨY ĐÃ TRÁNH:
      data-url-chon="{% url 'pmv:gcd_may_in_luu' %}"
      data-nen="{% static 'img/GCD.jpg' %}"
      data-kho-to="{{ kho_to }}"
+     data-vach-so="{{ vach_so }}"
+     data-vach-thu="{{ vach_thu }}"
+     data-vach-min="{{ vach_min }}"
      data-sua="{% if duoc_sua %}1{% else %}0{% endif %}"
      hidden>{% csrf_token %}</div>
 {% endblock %}

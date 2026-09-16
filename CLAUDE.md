@@ -391,7 +391,7 @@ Smoke_ui 7c → 6 kịch bản (142 PASS).
 **MẪU IN GIẤY CẦM ĐỒ — GCD, A5 NẰM NGANG (GĐ chốt 15/09/2026)**: cấu hình TẬP TRUNG ở KHBL
 `/he-thong/mau-in-gcd/`, **IN THẬT ở KHCD** `https://localhost:8200/camdo/lap-phieu`. Giấy **ĐÃ IN SẴN** → chỉ in
 CHỮ vào ô, **TUYỆT ĐỐI KHÔNG in ảnh nền**; `static/img/GCD.jpg` (⚠ tên tệp CHỮ HOA) chỉ làm NỀN XEM TRƯỚC.
-Tệp mới: **`apps/pos/gcd_layout.py`** (KEY `gcd_layout` · 17 KHỐI · `mac_dinh/load/save/css/css_in` · sổ máy in) ·
+Tệp mới: **`apps/pos/gcd_layout.py`** (KEY `gcd_layout` · **18 KHỐI** · `mac_dinh/load/save/css/css_in` · sổ máy in) ·
 `apps/pos/gcd_print_config.py` (view) · **`apps/pos/gcd_may_in.py`** (KEY `gcd_may_in` — tìm/chọn máy in thật, 15/09) ·
 `templates/pos/gcd_mau.html` + `templates/pos/_gcd_a5.html` ·
 `static/css/gcd_mau.css` · `static/js/gcd_mau.js` · `apps/pos/management/commands/smoke_gcd.py` ·
@@ -465,10 +465,44 @@ bấm thêm một bước") + liệt kê CÒN THIẾU GÌ. KHCD đọc `gcd_may_
 chủ tự đẩy~~ **ĐÃ CHỐT 15/09**: ghi nhớ + thử đẩy, hụt thì rơi về hộp thoại trình duyệt (xem khối trên); (d) **số tiền in ra**: `_ct.tien` mặc định `du_hien_tai`
 để ĐÚNG BẰNG số trang in cũ của KHCD đang in — đổi sang `goc_ban_dau` thì hai đường in ra HAI con số khác nhau cho
 cùng một phiếu đã đóng lời một phần, phải dán nhãn "bản nội bộ" cho trang in cũ trước.
-**Bộ kiểm `manage.py smoke_gcd` — 70 kịch bản PASS** (50 lúc dựng + **20 phần MÁY IN 15/09/2026**): mặc định hợp lệ
+**MÃ VẠCH SỐ BIÊN NHẬN trên GCD (GĐ yêu cầu 16/09/2026)** — khối thứ 18, key **`ma_phieu_vach`**, selector
+`.gcd-a5__ma-vach`, **BẬT SẴN**, đứng NGAY TRÊN khối `ma_phieu` trong `BLOCKS`.
+**BỘ SỐ MẶC ĐỊNH (KHCD phải khai Y HỆT): `left 77.4 · top 5.6 · w 18.8 · h 6.0 · fs 8 · an 0`.**
+· **Thuật toán tách ra `apps/pos/ma_vach.py`** — `_codebar` cũ trong `views.py` chuyển thành alias `_codebar =
+MV.png_code39`, **KHÔNG sửa một dòng thuật toán nào** nên Giấy đảm bảo (đang chạy thật, đã quét được) giữ nguyên hành
+vi; bộ kiểm khoá bằng `V._codebar is MV.png_code39`. Bên KHCD chép cùng module này.
+· **MÃ VẠCH MANG SỐ GÌ**: `so_ma_vach()` = **bỏ mọi ký tự không phải chữ số, GIỮ ĐỦ, KHÔNG rút gọn** —
+`CD26090100012` → `26090100012` (11 số). **KHÔNG dùng kiểu rút 9 số `_ma_gdb()` của Giấy đảm bảo**: mã cầm đồ 11 số,
+cắt còn 9 là hai phiếu khác nhau có thể ra CÙNG một mã vạch — chứng từ cầm đồ là giấy tờ pháp lý, quét nhầm là trả
+nhầm hàng. Bảng `CODE39` chỉ có chữ số (bản chép nguyên) nên tiền tố chữ bị bỏ; **tra ngược được vì `CD…` là tiền tố
+HẰNG SỐ** — KHCD tra theo PHẦN SỐ (`so_ma_vach(row.code) == số quét được`), đừng ghép chuỗi `"CD" + số`.
+⚠ Ngày nào sinh loại mã có tiền tố khác mà phần số trùng (vd `GH26090100012`) thì hai tờ mang cùng mã vạch → lúc đó
+phải đổi sang mã vạch có chữ cái, KHÔNG vá bằng cách đoán tiền tố.
+· **VỊ TRÍ ĐO BẰNG MÁY, KHÔNG ƯỚC LƯỢNG BẰNG MẮT** (ước lượng bằng mắt đã sai 5% và đè mất chữ "II" của KIM HẠNH II):
+quét mực `GCD.jpg` cho dải y 5,0–12,4% (dưới dòng "DNTN…" đáy 4,8% · trên dòng "ĐC:" đỉnh 12,4%) → chữ đỏ hết ở
+**77,1%**, từ đó sang phải sạch mực. ⚠ **Cả nửa phải tờ giấy KHÔNG có dải trống nào quá ~40mm** (đã đo cả y 14,6–19,4%
+và y 22–31%) ⇒ 11 số × 207 mô-đun hẹp trong 39,5mm cho **vạch hẹp ≈ 0,17mm (7 mil)**. Máy quét cầm tay cự ly quầy đọc
+được, **NHƯNG ĐÂY LÀ ĐIỀU DUY NHẤT PHẢI QUÉT THỬ THẬT trên tờ in đầu tiên**. Quét không ra thì **ĐỪNG cắt bớt chữ số**:
+nới `w` lấn sang trái, hoặc kéo xuống dải y 23–30,5% (bên phải tiêu đề "BIÊN NHẬN CẦM ĐỒ", rộng tương đương nhưng nằm
+DƯỚI ô SỐ:), hoặc đặt lại tờ in sẵn có chừa chỗ.
+· **KHÔNG làm khối "số đọc được" riêng** như Giấy đảm bảo (bên đó tách 2 khối vì mã vạch mang mã 9 số RÚT GỌN, khác mã
+in trên giấy nên bắt buộc in kèm số): ở GCD khối `ma_phieu` ngay bên dưới ĐÃ in nguyên `CD26090100012`, thêm dòng số
+nữa là in trùng trên tờ giấy vốn đã chật.
+· **CSS khối ảnh nằm trong `css()`** (hằng `CSS_ANH` → `.gcd-anh{display:block!important;padding:0!important;
+background:#fff;object-fit:fill;image-rendering:pixelated}`) **chứ KHÔNG để trong `static/css`**: static là của riêng
+KHBL, KHCD có bản khác ⇒ đúng kiểu lệch hai bên đã làm chữ lệch 9mm hôm trước. ⚠ Chuỗi này **nhân bản trong
+`static/js/gcd_mau.js`** (`buildCss` dựng lại toàn bộ `<style>` mỗi lần kéo-thả, thiếu là mã vạch xẹp mất lúc kéo) —
+smoke đọc thẳng tệp JS và so TỪNG KÝ TỰ. `object-fit:fill` an toàn vì co giãn đồng nhất theo trục ngang, tỷ lệ giữa
+các vạch không đổi.
+· Partial `_gcd_a5.html` có nhánh MỚI: khối có `k.anh` render thẳng `<img class="… gcd-anh" data-gcd=…
+draggable="false">` (không bọc `<div>`, để `css()` neo vị trí vào chính thẻ ảnh — đúng cách GĐB làm); `draggable=false`
+để trình duyệt đừng cướp thao tác kéo khối. View truyền `anh = MV.png_code39(...)` nên trang cấu hình **xem trước mã
+vạch THẬT, không phải ô trống** — có vẽ ra vạch thì mới thấy được mã có bị bóp hẹp / đè chữ in sẵn trước khi in.
+
+**Bộ kiểm `manage.py smoke_gcd` — 91 kịch bản PASS** (50 lúc dựng + **20 phần MÁY IN 15/09/2026** + **21 phần MÃ VẠCH 16/09/2026**): mặc định hợp lệ
 hình học · CSS A5 ngang · chống in nền · khối tắt · ép giới hạn / NaN / khoá lạ · khổ giấy tham số · sổ máy in (chuẩn
 hoá id, khử trùng, cách lạ) · trang
-GET 200 + **đủ đúng 17 `data-gcd` trên HTML ĐÃ RENDER** (so tập hợp với `BLOCKS` — chỉ so `css()` hai bên thì template
+GET 200 + **đủ đúng 18 `data-gcd` trên HTML ĐÃ RENDER** (so tập hợp với `BLOCKS` — chỉ so `css()` hai bên thì template
 quên một `data-gcd` vẫn PASS mà khối đó không bao giờ được định vị) · POST lưu/reset/400 · rào quyền chỉ-XEM ·
 **gdb_layout + deposit_print_layout giữ NGUYÊN VĂN** · TỰ DỌN **3 khoá** (`gcd_layout` · `may_in_ds` · `gcd_may_in`)
 về đúng trạng thái trước khi chạy (nhớ cả việc hàng đã tồn tại hay chưa).

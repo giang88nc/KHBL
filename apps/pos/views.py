@@ -24,7 +24,7 @@ from apps.pmv import money as M
 from apps.pmv.client import PmvClient, PmvProcError
 from apps.pmv.models import pmv_user_for_web_user
 
-from . import bill as B, cart, cccd, customer as C, passcode as PC, quyen as Q, services as S, vietqr as QR
+from . import bill as B, cart, cccd, customer as C, ma_vach as MV, passcode as PC, quyen as Q, services as S, vietqr as QR
 
 
 logger = logging.getLogger(__name__)
@@ -52,43 +52,10 @@ def _so(x):
     return M.dec(s or 0)
 
 
-_CODE39 = {
-    "0": "nnnwwnwnn", "1": "wnnwnnnnw", "2": "nnwwnnnnw", "3": "wnwwnnnnn",
-    "4": "nnnwwnnnw", "5": "wnnwwnnnn", "6": "nnwwwnnnn", "7": "nnnwnnwnw",
-    "8": "wnnwnnwnn", "9": "nnwwnnwnn", "-": "nnnwnnnww", "*": "nwnnwnwnn",
-}
-
-
-def _codebar(code):
-    """PNG Code 39 chuẩn, có start/stop và quiet-zone cho máy quét mã vạch.
-
-    Không dùng các ``div`` CSS để browser không co vạch lẻ thành pixel mờ khi in.
-    """
-    import base64
-    from io import BytesIO
-    from PIL import Image, ImageDraw
-
-    value = re.sub(r"[^0-9]", "", str(code or "")) or "0"
-    chars = "*" + value + "*"
-    narrow, wide, quiet, height = 4, 12, 40, 96
-    widths = []
-    for pos, char in enumerate(chars):
-        widths.extend(wide if unit == "w" else narrow for unit in _CODE39[char])
-        if pos < len(chars) - 1:
-            widths.append(narrow)  # khoảng cách chuẩn giữa hai ký tự Code 39
-    image = Image.new("1", (quiet * 2 + sum(widths), height), 1)
-    draw, cursor = ImageDraw.Draw(image), quiet
-    for pos, char in enumerate(chars):
-        for index, unit in enumerate(_CODE39[char]):
-            width = wide if unit == "w" else narrow
-            if index % 2 == 0:
-                draw.rectangle((cursor, 0, cursor + width - 1, height - 1), fill=0)
-            cursor += width
-        if pos < len(chars) - 1:
-            cursor += narrow
-    buffer = BytesIO()
-    image.save(buffer, format="PNG", optimize=False)
-    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+# Mã vạch Code 39 đã TÁCH sang apps/pos/ma_vach.py ngày 16/09/2026 để Giấy đảm bảo và Giấy cầm đồ
+# dùng CHUNG một bản thuật toán. Thuật toán KHÔNG đổi một dòng nào — alias dưới đây giữ nguyên tên
+# `_codebar` cho 2 chỗ gọi của Giấy đảm bảo, nên hành vi tờ GĐB y hệt trước khi tách.
+_codebar = MV.png_code39
 
 
 def _ma_gdb(code):

@@ -21,7 +21,7 @@ và `css()` hai bên phải sinh chuỗi GIỐNG NHAU TỪNG KÝ TỰ (đó là 
 
 BA CÁI BẪY ĐÃ XỬ SẴN TRONG MÃ NÀY — đừng gỡ ra:
   1. `css()` TỰ SINH `position:relative` cho `.gcd-a5`. Bên KHCD không có khbl.css; thiếu dòng này thì
-     17 khối `position:absolute` neo vào viewport và bố cục vỡ sạch ở CẢ bản in lẫn bản xem trước.
+     18 khối `position:absolute` neo vào viewport và bố cục vỡ sạch ở CẢ bản in lẫn bản xem trước.
   2. Nền xem trước KHÔNG BAO GIỜ đặt bằng `background` của `.gcd-a5` (rule `body.x .gcd-a5` có độ đặc
      hiệu cao hơn rule chống in ⇒ nền IN RA GIẤY IN SẴN). Nền là phần tử riêng `.gcd-nen.no-print`, và
      `css_in()` ẩn thẳng `display:none` khi in. Cũng KHÔNG dùng `print-color-adjust:exact`.
@@ -42,7 +42,7 @@ MAY_IN_KEY = "may_in_ds"          # SỔ MÁY IN — khoá RIÊNG, dùng chung c
 
 PAPER_W_MM, PAPER_H_MM = 210, 148  # chỉ là MẶC ĐỊNH; số thật lấy ở _in.kho_w / _in.kho_h
 
-# ── 17 KHỐI ────────────────────────────────────────────────────────────────────────────────────
+# ── 18 KHỐI ────────────────────────────────────────────────────────────────────────────────────
 # `sel` = selector dùng CHUNG ở 2 nơi: partial xem trước KHBL và trang in KHCD (đều gắn data-gcd=key).
 # top/h: hộp chữ đặt sao cho ĐÁY hộp trùng dòng kẻ chấm (`align-items:flex-end` trong CSS tĩnh) → chữ
 # NGỒI TRÊN đường kẻ, không đè lên. Số dưới đây ĐO TRÊN ẢNH GCD.jpg, là ĐIỂM KHỞI ĐẦU để GĐ kéo tinh.
@@ -59,6 +59,32 @@ BLOCKS = [
      "left": 2.5, "top": 8.0, "w": 25.0, "h": 37.0, "fs": 6.5, "an": 1},
 
     # B. THÂN PHẢI — biên nhận giao khách
+    # MÃ VẠCH Code 39 của SỐ BIÊN NHẬN (GĐ yêu cầu 16/09/2026). Nội dung = phần CHỮ SỐ của mã phiếu
+    # (CD26090100012 → 26090100012), sinh bằng apps/pos/ma_vach.py — xem `so_ma_vach()` để biết vì
+    # sao bỏ tiền tố chữ và vì sao KHÔNG rút gọn 9 số như Giấy đảm bảo.
+    # VÌ SAO ĐẶT Ở ĐÂY (left 77,4 · top 5,6 · rộng 18,8 · cao 6,0) — số ĐO BẰNG MÁY trên GCD.jpg,
+    # không ước lượng bằng mắt (ước lượng bằng mắt đã sai 5% và đè mất chữ "II" của KIM HẠNH II):
+    #   · Quét mực tờ giấy: trong dải y 5,0–12,4% (DƯỚI dòng in sẵn "DNTN KINH DOANH VÀNG & CẦM ĐỒ"
+    #     đáy 4,8% · TRÊN dòng "ĐC: 1276 Kha Vạn Cân…" đỉnh 12,4%) thì chữ đỏ "KIM HẠNH II" hết ở
+    #     77,1% và từ đó sang phải SẠCH MỰC tới mép. Đây là khoảng trống rộng nhất NẰM TRÊN ô "SỐ:".
+    #   · Bắt đầu 77,4% (hở 0,3% với chữ đỏ; cộng quiet-zone 1,7mm dựng sẵn trong ảnh ⇒ vạch đen thật
+    #     cách chữ ~2,4mm). Mép phải 96,2% chừa 8,0mm — ngoài vùng chết cơ khí 4–6mm của máy in, cùng
+    #     lý do đã bắt khối `giay_to` phải TẮT SẴN.
+    #   · CAO 6,0% = 8,9mm — thừa sức cho máy quét bắt tia chéo, vẫn hở ~1,2mm trên và 0,8mm dưới.
+    # ⚠ BỀ RỘNG LÀ TRẦN CỨNG CỦA TỜ GIẤY NÀY, KHÔNG PHẢI LỰA CHỌN THẨM MỸ: cả nửa phải tờ giấy không
+    #   có dải trống nào quá ~40mm (đã đo cả dải y 14,6–19,4% và y 22–31%, đều 38–40mm). 11 chữ số tốn
+    #   207 mô-đun hẹp ⇒ vạch hẹp ≈ 0,17mm (7 mil). Máy quét CCD/laser cầm tay ở cự ly quầy đọc được
+    #   cỡ này, NHƯNG ĐÂY LÀ ĐIỀU DUY NHẤT PHẢI QUÉT THỬ THẬT trên tờ in đầu tiên.
+    #   Quét không ra thì ĐỪNG bóp mã cho vừa chỗ khác — hoặc nới ô Rộng % lấn sang trái (chấp nhận
+    #   sát chữ đỏ hơn), hoặc kéo xuống dải y 23–30,5% (bên phải tiêu đề "BIÊN NHẬN CẦM ĐỒ", rộng
+    #   tương đương, chỉ tội nằm DƯỚI ô SỐ:), hoặc đặt lại tờ giấy in sẵn có chừa chỗ cho mã vạch.
+    #   TUYỆT ĐỐI KHÔNG cắt bớt chữ số cho mã ngắn lại — xem `so_ma_vach()`.
+    # KHÔNG làm khối "số đọc được" riêng như Giấy đảm bảo: bên GĐB mã vạch mang mã 9 số RÚT GỌN,
+    # khác mã hóa đơn in trên giấy, nên bắt buộc phải in kèm số để người đọc đối chiếu. Ở đây khối
+    # `ma_phieu` ngay bên dưới ĐÃ in nguyên mã CD26090100012 rồi — thêm một dòng số nữa là in trùng,
+    # tốn chỗ trên tờ giấy đã chật và đẻ thêm một khối phải căn.
+    {"key": "ma_phieu_vach", "ten": "Mã vạch Số biên nhận", "sel": ".gcd-a5__ma-vach",
+     "left": 77.4, "top": 5.6, "w": 18.8, "h": 6.0, "fs": 8, "an": 0},
     {"key": "ma_phieu", "ten": "Số biên nhận (ô SỐ:)", "sel": ".gcd-a5__ma-phieu",
      "left": 83.8, "top": 18.4, "w": 14.2, "h": 3.2, "fs": 8, "an": 0},
     {"key": "khach_ten", "ten": "Nhận của Ông/Bà", "sel": ".gcd-a5__khach-ten",
@@ -95,6 +121,16 @@ BLOCKS = [
 ]
 BLOCK_MAP = {b["key"]: b for b in BLOCKS}
 GIOI_HAN = {"left": (0, 100), "top": (0, 100), "w": (1, 100), "h": (0.5, 100), "fs": (3, 30)}
+
+# Khối ẢNH (mã vạch) — markup là thẻ <img class="… gcd-anh">. Rule này PHẢI do `css()` sinh ra, KHÔNG
+# để trong static/css: tệp static là của riêng KHBL, KHCD có bản sao khác ⇒ đúng kiểu lệch hai bên đã
+# làm chữ lệch 9mm hôm trước. `object-fit:fill` = kéo ảnh phủ trọn hộp, tỷ lệ BỀ NGANG giữa các vạch
+# vẫn đều nhau (co giãn đồng nhất theo trục ngang) nên máy quét vẫn đọc đúng; `image-rendering:
+# pixelated` để trình duyệt đừng làm mờ mép vạch lúc phóng to ra khổ in.
+# ⚠ Chuỗi này được NHÂN BẢN trong static/js/gcd_mau.js (hàm buildCss dựng lại CSS lúc kéo-thả). Sửa
+# đây thì sửa cả bên kia — `smoke_gcd` đối chiếu từng ký tự và FAIL nếu lệch.
+CSS_ANH = (".gcd-anh{display:block!important;padding:0!important;background:#fff;"
+           "object-fit:fill;image-rendering:pixelated}")
 
 # ── _in : THIẾT LẬP MÁY IN ─────────────────────────────────────────────────────────────────────
 # kho "A5N" = gửi máy in ĐÚNG kích thước tờ đo được (kho_w × kho_h mm). KHÔNG dùng "auto" làm mặc định
@@ -356,7 +392,7 @@ def css(layout=None):
     inn = {**IN_MAC_DINH, **(layout.get(IN_KEY) or {})}
     w, h = _so(inn["kho_w"]), _so(inn["kho_h"])
     out = [".gcd-a5{position:relative!important;width:%smm!important;max-width:100%%;height:auto;"
-           "aspect-ratio:%s/%s;overflow:hidden}" % (w, w, h)]
+           "aspect-ratio:%s/%s;overflow:hidden}" % (w, w, h), CSS_ANH]
     for b in BLOCKS:
         v = layout[b["key"]]
         fs = _so(v["fs"])

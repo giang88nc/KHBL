@@ -43,7 +43,10 @@
   }
   function buildCss(st) {
     var i = st._in, w = so(i.kho_w), h = so(i.kho_h);
-    var out = ['.gcd-a5{position:relative!important;width:' + w + 'mm!important;max-width:100%;height:auto;aspect-ratio:' + w + '/' + h + ';overflow:hidden}'];
+    var out = ['.gcd-a5{position:relative!important;width:' + w + 'mm!important;max-width:100%;height:auto;aspect-ratio:' + w + '/' + h + ';overflow:hidden}',
+      /* BẢN SAO NGUYÊN VĂN của gcd_layout.CSS_ANH (khối ảnh mã vạch). Hàm này dựng lại TOÀN BỘ thẻ
+         <style> mỗi lần kéo-thả, thiếu dòng này thì mã vạch xẹp mất ngay khi kéo. smoke_gcd so từng ký tự. */
+      '.gcd-anh{display:block!important;padding:0!important;background:#fff;object-fit:fill;image-rendering:pixelated}'];
     Object.keys(SEL).forEach(function (k) {
       var v = st[k], s = SEL[k]; if (!v) return;
       var fs = so(v.fs);
@@ -73,7 +76,40 @@
     scaleEl.style.setProperty('--gcd-k', k);
     vp.style.height = (paper.offsetHeight * k) + 'px';
   }
-  function apply() { styleEl.textContent = buildCss(state); veNen(); doThuPhong(); }
+  /* ── CẢNH BÁO MÃ VẠCH QUÁ HẸP — bản sao 1-1 của apps/pos/ma_vach.vach_hep_mm() ──
+     Vì sao phải có bên JS: kéo ô Rộng % hẹp lại là vạch hẹp đi NGAY, còn số server tính chỉ đúng
+     tới lần tải trang. Không có dòng này thì GĐ căn xong, Lưu, in ra giấy rồi mới biết máy quét
+     đọc không nổi. Ngưỡng + chuỗi số mẫu do server đưa sang (data-vach-*), KHÔNG chép số vào đây. */
+  var VACH_SO = cfg.dataset.vachSo || '';
+  var VACH_THU = parseFloat(cfg.dataset.vachThu) || 0;
+  var VACH_MIN = parseFloat(cfg.dataset.vachMin) || 0;
+  var vachEl = document.getElementById('gcdm-vach');
+
+  function vachHepMm(st) {
+    if (!VACH_SO) return 0;
+    var kyTu = VACH_SO.length + 2;                 // start + dữ liệu + stop
+    var donVi = kyTu * 15 + (kyTu - 1) + 20;       // 15 đơn vị/ký tự + ngăn cách + quiet-zone 2×10
+    var o = st.ma_phieu_vach || {}, inn = st._in || {};
+    var rongMm = (+inn.kho_w || 0) * (+o.w || 0) / 100;
+    return donVi ? rongMm / donVi : 0;
+  }
+  function veVach() {
+    if (!vachEl) return;
+    var mm = vachHepMm(state), cau = '';
+    if (mm && mm < VACH_MIN) {
+      cau = 'Vạch hẹp chỉ ' + mm.toFixed(3) + ' mm — DƯỚI mức ' + VACH_MIN + ' mm, máy quét quầy '
+          + 'nhiều khả năng đọc không ra. Nới ô Rộng % hoặc chuyển mã vạch xuống chỗ rộng hơn '
+          + 'TRƯỚC khi in.';
+    } else if (mm && mm < VACH_THU) {
+      cau = 'Vạch hẹp ' + mm.toFixed(3) + ' mm — dưới mức thoải mái ' + VACH_THU + ' mm. Vẫn '
+          + 'thường đọc được, nhưng hãy QUÉT THỬ tờ in đầu tiên trước khi dùng thật.';
+    }
+    vachEl.hidden = !cau;
+    vachEl.textContent = cau ? '⚠ ' + cau : '';
+    vachEl.classList.toggle('gcdm-warn--nhe', !!cau && mm >= VACH_MIN);
+  }
+
+  function apply() { styleEl.textContent = buildCss(state); veNen(); doThuPhong(); veVach(); }
 
   function sync() {
     document.querySelectorAll('.gcdm-row').forEach(function (row) {
