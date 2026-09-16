@@ -1,0 +1,56 @@
+{% extends "base.html" %}{% load static pos_extras %}
+{% block title %}Kiểm soát dòng tiền{% endblock %}
+{% block page_head %}{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/money_flow.css' %}?v=20260916.1">{% endblock %}
+{% block content %}
+<section class="mf-page">
+  <header class="mf-head">
+    <div><span class="mf-kicker">SỔ DÒNG TIỀN · GIAI ĐOẠN {{ phase }}</span>
+      <h1>Kiểm soát IN / OUT</h1>
+      <p>Bản chiếu chỉ đọc từ chứng từ nguồn. Chưa ghi ngược PMV/KHCD, chưa thay đổi luồng đang chạy.</p>
+    </div>
+    <div class="mf-phase"><b>GĐ1</b><span>Tổng hợp &amp; quan sát</span></div>
+  </header>
+
+  <form class="mf-filter" method="get">
+    <label>Từ ngày{{ form.d1 }}</label><label>Đến ngày{{ form.d2 }}</label>
+    <label>Dòng tiền{{ form.direction }}</label><label>Dịch vụ{{ form.service }}</label>
+    <label>Trạng thái{{ form.payment_status }}</label>
+    <label class="mf-search">Mã phiếu / khách{{ form.key }}</label>
+    <button type="submit">Tổng hợp</button>
+    {% if form.non_field_errors %}<div class="mf-error">{{ form.non_field_errors }}</div>{% endif %}
+  </form>
+
+  {% if stats %}
+  <div class="mf-cards">
+    <article class="mf-card mf-card--in"><span>KHÁCH TRẢ · IN</span><b>{{ by_direction.IN.total|default:0|tien_tran }}đ</b>
+      <small>{{ by_direction.IN.n|default:0 }} dòng</small></article>
+    <article class="mf-card mf-card--out"><span>TRẢ KHÁCH · OUT</span><b>{{ by_direction.OUT.total|default:0|tien_tran }}đ</b>
+      <small>{{ by_direction.OUT.n|default:0 }} dòng</small></article>
+    <article class="mf-card"><span>TIỀN MẶT GHI NHẬN</span><b>{{ stats.cash|tien_tran }}đ</b><small>theo chứng từ nguồn</small></article>
+    <article class="mf-card"><span>CHUYỂN KHOẢN</span><b>{{ stats.bank|tien_tran }}đ</b><small>chờ / đã đối soát</small></article>
+  </div>
+
+  <div class="mf-note"><b>Phân biệt trạng thái:</b> phiếu nguồn đã chốt không đồng nghĩa chuyển khoản đã xác minh. GĐ1 giữ hai trạng thái tách biệt.</div>
+  <div class="mf-table-wrap">
+    <table class="mf-table">
+      <thead><tr><th>Ngày</th><th>IN/OUT</th><th>Dịch vụ · phiếu</th><th>Khách</th><th class="num">Tổng</th><th class="num">Tiền mặt</th><th class="num">Chuyển khoản</th><th>Phiếu</th><th>Xác minh tiền</th></tr></thead>
+      <tbody>{% for row in rows %}
+        <tr class="{% if row.is_void %}is-void{% endif %}">
+          <td>{{ row.business_date|date:"d/m/Y" }}</td>
+          <td><span class="mf-dir mf-dir--{{ row.direction|lower }}">{{ row.direction }}</span></td>
+          <td><b>{{ row.service_label }}</b><small>{{ row.source_bill_code|default:row.source_id }}</small></td>
+          <td>{{ row.customer_name|default:"—" }}{% if row.customer_id %}<small>{{ row.customer_id }}</small>{% endif %}</td>
+          <td class="num strong">{{ row.expected_amount|tien_tran }}</td>
+          <td class="num">{{ row.cash_amount|tien_tran }}</td>
+          <td class="num">{{ row.bank_amount|tien_tran }}</td>
+          <td><span class="mf-source">{{ row.source_status|default:"—" }}</span></td>
+          <td><span class="mf-status mf-status--{{ row.payment_status }}">{{ row.get_payment_status_display }}</span></td>
+        </tr>
+      {% empty %}<tr><td colspan="9" class="mf-empty">Không có dòng tiền trong kỳ đã chọn.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if truncated %}<p class="mf-warning">Danh sách đang hiển thị 500 dòng đầu. Hãy thu hẹp bộ lọc.</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

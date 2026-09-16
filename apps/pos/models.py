@@ -306,6 +306,58 @@ class ThauNhom(models.Model):
     def __str__(self):
         return f"Thâu #{self.pk} {', '.join(self.bill_codes or self.trn_ids)}"
 
+
+class MoneyFlow(models.Model):
+    """Sổ đọc tổng hợp IN/OUT, không thay thế chứng từ nguồn.
+
+    Giai đoạn 1 chỉ đồng bộ bản chiếu từ các bảng nghiệp vụ KHBL; không có
+    đường ghi ngược PMV/KHCD. ``source_*`` là khóa truy vết, còn trạng thái
+    thanh toán được tách khỏi trạng thái phiếu để không coi C = đã đối soát.
+    """
+
+    IN, OUT = "IN", "OUT"
+    DIRECTIONS = [(IN, "Khách trả"), (OUT, "Trả khách")]
+    WAITING, RECORDED, PARTIAL, CONFIRMED, REVIEW, VOID = (
+        "waiting", "recorded", "partial", "confirmed", "review", "void")
+    PAYMENT_STATUSES = [
+        (WAITING, "Chờ ghi nhận"), (RECORDED, "Nguồn đã ghi"),
+        (PARTIAL, "Khớp một phần"), (CONFIRMED, "Đã xác minh"),
+        (REVIEW, "Cần kiểm tra"), (VOID, "Không còn hiệu lực"),
+    ]
+
+    direction = models.CharField(max_length=3, choices=DIRECTIONS, db_index=True)
+    service = models.CharField(max_length=20, db_index=True)
+    source_system = models.CharField(max_length=12, default="KHBL")
+    source_type = models.CharField(max_length=30)
+    source_id = models.CharField(max_length=64)
+    source_group_id = models.CharField(max_length=64, blank=True, default="")
+    source_bill_code = models.CharField(max_length=40, blank=True, default="", db_index=True)
+    source_trn_ids = models.JSONField(default=list, blank=True)
+    flow_role = models.CharField(max_length=20, default="settlement")
+    customer_id = models.CharField(max_length=30, blank=True, default="")
+    customer_name = models.CharField(max_length=200, blank=True, default="")
+    expected_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    cash_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    bank_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    business_date = models.DateField(db_index=True)
+    source_status = models.CharField(max_length=20, blank=True, default="")
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUSES, default=WAITING, db_index=True)
+    is_void = models.BooleanField(default=False)
+    source_snapshot = models.JSONField(default=dict, blank=True)
+    synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "money_flow"
+        ordering = ["-business_date", "-id"]
+        constraints = [models.UniqueConstraint(
+            fields=["source_system", "service", "source_type", "source_id", "flow_role"],
+            name="money_flow_source_role")]
+        indexes = [
+            models.Index(fields=["direction", "business_date"], name="money_flow_dir_day"),
+            models.Index(fields=["service", "business_date"], name="money_flow_svc_day"),
+        ]
+
 from .deposit_models import (DepositEvent, DepositStockHold, DepositMoneyOperation,
                              DepositMessageTemplate, DepositMessage)  # noqa: E402,F401
 from .customer_sync_models import CustomerSyncReceipt  # noqa: E402,F401

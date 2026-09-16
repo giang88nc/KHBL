@@ -13,10 +13,12 @@ from . import customer_camera
 from . import customer_sync
 from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
+from . import money_flow_views
 
 app_name = "pos"
 
 urlpatterns = [
+    path("banle/check-money-flow/", money_flow_views.listing, name="money_flow"),
     path('banle/bao-cao/', bao_cao.trang, name='bao_cao'),        # BÁO CÁO (12/09/2026)
     path('banle/dat-coc/', deposits.index, name='dat_coc'),
     path('banle/dat-coc/bao-cao/', deposits.report, name='dat_coc_report'),
