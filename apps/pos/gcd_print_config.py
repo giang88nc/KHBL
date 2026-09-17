@@ -40,10 +40,10 @@ logger = logging.getLogger(__name__)
 # (địa chỉ 65 ký tự, nhiều món gộp một dòng, 550.000.000) — để GĐ nhìn thấy cảnh tràn TRƯỚC khi in,
 # bản xem trước dùng dữ liệu ngắn thì không bao giờ lộ.
 MAU_THUONG = {
-    "sku": "CD26090100012",
+    "sku": "KH22609020839",
     "khach_ten": "Nguyễn Thị Kim Anh",
     "khach_diachi": "1276 Kha Vạn Cân, P. Linh Trung, TP. Thủ Đức",
-    "mon_hang": "[N9999] Lắc tay trơn 3.25c + [18K] Nhẫn đá 1.10c",
+    "mon_hang": "[99] Lắc tay trơn 3.25c + [61] Nhẫn đá 1.10c + [bk] Dây bạch kim 5.40g",
     "so_tien": 25_000_000,
     "so_tien_chu": "Hai mươi lăm triệu đồng",
     "ky_han": 30,
@@ -51,18 +51,32 @@ MAU_THUONG = {
     "due": dt.date(2026, 10, 1),
     "nhan_vien": "Nguyễn Văn Mẫu",
     "trang_thai": "ĐANG CẦM",
-    "giay_to": "CCCD 079188001234",
+    # Ba o duoi day dung chung MA TRUY VET (GD chot 17/09/2026): ma phieu bo KH2 - loan_id -
+    # log_id - lan in. Ba so nay ben KHCD lay tu cd_loans.id, dong log moi nhat va count_print.
+    "loan_id": 977,
+    "log_id": 3435,
+    "lan_in": 1,
     "lai": "3,0 %/tháng",
     "tu": "Tủ 24K",
     "phone": "0901 234 567",
     "ghi_chu": "Khách quen, hẹn đóng lời hằng tháng.",
+    # Cuống tiệm giữ ghi GIAO DỊCH vừa làm, không phải trạng thái phiếu: nghiệp vụ + giờ phút +
+    # tiền thu/chi của chính lượt đó. Bên KHCD lấy từ dòng cd_loan_logs mới nhất.
+    "nghiep_vu": "Cầm mới",
+    "luc": "14:35 01/09/2026",
+    "thu_chi": "Chi 25.000.000",
 }
 MAU_DAI = {
     **MAU_THUONG,
+    # Trường hợp dài nhất của cuống: nghiệp vụ dài nhất trong bảng OPS + số tiền 9 chữ số.
+    "nghiep_vu": "Mở khóa báo mất",
+    "thu_chi": "Thu 550.000.000",
     "khach_ten": "Nguyễn Thị Hoàng Bảo Trâm Anh",
     "khach_diachi": "Số 1276/45B Kha Vạn Cân, Khu phố 3, P. Linh Trung, TP. Thủ Đức, TP. HCM",
-    "mon_hang": ("[N9999] Lắc tay trơn 3.25c · [18K] Nhẫn đá xanh 1.10c · [N9999] Dây chuyền 5.40c"
-                 " · [610] Bông tai 0.85c · [SJC] Nhẫn tròn trơn 2.00c"),
+    # Đủ BỐN kiểu Giám đốc chốt 17/09: chỉ (c) · gram (g) · nhãn quy đổi (18k→61) · mã lạ KHÔNG
+    # có đơn vị — để trang căn cho thấy trước mọi hình dạng sẽ in ra.
+    "mon_hang": ("[99] Lắc tay trơn 3.25c + [61] Nhẫn đá xanh 1.10c + [sjc] Nhẫn tròn trơn 2.00c"
+                 " + [bk] Dây bạch kim 5.40g + [vt] Bông tai vàng trắng 0.85"),
     "so_tien": 550_000_000,
     "so_tien_chu": "Năm trăm năm mươi triệu đồng",
 }
@@ -79,13 +93,23 @@ def _ngay(d):
 def _du_lieu_mau(dai=False):
     """Bản đồ key khối → chuỗi in ra + class co chữ, dựng y như KHCD sẽ dựng lúc in thật."""
     m = MAU_DAI if dai else MAU_THUONG
+    # MÃ TRUY VẾT — dựng y hệt gcd_print._ma_theo_doi() bên KHCD: mã phiếu BỎ tiền tố KH2, rồi
+    # loan_id · log_id · lần in (2 chữ số). Ba ô cùng in chuỗi này.
+    ma_phieu = m["sku"]
+    theo_doi = "%s-%s-%s-%02d" % (ma_phieu[3:] if ma_phieu.upper().startswith("KH2") else ma_phieu,
+                                  m["loan_id"], m["log_id"], m["lan_in"])
+    # SĐT che 4 số giữa, giữ 3 đầu + 3 cuối — giống _che_sdt() bên KHCD.
+    so = "".join(c for c in m["phone"] if c.isdigit())
+    che = (so[:3] + "****" + so[-3:]) if len(so) >= 7 else ""
     gia_tri = {
-        "so_cuong_1": m["sku"],
-        "so_cuong_2": m["sku"],
-        "cuong_chi_tiet": "\n".join([m["mon_hang"], "Lãi: " + m["lai"], m["tu"],
-                                     "ĐT: " + m["phone"], m["ghi_chu"]]),
+        "so_cuong_1": theo_doi,
+        "so_cuong_2": theo_doi,
+        # Tóm tắt lượt việc — mẫu lấy trường hợp "Trả bớt" đúng như ví dụ Giám đốc đưa. Nghiệp vụ
+        # Cầm mới / Chuộc đồ / Thanh lý / Báo mất thì khối này TRỐNG (xem gcd_print.OP_CO_TOM_TAT).
+        "cuong_chi_tiet": "\n".join(["Trả bớt: " + _tien_vn(m["so_tien"]).replace(" ₫", "") + " ₫",
+                                     "Số ngày cầm: 1 ngày", "Tiền lời: 11.000 ₫"]),
         "ma_phieu": m["sku"],
-        "khach_ten": m["khach_ten"],
+        "khach_ten": m["khach_ten"] + (" | " + che if che else ""),
         "khach_diachi": m["khach_diachi"],
         "mon_hang": m["mon_hang"],
         "so_tien_so": _tien_vn(m["so_tien"]),
@@ -96,18 +120,41 @@ def _du_lieu_mau(dai=False):
         "nam": str(m["due"].year),
         "nhan_vien": m["nhan_vien"],
         "khach_ky": m["khach_ten"],
-        "trang_thai": m["trang_thai"],
-        "giay_to": m["giay_to"],
+        # GĐ chốt 17/09/2026: ô này là DẤU TÊN TIỆM cố định, không còn là trạng thái phiếu.
+        "trang_thai": "CẦM ĐỒ KIM HẠNH 2",
+        # Cũng là mã truy vết như hai ô cuống — không còn in "CCCD <số>" lên giấy.
+        "giay_to": theo_doi,
         # MÃ VẠCH: text = ĐÚNG chuỗi số máy quét sẽ đọc ra (CD26090100012 → 26090100012), dùng luôn
         # làm `alt` để người xem đối chiếu được. Dựng bằng cùng hàm KHCD dùng lúc in ⇒ xem trước
         # không nói dối.
         "ma_phieu_vach": MV.so_ma_vach(m["sku"]),
+        # Hai bảng cuống mang ĐÚNG MỘT bộ dữ liệu: GĐ chốt hai bản giống hệt nhau, nên dựng một lần
+        # rồi dùng cho cả hai — lệch nhau một chữ là hai nửa tờ giấy nói hai chuyện khác nhau.
+        "cuong_bang_1": m["sku"],
+        "cuong_bang_2": m["sku"],
+    }
+    bang = {
+        "nghiep_vu": m["nghiep_vu"],
+        "luc": m["luc"],
+        # QR mang NGUYÊN mã phiếu kể cả chữ cái, khác mã vạch Code 39 chỉ mang phần số.
+        "qr": MV.svg_qr(m["sku"]),
+        "ma": m["sku"],
+        "ten": m["khach_ten"],
+        "dt": m["phone"],
+        # MỘT phần tử, nối bằng " + " — ĐÚNG hình dạng desk.summary() bên KHCD trả về. Tách
+        # thành nhiều dòng ngắn là bản xem trước nói dối: tờ in thật là một khối chữ chảy tràn.
+        "noi_dung": [m["mon_hang"]],
+        "thu_chi": m["thu_chi"],
+        # KHÔNG thêm "₫": bên KHCD ô này in SỐ TRẦN (gcd_print._vnd). Bản xem trước mà thêm ký
+        # hiệu tiền là nó nói dối tờ in ra — đúng loại lệch nhỏ mà không ai soi lại.
+        "cam": _tien_vn(m["so_tien"]).replace(" ₫", ""),
     }
     o = []
     for b in L.BLOCKS:
         v = gia_tri.get(b["key"], "")
         o.append({"key": b["key"], "ten": b["ten"], "text": v, "cls": b["sel"].lstrip("."),
                   "dong": v.split("\n") if b["key"] == "cuong_chi_tiet" else [],
+                  "bang": bang if b["key"] in L.KHOI_BANG else None,
                   # ẢNH THẬT, không phải ô trống: có vẽ ra vạch thì GĐ mới thấy được mã vạch có bị
                   # bóp quá hẹp / đè lên chữ in sẵn hay không TRƯỚC khi đem in.
                   "anh": MV.anh_ma_vach(v) if b["key"] == "ma_phieu_vach" else "",

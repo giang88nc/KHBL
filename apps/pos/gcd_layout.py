@@ -42,7 +42,17 @@ MAY_IN_KEY = "may_in_ds"          # SỔ MÁY IN — khoá RIÊNG, dùng chung c
 
 PAPER_W_MM, PAPER_H_MM = 210, 148  # chỉ là MẶC ĐỊNH; số thật lấy ở _in.kho_w / _in.kho_h
 
-# ── 18 KHỐI ────────────────────────────────────────────────────────────────────────────────────
+# BƯỚC NHẢY HAI NỬA CUỐNG — ĐO BẰNG MÁY trên static/img/GCD.jpg (2470×1724) ngày 16/09/2026:
+# tâm mực chữ "SỐ:" in sẵn nằm ở 3,25% và 50,06% chiều cao ⇒ hai nửa xé cách nhau 46,81%.
+# Hai bảng cuống dùng ĐÚNG số này, nhờ vậy hai mảnh giấy xé ra nằm cùng một vị trí dưới chữ "SỐ:"
+# của nửa mình — đó là nghĩa của "canh chỉnh đều theo phần xé".
+# ⚠ Cặp so_cuong_1 (top 1,0) / so_cuong_2 (top 46,2) có từ 15/09 đang dùng bước nhảy 45,2, tức mã
+#   phiếu ở nửa DƯỚI in cao hơn chữ "SỐ:" của nó khoảng 2,2mm. CHƯA SỬA: đó là bố cục ĐANG CHẠY
+#   THẬT và Giám đốc đã lưu bản riêng trong pmv_state — đổi mặc định ở đây KHÔNG đổi được bản đã
+#   lưu, phải kéo trên trang cấu hình. Ghi ra để lần sau không ai tưởng 45,2 là số đo của tờ giấy.
+BUOC_CUONG_PCT = 46.81
+
+# ── 20 KHỐI ────────────────────────────────────────────────────────────────────────────────────
 # `sel` = selector dùng CHUNG ở 2 nơi: partial xem trước KHBL và trang in KHCD (đều gắn data-gcd=key).
 # top/h: hộp chữ đặt sao cho ĐÁY hộp trùng dòng kẻ chấm (`align-items:flex-end` trong CSS tĩnh) → chữ
 # NGỒI TRÊN đường kẻ, không đè lên. Số dưới đây ĐO TRÊN ẢNH GCD.jpg, là ĐIỂM KHỞI ĐẦU để GĐ kéo tinh.
@@ -57,6 +67,21 @@ BLOCKS = [
     # mấy thứ này ở thân phải nên đây là chỗ hợp lệ duy nhất. TẮT SẴN — GĐ bật nếu muốn cuống mang tin.
     {"key": "cuong_chi_tiet", "ten": "Chi tiết cuống (tuỳ chọn)", "sel": ".gcd-a5__cuong-chi-tiet",
      "left": 2.5, "top": 8.0, "w": 25.0, "h": 37.0, "fs": 6.5, "an": 1},
+    # HAI BẢNG CUỐNG (GĐ chốt 16/09/2026) — hai BẢN GIỐNG HỆT nhau: xé đôi cuống thì mỗi nửa vẫn
+    # mang đủ thông tin, một bản gắn theo món hàng, một bản lưu sổ.
+    # VÌ SAO ĐẶT Ở HAI MỐC NÀY: tờ in sẵn có ĐÚNG HAI chữ "SỐ:" trên cuống — đó chính là hai nửa
+    # xé. Hai bảng cách nhau ĐÚNG BẰNG khoảng cách giữa hai chữ đó (BUOC_CUONG_PCT), nên hai mảnh
+    # giấy xé ra trông y hệt nhau: mỗi bảng nằm cùng một khoảng cách dưới chữ "SỐ:" của nửa mình.
+    # ⚠ 16/09/2026: bước nhảy này ĐO LẠI BẰNG MÁY trên GCD.jpg = 46,81%, KHÔNG phải 45,2% như cặp
+    # so_cuong_1/so_cuong_2 đang dùng (hai khối đó lệch 2,4mm so với chữ in sẵn — xem BUOC_CUONG_PCT).
+    # Bản trên bắt đầu 13,5%: NGAY DƯỚI khối chữ in sẵn "DNTN… / KIM HẠNH II" (đáy ~12,5%).
+    # ⚠ KHÔNG VIỀN (GĐ chốt): CSS_CUONG không vẽ một đường kẻ nào, chỉ căn hàng bằng khoảng cách.
+    # `cuong_chi_tiet` ở trên coi như đã bị hai bảng này THAY THẾ — giữ lại (vẫn TẮT SẴN) để bố cục
+    # cũ ai đã lưu thì không mất, đừng bật cùng lúc kẻo hai khối đè nhau.
+    {"key": "cuong_bang_1", "ten": "Bảng cuống — bản trên", "sel": ".gcd-a5__cuong-bang-1",
+     "left": 3.0, "top": 13.5, "w": 26.0, "h": 33.0, "fs": 7, "an": 0},
+    {"key": "cuong_bang_2", "ten": "Bảng cuống — bản dưới", "sel": ".gcd-a5__cuong-bang-2",
+     "left": 3.0, "top": 60.3, "w": 26.0, "h": 33.0, "fs": 7, "an": 0},
 
     # B. THÂN PHẢI — biên nhận giao khách
     # MÃ VẠCH Code 39 của SỐ BIÊN NHẬN (GĐ yêu cầu 16/09/2026). Nội dung = phần CHỮ SỐ của mã phiếu
@@ -116,7 +141,7 @@ BLOCKS = [
     # ⚠ dòng "* Cửa hàng có giữ các giấy tờ:" nằm ở ~97% chiều cao = CÁCH MÉP DƯỚI ~4mm, lọt vùng chết
     # cơ khí của laser/inkjet phổ thông (4,2–6,4mm) — @page margin:0 KHÔNG mở được vùng đó. TẮT SẴN cho
     # tới khi in thử đúng máy in thật; cần ghi CCCD thì bật `cuong_chi_tiet` bên cuống trái.
-    {"key": "giay_to", "ten": "Giấy tờ cửa hàng giữ (CCCD)", "sel": ".gcd-a5__giay-to",
+    {"key": "giay_to", "ten": "Mã truy vết (ô Giấy tờ)", "sel": ".gcd-a5__giay-to",
      "left": 55.5, "top": 94.1, "w": 31.8, "h": 3.0, "fs": 8, "an": 1},
 ]
 BLOCK_MAP = {b["key"]: b for b in BLOCKS}
@@ -131,6 +156,33 @@ GIOI_HAN = {"left": (0, 100), "top": (0, 100), "w": (1, 100), "h": (0.5, 100), "
 # đây thì sửa cả bên kia — `smoke_gcd` đối chiếu từng ký tự và FAIL nếu lệch.
 CSS_ANH = (".gcd-anh{display:block!important;padding:0!important;background:#fff;"
            "object-fit:fill;image-rendering:pixelated}")
+
+# Khối BẢNG CUỐNG — markup là <div class="… gcd-cuong"> chứa QR + mấy dòng. Cùng lý do với CSS_ANH:
+# rule phải do `css()` sinh để KHCD có luôn, và static/js/gcd_mau.js giữ BẢN SAO y hệt.
+# KHÔNG VẼ VIỀN (GĐ chốt 16/09/2026): chỉ căn hàng bằng khoảng cách. Mọi đường kẻ đều vắng mặt có
+# chủ đích — thêm `border` vào đây là đi ngược yêu cầu, đừng "sửa cho đẹp".
+# Khối này KHÔNG mang class .gcd-o (lớp đó xếp chữ dồn xuống đáy hộp, phá bố cục bảng) nên phải tự
+# khai z-index, y như bẫy đã gặp với .gcd-anh: không có thì nó nằm cùng tầng ảnh nền xem trước.
+# Nhãn dọc co theo `em` chứ KHÔNG dùng var(--gcd-fs): biến đó chỉ có bên KHBL, css() của KHCD không
+# sinh ra. Dùng `em` thì hai bên cùng ăn theo cỡ chữ của khối, khỏi phải nhớ đồng bộ thêm một thứ.
+CSS_CUONG = (
+    ".gcd-a5 .gcd-cuong{z-index:1}"
+    ".gcd-cuong{display:flex!important;flex-direction:row;align-items:stretch;gap:1.2mm;border:none!important;padding:0!important;overflow:hidden;line-height:1.15}"
+    ".gcd-cuong__doc{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;text-align:center;font-size:1.3em}"
+    ".gcd-cuong__than{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.9mm}"
+    ".gcd-cuong__dau{display:flex;flex-direction:row;align-items:flex-start;gap:1.2mm}"
+    ".gcd-cuong__qr{flex:0 0 32%;aspect-ratio:1/1;height:auto;display:block;background:#fff}"
+    ".gcd-cuong__ds{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1.5mm; overflow-wrap:anywhere;word-break:break-word;margin-top: 10px;}"
+    ".gcd-cuong__noi{flex:1 1 auto;min-height:0;overflow-wrap:anywhere;word-break:break-word}"
+    ".gcd-cuong__tien{display:flex;flex-direction:row;gap:1.2mm;justify-content:center}"
+    ".gcd-cuong__tien span{flex:0 0 auto}"
+    ".gcd-cuong b{font-weight:700; font-size: 16px;}"
+)
+
+# Khối nào là ẢNH, khối nào là BẢNG — hai bên dùng chung để template khỏi đoán theo tên khoá.
+KHOI_MA_VACH = "ma_phieu_vach"
+KHOI_ANH = (KHOI_MA_VACH,)
+KHOI_BANG = ("cuong_bang_1", "cuong_bang_2")
 
 # ── _in : THIẾT LẬP MÁY IN ─────────────────────────────────────────────────────────────────────
 # kho "A5N" = gửi máy in ĐÚNG kích thước tờ đo được (kho_w × kho_h mm). KHÔNG dùng "auto" làm mặc định
@@ -392,7 +444,7 @@ def css(layout=None):
     inn = {**IN_MAC_DINH, **(layout.get(IN_KEY) or {})}
     w, h = _so(inn["kho_w"]), _so(inn["kho_h"])
     out = [".gcd-a5{position:relative!important;width:%smm!important;max-width:100%%;height:auto;"
-           "aspect-ratio:%s/%s;overflow:hidden}" % (w, w, h), CSS_ANH]
+           "aspect-ratio:%s/%s;overflow:hidden}" % (w, w, h), CSS_ANH, CSS_CUONG]
     for b in BLOCKS:
         v = layout[b["key"]]
         fs = _so(v["fs"])

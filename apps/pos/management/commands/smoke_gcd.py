@@ -25,6 +25,7 @@ from django.test import Client
 from apps.pmv.models import PmvState
 from apps.pos import gcd_layout as L
 from apps.pos import gcd_may_in as MI
+from apps.pos import gcd_print_config as PC
 from apps.pos import ma_vach as MV
 
 URL = "/he-thong/mau-in-gcd/"
@@ -87,8 +88,8 @@ class Command(BaseCommand):
         try:
             # ── 1. MẶC ĐỊNH phải hợp lệ về hình học ──
             md = L.mac_dinh()
-            check("18 khối + 3 khoá phụ (_in/_ct/_nen)",
-                  len(L.BLOCKS) == 18 and all(k in md for k in (L.IN_KEY, L.CT_KEY, L.NEN_KEY)))
+            check("20 khối + 3 khoá phụ (_in/_ct/_nen)",
+                  len(L.BLOCKS) == 20 and all(k in md for k in (L.IN_KEY, L.CT_KEY, L.NEN_KEY)))
             loi = [b["key"] for b in L.BLOCKS
                    if md[b["key"]]["left"] + md[b["key"]]["w"] > 100.01
                    or md[b["key"]]["top"] + md[b["key"]]["h"] > 100.01]
@@ -115,8 +116,8 @@ class Command(BaseCommand):
                   ".gcd-a5:not(.gcd-sua) .gcd-a5__giay-to{display:none!important}" in css
                   and ".gcd-a5.gcd-sua .gcd-a5__giay-to{opacity:.3!important" in css)
             check("bậc thang co chữ sinh sẵn cho MỌI khối",
-                  css.count(".gcd-co-2{font-size:calc(") == 18 and css.count(".gcd-co-3{font-size:calc(") == 18)
-            check("mỗi khối đúng 1 rule vị trí", css.count("{position:absolute!important;") == 18)
+                  css.count(".gcd-co-2{font-size:calc(") == 20 and css.count(".gcd-co-3{font-size:calc(") == 20)
+            check("mỗi khối đúng 1 rule vị trí", css.count("{position:absolute!important;") == 20)
 
             # ── 3. lop_co / qua_dai ──
             check("co chữ: ngắn = không co · vừa = bậc 2 · dài = bậc 3",
@@ -249,6 +250,47 @@ class Command(BaseCommand):
             check("anh_ma_vach: mã có số → ĐÚNG ảnh của png_code39 (không phải ảnh thứ hai)",
                   MV.anh_ma_vach("CD26090100012") == MV.png_code39("26090100012"))
 
+            # ── 3d. HAI BẢNG CUỐNG TIỆM GIỮ (GĐ chốt 16/09/2026) ──
+            # Cuống là phần XÉ RA giữ lại: in sai thì tới lúc khách chuộc mới lòi, và lúc đó tờ
+            # giấy đã đi theo món hàng vào tủ.
+            b1, b2 = L.BLOCK_MAP.get("cuong_bang_1"), L.BLOCK_MAP.get("cuong_bang_2")
+            c1, c2 = L.BLOCK_MAP["so_cuong_1"], L.BLOCK_MAP["so_cuong_2"]
+            check("có ĐỦ hai khối bảng cuống và BẬT SẴN",
+                  bool(b1 and b2) and md["cuong_bang_1"]["an"] == 0 and md["cuong_bang_2"]["an"] == 0)
+            check("hai bảng GIỐNG HỆT nhau về khung, chỉ khác vị trí dọc (GĐ chốt hai bản y nhau)",
+                  bool(b1 and b2) and (b1["left"], b1["w"], b1["h"], b1["fs"])
+                  == (b2["left"], b2["w"], b2["h"], b2["fs"]))
+            # ⚠ So với SỐ ĐO TRÊN GIẤY (BUOC_CUONG_PCT), KHÔNG so với cặp so_cuong_1/so_cuong_2:
+            # cặp đó đang dùng 45,2 và chính nó lệch 2,4mm so với chữ in sẵn — lấy nó làm chuẩn là
+            # đo cái sai bằng cái sai, đúng cái bẫy bộ kiểm cũ đã dính.
+            check("bước nhảy hai bảng ĐÚNG BẰNG khoảng cách THẬT giữa hai chữ 'SỐ:' in sẵn",
+                  bool(b1 and b2) and abs((b2["top"] - b1["top"]) - L.BUOC_CUONG_PCT) <= 0.02,
+                  str((b2["top"] - b1["top"], L.BUOC_CUONG_PCT, c2["top"] - c1["top"])))
+            check("hằng BUOC_CUONG_PCT giữ đúng số đo trên GCD.jpg (50,06 − 3,25)",
+                  abs(L.BUOC_CUONG_PCT - 46.81) < 0.005)
+            # 30,53% = cột đầu tiên có mực của THÂN PHẢI (đo trên GCD.jpg); dưới letterhead thì dải
+            # 14%–30,5% trắng hoàn toàn. Chỗ xé nằm đâu đó trong dải trắng ấy — giấy đục lỗ không
+            # để lại mực nên không đo được, vì vậy chặn ở 29,5% cho có khoảng an toàn ~1%.
+            check("bảng nằm TRỌN trong cuống trái (mép phải <= 29,5%; thân phải dính mực từ 30,53%)",
+                  bool(b1 and b2) and b1["left"] + b1["w"] <= 29.5 and b2["left"] + b2["w"] <= 29.5)
+            check("bản trên KHÔNG đè khối chữ in sẵn (>= 12,5%) và KHÔNG chạm chữ 'SỐ:' thứ hai (<= 49,4%)",
+                  bool(b1) and b1["top"] >= 12.5 and b1["top"] + b1["h"] <= 49.4, str(b1))
+            check("bản dưới nằm trọn trong tờ giấy", bool(b2) and b2["top"] + b2["h"] <= 100.0)
+            check("KHÔNG VIỀN: mọi chữ 'border' trong CSS bảng cuống đều là border:none",
+                  all(x.startswith(":none") for x in L.CSS_CUONG.split("border")[1:]), L.CSS_CUONG)
+            check("css() sinh sẵn CSS bảng cuống — KHCD khỏi chép tay vào static", L.CSS_CUONG in css)
+            check("static/js/gcd_mau.js giữ BẢN SAO ĐÚNG TỪNG KÝ TỰ của CSS_CUONG "
+                  "(thiếu là bảng vỡ ngay khi kéo)", L.CSS_CUONG in js)
+            # QR khác mã vạch Code 39 ở chỗ MANG CẢ CHỮ CÁI — đó là lý do có nó bên cạnh mã vạch.
+            qr = MV.svg_qr("KH22609020810")
+            check("svg_qr: trả SVG data URI thật",
+                  qr.startswith("data:image/svg+xml") and len(qr) > 200, qr[:60])
+            check("svg_qr: cùng mã phiếu → CÙNG một chuỗi (KHBL và KHCD không thể lệch)",
+                  MV.svg_qr("KH22609020810") == qr)
+            check("svg_qr: đổi một chữ số là đổi ảnh", MV.svg_qr("KH22609020811") != qr)
+            check("svg_qr: rỗng/None → KHÔNG vẽ, khác png_code39 vốn cố ý vẽ mã của số 0",
+                  MV.svg_qr("") == "" and MV.svg_qr(None) == "" and MV.png_code39("") != "")
+
             # ── 3c. ĐỐI CHIẾU THẲNG SANG KHO KHCD (bên in thật) ──
             # Hai kho là 2 dự án rời, không import được nhau (KHCD là Flask). Đọc TỆP rồi so.
             khcd = Path(r"D:/PYTHON/KHCD/khcd")
@@ -273,7 +315,7 @@ class Command(BaseCommand):
                 # Cái ĐI QUA pmv_state là cụm 6 số theo `key` — đó mới là thứ phải trùng từng con.
                 truong = ("key", "left", "top", "w", "h", "fs", "an")
                 gon = lambda ds: [tuple(b[t] for t in truong) for b in ds]
-                check("18 khối của KHCD TRÙNG KHÍT KHBL: thứ tự · tên khoá · 6 số mặc định "
+                check("20 khối của KHCD TRÙNG KHÍT KHBL: thứ tự · tên khoá · 6 số mặc định "
                       "(lệch một số là bản xem trước nói dối tờ in ra)",
                       gon(kb) == gon(L.BLOCKS),
                       str([a for a, b in zip(gon(kb), gon(L.BLOCKS)) if a != b])[:300])
@@ -291,6 +333,22 @@ class Command(BaseCommand):
                 ban_sao = (khcd / "ma_vach.py").read_text(encoding="utf-8")
                 vung_bl = nguon[nguon.index("CODE39 = {"):].split("\n" + moc_het, 1)[0].rstrip("\n")
                 vung_cd = ban_sao.split(moc_dau + "\n", 1)[-1].split("\n" + moc_het, 1)[0]
+                check("KHCD khai ĐÚNG hai khối bảng cuống như KHBL",
+                      tuple(hang_so("gcd_layout.py", "KHOI_BANG")) == tuple(L.KHOI_BANG))
+                check("KHCD dùng CÙNG chuỗi CSS bảng cuống (KHÔNG VIỀN) — giống từng ký tự",
+                      hang_so("gcd_layout.py", "CSS_CUONG") == L.CSS_CUONG)
+                check("KHCD giữ CÙNG bước nhảy hai nửa cuống đo trên giấy",
+                      hang_so("gcd_layout.py", "BUOC_CUONG_PCT") == L.BUOC_CUONG_PCT)
+                # Thân bảng cuống ở hai kho phải giống TỪNG KÝ TỰ; chỉ khối chú thích đầu tệp được
+                # khác nhau (Django dùng {% comment %}, Jinja2 dùng {# #}).
+                than_bl = (settings.BASE_DIR / "templates" / "pos" / "_gcd_cuong.html").read_text(
+                    encoding="utf-8").split("{% endcomment %}", 1)[-1].lstrip()
+                than_cd = (khcd / "templates" / "_gcd_cuong.html").read_text(
+                    encoding="utf-8").split("#}", 1)[-1].lstrip()
+                check("thân bảng cuống của KHCD giống KHBL ĐÚNG TỪNG KÝ TỰ",
+                      than_bl == than_cd and than_bl.startswith("{% if b.nghiep_vu")
+                      and 'gcd-cuong__doc' in than_bl,
+                      f"KHBL {len(than_bl)} ký tự · KHCD {len(than_cd)} ký tự")
                 check("KHBL đã ĐÓNG vùng sao chép bằng dòng mốc (viết thêm hàm ở cuối tệp không "
                       "còn làm bài kiểm bên KHCD đỏ oan)", moc_het in nguon)
                 check("VÙNG SAO CHÉP của KHCD giống KHBL ĐÚNG TỪNG KÝ TỰ (sửa bên này phải chép "
@@ -375,9 +433,10 @@ class Command(BaseCommand):
             check("ảnh mã vạch mang class .gcd-anh + alt là ĐÚNG số máy quét sẽ đọc + không bị "
                   "trình duyệt cướp thao tác kéo",
                   bool(img) and "gcd-anh" in img.group(0) and 'draggable="false"' in img.group(0)
-                  and "26090100012" in img.group(0))
+                  and MV.so_ma_vach(PC.MAU_THUONG["sku"]) in img.group(0))
             check("số trên mã vạch KHỚP số biên nhận in ở ô SỐ: (quét ra tra đúng phiếu)",
-                  "CD26090100012" in b and MV.so_ma_vach("CD26090100012") in (img.group(0) if img else ""))
+                  PC.MAU_THUONG["sku"] in b
+                  and MV.so_ma_vach(PC.MAU_THUONG["sku"]) in (img.group(0) if img else ""))
             # Dải cảnh báo vạch hẹp: bố cục mặc định cho 0,174 mm ⇒ trang PHẢI hiện dòng xám.
             dai_vach = re.search(r'<div class="gcdm-warn[^"]*"\s+id="gcdm-vach"[^>]*>([^<]*)<',
                                  b, re.S)
@@ -389,7 +448,39 @@ class Command(BaseCommand):
             check("ngưỡng gửi sang JS ở dạng CHẤM thập phân — số bản địa hoá 0,19 sẽ bị parseFloat "
                   "cắt còn 0 rồi cảnh báo im luôn",
                   'data-vach-thu="0.19"' in b and 'data-vach-min="0.15"' in b
-                  and 'data-vach-so="26090100012"' in b)
+                  and 'data-vach-so="%s"' % MV.so_ma_vach(PC.MAU_THUONG["sku"]) in b)
+            cuong = re.findall(r'<div class="[^"]*gcd-cuong" data-gcd="(cuong_bang_[12])"', b)
+            check("trang cấu hình render ĐỦ hai bảng cuống",
+                  sorted(cuong) == ["cuong_bang_1", "cuong_bang_2"], str(cuong))
+            # GĐ chốt 17/09: BỎ hẳn nhãn "Thu/Chi:" — dòng tiền chỉ còn MỘT số tự nói hướng của nó.
+            # KHÔNG gò cứng nhãn tiếng Việt ở đây: Giám đốc còn chỉnh chữ trên template (17/09 đã
+            # đổi "Cầm:" thành "Tiền gốc:"). Kiểm theo CẤU TRÚC + con số, để sửa chữ không làm đỏ oan.
+            check("mỗi bảng có QR thật + đủ 2 dòng tiền + số tiền đúng, KHÔNG còn nhãn Thu/Chi",
+                  b.count('class="gcd-cuong__qr"') == 2
+                  and b.count('class="gcd-cuong__tien"') == 4 and b.count("Thu/Chi:") == 0
+                  and b.count("Chi 25.000.000") == 2 and b.count("25.000.000</b>") == 2)
+            check("QR mang NGUYÊN mã phiếu kể cả chữ cái (mã vạch Code 39 chỉ mang phần số)",
+                  b.count('alt="QR mã phiếu %s"' % PC.MAU_THUONG["sku"]) == 2
+                  and 'src="data:image/svg+xml' in b)
+            # ── NỘI DUNG 4 KHỐI GĐ CHỐT 17/09/2026 ──
+            # Mã truy vết = mã phiếu bỏ KH2 · loan_id · log_id · lần in. In ở 3 ô: hai cuống + ô
+            # "giấy tờ". Có nó mới lần được từ TỜ GIẤY về đúng lượt việc trong sổ.
+            theo_doi = "2609020839-977-3435-01"
+            check("mã truy vết đúng dạng và in ở CẢ BA ô (2 cuống + ô giấy tờ)",
+                  b.count(theo_doi) == 3, str(b.count(theo_doi)))
+            check("mã truy vết BỎ tiền tố KH2 của mã phiếu, nhưng mã phiếu ở ô SỐ: vẫn in đủ",
+                  not theo_doi.startswith("KH2") and PC.MAU_THUONG["sku"] in b)
+            check("ô Nhận của Ông/Bà có tên KÈM sđt che 4 số giữa",
+                  "Nguyễn Thị Kim Anh | 090****567" in b and "0901234567" not in b)
+            check("ô dấu đổi thành TÊN TIỆM cố định, không còn trạng thái phiếu",
+                  "CẦM ĐỒ KIM HẠNH 2" in b and "ĐANG CẦM" not in b)
+            check("khối tóm tắt giao dịch đủ ba dòng đúng mẫu GĐ đưa",
+                  "Trả bớt: 25.000.000 ₫" in b and "Số ngày cầm: 1 ngày" in b
+                  and "Tiền lời: 11.000 ₫" in b)
+            # "CCCD" còn trong TÊN KHỐI trên bảng chỉnh (nhãn giao diện), nhưng SỐ giấy tờ thì
+            # không được in ra tờ giấy nữa.
+            check("KHÔNG còn in số CCCD lên tờ giấy", "CCCD 0" not in b and "079188001234" not in b)
+
             check("có <style id=gcd-layout-css> + bảng chỉnh + ảnh nền tách riêng",
                   'id="gcd-layout-css"' in b and 'class="gcdm-row"' in b
                   and 'class="gcd-nen no-print"' in b and "img/GCD.jpg" in b)

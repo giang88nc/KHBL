@@ -1,0 +1,36 @@
+{% comment %}
+BẢNG CUỐNG TIỆM GIỮ — phần trái xé của Giấy cầm đồ (GĐ chốt 16/09/2026).
+
+⚠ KHCD GIỮ BẢN SAO: khcd/templates/_gcd_cuong.html. Hai tệp chỉ được khác nhau ĐÚNG khối chú thích
+  đầu tệp — bên này là cú pháp chú thích của Django, bên đó là của Jinja2. Phần THÂN bên dưới
+  phải GIỐNG TỪNG KÝ TỰ; `smoke_gcd` cắt bỏ chú thích rồi so, lệch một ký tự là FAIL.
+  Lý do khắt khe: một bên là bản XEM TRƯỚC để Giám đốc căn, một bên là tờ IN THẬT. Lệch nhau thì
+  căn một đằng in một nẻo — đúng kiểu lỗi font đã làm chữ lệch 9mm hôm trước.
+
+KHÔNG CÓ VIỀN: mọi đường kẻ đều vắng mặt CÓ CHỦ ĐÍCH (xem CSS_CUONG trong gcd_layout.py).
+
+⚠ Ô TRỐNG THÌ BỎ HẲN DÒNG, không in nhãn trơ: sổ phiên đọc không được (hoặc lượt việc không phát
+  sinh đồng nào, ví dụ "Mở khóa báo mất") thì nghiep_vu/luc/thu_chi là chuỗi rỗng. Không có mấy
+  {% if %} này thì cột dọc in ra ĐÚNG MỘT DẤU PHẨY và dòng "Thu/Chi:" trơ nhãn không số — trên
+  chứng từ pháp lý đã in ra giấy thì không sửa lại được.
+Bố cục khớp mẫu Giám đốc đưa: cột dọc trái = nghiệp vụ + giờ giao dịch · hàng đầu = QR + mã phiếu,
+tên khách, số đt · giữa = nội dung · hai dòng cuối = tiền lượt này và Cầm.
+
+17/09/2026 — Giám đốc bỏ hẳn chữ "Thu/Chi:": dòng tiền chỉ còn MỘT số tự nói hướng của nó,
+"Thu 1.500.000" hay "Chi 25.000.000" (gcd_print._phien dựng sẵn chuỗi này; bằng 0 thì trống
+và cả dòng biến mất).
+{% endcomment %}
+{% if b.nghiep_vu or b.luc %}<div class="gcd-cuong__doc">{{ b.nghiep_vu }}{% if b.nghiep_vu and b.luc %}, {% endif %}{{ b.luc }}</div>{% endif %}
+<div class="gcd-cuong__than">
+ <div class="gcd-cuong__dau">
+  {% if b.qr %}<img class="gcd-cuong__qr" src="{{ b.qr }}" draggable="false" alt="QR mã phiếu {{ b.ma }}">{% endif %}
+  <div class="gcd-cuong__ds">
+   <b>{{ b.ma }}</b>
+   <span>{{ b.ten }}</span>
+   <span>{{ b.dt }}</span>
+  </div>
+ </div>
+ <div class="gcd-cuong__noi">{% for d in b.noi_dung %}<div>{{ d }}</div>{% endfor %}</div>
+ {% if b.thu_chi %}<div class="gcd-cuong__tien"><span>{{ b.thu_chi }}</span></div>{% endif %}
+ <div class="gcd-cuong__tien"><span>Tiền gốc:</span><b>{{ b.cam }}</b></div>
+</div>

@@ -46,7 +46,10 @@
     var out = ['.gcd-a5{position:relative!important;width:' + w + 'mm!important;max-width:100%;height:auto;aspect-ratio:' + w + '/' + h + ';overflow:hidden}',
       /* BẢN SAO NGUYÊN VĂN của gcd_layout.CSS_ANH (khối ảnh mã vạch). Hàm này dựng lại TOÀN BỘ thẻ
          <style> mỗi lần kéo-thả, thiếu dòng này thì mã vạch xẹp mất ngay khi kéo. smoke_gcd so từng ký tự. */
-      '.gcd-anh{display:block!important;padding:0!important;background:#fff;object-fit:fill;image-rendering:pixelated}'];
+      '.gcd-anh{display:block!important;padding:0!important;background:#fff;object-fit:fill;image-rendering:pixelated}',
+      /* BAN SAO NGUYEN VAN cua gcd_layout.CSS_CUONG (hai bang cuong tiem giu). CO Y KHONG
+         CO VIEN - Giam doc chot border=none 16/09/2026, dung them duong ke cho 'de nhin'. */
+      '.gcd-a5 .gcd-cuong{z-index:1}.gcd-cuong{display:flex!important;flex-direction:row;align-items:stretch;gap:1.2mm;border:none!important;padding:0!important;overflow:hidden;line-height:1.15}.gcd-cuong__doc{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;text-align:center;font-size:1.3em}.gcd-cuong__than{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.9mm}.gcd-cuong__dau{display:flex;flex-direction:row;align-items:flex-start;gap:1.2mm}.gcd-cuong__qr{flex:0 0 32%;aspect-ratio:1/1;height:auto;display:block;background:#fff}.gcd-cuong__ds{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1.5mm; overflow-wrap:anywhere;word-break:break-word;margin-top: 10px;}.gcd-cuong__noi{flex:1 1 auto;min-height:0;overflow-wrap:anywhere;word-break:break-word}.gcd-cuong__tien{display:flex;flex-direction:row;gap:1.2mm;justify-content:center}.gcd-cuong__tien span{flex:0 0 auto}.gcd-cuong b{font-weight:700; font-size: 16px;}'];
     Object.keys(SEL).forEach(function (k) {
       var v = st[k], s = SEL[k]; if (!v) return;
       var fs = so(v.fs);

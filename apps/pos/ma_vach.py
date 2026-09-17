@@ -97,6 +97,30 @@ def png_code39(code):
     buffer = BytesIO()
     image.save(buffer, format="PNG", optimize=False)
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def svg_qr(noi_dung):
+    """QR (SVG data URI) của MÃ PHIẾU, in trên cuống tiệm giữ của Giấy cầm đồ.
+
+    SVG chứ không PNG: cuống chỉ rộng ~55mm nên ô QR chỉ quanh 17mm — PNG ở cỡ đó bị trình duyệt
+    nội suy thành mép xám lúc in, máy quét 2D đọc chậm hẳn. SVG là vector, máy in rasterise ở đúng
+    DPI của nó. Đây cũng là nếp ĐÃ CHẠY THẬT của phiếu đặt cọc (apps/pos/deposit_print_config.py).
+
+    ⚠ KHÁC mã vạch Code 39 ở một điểm QUAN TRỌNG: QR mang NGUYÊN mã phiếu KỂ CẢ CHỮ CÁI
+    (`KH22609020810`), không phải chỉ phần chữ số. Bảng CODE39 ở trên chỉ có chữ số nên mã vạch
+    buộc phải bỏ tiền tố và tra ngược theo PHẦN SỐ; QR thì quét ra đúng mã phiếu, khỏi suy đoán
+    tiền tố — hai thứ bổ cho nhau chứ không thay nhau.
+
+    Đầu vào rỗng → trả '' (KHÔNG vẽ QR của chuỗi rỗng). Khác hẳn png_code39 vốn cố ý vẽ mã số 0 để
+    trang in không bao giờ chết: QR rỗng quét ra rỗng, nhân viên sẽ tưởng máy quét hỏng và loay
+    hoay với cái máy thay vì nhìn ra tờ phiếu thiếu mã.
+    """
+    ma = str(noi_dung or "").strip()
+    if not ma:
+        return ""
+    import segno
+
+    return segno.make(ma, micro=False).svg_data_uri()
 # ═══ HẾT VÙNG SAO CHÉP ═══
 # ⚠ MỐC TRÊN LÀ BIÊN CỦA VÙNG KHCD CHÉP LẠI (khcd/ma_vach.py so sha256 hai vùng, lệch là TRƯỢT).
 # Từ đây xuống là mã RIÊNG của KHBL — thêm/sửa thoải mái, KHCD không chép. Trước 16/09/2026 vùng

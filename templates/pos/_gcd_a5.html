@@ -24,6 +24,8 @@ kéo khối bằng hành vi kéo-thả ảnh mặc định của nó.
   {% for k in khoi_mau %}{% if k.anh %}
   <img class="{{ k.cls }} gcd-anh" data-gcd="{{ k.key }}" src="{{ k.anh }}" draggable="false"
        title="{{ k.ten }}" alt="Mã vạch Code 39: {{ k.text }}">
+  {% elif k.bang %}
+  <div class="{{ k.cls }} gcd-cuong" data-gcd="{{ k.key }}" title="{{ k.ten }}">{% include "pos/_gcd_cuong.html" with b=k.bang %}</div>
   {% else %}
   <div class="{{ k.cls }} gcd-o {{ k.co }}" data-gcd="{{ k.key }}" title="{{ k.ten }}">
     {% if k.dong %}{% for d in k.dong %}<div>{{ d }}</div>{% endfor %}{% else %}{{ k.text }}{% endif %}
