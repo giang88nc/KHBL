@@ -17,7 +17,7 @@ from . import customer as C, customer_phones as P
 from .customer_bridge_models import CustomerBridgeReceipt
 from .customer_sync_models import CustomerSyncReceipt
 
-FIELDS = 'CustID,CustCode,CustName,Phone,GhiChu2,GhiChu3,CMND,Address,Active'
+FIELDS = 'CustID,CustCode,CustName,Phone,GhiChu2,GhiChu3,CMND,Address,Active,Gender'   # Gender: KHCD dùng cho xưng hô Anh/Chị trong tin nhắc (18/09/2026)
 FORM_FIELDS = ('CustName','Phone','GhiChu2','GhiChu3','CMND','Address','BirthDate','Gender','NgayCap','NoiCap','Email','Notes','CustType','Active')
 
 
