@@ -5,8 +5,8 @@
 <div class="kh-anh__item" data-photo data-label="{{ label }}" data-facing="environment">
  <b>{{ label }}</b><div class="kh-anh__khung" data-xem><span>Chưa có ảnh</span></div>
  <div class="kh-anh__actions">
-  <label class="khbl-btn khbl-btn--outline kh-anh__btn">Chọn<input type="file" name="{{ name }}" accept="image/*" data-photo-input hidden></label>
-  <button class="khbl-btn kh-anh__btn" type="button" data-chup>Chụp</button>
+  <label class="khbl-btn khbl-btn--outline kh-anh__btn" title="Chọn tệp ảnh" aria-label="Chọn tệp ảnh">📁<input type="file" name="{{ name }}" accept="image/*" data-photo-input hidden></label>
+  <button class="khbl-btn kh-anh__btn" type="button" data-chup title="Chụp ảnh" aria-label="Chụp ảnh">📷</button>
   {% if mat %}<button class="khbl-btn khbl-btn--outline kh-anh__btn kh-anh__btn--cat" type="button" title="Tách thẻ CCCD"
    hx-post="{% url 'pos:khach_anh_cat' %}" hx-encoding="multipart/form-data" hx-params="{{ name }},CustID,mat" hx-vals='{"mat":"{{ mat }}"}'
    hx-target="#kh-cat-root" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="this"

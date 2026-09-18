@@ -195,7 +195,10 @@ IN_MAC_DINH = {"kho": "A5N", "canh": "giua", "dx": 0, "dy": 0, "ty_le": 100,
                "kho_w": PAPER_W_MM, "kho_h": PAPER_H_MM, "may_in": ""}
 KHO_TO = "TỜ"   # giá trị canh: sinh size từ kho_w × kho_h
 IN_KHO = {"A5N": KHO_TO, "auto": "auto", "A4N": "A4 landscape",
-          "A5D": "A5 portrait", "A4D": "A4 portrait", "Letter": "letter landscape"}
+          "A5D": "A5 portrait", "A4D": "A4 portrait", "Letter": "letter landscape",
+          # A4T (GĐ chốt 17/09/2026): máy in để A4 ĐỨNG, tờ GCD A5 ngang là ĐÚNG NỬA TRÊN của tờ A4
+          # (210 mm = trọn bề ngang) → sát mép trên-trái, KHÔNG lề, KHÔNG canh giữa; dx/dy vẫn tinh chỉnh được.
+          "A4T": "auto"}   # auto: KHÔNG ép khổ/hướng — chọn A4 đứng trong hộp thoại in, Edge nhớ cho lần sau (GĐ chốt 17/09)
 IN_CANH = ("giua", "trai")
 IN_GIOI_HAN = {"dx": (-80, 80), "dy": (-80, 80), "ty_le": (50, 150),
                "kho_w": (80, 420), "kho_h": (60, 420)}
@@ -413,7 +416,7 @@ def css_in(inn=None):
     size = IN_KHO.get(inn["kho"], "auto")
     if size == KHO_TO:
         size = "%smm %smm" % (_so(inn["kho_w"]), _so(inn["kho_h"]))
-    giua = inn["canh"] != "trai"
+    giua = inn["canh"] != "trai" and inn["kho"] != "A4T"   # A4T: luôn sát mép trái, không canh giữa
     rule = ["left:%smm!important" % _so(inn["dx"]), "top:%smm!important" % _so(inn["dy"]),
             "margin:0 auto!important" if giua else "margin:0!important",
             "background:none!important", "box-shadow:none!important", "overflow:hidden!important",

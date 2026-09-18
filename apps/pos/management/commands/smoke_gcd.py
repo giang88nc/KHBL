@@ -144,20 +144,20 @@ class Command(BaseCommand):
                   mv and mv["left"] >= 77.1 and mv["top"] + mv["h"] <= 12.4
                   and mv["left"] + mv["w"] <= 96.5 and mv["top"] >= 4.9)
             # Vạch hẹp = (rộng ô × tỷ lệ phần vạch) ÷ số mô-đun hẹp. Dưới ~0,15mm là chắc chắn câm.
-            mm_hep = (210 * mv["w"] / 100) * (828 / 908) / 207 if mv else 0
-            check("bề rộng ô đủ để vạch hẹp ≥ 0,15mm (11 chữ số, tính cả quiet-zone)",
+            mm_hep = (210 * mv["w"] / 100) * (828 / 908) / 239 if mv else 0   # 13 ký tự: 15×16−1 = 239 mô-đun vạch
+            check("bề rộng ô đủ để vạch hẹp ≥ 0,15mm (13 ký tự, tính cả quiet-zone)",
                   mm_hep >= 0.15, f"{mm_hep:.3f}mm")
 
             # SỐ mà mã vạch mang — HỢP ĐỒNG với KHCD, hai bên phải ra cùng một chuỗi.
-            check("so_ma_vach: bỏ tiền tố chữ, GIỮ ĐỦ 11 chữ số, KHÔNG rút gọn 9 số như GĐB",
-                  MV.so_ma_vach("CD26090100012") == "26090100012"
-                  and len(MV.so_ma_vach("CD26090100012")) == 11,
+            check("so_ma_vach: GIỮ TRỌN mã phiếu (chữ + 11 số = 13 ký tự), KHÔNG rút gọn 9 số như GĐB",
+                  MV.so_ma_vach("CD26090100012") == "CD26090100012"
+                  and len(MV.so_ma_vach("CD26090100012")) == 13,
                   MV.so_ma_vach("CD26090100012"))
             check("so_ma_vach: chạy lại trên chính kết quả vẫn ra thế (tra ngược an toàn)",
-                  MV.so_ma_vach(MV.so_ma_vach("CD26090100012")) == "26090100012")
+                  MV.so_ma_vach(MV.so_ma_vach("CD26090100012")) == "CD26090100012")
             check("so_ma_vach: rỗng/None/toàn chữ → chuỗi rỗng, KHÔNG nổ lỗi",
                   MV.so_ma_vach("") == "" and MV.so_ma_vach(None) == ""
-                  and MV.so_ma_vach("CD-/ .") == "")
+                  and MV.so_ma_vach("-/ .") == "")
             check("so_ma_vach: 2 phiếu khác nhau KHÔNG bao giờ ra cùng một số",
                   MV.so_ma_vach("CD26090100012") != MV.so_ma_vach("CD26090100013"))
 
@@ -213,9 +213,9 @@ class Command(BaseCommand):
                   and (MV.VACH_HEP_TOI_THIEU_MM, MV.VACH_HEP_CAN_THU_MM) == (0.15, 0.19))
             rong_md = L.BLOCK_MAP["ma_phieu_vach"]["w"]
             mm_md = MV.vach_hep_mm("CD26090100012", rong_md, L.PAPER_W_MM)
-            check("bố cục MẶC ĐỊNH (rộng 18.8% · tờ 210mm · mã 11 số) → vạch hẹp ≈ 0,174 mm",
-                  abs(mm_md - 0.1739) < 0.0005, f"{mm_md:.4f}")
-            check("0,174 mm nằm GIỮA hai ngưỡng → mức 'nhac' (dải xám nhắc quét thử), KHÔNG kêu đỏ",
+            check("bố cục MẶC ĐỊNH (rộng 18.8% · tờ 210mm · mã 13 ký tự có chữ) → vạch hẹp ≈ 0,152 mm",
+                  abs(mm_md - 0.1524) < 0.0005, f"{mm_md:.4f}")
+            check("0,152 mm nằm GIỮA hai ngưỡng → mức 'nhac' (dải xám nhắc quét thử), KHÔNG kêu đỏ",
                   MV.canh_bao_vach("CD26090100012", rong_md, L.PAPER_W_MM)[0] == "nhac")
             check("bóp còn 8% → mức 'nang' + câu bảo NỚI RỘNG trước khi in",
                   MV.canh_bao_vach("CD26090100012", 8, L.PAPER_W_MM)[0] == "nang"
@@ -227,8 +227,8 @@ class Command(BaseCommand):
             check("tờ giấy HẸP hơn thì vạch hẹp mỏng theo (cảnh báo chạy trên kho_w thật)",
                   MV.vach_hep_mm("CD26090100012", rong_md, 148) < mm_md)
             check("mã KHÔNG có chữ số → không in vạch → KHÔNG báo động",
-                  MV.vach_hep_mm("CD-/ .", rong_md, L.PAPER_W_MM) == 0.0
-                  and MV.canh_bao_vach("CD-/ .", rong_md, L.PAPER_W_MM) == ("", ""))
+                  MV.vach_hep_mm("-/ .", rong_md, L.PAPER_W_MM) == 0.0
+                  and MV.canh_bao_vach("-/ .", rong_md, L.PAPER_W_MM) == ("", ""))
             check("rộng/khổ là rác (None, chữ) → trả 0, KHÔNG nổ lỗi giữa trang cấu hình",
                   MV.vach_hep_mm("CD26090100012", None, L.PAPER_W_MM) == 0.0
                   and MV.vach_hep_mm("CD26090100012", rong_md, "abc") == 0.0)
@@ -245,10 +245,10 @@ class Command(BaseCommand):
             # thẳng nó ở bản xem trước là thấy mã vạch trong khi tờ in ra bỏ trống.
             check("anh_ma_vach: mã KHÔNG có chữ số → KHÔNG vẽ (giống khcd/ma_vach.anh_ma_vach), "
                   "chứ không vẽ mã của số 0",
-                  MV.anh_ma_vach("CD-/ .") == "" and MV.anh_ma_vach("") == ""
+                  MV.anh_ma_vach("-/ .") == "" and MV.anh_ma_vach("") == ""
                   and MV.png_code39("") == MV.png_code39("0"))
             check("anh_ma_vach: mã có số → ĐÚNG ảnh của png_code39 (không phải ảnh thứ hai)",
-                  MV.anh_ma_vach("CD26090100012") == MV.png_code39("26090100012"))
+                  MV.anh_ma_vach("CD26090100012") == MV.png_code39("CD26090100012"))
 
             # ── 3d. HAI BẢNG CUỐNG TIỆM GIỮ (GĐ chốt 16/09/2026) ──
             # Cuống là phần XÉ RA giữ lại: in sai thì tới lúc khách chuộc mới lòi, và lúc đó tờ

@@ -30,40 +30,38 @@ CODE39 = {
     "0": "nnnwwnwnn", "1": "wnnwnnnnw", "2": "nnwwnnnnw", "3": "wnwwnnnnn",
     "4": "nnnwwnnnw", "5": "wnnwwnnnn", "6": "nnwwwnnnn", "7": "nnnwnnwnw",
     "8": "wnnwnnwnn", "9": "nnwwnnwnn", "-": "nnnwnnnww", "*": "nwnnwnwnn",
+    # A–Z + ký hiệu chuẩn Code 39 (17/09/2026 — GĐ chốt: mã vạch mang TRỌN mã phiếu 'KH22609123456',
+    # máy quét trả đúng chuỗi mã phiếu). Chữ số giữ NGUYÊN mẫu cũ ⇒ Giấy đảm bảo (mã 9 số) không đổi.
+    "A": "wnnnnwnnw", "B": "nnwnnwnnw", "C": "wnwnnwnnn", "D": "nnnnwwnnw", "E": "wnnnwwnnn",
+    "F": "nnwnwwnnn", "G": "nnnnnwwnw", "H": "wnnnnwwnn", "I": "nnwnnwwnn", "J": "nnnnwwwnn",
+    "K": "wnnnnnnww", "L": "nnwnnnnww", "M": "wnwnnnnwn", "N": "nnnnwnnww", "O": "wnnnwnnwn",
+    "P": "nnwnwnnwn", "Q": "nnnnnnwww", "R": "wnnnnnwwn", "S": "nnwnnnwwn", "T": "nnnnwnwwn",
+    "U": "wwnnnnnnw", "V": "nwwnnnnnw", "W": "wwwnnnnnn", "X": "nwnnwnnnw", "Y": "wwnnwnnnn",
+    "Z": "nwwnwnnnn", " ": "nwwnnnwnn", ".": "wwnnnnwnn", "$": "nwnwnwnnn", "/": "nwnwnnnwn",
+    "+": "nwnnnwnwn", "%": "nnnwnwnwn",
 }
 
 
 def so_ma_vach(ma):
-    """SỐ mà mã vạch mang theo = BỎ mọi ký tự không phải chữ số, GIỮ NGUYÊN thứ tự, KHÔNG rút gọn.
+    """CHUỖI mà mã vạch mang theo = TRỌN MÃ PHIẾU: giữ CHỮ (in hoa) + SỐ, bỏ ký tự khác, KHÔNG rút gọn.
 
-    MÃ PHIẾU THẬT ĐANG CHẠY — đếm trên sổ KHCD ngày 16/09/2026, 25.465 mã khác nhau:
-        'KH22609020810'   → '22609020810'    11 chữ số · 18.854 mã — đường cầm đồ hằng ngày
-        'CU2606000000625' → '2606000000625'  13 chữ số ·  6.594 mã — phiếu chuyển từ hệ cũ
-      lác đác vài mã 9 / 10 / 12 chữ số. Bản xem trước bên KHBL dùng mã GIẢ 'CD26090100012' (11 số,
-      đúng độ dài thường gặp) — đừng đọc 'CD…' thành tiền tố thật.
+        'KH22609020810'   → 'KH22609020810'   13 ký tự — đường cầm đồ hằng ngày
+        'CU2606000000625' → 'CU2606000000625' 15 ký tự — phiếu chuyển từ hệ cũ
+        'CD-2609/01 00012' → 'CD26090100012'  (ký tự ngăn cách bị bỏ)
+
+    GĐ chốt 17/09/2026: bản cũ BỎ CHỮ CÁI ('KH22609123456' → '22609123456') nên máy quét trả về một
+    chuỗi KHÔNG PHẢI mã phiếu, tra cứu không khớp. Nay Code 39 mã hoá cả A–Z (bảng CODE39 ở trên đã
+    thêm), quét ra đúng 'KH22609123456' — tra thẳng theo `sku`, không phải REPLACE bỏ chữ nữa.
 
     ⚠ ĐÂY LÀ HỢP ĐỒNG GIỮA KHBL VÀ KHCD. Hai bên phải sinh RA ĐÚNG MỘT chuỗi cho cùng một mã phiếu,
-    nếu không thì bản xem trước một đằng, tờ in ra một nẻo.
-
-    VÌ SAO BỎ CHỮ CÁI chứ không mã hoá chúng: bảng `CODE39` ở trên chỉ có chữ số (bản chép nguyên đã
-    quét được thực tế), thêm A-Z vào là ĐỘNG VÀO THUẬT TOÁN ĐANG CHẠY THẬT của Giấy đảm bảo.
-    VÌ SAO KHÔNG RÚT GỌN 9 số như `_ma_gdb()` của Giấy đảm bảo: mã cầm đồ dài 11–13 chữ số, cắt còn
-    9 là VỨT BỎ thông tin ⇒ hai phiếu khác nhau có thể ra cùng một mã vạch. Chứng từ cầm đồ là giấy
-    tờ pháp lý, quét nhầm phiếu là trả nhầm hàng.
-
-    TRA NGƯỢC VỀ ĐÚNG PHIẾU: bỏ chữ cái xong vẫn phải còn DUY NHẤT. Cách tra an toàn bên KHCD là so
-    theo PHẦN SỐ chứ đừng ghép chuỗi tiền tố + số:
-        ... WHERE REPLACE(...) -- hoặc lọc trong Python: so_ma_vach(row.sku) == so_quet_duoc
-    ⚠ ĐIỀU KIỆN PHẢI GIỮ: PHẦN SỐ của mọi mã phiếu không được trùng nhau. Kho hiện có HAI tiền tố
-    ('KH…' và 'CU…') chứ không phải một — đã soát cả 25.465 mã: bỏ chữ cái rồi KHÔNG còn cặp nào
-    trùng (hai nhóm khác độ dài). Ngày nào sinh thêm loại mã mà phần số đụng mã đang có (ví dụ
-    'GH22609020810' cho gia hạn) thì hai tờ giấy mang CÙNG một mã vạch — lúc đó phải đổi sang mã
-    vạch có chữ cái, không vá bằng cách đoán tiền tố.
-    ⚠ NHÓM 'CU…' 13 số là nhóm SÁT NGƯỠNG nhất: với bề rộng khối mặc định, vạch hẹp chỉ còn
-    ≈ 0,152 mm — nhỉnh hơn ngưỡng đỏ 0,15 mm một chút (xem `canh_bao_vach`). Quét thử một tờ 'CU…'
-    trước khi in loạt.
+    nếu không thì bản xem trước một đằng, tờ in ra một nẻo. Chạy lại trên chính kết quả vẫn ra thế
+    (idempotent) để tra ngược an toàn. Chữ số KHÔNG đổi mẫu vạch ⇒ mã 9 số của Giấy đảm bảo y cũ.
+    VÌ SAO KHÔNG RÚT GỌN như `_ma_gdb()` của Giấy đảm bảo: cắt bớt là hai phiếu khác nhau có thể ra
+    cùng một mã vạch — chứng từ cầm đồ là giấy tờ pháp lý, quét nhầm phiếu là trả nhầm hàng.
+    ⚠ Dài thêm 2 ký tự chữ ⇒ vạch hẹp mỏng đi ~12% so với bản 11 số: khối rộng 18,8% trên tờ 210 mm
+    cho ≈ 0,152 mm — vẫn ≥ ngưỡng đỏ 0,15 mm nhưng nằm ở dải "quét thử" (xem `vach_hep_mm`).
     """
-    return re.sub(r"\D", "", str(ma or ""))
+    return re.sub(r"[^0-9A-Z]", "", str(ma or "").upper())
 
 
 def png_code39(code):
@@ -76,7 +74,7 @@ def png_code39(code):
     """
     from PIL import Image, ImageDraw
 
-    value = re.sub(r"[^0-9]", "", str(code or "")) or "0"
+    value = re.sub(r"[^0-9A-Z\-. $/+%]", "", str(code or "").upper()) or "0"
     chars = "*" + value + "*"
     narrow, wide, quiet, height = 4, 12, 40, 96
     widths = []
