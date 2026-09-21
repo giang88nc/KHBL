@@ -1,0 +1,13 @@
+{% comment %}Một ô ảnh của bảng .pg-tb--hinh (Hình 1 / Hình 2) — biến a = anh_doi.<slot> (ck_tra_khach.anh_o).{% endcomment %}
+<td class="kh-anh__item pg-hinh__o" data-photo data-label="{{ a.label }}" data-facing="environment">
+  <div class="kh-anh__khung pg-hinh__khung" data-xem>
+    {% if a.src %}<a href="{{ a.src }}" target="_blank" rel="noopener" title="Bấm để xem lớn{% if a.tam %} (ảnh chờ — ghi khi THANH TOÁN){% endif %}"><img src="{{ a.src }}" alt="{{ a.label }}"></a>
+    {% else %}<span>Chưa có</span>{% endif %}
+  </div>
+  <div class="kh-anh__actions pg-ck__actions pg-hinh__nut">
+    <button class="pg-ck__ico" type="button" data-chup title="Chụp {{ a.label|lower }}" {% if phieu_chot %}disabled{% endif %}>📷</button>
+    <label class="pg-ck__ico{% if phieu_chot %} pg-ck__ico--off{% endif %}" title="Chọn tệp {{ a.label|lower }}">📁<input type="file" name="anh_{{ a.slot }}" accept="image/*" data-photo-input hidden {% if phieu_chot %}disabled{% endif %}></label>
+    {% if a.tam %}<i class="pg-ck__cho" title="Ảnh chờ — ghi vào hóa đơn khi THANH TOÁN">chờ</i>
+    <button class="pg-ck__ico pg-ck__ico--x" type="button" title="Bỏ ảnh chờ" {% if phieu_chot %}disabled{% else %}hx-post="{% url 'pos:ban_anh_xoa' %}" hx-vals='{"slot": "{{ a.slot }}"}' hx-swap="none"{% endif %}>×</button>{% endif %}
+  </div>
+</td>

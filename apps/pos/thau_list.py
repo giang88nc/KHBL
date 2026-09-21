@@ -44,6 +44,12 @@ def enrich(rows, membership):
     return rows
 
 
+def loc_nghiep_vu(request):
+    """Bộ lọc NGHIỆP VỤ (19/09/2026): '' = tất cả · thau = phiếu thâu · doi = hóa đơn bán-đổi tiệm trả khách."""
+    v = request.GET.get('nghiep_vu', '')
+    return v if v in (ThauNhom.THAU, ThauNhom.DOI) else ''
+
+
 @login_not_required     # GĐ chốt 10/09/2026: trang xem công khai trong mạng tiệm
 @require_GET
 def listing(request):
@@ -56,11 +62,13 @@ def listing(request):
     if method not in ('all', 'cash', 'bank'):
         method = 'bank'
     customer, status = request.GET.get('khach', '').strip(), request.GET.get('trang_thai', '')
+    nghiep_vu = loc_nghiep_vu(request)
     rows, error, live = [], '', True
     try:
         rows, live = TP.inspect(d1, d2)
         rows = enrich(rows, {r['TrnID']: r['bank'] for r in rows})
         rows = [r for r in rows if (method == 'all' or r['method'] == method)
+                and (not nghiep_vu or r.get('nghiep_vu') == nghiep_vu)
                 and (not customer or any(customer.casefold() in str(m.get(k, '')).casefold() for m in r['members'] for k in ('CustName', 'Phone', 'CMND')))
                 and (not request.GET.get('payment_status') or r['payment_status'] == request.GET['payment_status'])
                 and (not status or any(m['Status'] == status and str(m['IsDel']) == '0' for m in r['members']))]
@@ -70,7 +78,8 @@ def listing(request):
         import logging
         logging.getLogger(__name__).exception('Không đọc được danh sách thâu 2')
         error = 'Không đọc được danh sách. Vui lòng thử lại.'
-    ctx = dict(rows=rows, d1=d1, d2=d2, today=today, method=method, khach=customer,
+    ctx = dict(rows=rows, d1=d1, d2=d2, today=today, method=method, khach=customer, nghiep_vu=nghiep_vu,
+               nghiep_vu_ds=[(k, v) for k, v in ThauNhom.NGHIEP_VU if k in (ThauNhom.THAU, ThauNhom.DOI)],
                trang_thai=status, source='kk' if live else 'hist', error=error,
                payment_status=request.GET.get('payment_status', ''), payment_labels=TP.LABELS.items(), can_manage=TP.permitted(request.user))
     return render(request, 'pos/_thau2_list.html' if request.headers.get('HX-Request') else 'pos/thau2.html', ctx)
@@ -156,6 +165,17 @@ def da_xac_nhan_ck(ids, can_tra):
     return da_tra >= M.dec(can_tra), da_tra
 
 
+def doc_hoa_don_doi(trn, client):
+    """Đọc hẹp MỘT hóa đơn bán-đổi cho popup chi tiết (chỉ SELECT, NOLOCK)."""
+    return client.query(
+        "SELECT b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.IsDel, b.CreatedDate, b.CustID, b.PayAmount, "
+        "b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, ISNULL(b.CardPay,0) AS CardPay, "
+        "ISNULL(c.CustName,'') AS CustName, ISNULL(c.Phone,'') AS Phone, ISNULL(c.CMND,'') AS CMND, "
+        "ISNULL(e.EmpName,'') AS EmpName FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
+        "LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID "
+        "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID WHERE b.TrnID = ?", (trn,))
+
+
 @login_not_required     # GĐ chốt 10/09/2026: trang xem công khai trong mạng tiệm
 @require_GET
 def detail(request):
@@ -165,13 +185,21 @@ def detail(request):
     membership = membership_for(groups_for([trn]))
     group = membership.get(trn)
     ids = [t for t in group.trn_ids if membership[t].pk == group.pk] if group else [trn]
+    doi = bool(group and group.nghiep_vu == ThauNhom.DOI)
     try:
         client = PmvClient(source, tag='thau2_detail')
-        items = [B.phieu_thau(t, client) for t in ids]
+        if doi:     # hóa đơn BÁN-ĐỔI tiệm trả khách (19/09/2026): đọc đúng 1 hóa đơn, tóm tắt thay tờ in phiếu thâu
+            items = doc_hoa_don_doi(trn, client)
+        else:
+            items = [B.phieu_thau(t, client) for t in ids]
         items = [r for r in items if r]
         if not items:
             return HttpResponse('Không tìm thấy phiếu.', status=404)
-        p = _phieu_ctx(items, group)
+        if doi:
+            p = {'tien_ck': M.dec(group.tien_ck), 'tien_mat': M.dec(group.tien_mat),
+                 'tra_khach': abs(M.dec(items[0].get('PayAmount')))}
+        else:
+            p = _phieu_ctx(items, group)
         row = {'TrnID': trn, 'members': items, 'tien_ck': p['tien_ck']}
         enrich([row], membership)
         row['da_xac_nhan'], row['ck_da_tra'] = da_xac_nhan_ck([i['TrnID'] for i in items], p['tien_ck'])
@@ -192,7 +220,7 @@ def detail(request):
             if customer and customer.get(field):
                 im['url'] = reverse('pos:khach_anh', kwargs={'cust_id': cust_id, 'kind': kind})
             row['cccd_images'].append(im)
-        return render(request, 'pos/_thau2_detail.html', {'p': p, 'r': row, 'items': items,
+        return render(request, 'pos/_thau2_detail.html', {'p': p, 'r': row, 'items': items, 'doi': doi,
                       'tiem': S.thong_tin_tiem(), 'in_luc': timezone.now()})
     except Exception:
         return HttpResponse('Không đọc được chi tiết phiếu. Vui lòng thử lại.', status=503)

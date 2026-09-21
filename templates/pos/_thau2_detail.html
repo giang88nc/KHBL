@@ -1,4 +1,4 @@
-{% extends 'partials/modal_shell.html' %}{% load static %}{% comment %}
+{% extends 'partials/modal_shell.html' %}{% load static pos_extras %}{% comment %}
 Popup mở được từ HAI nơi: trang /thau-vao-2/ (có sẵn thau2.css) và nút XEM trong popup DANH SÁCH của trang
 /thau-vao/ (KHÔNG có thau2.css → trước 10/09/2026 popup mở ở đó bị vỡ giao diện). Vì vậy popup TỰ mang theo
 bảng kiểu của mình; trình duyệt tải một lần rồi dùng lại từ bộ nhớ đệm nên mở lần sau không tốn thêm.
@@ -7,12 +7,27 @@ Mã QR bị khóa (làm mờ + phủ nhãn, bỏ thẻ liên kết nên không b
 chuyển khoản, hoặc phiếu của NGÀY KHÁC vì mã chỉ dùng trong ngày.
 
 Ảnh bấm vào mở ngay trong khung popup: lớp xem ảnh có slide, lăn chuột giữa để phóng to quanh con trỏ.
+
+doi=True (19/09/2026): hóa đơn BÁN-ĐỔI dư tiệm chuyển khoản trả khách — cột trái là bảng tóm tắt hóa đơn thay
+cho tờ in phiếu thâu; khối chuyển khoản + ảnh bên phải dùng chung.
 {% endcomment %}
-{% block modal_title %}CHI TIẾT PHIẾU THÂU{% endblock %}
+{% block modal_title %}{% if doi %}CHI TIẾT HÓA ĐƠN ĐỔI — TIỆM TRẢ KHÁCH{% else %}CHI TIẾT PHIẾU THÂU{% endif %}{% endblock %}
 {% block modal_style %}width:min(1050px,96vw);max-width:96vw;max-height:94vh{% endblock %}
 {% block modal_body %}<link rel="stylesheet" href="{% static 'css/thau2.css' %}?v=4">
 <div class="th2-detail">
-<div>{% for item in items %}<p>{{ item.BillCode|default:item.TrnID }} · {% if item.IsDel != '0' %}Đã hủy{% elif item.Status == 'C' %}Đã chốt{% else %}Còn chờ{% endif %}</p>{% endfor %}{% include 'pos/_thau_phieu.html' %}</div>
+<div>{% for item in items %}<p>{{ item.BillCode|default:item.TrnID }} · {% if item.IsDel != '0' %}Đã hủy{% elif item.Status == 'C' %}Đã chốt{% else %}Còn chờ{% endif %}</p>{% endfor %}{% if doi %}{% with h=items.0 %}
+<dl class="th2-bank-fields th2-doi-tom">
+  <div><dt>Hóa đơn:</dt><dd class="mono">{{ h.BillCode|default:h.TrnID }}</dd></div>
+  <div><dt>Ngày:</dt><dd>{{ h.TrnDate|date:"d/m/Y" }} {{ h.TrnTime|slice:":5" }}</dd></div>
+  <div><dt>Nhân viên:</dt><dd>{{ h.EmpName|default:"—" }}</dd></div>
+  <div><dt>Khách:</dt><dd>{{ h.CustName|default:"Khách lẻ" }}</dd></div>
+  <div><dt>SĐT · CCCD:</dt><dd class="mono">{{ h.Phone|default:"—" }} · {{ h.CMND|default:"—" }}</dd></div>
+  <div><dt>Vàng mới:</dt><dd class="mono">{{ h.TienBan|tien_tran }}</dd></div>
+  <div><dt>Vàng cũ:</dt><dd class="mono">{{ h.TienMua|tien_tran }}</dd></div>
+  <div><dt>Tiệm trả khách:</dt><dd class="mono"><b>{{ p.tra_khach|tien_tran }}</b></dd></div>
+  <div><dt>· Tiền mặt:</dt><dd class="mono">{{ p.tien_mat|tien_tran }}</dd></div>
+  <div><dt>· Chuyển khoản:</dt><dd class="mono"><b>{{ p.tien_ck|tien_tran }}</b></dd></div>
+</dl>{% endwith %}{% else %}{% include 'pos/_thau_phieu.html' %}{% endif %}</div>
 <div class="th2-detail-right">
   <section class="th2-detail-section">
     <div class="th2-bank-grid">

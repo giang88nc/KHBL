@@ -173,6 +173,43 @@ def _ctx_pos(request, extra=None):
     ctx["khoa_ngay_cu"] = ctx["phieu_chot"] and not ctx["don_hom_nay"]
     ctx["ten_nv"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp")), "")
     ctx["ten_nv_sup"] = next((e["EmpName"] for e in ctx["nvs"] if e["EmpID"] == g.get("emp_sup")), "")
+    # TIỆM TRẢ KHÁCH bằng chuyển khoản (bán-đổi dư, GĐ chốt 19/09/2026) — khối giống trang Thâu vào
+    from . import ck_tra_khach as CK
+    ctx["anh_doi"] = CK.anh_o(request, g)           # Hình 1 · Hình 2 · QR khách (ảnh chờ / nhóm đã ghi)
+    ctx["tra_khach"] = CK.tra_khach(ctx["t"])
+    # FORM IN (khách chuyển khoản VÀO tài khoản tiệm, GĐ chốt 19/09/2026 tối): TK mặc định type=cty · nội dung cố
+    # định = mã hóa đơn bỏ gạch · ô hình QR đã tạo (money_flow_payment) · TẠO QR chỉ bật khi đã THANH TOÁN
+    if not g.get("bank_id"):
+        ctx["bank_sel"] = str(CK.tk_tiem_mac_dinh() or "")
+    if ctx["t"]["pay_method"] == "bank" and M.dec(ctx["t"]["khach_tra"]) > 0:
+        ctx["nd_in"] = CK.noi_dung_in(g)
+        if ctx["phieu_chot"]:
+            # DS QR theo nội dung CK (✔ đã khớp) · đã nhận · còn phải thanh toán; ô số tiền QR mặc định = phần CK
+            # đang chọn nếu còn đủ, không thì toàn bộ phần còn lại (GĐ chốt 19/09/2026 tối)
+            ctx["qr_in"], ctx["qr_in_img"] = CK.qr_in_hien(g)
+            tt = ctx["qr_in_tt"] = CK.qr_in_tinh_trang(g)
+            con = tt["con_lai"] if tt["con_lai"] is not None else M.dec(ctx["t"]["khach_tra"])
+            # CashPay trên KK (đọc lại mỗi lần bấm CHUYỂN KHOẢN) = số thực tế còn phải thu; = 0 → XÁC NHẬN XONG
+            kk = ctx["kk"] = CK.tien_kk(g)
+            if kk and not kk["loi"]:
+                con = min(con, kk["con"])
+                ctx["kk_xong"] = kk["xong"]
+                if kk["xong"]:
+                    ctx["bang_chung"] = CK.bang_chung(g)
+            ctx["kk_con"] = con
+            ck = M.dec(ctx["t"]["tien_ck"])
+            ctx["qr_tien_mac_dinh"] = ck if 0 < ck <= con else con
+            ctx["tao_qr_in"] = con > 0 and not ctx["khoa_ngay_cu"] and not ctx.get("kk_xong")
+    elif ctx["tra_khach"] and ctx["t"]["pay_method"] == "bank" and ctx["phieu_chot"]:
+        kk = ctx["kk"] = CK.tien_kk(g)             # tiệm trả khách: CashPay = 0 ⇔ CK trả khách đã đối soát xong
+        if kk and not kk["loi"] and kk["xong"]:
+            ctx["kk_xong"], ctx["bang_chung"] = True, CK.bang_chung(g, ra=True)
+    if ctx["tra_khach"]:
+        ctx["banks_vn"] = QR.BANKS
+        ctx["ck_nd_mac_dinh"] = CK.noi_dung(g)
+        ctx["tien_mat_tra"], ctx["tien_ck_tra"] = abs(ctx["t"]["tien_mat"]), abs(ctx["t"]["tien_ck"])
+        ctx["tao_qr_khach"] = (ctx["phieu_chot"] and bool(ctx["tien_ck_tra"])
+                               and bool(g.get("ck_bank") and g.get("ck_stk")))
     ctx.update(_coc_ctx(g))
     ctx.update(extra or {})
     return ctx
@@ -584,14 +621,25 @@ def ban_doi_tinh_lai(request):
 @require_POST
 def ban_dat(request):
     """Đặt khách · nhân viên · ngày · các khoản tiền · ghi chú."""
-    if _dang_khoa(request):
+    from . import ck_tra_khach as CK
+    # Đơn ĐÃ CHỐT hôm nay: vẫn đổi được PHƯƠNG THỨC TRẢ TIỀN (GĐ chốt 19/09/2026 tối) — chỉ khi request CHỈ mang các ô
+    # của form phương thức; ô khác (món, khách, tiền bớt…) vẫn khóa như cũ. Không ghi gì lên KK (xem CK.PAY_KEYS).
+    sau_chot = _dang_khoa(request)
+    if sau_chot and not CK.sua_tt_sau_chot(request):
         return _loi(request, KHOA_MSG)
     g = cart.get(request)
     if "cust_id" in request.POST:
         cid = (request.POST.get("cust_id") or "").strip()
         k = S.khach_theo_id(cid) if cid and cid != S.WALK_IN else None
+        previous_cust=g.get("cust") or {}
         g["cust"] = {"id": k["CustID"], "code": k["CustCode"], "name": k["CustName"],
                      "phone": k["Phone"] or "", "diem": str(M.dec(k["Diem"]))} if k else None
+        if k and previous_cust.get("id")==k["CustID"]: g["cust"]["phone"]=previous_cust.get("phone","")
+    if "document_phone" in request.POST and g.get("cust"):
+        from .document_contacts import normalize_phone
+        try: g["cust"]["phone"] = normalize_phone(request.POST.get("document_phone"))
+        except ValueError as exc: return _loi(request,str(exc))
+        g["document_phone_explicit"]=True
     if "emp" in request.POST:
         moi = (request.POST.get("emp") or "").strip()
         if moi and moi == (g.get("emp_sup") or ""):
@@ -615,9 +663,14 @@ def ban_dat(request):
         g["tien_mat"] = str(M.tron_ngan(_so(v))) if v else ""
     if "bank_id" in request.POST:
         g["bank_id"] = (request.POST.get("bank_id") or "").strip()
+    CK.nhan_form(g, request.POST)                  # ô CHUYỂN KHOẢN CHO KHÁCH khi tiệm trả (19/09/2026)
+    if sau_chot and g.get("pay_method") == "bank" and "pay_method" in request.POST:
+        CK.doc_tien_kk(g)                          # bấm CHUYỂN KHOẢN / ⟳: đọc lại CashPay·CardPay trên KK (chỉ đọc)
     if "cust_id" in request.POST and g.get("coc_ids"):
         g["coc_ids"], g["coc"] = [], "0"        # đổi khách thì phiếu cọc của khách cũ không còn đúng
     cart.save(request, g)
+    if sau_chot:
+        CK.sau_chot_ghi_lai(request, g)            # gold_bill + nhóm CK trả khách (MySQL) — hóa đơn KK giữ nguyên
     return _pos_oob(request)
 
 
@@ -654,6 +707,10 @@ def ban_coc(request):
             if money_error:
                 return _loi(request,money_error,{'coc_mo':True})
         dang = [x for x in dang if x != ma] if ma in dang else dang + [ma]
+    if len(dang)==1 and not g.get("trn_id") and not g.get("document_phone_explicit"):
+        from .document_contacts import read
+        saved_contact=read("KHBL_DEPOSIT",dang[0],cust)
+        if saved_contact: g["cust"]["phone"]=saved_contact.phone
     g["coc_ids"] = dang
     g["coc"] = BC.chuoi_tien(BC.tong_tien(ds, dang))
     cart.save(request, g)
@@ -696,6 +753,7 @@ def ban_moi(request):
     """ĐƠN MỚI / THÊM MỚI: xóa trắng form — KỂ CẢ nhân viên bán (GĐ chốt 07/09/2026: mỗi đơn
     chọn lại NV để không ghi nhầm doanh số người trước)."""
     cart.clear(request, giu_nv=False)
+    __import__("apps.pos.ck_tra_khach", fromlist=["xoa_anh_cho"]).xoa_anh_cho(request)   # ảnh chờ Hình/QR (19/09)
     return _pos_oob(request, {"tin": "Đã mở phiếu mới."})
 
 
@@ -787,6 +845,9 @@ def _nap_phieu(request, trn, ghi_chu=""):
         cart.save(request, g)
     GB.lam_tuoi_tu_kk(trn, phieu=phieu)
     g = cart.get(request)
+    __import__("apps.pos.ck_tra_khach", fromlist=["nap_tu_nhom"]).nap_tu_nhom(g)   # ô CK cho khách (19/09/2026)
+    if g.get("pay_method") == "bank":                                               # CashPay·CardPay thật trên KK
+        __import__("apps.pos.ck_tra_khach", fromlist=["doc_tien_kk"]).doc_tien_kk(g)
     g["_fp"], g["_fp_kk"] = __import__("apps.pos.don", fromlist=["van_tay"]).van_tay(g), \
         __import__("apps.pos.don", fromlist=["van_tay_kk"]).van_tay_kk(g)
     cart.save(request, g)
@@ -907,6 +968,7 @@ def ban_thuc_hien(request, hanh_dong):
     if hanh_dong == "sua":
         g2 = cart.nap(request, B.doc(trn))
         g2["emp_sup"], g2["pay_method"], g2["bank_id"] = emp_sup, pm, bank   # phần app-only giữ qua mở lại
+        __import__("apps.pos.ck_tra_khach", fromlist=["giu"]).giu(g, g2)    # ô CK cho khách (19/09/2026)
         g2["sua_lai"] = True                                                 # nhãn ✎ ĐANG SỬA (08/09 chiều)
         cart.save(request, g2)
         GB.upsert_tu_gio(g2, status=B.NHAP, is_del=False, user=request.user)
@@ -949,10 +1011,18 @@ def _kiem_truoc_khi_luu(request, g, ph):
 def ban_thanh_toan(request):
     """Lưu phiếu rồi CHỐT. GĐ chốt 03/09/2026: hóa đơn mới luôn mang ngày HÔM NAY."""
     g = cart.get(request)
+    if "document_phone" in request.POST and g.get("cust"):
+        from .document_contacts import normalize_phone
+        try: g["cust"]["phone"]=normalize_phone(request.POST["document_phone"])
+        except ValueError as exc: return _loi(request,str(exc))
     ph = _phien(request)
     loi, o_loi = _kiem_truoc_khi_luu(request, g, ph)
     if loi:
         return _loi(request, loi, {"loi_o": o_loi})
+    from . import ck_tra_khach as CK
+    loi = CK.kiem_truoc_chot(g)                       # tiệm trả khách: không quẹt thẻ (19/09/2026)
+    if loi:
+        return _loi(request, loi)
     # 08/09 chiều: KHÓA CHỐNG BẤM ĐÔI theo phiên (cache.add nguyên tử, 30s) — 2 request tới gần nhau đều đọc session
     # CHƯA có trn_id → B.luu(trn_id="") 2 lần = 2 hóa đơn, 2 lần vào két. Nút chân trang cũng hx-sync/disable.
     khoa = f"khbl:tt:{request.session.session_key}"
@@ -994,6 +1064,10 @@ def ban_thanh_toan(request):
                 reservation.invoice_id=trn_id;reservation.status='done';reservation.active_key=None
                 reservation.message='PMV đã cấp mã hóa đơn; tiếp tục trên đúng hóa đơn này.'
                 reservation.save()
+        from . import document_contacts as DC
+        import uuid
+        token=g.setdefault("contact_token",uuid.uuid4().hex);cart.save(request,g);request.session.save()
+        intent=DC.begin("KHBL_BUYSELL",token,DC.save_cart("KHBL_BUYSELL",g,request.user.username),c.target,g.get("trn_id"))
         kq = B.luu(trn_id=g.get("trn_id") or "", ban=cart.dong_ban(g), doi=cart.dong_doi(g),
                    ngay=c.fmt_date(now.date()), gio=c.fmt_time(now),
                    cust_id=(g.get("cust") or {}).get("id") or S.WALK_IN,
@@ -1001,7 +1075,7 @@ def ban_thanh_toan(request):
                    user_id=ph["user_id"], ghi_chu=g.get("ghi_chu") or "",
                    bot=g.get("bot"), cong_them=g.get("cong_them"),
                    vang_them=g.get("vang_them"), coc=g.get("coc"), c=c,
-                   on_created=invoice_created if g.get('coc_ids') else None)
+                   on_created=invoice_created, contact_intent=intent)
         # Giữ mã hóa đơn ngay khi lưu xong; liên kết/chốt lỗi không tạo hóa đơn mới khi bấm lại.
         g['trn_id'],g['bill_code']=kq['trn_id'],kq['bill_code']
         cart.save(request,g)
@@ -1040,10 +1114,23 @@ def ban_thanh_toan(request):
     emp_sup, pm, bank, tm = g.get("emp_sup") or "", g.get("pay_method") or "cash", g.get("bank_id") or "", g.get("tien_mat") or ""
     g2 = cart.nap(request, B.doc(kq["trn_id"], c))
     g2["emp_sup"], g2["pay_method"], g2["bank_id"], g2["tien_mat"] = emp_sup, pm, bank, tm   # app-only giữ qua nap
+    CK.giu(g, g2)                                                                  # ô CK cho khách cũng app-only
+    if pm == "bank":
+        CK.doc_tien_kk(g2)                                                         # CashPay·CardPay vừa chốt trên KK
     cart.save(request, g2)
     from . import gold_bill as GB
     GB.upsert_tu_gio(g2, status=B.CHOT_ROI, is_del=False, user=request.user)       # ghi xuyên gold_bill
     tin = f"Đã thanh toán {kq['bill_code']} — {M.money_vn(kq['tong']['khach_tra'])}"
+    # Tiệm trả khách bằng CK (19/09/2026): ghi nhóm CK nghiep_vu='doi' để đối soát như phiếu thâu. KK đã chốt rồi
+    # nên lỗi MySQL ở đây KHÔNG được làm hỏng thanh toán — chỉ báo để SỬA/THANH TOÁN lại cho có nhóm.
+    try:
+        nhom_ck = CK.ghi_nhom_sau_chot(request, g2, cart.tong_cua(g2), kq["bill_code"])
+        if nhom_ck:
+            tin += (" · đã ghi phần chuyển khoản cho khách để đối soát" if nhom_ck.tien_ck
+                    else " · đã lưu hình vào hóa đơn")
+    except Exception:
+        logging.getLogger(__name__).exception("Ghi nhóm CK trả khách %s", kq["trn_id"])
+        tin += " · ⚠ CHƯA ghi được phần chuyển khoản cho khách — báo quản lý kiểm tra"
     extra = {"tin": tin, "vua_chot": kq["trn_id"]}
     if request.POST.get("in") == "1":
         # THANH TOÁN & IN (GĐ chốt 08/09/2026 chiều — "chưa in ra giấy được"): CHỐT → IN THẲNG → FORM TRẮNG (như ĐƠN MỚI).
@@ -1713,7 +1800,8 @@ def _gdb_ctx(trn_id, loai, nguon="live"):
         return None, HttpResponse("Không thể đọc thông tin phiếu: " + S.error_message(exc), status=503)
     if not row:
         return None, HttpResponse("Không tìm thấy phiếu.", status=404)
-    r = row[0]
+    from . import document_contacts as DC
+    r = DC.overlay("KHBL_BUYGOLD" if loai=="THAU" else "KHBL_BUYSELL",row[0],c.target)
 
     def _tl_chi(value, unit="L", co_don_vi=True):
         """GĐB luôn ghi trọng lượng theo chỉ: MSSQL lưu vàng theo ly."""

@@ -18,7 +18,7 @@ from apps.pmv.models import PmvState, UserModuleAccess
 from . import services as S
 from .bank_reconcile import single_run, bank_time
 from .invoice_display import compact, groups_for, membership_for
-from .models import GoldBill, ThauPaymentLink, BankReconcileState
+from .models import GoldBill, ThauNhom, ThauPaymentLink, BankReconcileState
 from .transfers import query
 
 LABELS = {'unconfirmed': 'Chưa xác nhận', 'confirmed': 'Đã xác nhận CK',
@@ -53,6 +53,7 @@ def catalog(d1, d2):
               .only('trn_id', 'tien_ck', 'tong').order_by()}
     orders = compact(raw, groups)
     for row in orders:
+        row['nghiep_vu'] = ThauNhom.THAU
         ids = sorted(m['TrnID'] for m in row['members'])
         group = membership.get(row['TrnID'])
         receiver = {k: getattr(group, k, '') for k in ('ck_bank', 'ck_stk', 'ck_ten', 'ck_nd')}
@@ -72,7 +73,84 @@ def catalog(d1, d2):
                     'bills': serial([{k: m.get(k) for k in ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'CardPay', 'SoTien')}
                                      for m in sorted(row['members'], key=lambda m: m['TrnID'])])}
         row.update(order_key=key(ids), ids=ids, required=required, snapshot=snapshot, problems=problems, live=live, bank=group)
+    doi = catalog_doi(d1, d2)
+    if doi:     # chỉ xếp lại khi thật có hóa đơn đổi — danh sách chỉ-thâu giữ nguyên thứ tự cũ
+        orders = sorted(orders + doi, key=lambda o: (str(o.get('TrnDate') or ''), str(o.get('TrnTime') or ''),
+                                                    str(o.get('CreatedDate') or '')), reverse=True)
     return orders, live
+
+
+# ─────── HÓA ĐƠN BÁN-ĐỔI DƯ — tiệm chuyển khoản trả khách (GĐ chốt 19/09/2026) ───────
+# Nguồn: nhóm ThauNhom(nghiep_vu='doi') do màn Bán hàng ghi lúc THANH TOÁN + đúng hóa đơn TRN_RT_BUYSELL đó trên KK.
+# Khác phiếu thâu ở 3 điểm, còn lại đi CHUNG bộ luật đối soát bên dưới:
+#   · tiền cần chuyển lấy từ NHÓM (tien_ck) — CardPay trên KK chỉ được ghi SAU khi khớp (phương án a);
+#   · snapshot KHÔNG gồm CardPay/CashPay, vì chính việc ghi CK sau khớp làm hai cột đó đổi;
+#   · CardPay trên KK phải là 0 hoặc đúng số của một liên kết từng có, lạ hơn thì "Cần kiểm tra".
+DOI_COT = ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'SoTien')
+
+
+def catalog_doi(d1, d2):
+    from apps.pmv.client import PmvClient
+
+    start = dt.datetime.combine(dt.date.fromisoformat(d1), dt.time.min)
+    if timezone.is_aware(timezone.now()):
+        start = timezone.make_aware(start)
+    latest = {}
+    for g in ThauNhom.objects.filter(nghiep_vu=ThauNhom.DOI, created_at__gte=start).order_by('-pk'):
+        for t in g.trn_ids or []:
+            latest.setdefault(t, g)
+    if not latest:
+        return []           # chưa có hóa đơn đổi nào có nhóm CK → không tốn thêm lượt đọc máy KK
+    c = PmvClient('kk', tag='ck_doi')
+    ids, rows = sorted(latest), []
+    for i in range(0, len(ids), 500):
+        lo = ids[i:i+500]
+        rows += c.query(
+            "SELECT b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.Status, b.IsDel, b.PayAmount AS SoTien, "
+            "ISNULL(b.CardPay,0) AS CardPay, b.CreatedDate, b.CustID, ISNULL(c.CustName,'') AS CustName, "
+            "ISNULL(c.Phone,'') AS Phone, ISNULL(c.CMND,'') AS CMND, ISNULL(e.EmpName,'') AS EmpName "
+            "FROM TRN_RT_BUYSELL b WITH (NOLOCK) LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID "
+            "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
+            f"WHERE b.TrnID IN ({','.join('?' * len(lo))}) "
+            "AND b.TrnDate >= CAST(? AS datetime) AND b.TrnDate < DATEADD(day,1,CAST(? AS datetime))",
+            (*lo, d1, d2))
+    orders = []
+    for r in rows:
+        group = latest[r['TrnID']]
+        ids = [r['TrnID']]
+        required, pay = M.dec(group.tien_ck), M.dec(r['SoTien'])
+        if pay >= 0 and not required:
+            continue        # khách trả dương, nhóm chỉ giữ ảnh vàng đổi — không phải tiệm trả khách
+        problems = []
+        if r['Status'] != 'C' or str(r['IsDel']) != '0':
+            problems.append('Phiếu chưa chốt hoặc đã hủy.')
+        if required and pay >= 0:
+            problems.append('Hóa đơn không còn là tiệm trả khách.')
+        elif required > -pay:
+            problems.append('Tiền CK lớn hơn số tiệm trả khách.')
+        receiver = {k: getattr(group, k, '') for k in ('ck_bank', 'ck_stk', 'ck_ten', 'ck_nd')}
+        snapshot = {'ids': ids, 'receiver': receiver, 'required': str(required), 'nghiep_vu': ThauNhom.DOI,
+                    'bills': serial([{k: r.get(k) for k in DOI_COT}])}
+        member = dict(r, loai='BAN_DOI')
+        row = dict(member, members=[member], thau_lines=[], SoTien=abs(pay), tien_ck=required, group_size=1,
+                   partial_group=False, mixed_status=False, nghiep_vu=ThauNhom.DOI,
+                   cust_id=r.get('CustID') or group.cust_id, kk_ck=-M.dec(r['CardPay']))
+        row.update(order_key=key(ids), ids=ids, required=required, snapshot=snapshot, problems=problems,
+                   live=True, bank=group)
+        orders.append(row)
+    return orders
+
+
+def tranh_chap(order, item, claimants):
+    """Giao dịch ngân hàng này có bị nhóm KHÁC nhận cùng không (GĐ chốt 19/09/2026 — đối soát kèm LOẠI nghiệp vụ).
+
+    Nội dung chỉ mang 4 số cuối mã phiếu, nên phiếu thâu và hóa đơn đổi có thể trùng đuôi. Nhóm khác CÙNG loại
+    luôn tính là tranh chấp (y hệt luật cũ: hai phiếu thâu cùng đuôi → không tự nối). Nhóm khác LOẠI chỉ tính khi
+    số tiền của nó cũng khớp giao dịch — lệch tiền thì chắc chắn không phải của nó.
+    """
+    tien = M.dec(item['trans_amount'])
+    return any(ok != order['order_key'] and (nv == order.get('nghiep_vu') or can == tien)
+               for nv, can, ok in claimants.get(item['id'], []))
 
 
 # Nội dung chuyển khoản CHUẨN (GĐ chốt 10/09/2026): "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" — phiếu
@@ -174,6 +252,7 @@ def inspect(d1, d2):
     legacy = {s.notification_id: s.trn_id for s in BankReconcileState.objects.filter(trn_id__isnull=False)}
     refs = Counter((b['provider'], b['bank_number'], b['ref_code']) for b in banks if b['ref_code'])
     claims = Counter()
+    claimants = {}      # bank id → [(nghiệp vụ, tiền cần CK, order_key)] — xét tranh chấp theo LOẠI (19/09/2026)
     for order in orders:
         candidates = []
         for bank in banks:
@@ -192,6 +271,7 @@ def inspect(d1, d2):
             item = dict(bank, exact=bool(exact), conflict=bool(foreign or (bank['ref_code'] and refs[ref] > 1)))
             candidates.append(item)
             claims[bank['id']] += 1
+            claimants.setdefault(bank['id'], []).append((order.get('nghiep_vu'), order['required'], order['order_key']))
         order['candidates'] = candidates
     for order in orders:
         related = [l for l in history if set(l.trn_ids) & set(order['ids'])]
@@ -206,6 +286,9 @@ def inspect(d1, d2):
                 problems.append('Giao dịch ngân hàng đã thay đổi hoặc không còn hợp lệ.')
             if bank and bank.get('ref_code') and refs[(bank['provider'], bank['bank_number'], bank['ref_code'])] > 1:
                 problems.append('Mã giao dịch ngân hàng bị trùng sau khi liên kết.')
+        if order.get('nghiep_vu') == ThauNhom.DOI and order['kk_ck'] not in (
+                {Decimal(0), paid} | {Decimal(l.amount) for l in related}):
+            problems.append('CK trên KK khác số đã đối soát — cần kiểm tra.')
         if order['required'] == 0 and not active:
             status = 'review' if problems and any('CK' in p for p in problems) else 'na'
         elif problems:
@@ -220,7 +303,7 @@ def inspect(d1, d2):
         else:
             status = 'review' if order['candidates'] else 'unconfirmed'
         for item in order['candidates']:
-            item['ambiguous'] = claims[item['id']] > 1
+            item['ambiguous'] = tranh_chap(order, item, claimants)   # chỉ-thâu: y hệt claims > 1 như trước
             item['can_link'] = not problems and not active and not item['conflict'] and M.dec(item['trans_amount']) == order['required']
             item['token'] = signing.dumps({'snapshot': order['snapshot'], 'bank': evidence(item)}, salt='thau-payment')
         order.update(payment_status=status, payment_label=LABELS[status], paid=paid,
@@ -245,6 +328,23 @@ def create_link(order, bank, user=None, reason='', mode='auto'):
             notification_id=bank['id'], active_notification_id=bank['id'], amount=bank['trans_amount'],
             snapshot=order['snapshot'], bank_snapshot=evidence(bank), mode=mode,
             user=user, username=getattr(user, 'username', '') if user else 'system', reason=reason)
+
+
+def ghi_kk_sau(d1, d2, ids):
+    """Sau khi nối / gỡ tay: nhóm là hóa đơn BÁN-ĐỔI thì ghi ngay CardPay lên KK theo tổng liên kết còn hiệu lực.
+    Phiếu thâu (CardPay đã ghi lúc THANH TOÁN) không đụng gì. Lỗi không làm hỏng thao tác vừa xong — job 5 phút
+    doi_soat_ck sẽ ghi lại. Trả câu nối thêm vào thông báo."""
+    from . import ck_tra_khach as CK
+    if not CK.nhom_doi((list(ids) or [''])[0]):
+        return ''
+    try:
+        orders, live = inspect(d1, d2)
+        xong, loi = CK.dong_bo_ck_kk(orders, chi_ids=ids) if live else (0, ['không đọc được máy KK'])
+    except Exception as exc:
+        xong, loi = 0, [str(exc)]
+    if loi:
+        return ' ⚠ Chưa ghi được CK lên máy KK — lượt chạy ngầm sẽ thử lại.'
+    return ' Đã cập nhật CK trên máy KK.' if xong else ''
 
 
 @require_POST
@@ -287,7 +387,8 @@ def action(request):
                     link.revoked_by = request.user.username
                     link.revoke_reason = reason
                     link.save(update_fields=['active_notification_id', 'revoked_at', 'revoked_by', 'revoke_reason'])
-                return JsonResponse({'changed': 1, 'message': 'Đã gỡ liên kết và lưu lịch sử; không hoàn tiền ngân hàng.'})
+                return JsonResponse({'changed': 1, 'message': 'Đã gỡ liên kết và lưu lịch sử; không hoàn tiền ngân hàng.'
+                                     + ghi_kk_sau(d1, d2, link.trn_ids)})
             orders, live = inspect(d1, d2)
             # Mutations must re-read the live ledger, never confirm against stale history.
             if not live:
@@ -304,7 +405,8 @@ def action(request):
                 if not reason or len(reason) > 500:
                     raise ValueError('Nhập căn cứ xác nhận (tối đa 500 ký tự).')
                 create_link(order, bank, request.user, reason, 'manual')
-                return JsonResponse({'changed': 1, 'message': 'Đã xác nhận liên kết giao dịch ngân hàng.'})
+                return JsonResponse({'changed': 1, 'message': 'Đã xác nhận liên kết giao dịch ngân hàng.'
+                                     + ghi_kk_sau(d1, d2, order['ids'])})
             changed = 0
             for order in orders:
                 matches = [b for b in order['candidates'] if b['can_link'] and not b['ambiguous'] and b['exact'] and b.get('ref_code')]

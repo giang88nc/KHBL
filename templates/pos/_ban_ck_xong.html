@@ -1,0 +1,18 @@
+{% load pos_extras %}{% comment %}
+XÁC NHẬN XONG (GĐ chốt 19/09/2026 tối): CashPay của hóa đơn trên máy KK = 0 và CardPay ≠ 0 — tức phần chuyển khoản đã
+được đối soát ghi đủ. Form chuyển khoản ẩn; chỉ hiện các phiên BẰNG CHỨNG (giao dịch ngân hàng đã khớp) + nút ⟳ đọc lại KK.
+Biến: kk (ck_tra_khach.tien_kk) · bang_chung (ck_tra_khach.bang_chung).
+{% endcomment %}
+<div class="pg-ckinfo pg-ckxong">
+  <div class="pg-ckxong__ttl">✔ ĐÃ XÁC NHẬN XONG
+    <button type="button" class="pg-ck__ico" hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"pay_method": "bank"}' hx-swap="none"
+            title="Đọc lại CashPay · CardPay trên máy KK">⟳</button></div>
+  <div class="pg-ckxong__kk">Máy KK: CashPay <b class="mono">0</b> · CardPay <b class="mono">{{ kk.card|tien_tran }}</b> · đọc lúc {{ kk.luc }}</div>
+  {% if bang_chung %}
+  <ol class="pg-ckin__ds pg-ckxong__ds" title="Các phiên bằng chứng — giao dịch ngân hàng đã khớp">
+    {% for b in bang_chung %}<li class="ok"><span class="mono">{{ b.gio }}</span><b class="mono">{{ b.amount|tien_tran }}</b><i class="mono" title="{{ b.nd }}">{{ b.ref|default:b.tk }}</i><em>✔️</em></li>{% endfor %}
+  </ol>
+  {% else %}
+  <p class="pg-ckxong__trong">Chưa thấy chứng từ ngân hàng trên web — phần CK có thể đã xác nhận trực tiếp trên phần mềm KK.</p>
+  {% endif %}
+</div>

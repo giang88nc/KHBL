@@ -123,7 +123,7 @@ def tu_phieu(phieu, emp=""):
              doi=[_dong(t, r) for t, r in phieu["doi"]])
     if phieu.get("cust_id") and phieu["cust_id"] != "CU0000000000000":
         g["cust"] = {"id": phieu["cust_id"], "name": phieu.get("khach") or "",
-                     "code": "", "phone": "", "diem": "0"}
+                     "code": "", "phone": phieu.get("phone") or "", "diem": "0"}
     return g
 
 
@@ -181,6 +181,10 @@ def tong_cua(g):
     raw = g.get("tien_mat")
     if raw in (None, ""):                       # chưa đặt tay → mặc định theo phương thức
         cash = tra if t["pay_method"] == "cash" else M.D0
+    elif tra < 0:
+        # TIỆM TRẢ KHÁCH (bán-đổi dư, GĐ chốt 19/09/2026 cho CHIA tiền mặt + CK): ô tiền mặt là số tiệm trả bằng
+        # tiền mặt (người bán gõ số dương), phần còn lại chuyển khoản. Cả hai mang dấu ÂM như khach_tra.
+        cash = -min(abs(M.dec(raw)), -tra)
     else:
         cash = min(max(M.dec(raw), M.D0), tra) if tra > 0 else M.D0
     t["tien_mat"] = cash

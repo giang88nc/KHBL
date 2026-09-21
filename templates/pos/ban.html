@@ -1,5 +1,6 @@
-{% extends "base.html" %}{% load pos_extras %}
+{% extends "base.html" %}{% load pos_extras static %}
 {% block title %}Mua bán{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/ban_ck.css' %}">{% endblock %}
 {% block main_mod %} khbl-main--pos{% endblock %}
 
 {% comment %}BỎ dải giá đỉnh (#gia-strip) trên màn bán — GĐ chốt 05/09/2026{% endcomment %}
@@ -170,11 +171,11 @@ document.addEventListener("keydown", function (e) {
   function mInt(s) { return parseInt(String(s || "").replace(/[^\d]/g, ""), 10) || 0; }
   function fmt(n) { return Math.max(n, 0).toLocaleString("vi-VN"); }
   function tra() {
-    // TIỀN KHÁCH TRẢ hiển thị; ÂM (trả lại khách) → 0, không tách. 08/09 chiều: nhận cả dấu "−"/"-" (mInt bỏ dấu → sai)
+    // TIỀN KHÁCH TRẢ hiển thị. 19/09/2026 (GĐ chốt): ÂM = tiệm trả khách, được CHIA tiền mặt + chuyển khoản như
+    // chiều dương → lấy ĐỘ LỚN (hai ô lúc đó là "Tiền mặt tiệm trả" / "Chuyển khoản cho khách", đều số dương).
     var el = document.querySelector(".pg-tong__tra b");
     if (!el) return 0;
-    var t = el.textContent.trim();
-    return (/^[-−–]/.test(t)) ? 0 : mInt(t);
+    return mInt(el.textContent.trim());
   }
   function sync(src) {
     var cash = document.getElementById("o-tienmat"), ck = document.getElementById("o-tienck");
@@ -195,6 +196,40 @@ document.addEventListener("keydown", function (e) {
   }
   document.addEventListener("DOMContentLoaded", ganPay);
   document.addEventListener("htmx:afterSwap", ganPay);
+})();
+</script>
+<script>
+/* ẢNH VÀNG ĐỔI (Hình 1 · Hình 2, GĐ chốt 19/09/2026): chọn / chụp xong → nén trên trình duyệt (≤1280px JPEG 0.8, như
+   Thâu vào) → bắn 'khbl:anh' cho form.pg-doi-hinh tự tải lên làm ẢNH CHỜ. Ô QR khách ở khối CK tự gửi theo 'change'. */
+(function () {
+  function nen(file) {
+    return new Promise(function (ok) {
+      if (!file || !/^image\//.test(file.type) || file.size < 350 * 1024) return ok(file);
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 1280, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        var c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { ok(b ? new File([b], (file.name || "anh").replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file); }, "image/jpeg", 0.8);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); ok(file); };
+      img.src = url;
+    });
+  }
+  document.addEventListener("change", function (e) {
+    var inp = e.target;
+    if (!inp || !inp.matches || !inp.matches("form.pg-doi-hinh input[type=file]")) return;
+    var f = inp.files && inp.files[0];
+    if (!f || inp.dataset.daNen === f.name + f.size) return;
+    var form = inp.closest("form");
+    nen(f).then(function (nf) {
+      try { var dt = new DataTransfer(); dt.items.add(nf); inp.files = dt.files; } catch (_) {}
+      inp._capturedFile = nf; inp.dataset.daNen = nf.name + nf.size;
+      if (window.htmx) htmx.trigger(form, "khbl:anh");
+    });
+  }, true);
 })();
 </script>
 {% endblock %}

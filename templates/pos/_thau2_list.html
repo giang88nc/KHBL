@@ -8,6 +8,8 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 · Cột NỘI DUNG có tick ✓ sau Tên chủ thẻ khi đúng khuôn đối soát, ✕ khi sai (GĐ chốt 11/09/2026).
 · Cột CHUYỂN KHOẢN dòng 2: khớp rồi thì hiện mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK".
 · Mã QR của phiếu khác ngày hôm nay: làm mờ + nhãn HẾT HẠN, không bấm mở.
+· 19/09/2026 (GĐ chốt): danh sách gồm cả hóa đơn BÁN-ĐỔI dư tiệm chuyển khoản trả khách — badge "Đổi" cạnh mã,
+  bộ lọc Nghiệp vụ (Tất cả · Thâu vào · Bán đổi dư); hai tệp xuất cũng theo đúng bộ lọc này.
 {% endcomment %}
 {% load pos_extras %}
 <section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0">
@@ -15,6 +17,7 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 <form class="th2-filter" hx-get="{% url 'pos:thau_vao_2' %}" hx-target="#thau2-list" hx-swap="outerHTML" hx-trigger="change, submit" hx-sync="this:replace">
 <label>Từ ngày<input class="khbl-input" type="date" name="d1" value="{{ d1 }}"></label>
 <label>Đến ngày<input class="khbl-input" type="date" name="d2" value="{{ d2 }}"></label>
+<label>Nghiệp vụ<select class="khbl-select" name="nghiep_vu"><option value="">Tất cả</option>{% for value,label in nghiep_vu_ds %}<option value="{{ value }}" {% if nghiep_vu == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
 <label>Phương thức<select class="khbl-select" name="method"><option value="all" {% if method == 'all' %}selected{% endif %}>Tất cả</option><option value="cash" {% if method == 'cash' %}selected{% endif %}>Tiền mặt</option><option value="bank" {% if method == 'bank' %}selected{% endif %}>Chuyển khoản</option></select></label>
 <label class="th2-customer">Khách hàng<input class="khbl-input" name="khach" value="{{ khach }}" placeholder="Tên · SĐT · CCCD"></label>
 <label>Trạng thái<select class="khbl-select" name="trang_thai"><option value="">Tất cả</option><option value="C" {% if trang_thai == 'C' %}selected{% endif %}>Đã chốt</option><option value="W" {% if trang_thai == 'W' %}selected{% endif %}>Còn chờ</option></select></label>
@@ -23,15 +26,15 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 <a class="khbl-btn khbl-btn--outline" href="{% url 'pos:thau_vao_2' %}">Hôm nay</a>
 </form>
 <div class="th2-xuat">  <a class="khbl-btn khbl-btn--outline" title="Tải danh sách khách trong khoảng ngày đang xem, đúng khuôn nhập nhà cung cấp (Ghi chú = tiền CK theo nghìn đồng)"
-     href="{% url 'pos:thau_vao_2_xuat_ncc' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">⬇ XUẤT EXCEL</a>
+     href="{% url 'pos:thau_vao_2_xuat_ncc' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&nghiep_vu={{ nghiep_vu }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">⬇ XUẤT EXCEL</a>
   <a class="khbl-btn khbl-btn--outline" title="Tải tệp Word ảnh CCCD hai mặt của các khách trên, in ra đúng cỡ thật 85,6 × 53,98 mm"
-     href="{% url 'pos:thau_vao_2_in_cccd' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">🪪 IN CCCD</a>
+     href="{% url 'pos:thau_vao_2_in_cccd' %}?d1={{ d1 }}&d2={{ d2 }}&method={{ method }}&nghiep_vu={{ nghiep_vu }}&khach={{ khach|urlencode }}&trang_thai={{ trang_thai }}&payment_status={{ payment_status }}">🪪 IN CCCD</a>
 </div>
 
 {% if error %}<p class="khbl-alert khbl-alert--do">{{ error }}</p>{% endif %}
 <div class="th2-table"><table class="pg-tb"><thead><tr><th>MÃ PHIẾU</th><th>GIỜ</th><th>KHÁCH</th><th>NỘI DUNG</th><th>HÌNH ẢNH</th><th class="r">TỔNG TIỀN</th><th class="r">CHUYỂN KHOẢN</th><th>TRẠNG THÁI</th><th></th></tr></thead><tbody>
 {% for r in rows %}<tr>
-<td>{% for m in r.members %}<b class="th2-code">{{ m.BillCode|default:m.TrnID }}</b>{% endfor %}{% if r.partial_group %}<small>{{ r.members|length }}/{{ r.group_size }} phiếu trong khoảng ngày</small>{% endif %}</td>
+<td>{% if r.nghiep_vu == 'doi' %}<span class="khbl-badge khbl-badge--cam" title="Hóa đơn bán-đổi dư — tiệm chuyển khoản trả khách">Đổi</span>{% endif %}{% for m in r.members %}<b class="th2-code">{{ m.BillCode|default:m.TrnID }}</b>{% endfor %}{% if r.partial_group %}<small>{{ r.members|length }}/{{ r.group_size }} phiếu trong khoảng ngày</small>{% endif %}</td>
 <td>{{ r.TrnTime|slice:":5" }}{% if d1 != d2 %}<small>{{ r.TrnDate|date:"d/m/Y" }}</small>{% endif %}</td>
 <td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
 <td>{% include 'pos/_thau2_bank.html' %}</td>

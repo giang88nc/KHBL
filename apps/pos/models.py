@@ -5,6 +5,19 @@ from django.conf import settings
 from django.db import models
 
 
+class MobileEmployeeIdentity(models.Model):
+    employee_id = models.PositiveBigIntegerField(unique=True, help_text='ID nhân viên KHJ, không phải EmpID PMV')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    enabled = models.BooleanField(default=True)
+    mobile_only = models.BooleanField(default=True)
+    employee_pmv = models.CharField(max_length=55, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'mobile_employee_identity'
+        verbose_name = 'Liên kết Face ID KHJ'
+
+
 class DepositSubmission(models.Model):
     """Giữ token một lần trước khi gửi lệnh PMV; không tự gửi lại khi mất phản hồi."""
     token = models.CharField(max_length=64, unique=True)
@@ -272,6 +285,16 @@ class ThauNhom(models.Model):
     mỗi dòng = 1 TRN_RT_BUYGOLD, cả nhóm chốt chung CompleteMore 'A@B@'. Bảng này giữ danh sách TrnID của nhóm để mở lại /
     in 1 tờ 110mm + phần app-only KK không giữ (kiểu giá từng dòng, cách thanh toán)."""
 
+    # NGHIỆP VỤ của nhóm (GĐ chốt 19/09/2026): nhóm không còn riêng phiếu thâu mà là "một lần TIỆM CHUYỂN KHOẢN
+    # CHO KHÁCH" — thau = phiếu thâu (trn_ids là TRN_RT_BUYGOLD) · doi = hóa đơn BÁN-ĐỔI dư tiền tiệm trả khách
+    # (trn_ids là 1 TrnID TRN_RT_BUYSELL) · camdo / khac để dành. Đối soát CK đọc cột này để biết mỗi nhóm thuộc
+    # loại nào. ⚠ Không nhầm với cột `kieu` bên dưới — `kieu` là KIỂU GIÁ TỪNG DÒNG thâu, đã có từ trước.
+    THAU, DOI, CAMDO, KHAC = "thau", "doi", "camdo", "khac"
+    NGHIEP_VU = [(THAU, "Thâu vào"), (DOI, "Bán đổi dư"), (CAMDO, "Cầm đồ"), (KHAC, "Khác")]
+    # db_default: cột mang DEFAULT ngay trong MySQL — khoảng giữa migrate và RESET, tiến trình web cũ (chưa biết
+    # cột này) vẫn tạo nhóm thâu được; thiếu nó INSERT sẽ hỏng SAU khi KK đã chốt phiếu.
+    nghiep_vu = models.CharField("Nghiệp vụ", max_length=10, choices=NGHIEP_VU, default=THAU, db_default=THAU,
+                                 db_index=True)
     trn_ids = models.JSONField("Các TrnID TRN_RT_BUYGOLD", default=list)
     bill_codes = models.JSONField("Số phiếu KK", default=list)
     kieu = models.JSONField("Kiểu giá từng dòng (thau/ban)", default=list)
@@ -358,7 +381,114 @@ class MoneyFlow(models.Model):
             models.Index(fields=["service", "business_date"], name="money_flow_svc_day"),
         ]
 
+
+class MoneyFlowPayment(models.Model):
+    """Chỉ dẫn thu/chi GĐ2 gắn với một dòng tiền nguồn.
+
+    Bảng này chỉ lưu lựa chọn phương thức và dữ liệu tạo QR; không ghi ngược
+    chứng từ KHBL/KHCD và cũng không tự coi một QR đã tạo là tiền đã khớp.
+    """
+
+    CASH, BANK = "CASH", "BANK"
+    METHODS = [(CASH, "Tiền mặt"), (BANK, "Chuyển khoản")]
+    READY, CANCELLED, SUCCESS, SUPERSEDED = "ready", "cancelled", "success", "superseded"
+    STATUSES = [(READY, "Sẵn sàng thanh toán"), (CANCELLED, "Đã hủy"), (SUCCESS, "Đã xác minh"), (SUPERSEDED, "Đã thay thế")]
+
+    flow = models.ForeignKey(MoneyFlow, on_delete=models.CASCADE, related_name="payment_instructions", null=True, blank=True)
+    origin = models.CharField(max_length=16, default='business', db_index=True)
+    qr_category = models.CharField(max_length=2, blank=True, default='')
+    standalone_reference = models.CharField(max_length=16, unique=True, null=True, blank=True)
+    note = models.CharField(max_length=500, blank=True, default='')
+    received_before = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    qr_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    active_key = models.CharField(max_length=80, unique=True, null=True, blank=True)
+    method = models.CharField(max_length=8, choices=METHODS)
+    amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    bank_code = models.CharField(max_length=20, blank=True, default="")
+    bank_name = models.CharField(max_length=120, blank=True, default="")
+    bank_account = models.CharField(max_length=40, blank=True, default="")
+    bank_owner = models.CharField(max_length=160, blank=True, default="")
+    transfer_content = models.CharField(max_length=100, blank=True, default="")
+    qr_payload = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=12, choices=STATUSES, default=READY, db_index=True)
+    created_by = models.CharField(max_length=150, blank=True, default="")
+    updated_by = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "money_flow_payment"
+        ordering = ["-updated_at", "-id"]
+
+class MoneyFlowBankReceipt(models.Model):
+    """Immutable evidence, committed atomically with MySQL source allocation."""
+    flow = models.ForeignKey(MoneyFlow, on_delete=models.PROTECT, related_name='bank_receipts', null=True, blank=True)
+    payment = models.ForeignKey(MoneyFlowPayment, on_delete=models.PROTECT, related_name='standalone_receipts', null=True, blank=True)
+    notification_id = models.BigIntegerField(unique=True)
+    bank_identity = models.CharField(max_length=64, unique=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    bill_code = models.CharField(max_length=40, blank=True, default='', db_index=True)
+    direction = models.CharField(max_length=3, default='IN')
+    source_system = models.CharField(max_length=12, blank=True, default='')
+    bank_account = models.CharField(max_length=100, blank=True, default='')
+    bank_ref = models.CharField(max_length=100, blank=True, default='')
+    status = models.CharField(max_length=12, default='applied', db_index=True)
+    evidence = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'money_flow_bank_receipt'
+
+
+class MoneyFlowSourceWrite(models.Model):
+    """Durable intent before MSSQL commit; retry by setting totals, never incrementing."""
+    flow = models.ForeignKey(MoneyFlow, on_delete=models.PROTECT)
+    active_key = models.CharField(max_length=80, unique=True, null=True)
+    status = models.CharField(max_length=12, default='pending', db_index=True)
+    expected = models.JSONField(default=dict)
+    total = models.DecimalField(max_digits=18, decimal_places=3)
+    bank = models.DecimalField(max_digits=18, decimal_places=3)
+    cash = models.DecimalField(max_digits=18, decimal_places=3)
+    error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'money_flow_source_write'
+
+
 from .deposit_models import (DepositEvent, DepositStockHold, DepositMoneyOperation,
                              DepositMessageTemplate, DepositMessage)  # noqa: E402,F401
 from .customer_sync_models import CustomerSyncReceipt  # noqa: E402,F401
 from .customer_bridge_models import CustomerBridgeReceipt  # noqa: E402,F401
+
+
+class DocumentContact(models.Model):
+    source_type = models.CharField(max_length=32)
+    source_id = models.CharField(max_length=100)
+    document_code = models.CharField(max_length=100, blank=True)
+    cust_id = models.CharField(max_length=55, blank=True)
+    customer_name = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'document_contacts'
+        constraints = [models.UniqueConstraint(fields=['source_type', 'source_id'], name='document_contact_source_uniq')]
+
+
+class DocumentContactWrite(models.Model):
+    """Durable intent across MySQL/MSSQL; never replay a financial procedure."""
+    token = models.CharField(max_length=64, unique=True)
+    source_type = models.CharField(max_length=32)
+    source_id = models.CharField(max_length=100, blank=True)
+    target = models.CharField(max_length=32)
+    snapshot = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'document_contact_writes'

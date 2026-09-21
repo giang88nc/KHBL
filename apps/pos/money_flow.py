@@ -6,8 +6,7 @@ idempotent; chạy lại chỉ cập nhật dòng cùng khóa nguồn.
 import datetime as dt
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
-from django.db.models import Q
+from django.db import connection
 from django.utils import timezone
 
 from .models import GoldBill, MoneyFlow, ThauNhom, ThauPaymentLink
@@ -19,6 +18,12 @@ SERVICES = {
     "DEPOSIT": "Đặt hàng / cọc",
     "PAWN": "Cầm đồ",
     "REDEEM": "Chuộc đồ",
+}
+
+KHCD_OPERATIONS = {
+    0: "Hủy phiên", 1: "Cầm mới", 2: "Cầm thêm", 3: "Trả bớt",
+    4: "Gia hạn", 5: "Chuộc đồ", 6: "Thanh lý", 7: "Báo mất",
+    8: "Mở khóa báo mất",
 }
 
 
@@ -49,7 +54,7 @@ def payment_state(source_status, is_void, bank, bank_matched=Decimal(0), explici
 def _upsert(*, service, source_type, source_id, direction, amount, cash, bank,
             business_date, source_status, is_void=False, bill_code="", trn_ids=None,
             group_id="", customer_id="", customer_name="", snapshot=None,
-            payment_status=None):
+            payment_status=None, source_system="KHBL"):
     amount, cash, bank = abs(dec(amount)), abs(dec(cash)), abs(dec(bank))
     defaults = {
         "direction": direction, "source_group_id": str(group_id or ""),
@@ -60,17 +65,37 @@ def _upsert(*, service, source_type, source_id, direction, amount, cash, bank,
         "payment_status": payment_status or payment_state(source_status, is_void, bank),
         "is_void": bool(is_void), "source_snapshot": snapshot or {},
     }
+    # A later projection refresh must not replace verified exact-VND amounts
+    # with planned/rounded cache allocations.
+    if direction==MoneyFlow.IN:
+        from django.db.models import Sum
+        from .models import MoneyFlowBankReceipt
+        verified=MoneyFlowBankReceipt.objects.filter(flow__source_system=source_system,
+            flow__source_type=source_type,flow__source_id=str(source_id),status='applied').aggregate(n=Sum('amount'))['n']
+        if verified is not None:
+            if verified<=amount:
+                defaults.update(bank_amount=verified,cash_amount=amount-verified,
+                    payment_status=MoneyFlow.VOID if is_void else MoneyFlow.CONFIRMED if verified==amount else MoneyFlow.PARTIAL)
+            else:defaults['payment_status']=MoneyFlow.REVIEW
+    # Metadata is populated by the source projector, not the legacy bill cache.
+    existing = MoneyFlow.objects.filter(source_system=source_system,service=service,
+        source_type=source_type,source_id=str(source_id),flow_role='settlement').first()
+    if existing and 'mobile' in (existing.source_snapshot or {}) and 'mobile' not in defaults['source_snapshot']:
+        defaults['source_snapshot']['mobile'] = existing.source_snapshot['mobile']
+        defaults['customer_id'], defaults['customer_name'] = existing.customer_id, existing.customer_name
     return MoneyFlow.objects.update_or_create(
-        source_system="KHBL", service=service, source_type=source_type,
+        source_system=source_system, service=service, source_type=source_type,
         source_id=str(source_id), flow_role="settlement", defaults=defaults)
 
 
-def sync_gold_bills(d1=None, d2=None):
+def sync_gold_bills(d1=None, d2=None, trn_ids=None):
     qs = GoldBill.all_objects.all().order_by("id")
     if d1:
         qs = qs.filter(trn_date__gte=d1)
     if d2:
         qs = qs.filter(trn_date__lte=d2)
+    if trn_ids:     # 19/09/2026: chiếu lại ĐÚNG hóa đơn vừa chốt (TẠO QR màn Bán hàng) — job 2 phút không truyền, y cũ
+        qs = qs.filter(trn_id__in=list(trn_ids))
     # Các TBG có nhóm do sync_thau_groups sở hữu; chỉ giữ TBG cũ không có nhóm.
     grouped = set(t for ids in ThauNhom.objects.values_list("trn_ids", flat=True) for t in (ids or []))
     count = 0
@@ -81,13 +106,13 @@ def sync_gold_bills(d1=None, d2=None):
             amount = cash + bank
             if amount <= 0:
                 MoneyFlow.objects.filter(source_system="KHBL", service="DEPOSIT",
-                    source_type="gold_bill_deposit", source_id=bill.trn_id).delete()
+                    source_type="gold_bill_deposit", source_id=bill.trn_id).update(is_void=True,payment_status=MoneyFlow.VOID)
                 continue
             explicit = {"matched": MoneyFlow.CONFIRMED, "partial": MoneyFlow.PARTIAL,
                         "review": MoneyFlow.REVIEW}.get(plan.get("bank_status"), "")
             _upsert(service="DEPOSIT", source_type="gold_bill_deposit", source_id=bill.trn_id,
                     direction=MoneyFlow.IN, amount=amount, cash=cash, bank=bank,
-                    business_date=bill.trn_date, source_status=bill.status, is_void=bill.is_del,
+                    business_date=bill.trn_date, source_status=bill.status, is_void=bill.is_del or bill.fulfilment=='cancelled' or bill.status=='D',
                     bill_code=bill.bill_code, trn_ids=[bill.trn_id], customer_id=bill.cust_id,
                     customer_name=bill.cust_name, payment_status=payment_state(
                         bill.status, bill.is_del, abs(bank), explicit=explicit),
@@ -103,7 +128,7 @@ def sync_gold_bills(d1=None, d2=None):
         else:
             if dec(bill.tong) == 0:
                 MoneyFlow.objects.filter(source_system="KHBL", service="RETAIL",
-                    source_type="gold_bill_retail", source_id=bill.trn_id).delete()
+                    source_type="gold_bill_retail", source_id=bill.trn_id).update(is_void=True,payment_status=MoneyFlow.VOID)
                 continue
             direction = MoneyFlow.OUT if dec(bill.tong) < 0 else MoneyFlow.IN
             _upsert(service="RETAIL", source_type="gold_bill_retail", source_id=bill.trn_id,
@@ -117,7 +142,9 @@ def sync_gold_bills(d1=None, d2=None):
 
 
 def sync_thau_groups(d1=None, d2=None):
-    qs = ThauNhom.objects.all().order_by("id")
+    # Chỉ nhóm PHIẾU THÂU. Nhóm bán-đổi dư (nghiep_vu='doi', 19/09/2026) là chính hóa đơn bán đã có dòng RETAIL
+    # từ gold_bill — chiếu thêm ở đây thành GOLD_BUY sẽ đếm tiền trả khách hai lần.
+    qs = ThauNhom.objects.filter(nghiep_vu=ThauNhom.THAU).order_by("id")
     # MySQL của tiệm từng trả rỗng với created_at__date; lọc bằng nửa khoảng.
     if d1:
         start = dt.datetime.combine(d1, dt.time.min)
@@ -160,12 +187,138 @@ def sync_thau_groups(d1=None, d2=None):
                 customer_id=group.cust_id, customer_name=group.cust_name,
                 payment_status=payment_state(source_status, is_void, bank, matched),
                 snapshot={"matched_bank": str(matched), "pay_method": group.pay_method,
-                          "gold_bill_active": len(active), "status_basis": "latest_group"})
+                          "gold_bill_active": len(active), "status_basis": "latest_group",
+                          "bank_code": group.ck_bank or "", "bank_account": group.ck_stk or "",
+                          "bank_owner": group.ck_ten or "", "transfer_content": group.ck_nd or ""})
         count += 1
     return count
 
 
-@transaction.atomic
+def _khcd_rows(d1=None, d2=None):
+    """Chỉ SELECT schema KHCD; mỗi dòng là một payment của một phiên."""
+    where, params = [], []
+    if d1:
+        where.append("l.happened_at >= %s")
+        params.append(d1.isoformat())
+    if d2:
+        where.append("l.happened_at < %s")
+        params.append((d2 + dt.timedelta(days=1)).isoformat())
+    clause = " WHERE " + " AND ".join(where) if where else ""
+    sql = """
+        SELECT l.id log_id,l.loan_id,l.operation_id,l.happened_at,l.request_key,l.note,l.employee_id,l.actor_legacy,
+               l.principal_change,l.interest,l.extra_amount,l.discount_amount,l.reverses_log_id,
+               n.sku,n.cust_id,n.phone,n.loan_state,n.version,n.customer_snapshot,
+               p.id payment_id,p.channel,p.direction,p.amount,p.cashPay,p.cardPay,p.payment_ref,p.reconciliation_state,p.bank_snapshot
+        FROM khj_cd.cd_loan_logs l
+        JOIN khj_cd.cd_loans n ON n.id=l.loan_id
+        JOIN khj_cd.cd_payments p ON p.log_id=l.id
+    """ + clause + " ORDER BY l.id,p.id"
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        names = [c[0] for c in cur.description]
+        return [dict(zip(names, row)) for row in cur.fetchall()]
+
+
+def _json(value):
+    import json
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(value or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def sync_khcd(d1=None, d2=None):
+    """Chiếu phiên tiền KHCD vào money_flow; không ghi bất kỳ bảng KHCD nào."""
+    raw = _khcd_rows(d1, d2)
+    from . import services
+    try:
+        staff_names = {str(e['EmpID']).strip(): e['EmpName'] for e in services.nhan_vien_ban()}
+    except Exception:
+        staff_names = {}
+    sessions = {}
+    for row in raw:
+        sessions.setdefault(row["log_id"], {"head": row, "payments": []})["payments"].append(row)
+    seen = set()
+    for log_id, data in sessions.items():
+        head, payments = data["head"], data["payments"]
+        directions = {p["direction"] for p in payments}
+        direction = next(iter(directions)) if len(directions) == 1 else MoneyFlow.IN
+        cash = sum((dec(p.get('cashPay')) if p.get('cashPay') is not None else
+                    dec(p['amount']) if p['channel'] == 'CASH' else Decimal(0) for p in payments), Decimal(0))
+        bank = sum((dec(p.get('cardPay')) if p.get('cardPay') is not None else
+                    dec(p['amount']) if p['channel'] == 'BANK' else Decimal(0) for p in payments), Decimal(0))
+        total = sum((dec(p['amount']) for p in payments), Decimal(0))
+        states = {str(p["reconciliation_state"] or "").upper() for p in payments}
+        operation = int(head["operation_id"])
+        is_void = operation == 0 or bool(states) and states <= {"REVERSED", "VOID"}
+        if is_void:
+            payment_status = MoneyFlow.VOID
+        elif len(directions) != 1 or cash + bank != total:
+            payment_status = MoneyFlow.REVIEW
+        elif bank and states & {"MATCHED", "CONFIRMED", "RECONCILED"}:
+            payment_status = MoneyFlow.CONFIRMED
+        elif bank and 'PARTIAL' in states:
+            payment_status = MoneyFlow.PARTIAL
+        elif bank:
+            payment_status = MoneyFlow.WAITING
+        else:
+            payment_status = MoneyFlow.RECORDED
+        customer = _json(head["customer_snapshot"])
+        bank_snapshots = [_json(p.get("bank_snapshot")) for p in payments]
+        bank_snapshot = next((item for item in bank_snapshots if item), {})
+        customer_name = (customer.get("name") or customer.get("CustName") or
+                         customer.get("customer_name") or "")
+        service = "PAWN" if direction == MoneyFlow.OUT else "REDEEM"
+        from .payment_reference import pawn_reference
+        ref=pawn_reference(head['happened_at'],head['loan_id'],log_id)
+        _upsert(source_system="KHCD", service=service, source_type="cd_loan_log",
+                source_id=log_id, group_id=head["loan_id"], direction=direction,
+                amount=total, cash=cash, bank=bank,
+                business_date=head["happened_at"].date(), source_status=KHCD_OPERATIONS.get(operation, str(operation)),
+                is_void=is_void, bill_code=ref if direction==MoneyFlow.IN else head["sku"], trn_ids=[], customer_id=head["cust_id"],
+                customer_name=customer_name, payment_status=payment_status,
+                snapshot={"mobile": {"happened_at":head['happened_at'].isoformat(),
+                          "employee_pmv":str(head.get('employee_id') or '').strip(),
+                          "employee_name":staff_names.get(str(head.get('employee_id') or '').strip(),''),
+                          "phone":head['phone'],"basis":"cd_loan_logs"},
+                          "operation_id": operation, "operation": KHCD_OPERATIONS.get(operation, str(operation)),
+                          "loan_state": head["loan_state"], "loan_version": head["version"],
+                          "payment_ids": [p["payment_id"] for p in payments],
+                          "receipt_sku": head['sku'],
+                          "payment_ref": next((p.get('payment_ref') for p in payments if p.get('payment_ref')), ''),
+                          "reconciliation_states": sorted(states), "phone": head["phone"],
+                          "bank_snapshot": bank_snapshot})
+        seen.add(str(log_id))
+    # Phiên có thể bị xóa trong cửa sổ hoàn tác 5 phút. Giữ dấu vết
+    # money_flow nhưng loại khỏi tổng, không để dòng mồ côi tiếp tục có hiệu lực.
+    stale = MoneyFlow.objects.filter(source_system="KHCD", source_type="cd_loan_log")
+    if d1:
+        stale = stale.filter(business_date__gte=d1)
+    if d2:
+        stale = stale.filter(business_date__lte=d2)
+    stale = stale.exclude(source_id__in=seen)
+    for flow in stale:
+        flow.is_void = True
+        flow.source_status = "Nguồn đã hoàn tác"
+        flow.payment_status = MoneyFlow.VOID
+        flow.source_snapshot = {**(flow.source_snapshot or {}), "missing_from_source": True}
+        flow.save(update_fields=["is_void", "source_status", "payment_status", "source_snapshot", "synced_at"])
+    return len(sessions)
+
+
 def sync(d1=None, d2=None):
     """Cập nhật sổ phụ từ nguồn có sẵn; tuyệt đối không ghi nguồn."""
-    return {"gold_bill": sync_gold_bills(d1, d2), "thau_nhom": sync_thau_groups(d1, d2)}
+    result = {"gold_bill": sync_gold_bills(d1, d2), "thau_nhom": sync_thau_groups(d1, d2)}
+    try:
+        result["khcd"] = sync_khcd(d1, d2)
+    except Exception as exc:
+        # Trang quản lý vẫn phải xem được bản sync cuối khi KHCD tạm dừng.
+        import logging
+        logging.getLogger(__name__).exception("Không đồng bộ được money_flow từ KHCD")
+        result["khcd_error"] = str(exc)[:240]
+    from .mobile_projection import refresh
+    result['mobile_metadata'] = refresh(d1, d2)
+    return result

@@ -66,11 +66,15 @@ def khach_trong_ds(request):
         method = "bank"
     tim, trang_thai = request.GET.get("khach", "").strip(), request.GET.get("trang_thai", "")
     tt_ck = request.GET.get("payment_status", "")
+    from .thau_list import loc_nghiep_vu
+    nghiep_vu = loc_nghiep_vu(request)      # 19/09/2026: gồm cả hóa đơn bán-đổi tiệm trả khách (GĐ chốt)
 
     chon = []
     for o in orders:
         cach = "bank" if o["required"] > 0 else "cash"
         if method != "all" and cach != method:
+            continue
+        if nghiep_vu and o.get("nghiep_vu") != nghiep_vu:
             continue
         if tt_ck and o.get("payment_status") != tt_ck:
             continue
@@ -94,7 +98,8 @@ def khach_trong_ds(request):
 
     gom = {}
     for o in chon:
-        cust = next((ma_kh.get(t) for t in o["ids"] if ma_kh.get(t)), "")
+        # hóa đơn bán-đổi không nằm trong TRN_RT_BUYGOLD → mã khách đã có sẵn trên dòng (cust_id, 19/09/2026)
+        cust = next((ma_kh.get(t) for t in o["ids"] if ma_kh.get(t)), "") or o.get("cust_id") or ""
         m0 = o["members"][0]
         khoa = cust or ("ten:" + str(m0.get("CustName") or ""))
         g = gom.setdefault(khoa, {"cust_id": cust, "ten": (m0.get("CustName") or "").strip(),

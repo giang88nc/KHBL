@@ -67,3 +67,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(
                 f"Đối soát {d1:%d/%m}–{d2:%d/%m}: {xong} nhóm{' (chỉ thử)' if o['thu'] else ' vừa xác nhận'}, "
                 f"{cho} nhóm còn chờ người kiểm."))
+            # HÓA ĐƠN BÁN-ĐỔI dư (GĐ chốt 19/09/2026, phương án a): CardPay trên KK = tổng liên kết còn hiệu lực.
+            # Chạy mọi lượt (không chỉ khi vừa nối) nên cũng tự bù lượt ghi hỏng trước đó và nhóm vừa gỡ liên kết.
+            # Không có hóa đơn đổi nào thì bỏ qua — lượt chỉ-thâu không đọc thêm máy KK.
+            if not o["thu"] and any(od.get("nghiep_vu") == "doi" for od in orders):
+                from apps.pos import ck_tra_khach as CK
+                orders2, live2 = TP.inspect(d1.isoformat(), d2.isoformat())
+                if live2:
+                    ghi, loi = CK.dong_bo_ck_kk(orders2)
+                    if ghi or loi:
+                        self.stdout.write(f"  CK trả khách lên KK: {ghi} hóa đơn vừa ghi"
+                                          + (f", {len(loi)} lỗi: {'; '.join(loi)}" if loi else ""))
