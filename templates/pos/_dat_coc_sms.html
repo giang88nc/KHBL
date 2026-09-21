@@ -1,0 +1,97 @@
+{% extends 'partials/modal_shell.html' %}{% load static pos_extras %}{% comment %}
+📱 GỬI SMS · PHIẾU ĐẶT CỌC (GĐ chốt 19/09/2026 · lịch nhắc + Xem/XÓA 20/09/2026) — popup 90% màn hình, thân 2 cột:
+  DS CHỌN (trái)  — phiếu tiến độ Hàng sẵn sàng TỚI HẠN một mức nhắc (mặc định) → tick → giờ gửi → TẠO SMS.
+                    Mức: Thông báo sẵn sàng (ngay) · Nhắc 1/2/3 khi quá hẹn ≥ 10/20/30 ngày · vừa có tin thì ẩn 10 ngày.
+                    Lọc "Tất cả" hiện cả phiếu chưa tới hạn kèm LÝ DO.
+  DS CHỜ (phải)   — tin nguồn khbl_deposit → Xem (thẻ tin đúng biến thật) · XÓA (xóa hẳn → phiếu trở lại DS CHỌN).
+Mọi thao tác trả lại NGUYÊN popup; htmx chỉ lấy #dcsms (hx-select). Hai form lọc luôn được kèm (hx-include).
+Thẻ Xem/MẪU nạp vào khung #dcsms-xem (outerHTML) từ _dat_coc_sms_the.html. Giờ hiển thị: giờ VN.
+Không gọi mạng: tin chỉ nằm ở DS CHỜ. Logic: apps/pos/deposit_sms.py.
+{% endcomment %}
+{% block modal_title %}📱 GỬI SMS · Thông báo hàng sẵn sàng{% endblock %}
+{% block modal_style %}width:90vw;max-width:90vw;height:90vh;max-height:90vh{% endblock %}
+{% block modal_body %}<link rel="stylesheet" href="{% static 'css/dat_coc_sms.css' %}">
+<div id="dcsms" class="dcsms">
+  <div class="dcsms__mau">
+    <span>Mẫu ZNS <b class="mono">635720</b>{% if mau %} · {{ mau.template_name }} · Zalo: <b>{{ mau.status }}</b>{% if not mau.gui_duoc %} <i class="dcsms__warn">— mẫu CHƯA được duyệt/bật: tin chỉ nằm ở DS CHỜ, chưa tới khách</i>{% endif %}{% else %} <i class="dcsms__warn">— chưa có trong zalo_templates</i>{% endif %}</span>
+    <span>Lịch: {% for k, ng, n in mucs %}<b>{{ n }}</b>{% if ng %} (quá hẹn ≥ {{ ng }} ngày){% else %} (ngay khi sẵn sàng){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %} · vừa nhắc ẩn {{ an_ngay }} ngày · gửi {{ gio_tu }}:00–{{ gio_den }}:00
+      <button type="button" class="dc-btn dcsms__mau-nut" hx-get="{% url 'pos:dat_coc_sms_mau' %}" hx-target="#dcsms-xem" hx-swap="outerHTML">📄 MẪU SMS</button></span>
+  </div>
+  <div id="dcsms-xem" class="dcsms__xem" hidden></div>
+  {% if not cho_ghi.0 %}<div class="dc-alert" role="alert">{{ cho_ghi.1 }}</div>{% endif %}
+  {% if tin_bao %}<div class="dcsms__ok" role="status">{{ tin_bao }}</div>{% endif %}
+  {% if loi %}<div class="dc-alert" role="alert">{{ loi }}</div>{% endif %}
+
+  <div class="dcsms__cot2">
+    <section class="dcsms__cot">
+      <header class="dcsms__head"><h3>DS CHỌN <small>{{ ung_vien|length }} phiếu</small></h3></header>
+      <form id="dcsms-loc" class="dcsms__loc" hx-get="{% url 'pos:dat_coc_sms' %}" hx-target="#dcsms" hx-select="#dcsms" hx-swap="outerHTML"
+            hx-include="#dcsms-loc2" hx-trigger="change, submit">
+        <label>Tiến độ<select class="khbl-select" name="tt">{% for v, n in trang_thai_phieu %}<option value="{{ v }}" {% if p.tt == v %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+        <label>Ngày đặt từ<input class="khbl-input" type="date" name="d1" value="{{ p.d1 }}"></label>
+        <label>đến<input class="khbl-input" type="date" name="d2" value="{{ p.d2 }}"></label>
+        <label>Lịch nhắc<select class="khbl-select" name="tin"><option value="can" {% if p.tin == 'can' %}selected{% endif %}>Tới hạn cần gửi</option><option value="" {% if p.tin != 'can' %}selected{% endif %}>Tất cả (kèm lý do)</option></select></label>
+        <label class="dcsms__tim">Tìm<input class="khbl-input" name="q" value="{{ p.q }}" placeholder="Mã phiếu · tên · SĐT"></label>
+      </form>
+      <form id="dcsms-tao" class="dcsms__bang" hx-post="{% url 'pos:dat_coc_sms_tao' %}" hx-target="#dcsms" hx-select="#dcsms" hx-swap="outerHTML"
+            hx-include="#dcsms-loc,#dcsms-loc2" hx-disabled-elt="find button[type=submit]">
+        {% csrf_token %}
+        <div class="dcsms__cuon"><table class="pg-tb">
+          <thead><tr><th class="w-x"><input type="checkbox" data-dcsms-all title="Chọn tất cả phiếu chọn được"></th><th>MÃ PHIẾU</th><th>NGÀY ĐẶT</th><th>KHÁCH</th><th>SĐT</th><th>HẸN</th><th class="r">QUÁ HẸN</th><th>MỨC SẼ GỬI</th><th>TIN GẦN NHẤT</th></tr></thead>
+          <tbody>{% for r in ung_vien %}<tr class="{% if not r.chon_duoc %}dcsms__khong{% endif %}" {% if r.ly_do %}title="{{ r.ly_do }}"{% endif %}>
+            <td class="w-x"><input type="checkbox" name="trn" value="{{ r.trn }}" data-dcsms-o {% if not r.chon_duoc or not can_edit %}disabled{% endif %}></td>
+            <td class="mono">{{ r.ma }}</td><td>{{ r.ngay|date:"d/m/Y" }}</td><td>{{ r.khach }}</td>
+            <td class="mono">{% if r.sdt_ok %}{{ r.sdt }}{% else %}<span class="dcsms__warn" title="Không có SĐT di động hợp lệ">{{ r.sdt|default:"— không SĐT" }}</span>{% endif %}</td>
+            <td>{{ r.hen|date:"d/m" }}</td>
+            <td class="r mono">{% if r.qua_han is not None and r.qua_han > 0 %}<span class="dcsms__qua">{{ r.qua_han }} ngày</span>{% elif r.qua_han is not None %}—{% endif %}</td>
+            <td>{% if r.muc %}<span class="dcsms__muc dcsms__muc--{{ r.muc }}">{{ r.nhan_muc }}</span>{% else %}<small class="dcsms__lydo">{{ r.ly_do }}</small>{% endif %}</td>
+            <td>{% if r.tin %}<span class="dcsms__tin">{{ r.tin }}</span>{% endif %}</td>
+          </tr>{% empty %}<tr><td colspan="9" class="pg-tb__trong">Không có phiếu tới hạn nhắc theo bộ lọc.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <footer class="dcsms__chan">
+          <label>Giờ gửi (giờ VN)<input class="khbl-input" type="datetime-local" name="gio" value="{{ gio_mac_dinh }}"></label>
+          <button class="dc-btn dc-btn--primary" type="submit" {% if not can_edit or not cho_ghi.0 %}disabled{% endif %}>➕ TẠO SMS (<span data-dcsms-dem>0</span>)</button>
+        </footer>
+      </form>
+    </section>
+
+    <section class="dcsms__cot">
+      <header class="dcsms__head"><h3>DS CHỜ <small>{{ ds_cho|length }} tin</small></h3></header>
+      <form id="dcsms-loc2" class="dcsms__loc" hx-get="{% url 'pos:dat_coc_sms' %}" hx-target="#dcsms" hx-select="#dcsms" hx-swap="outerHTML"
+            hx-include="#dcsms-loc" hx-trigger="change, submit">
+        <label>Trạng thái tin<select class="khbl-select" name="ctt">
+          <option value="cho" {% if p.ctt == 'cho' %}selected{% endif %}>Chờ gửi</option><option value="gui" {% if p.ctt == 'gui' %}selected{% endif %}>Đã gửi</option>
+          <option value="loi" {% if p.ctt == 'loi' %}selected{% endif %}>Lỗi</option><option value="huy" {% if p.ctt == 'huy' %}selected{% endif %}>Đã hủy</option>
+          <option value="" {% if p.ctt == '' %}selected{% endif %}>Tất cả</option></select></label>
+        <label class="dcsms__tim">Tìm<input class="khbl-input" name="cq" value="{{ p.cq }}" placeholder="Mã phiếu · tên · SĐT"></label>
+      </form>
+      <div class="dcsms__cuon"><table class="pg-tb">
+        <thead><tr><th>GIỜ HẸN</th><th>MÃ PHIẾU</th><th>KHÁCH</th><th>SĐT</th><th>MỨC</th><th>TRẠNG THÁI</th><th class="dcsms__nut-cot"></th></tr></thead>
+        <tbody>{% for m in ds_cho %}<tr>
+          <td class="mono">{{ m.gio|date:"d/m H:i" }}</td><td class="mono">{{ m.ma }}</td><td>{{ m.khach }}</td><td class="mono">{{ m.sdt }}</td>
+          <td>{{ m.muc }}</td>
+          <td><span class="dcsms__tin dcsms__tin--{{ m.status }}" title="{{ m.ly_do }}">{{ m.nhan }}</span></td>
+          <td class="dcsms__nut-cot"><button type="button" class="dc-btn dcsms__nut" hx-get="{% url 'pos:dat_coc_sms_xem' m.id %}" hx-target="#dcsms-xem" hx-swap="outerHTML" title="Xem nội dung sẽ gửi">Xem</button>{% if m.xoa_duoc and can_edit %}<button type="button" class="dc-btn dcsms__nut dcsms__nut--xoa" hx-post="{% url 'pos:dat_coc_sms_xoa' m.id %}" hx-target="#dcsms" hx-select="#dcsms" hx-swap="outerHTML"
+                  hx-include="#dcsms-loc,#dcsms-loc2,#dcsms-tao [name=csrfmiddlewaretoken]" hx-confirm="Xóa hẳn tin của phiếu {{ m.ma }}? Phiếu sẽ trở lại DS CHỌN." title="Xóa hẳn tin — phiếu trở lại DS CHỌN">XÓA</button>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="7" class="pg-tb__trong">Chưa có tin.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+  </div>
+</div>
+<script>
+(function () {
+  if (window.__dcsmsGan) return;
+  window.__dcsmsGan = true;
+  document.addEventListener("change", function (e) {
+    var goc = e.target.closest && e.target.closest("#dcsms");
+    if (!goc || !e.target.matches("[data-dcsms-all],[data-dcsms-o]")) return;
+    if (e.target.matches("[data-dcsms-all]")) {
+      goc.querySelectorAll("[data-dcsms-o]:not(:disabled)").forEach(function (c) { c.checked = e.target.checked; });
+    }
+    var o = goc.querySelector("[data-dcsms-dem]");
+    if (o) o.textContent = goc.querySelectorAll("[data-dcsms-o]:checked").length;
+  });
+})();
+</script>
+{% endblock %}
+{% block modal_foot %}<button class="dc-btn" type="button" onclick="closeKhblModal()">Đóng</button>{% endblock %}

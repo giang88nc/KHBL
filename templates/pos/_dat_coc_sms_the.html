@@ -1,0 +1,31 @@
+{% load static %}{% comment %}
+THẺ XEM TIN ZNS 635720 "Thông báo hàng sẵn sàng" (GĐ chốt 20/09/2026) — dựng theo bố cục mẫu GĐ gửi.
+t.la_mau: bấm 📄 MẪU SMS → hiện TÊN BIẾN; ngược lại: nút Xem ở DS CHỜ → đúng nội dung sẽ gửi (biến đã điền) + số nhận,
+mức nhắc, giờ hẹn (giờ VN), trạng thái. Trả nguyên khối #dcsms-xem để thay khung rỗng trong popup Gửi SMS.
+{% endcomment %}
+<div id="dcsms-xem" class="dcsms__xem" onclick="if(event.target===this)this.hidden=true">
+  <article class="dcsms__the" aria-label="Tin ZNS 635720">
+    <button type="button" class="dcsms__the-x" onclick="this.closest('.dcsms__xem').hidden=true" title="Đóng">×</button>
+    <div class="dcsms__the-logo"><img src="{% static 'img/logo_icon.png' %}" alt="" width="44" height="44"><span>Tiệm Vàng <b>KIM HẠNH 2</b></span></div>
+    <h4>THÔNG BÁO HÀNG ĐẶT</h4>
+    <p>Xin chào <b>{{ t.anh_chi }}</b> <b>{{ t.customer_name }}</b>,</p>
+    <p>Tiệm Vàng Kim Hạnh 2 xin thông báo: Mã đặt hàng <b>{{ t.bill_code }}</b> của Quý khách đã sẵn sàng tại tiệm. Kính mời <b>{{ t.anh_chi }}</b> đến kiểm tra, nhận hàng và hoàn tất giao dịch.</p>
+    <p>Trân trọng!</p>
+    <span class="dcsms__the-cskh">📞 Liên hệ bộ phận CSKH</span>
+    {% if t.la_mau %}
+    <dl class="dcsms__the-bien">
+      <div><dt>bill_code</dt><dd>BillCode (phiếu app mobile: TrnID), che phần giữa — vd <span class="mono">26********00012</span></dd></div>
+      <div><dt>customer_name</dt><dd>Tên khách đã bỏ tiền tố xưng hô — vd "Chị Hân" → <i>Hân</i></dd></div>
+      <div><dt>anh_chi</dt><dd>Suy từ tên (tiền tố → chữ lót) rồi giới tính khách; không rõ thì <i>Anh/Chị</i></dd></div>
+    </dl>
+    {% else %}
+    <dl class="dcsms__the-bien">
+      <div><dt>Gửi tới</dt><dd class="mono">{{ t.sdt }}</dd></div>
+      <div><dt>Phiếu</dt><dd class="mono">{{ t.ma }}</dd></div>
+      <div><dt>Mức</dt><dd>{{ t.muc }}</dd></div>
+      <div><dt>Giờ hẹn gửi</dt><dd>{{ t.gio|date:"d/m/Y H:i" }} (giờ VN)</dd></div>
+      <div><dt>Trạng thái</dt><dd>{{ t.nhan }}</dd></div>
+    </dl>
+    {% endif %}
+  </article>
+</div>

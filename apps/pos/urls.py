@@ -4,8 +4,13 @@ from . import views
 from . import deposits
 from . import deposit_operations
 from . import deposit_messages
+from . import deposit_sms
 from . import deposit_money
 from . import deposit_photos
+from . import mobile_invoice
+from . import mobile_orders
+from . import mobile_online
+from . import mobile_qr
 from . import deposit_editing
 from . import bao_cao
 from . import qr_learning_views
@@ -13,15 +18,48 @@ from . import customer_camera
 from . import customer_sync
 from . import thau_list, thau_payments, thau_xuat
 from . import views_thau as VT, transfers, dashboard_alerts, bank_reconcile
-from . import money_flow_views
+from . import money_flow_views, mobile_auth
+from . import ck_tra_khach as CK
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_GET, require_POST
 
 app_name = "pos"
 
 urlpatterns = [
     path("banle/check-money-flow/", money_flow_views.listing, name="money_flow"),
+    path("banle/check-money-flow/<int:pk>/payment/<str:method>/", money_flow_views.payment, name="money_flow_payment"),
+    path("banle/check-money-flow/payment/<int:pk>/reconcile/", money_flow_views.reconcile_pawn, name="money_flow_reconcile_pawn"),
+    path("banle/mobile/", mobile_auth.home, name="money_flow_mobile"),
+    path("banle/mobile/online/", login_required(mobile_online.index, login_url='/banle/mobile/'), name="mobile_online"),
+    path("banle/mobile/online/<str:pk>/pickup/", login_required(mobile_online.pickup, login_url='/banle/mobile/'), name="mobile_online_pickup"),
+    path("banle/mobile/qr/", login_required(mobile_qr.index, login_url='/banle/mobile/'), name="mobile_qr_list"),
+    path("banle/mobile/qr/new/", login_required(mobile_qr.new, login_url='/banle/mobile/'), name="mobile_qr_new"),
+    path("banle/mobile/qr/<int:pk>/", login_required(mobile_qr.detail, login_url='/banle/mobile/'), name="mobile_qr_detail"),
+    path("banle/mobile/qr/<int:pk>/check/", login_required(mobile_qr.check, login_url='/banle/mobile/'), name="mobile_qr_check"),
+    path("banle/mobile/orders/", login_required(mobile_orders.index, login_url='/banle/mobile/'), name="mobile_orders"),
+    path("banle/mobile/orders/<str:pk>/", login_required(mobile_orders.detail, login_url='/banle/mobile/'), name="mobile_order_detail"),
+    path("banle/mobile/auth/start/", mobile_auth.start, name="mobile_auth_start"),
+    path("banle/mobile/auth/notice/", mobile_auth.notice, name="mobile_auth_notice"),
+    path("banle/mobile/invoice/<int:pk>/", login_required(mobile_invoice.popup, login_url='/banle/mobile/'), name="mobile_invoice"),
+    path("banle/mobile/qr/<int:pk>/image/", login_required(money_flow_views.mobile_qr_image, login_url='/banle/mobile/'), name="mobile_qr_image"),
+    path("banle/mobile/qr/<int:pk>/success/", login_required(money_flow_views.mobile_qr_success, login_url='/banle/mobile/'), name="mobile_qr_success"),
+    path("banle/mobile/money-in/<int:pk>/check/", login_required(money_flow_views.mobile_check, login_url='/banle/mobile/'), name="mobile_money_check"),
+    path("banle/mobile/auth/result/", mobile_auth.auth_result, name="mobile_auth_result"),
+    path("banle/mobile/health/", mobile_auth.health, name="mobile_health"),
+    path("banle/mobile/login/", mobile_auth.MobilePasswordLogin.as_view(), name="mobile_password_login"),
+    path("banle/mobile/auth/callback/", mobile_auth.callback, name="mobile_auth_callback"),
+    path("banle/mobile/logout/", mobile_auth.sign_out, name="mobile_logout"),
+    path("banle/mobile/dashboard/", login_required(money_flow_views.mobile_home, login_url='/banle/mobile/'), name="money_flow_mobile_dashboard"),
+    path("banle/mobile/money-in/", login_required(money_flow_views.mobile_in, login_url='/banle/mobile/'), name="money_flow_mobile_in"),
     path('banle/bao-cao/', bao_cao.trang, name='bao_cao'),        # BÁO CÁO (12/09/2026)
     path('banle/dat-coc/', deposits.index, name='dat_coc'),
     path('banle/dat-coc/bao-cao/', deposits.report, name='dat_coc_report'),
+    # 📱 GỬI SMS (19/09/2026) — ĐẶT TRƯỚC 'dat-coc/<pk>/<action>/' kẻo 'gui-sms/tao/' bị hiểu là phiếu 'gui-sms'
+    path('banle/dat-coc/gui-sms/', deposit_sms.popup, name='dat_coc_sms'),
+    path('banle/dat-coc/gui-sms/tao/', deposit_sms.tao_view, name='dat_coc_sms_tao'),
+    path('banle/dat-coc/gui-sms/<int:mid>/xoa/', deposit_sms.xoa_view, name='dat_coc_sms_xoa'),
+    path('banle/dat-coc/gui-sms/mau/', deposit_sms.xem_view, name='dat_coc_sms_mau'),
+    path('banle/dat-coc/gui-sms/<int:mid>/xem/', deposit_sms.xem_view, name='dat_coc_sms_xem'),
     path('banle/dat-coc/thong-bao/soan/', deposit_messages.compose, name='dat_coc_compose'),
     path('banle/dat-coc/thong-bao/goi-y/<str:kind>/', deposit_messages.suggestion_edit, name='dat_coc_suggestion'),
     path('banle/dat-coc/thong-bao/mau/them/', deposit_messages.template_edit, name='dat_coc_template_add'),
@@ -70,6 +108,15 @@ urlpatterns = [
     path("banle/ban-hang/vang-doi/tinh-lai/", views.ban_doi_tinh_lai, name="ban_doi_tinh_lai"),
     path("banle/ban-hang/dat/", views.ban_dat, name="ban_dat"),
     path("banle/ban-hang/qr/", views.ban_qr, name="ban_qr"),
+    # 🏦 TIỆM CHUYỂN KHOẢN CHO KHÁCH khi bán-đổi dư (19/09/2026) — scan QR khách · QR tiệm trả · lưu QR vào nhóm
+    path("banle/ban-hang/ck-khach/quet/", require_POST(CK.ban_ck_quet), name="ban_ck_quet"),
+    path("banle/ban-hang/ck-khach/qr/", require_GET(CK.ban_ck_qr), name="ban_ck_qr"),
+    path("banle/ban-hang/ck-khach/qr/luu/", require_POST(CK.ban_ck_qr_luu), name="ban_ck_qr_luu"),
+    path("banle/ban-hang/anh/len/", require_POST(CK.ban_anh_len), name="ban_anh_len"),      # 📷/📁 Hình 1·2·QR
+    path("banle/ban-hang/ck-in/qr/", require_POST(CK.ban_in_qr), name="ban_in_qr"),         # 🔳 QR IN → money_flow_payment
+    path("banle/ban-hang/ck-in/qr/<int:pk>/", require_GET(CK.ban_in_qr_xem), name="ban_in_qr_xem"),   # popup 1 QR
+    path("banle/ban-hang/anh/", require_GET(CK.ban_anh), name="ban_anh"),
+    path("banle/ban-hang/anh/xoa/", require_POST(CK.ban_anh_xoa), name="ban_anh_xoa"),
     path("banle/ban-hang/coc/", views.ban_coc, name="ban_coc"),          # 💸 áp phiếu ĐẶT-CỌC (11/09/2026)
     path("banle/ban-hang/moi/", views.ban_moi, name="ban_moi"),
     path("banle/ban-hang/tim-khach/", views.ban_tim_khach, name="ban_tim_khach"),

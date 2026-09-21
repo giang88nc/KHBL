@@ -1,0 +1,61 @@
+/* 📱 GỬI SMS · PHIẾU ĐẶT CỌC (GĐ chốt 19/09/2026) — popup 90% màn hình, 2 cột DS CHỌN / DS CHỜ. Tệp riêng. */
+.dcsms{display:flex;flex-direction:column;gap:8px;height:100%;min-height:0}
+.dcsms__mau{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;padding:6px 10px;border:1px dashed var(--gold-300);
+  border-radius:6px;background:var(--gold-100);font-size:12px;color:var(--ink-600)}
+.dcsms__mau code{font-size:11.5px}
+.dcsms__warn{color:var(--flame-500, #B3402A);font-style:normal}
+.dcsms__ok{padding:6px 10px;border-radius:6px;background:#EAF3EC;border:1px solid #BFDCC7;color:#2E7D46;font-size:12.5px}
+.dcsms__cot2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;flex:1 1 auto;min-height:0}
+.dcsms__cot{display:flex;flex-direction:column;gap:6px;min-height:0;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface, #fff)}
+.dcsms__head h3{margin:0;font-size:14px;letter-spacing:.05em;color:var(--gold-700)}
+.dcsms__head small{font-weight:400;color:var(--ink-600);letter-spacing:0;margin-left:6px}
+.dcsms__loc{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:flex-end}
+.dcsms__loc label{display:grid;gap:2px;font-size:11px;color:var(--ink-600)}
+.dcsms__loc .khbl-input,.dcsms__loc .khbl-select{font-size:12px;padding:4px 6px}
+.dcsms__tim{flex:1 1 160px}
+.dcsms__bang{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;margin:0}
+.dcsms__cuon{flex:1 1 auto;min-height:0;overflow:auto;border-top:1px solid var(--line)}
+.dcsms__cuon .pg-tb{font-size:12px}
+.dcsms__cuon thead th{position:sticky;top:0;z-index:1}
+.dcsms__khong{opacity:.55}
+.dcsms__tin{display:inline-block;padding:1px 6px;border-radius:10px;font-size:11px;background:#F3F1EC;color:var(--ink-600)}
+.dcsms__tin--con,.dcsms__tin--queued,.dcsms__tin--retry{background:var(--gold-100);color:var(--gold-700)}
+.dcsms__tin--sent,.dcsms__tin--delivered,.dcsms__tin--seen{background:#EAF3EC;color:#2E7D46}
+.dcsms__tin--failed,.dcsms__tin--failed_permanent{background:#FBEAE6;color:#B3402A}
+.dcsms__nd{white-space:nowrap}
+.dcsms__chan{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;padding-top:6px;border-top:1px dashed var(--line)}
+.dcsms__chan label{display:grid;gap:2px;font-size:11px;color:var(--ink-600)}
+.dcsms__huy{padding:2px 8px;font-size:11.5px}
+@media (max-width:900px){.dcsms__cot2{grid-template-columns:1fr}}
+
+/* 📄 MẪU SMS (GĐ chốt 20/09/2026) — lớp xem mẫu ZNS 635720 ngay trong popup, bố cục như thẻ tin Zalo */
+.dcsms{position:relative}
+.dcsms__mau-nut{margin-left:8px;padding:2px 10px;font-size:11.5px}
+.dcsms__xem{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:rgba(28,25,23,.35);border-radius:8px}
+.dcsms__xem[hidden]{display:none}
+.dcsms__the{position:relative;width:min(440px,92%);max-height:92%;overflow:auto;padding:18px 20px 16px;border-radius:12px;background:#fff;
+  box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:Arial,Helvetica,sans-serif;color:#3b3b3b;font-size:14.5px;line-height:1.55}
+.dcsms__the-x{all:unset;position:absolute;top:8px;right:10px;cursor:pointer;font-size:20px;color:#888}
+.dcsms__the-logo{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.dcsms__the-logo span{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;color:#8C6A1D;letter-spacing:.02em}
+.dcsms__the-logo b{font-weight:700;color:#B8860B}
+.dcsms__the h4{margin:6px 0 8px;font-size:16px;letter-spacing:.04em;color:#222}
+.dcsms__the p{margin:0 0 10px}
+.dcsms__the p b{color:#222}
+.dcsms__the-cskh{display:block;margin-top:4px;padding:9px 0;border-radius:8px;background:#0068FF;color:#fff;text-align:center;font-weight:700}
+.dcsms__the-bien{margin:12px 0 0;padding-top:8px;border-top:1px dashed #ddd;font-size:11.5px;color:#666}
+.dcsms__the-bien div{display:grid;grid-template-columns:100px 1fr;gap:6px;padding:2px 0}
+.dcsms__the-bien dt{font-family:monospace;color:#8C6A1D}
+.dcsms__the-bien dd{margin:0}
+
+/* Lịch nhắc + Xem/XÓA (GĐ chốt 20/09/2026) */
+.dcsms__qua{color:#B3402A;font-weight:600}
+.dcsms__muc{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.dcsms__muc--san_sang{background:#EAF3EC;color:#2E7D46}
+.dcsms__muc--nhac1{background:var(--gold-100);color:var(--gold-700)}
+.dcsms__muc--nhac2{background:#FCEFD9;color:#C07A1A}
+.dcsms__muc--nhac3{background:#FBEAE6;color:#B3402A}
+.dcsms__lydo{color:var(--ink-600);font-size:10.5px}
+.dcsms__nut-cot{white-space:nowrap;text-align:right}
+.dcsms__nut{padding:2px 8px;font-size:11.5px;margin-left:4px}
+.dcsms__nut--xoa{color:#B3402A;border-color:#E8B9AE}
