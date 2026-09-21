@@ -269,6 +269,8 @@ def mau_dong_doi(bang, cols, tu_luc, limit=30):
     if not cols or not re.fullmatch(r"[A-Za-z0-9_]+", bang):
         return []
     dk = " OR ".join(f"[{c}] >= CAST(? AS datetime)" for c in cols)
+    if timezone.is_aware(tu_luc):                   # máy KK ghi GIỜ VN — mốc aware (vd UTC) phải quy về giờ VN (sửa 20/09/2026)
+        tu_luc = timezone.localtime(tu_luc)
     moc = tu_luc.strftime("%Y-%m-%dT%H:%M:%S")     # ISO có 'T' — SQL Server hiểu bất kể ngôn ngữ phiên
     rows = pmv_read(f"SELECT TOP {int(limit)} * FROM [{bang}] WITH (NOLOCK) WHERE {dk} ORDER BY [{cols[0]}] DESC",
                     tuple(moc for _ in cols), tag="danh_dau", audit=False)

@@ -225,8 +225,8 @@ def chuan_hoa_sdt(value):
 
 
 def _gio_vn_sang_aware(value):
-    """datetime naive đọc từ MSSQL là GIỜ VN ⇒ gắn múi giờ VN. Django tự quy về UTC naive khi ghi,
-    khớp ``_mssql_local_to_utc()`` của CARE360. TUYỆT ĐỐI không trừ tay 7 giờ."""
+    """datetime naive đọc từ MSSQL là GIỜ VN ⇒ gắn múi giờ VN. Sổ ``zalo_messages`` lưu giờ VN (GioVNField +
+    kết nối TIME_ZONE VN từ 20/09/2026) nên ghi ra đúng giờ máy KK. TUYỆT ĐỐI không trừ/cộng tay 7 giờ."""
     if not isinstance(value, datetime):
         return None
     if timezone.is_aware(value):
@@ -432,7 +432,8 @@ def doc_hoa_don(trn_id, *, c=None, giay_cho=5, giay_noi=5):
     dich = _dich_hien_tai(c) or "kk"
     rows = gateway.pmv_read(SQL_HOA_DON, (str(trn_id),), tag="zns_xep_hang", audit=False,
                             target=dich, timeout=giay_noi, query_timeout=giay_cho)
-    return rows[0] if rows else None
+    from apps.pos.document_contacts import overlay
+    return overlay("KHBL_BUYSELL",rows[0],dich) if rows else None
 
 
 # ───────────────────────── DỰNG / CẬP NHẬT MỘT DÒNG ─────────────────────────

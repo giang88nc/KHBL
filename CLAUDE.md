@@ -756,7 +756,16 @@ TIỀN ĐÃ VÀO KÉT THẬT. Cũng **không `select_for_update`**, không giữ
 · `recipient_ciphertext` = **`khbl_no_cipher`** (KHBL không giữ khóa Fernet của KH_GATEWAY; lớp gửi
 lấy số từ `customer_phone` nên placeholder không cản bước 2).
 ⚠ Tiền tố băm số điện thoại **GIỮ NGUYÊN `"care360-zbs|"`** — đổi là vỡ đối soát VÀ vỡ khoảng lặng chéo.
-⚠ Mọi cột `datetime` là **UTC NAIVE**; gán datetime AWARE để Django tự quy đổi, KHÔNG trừ tay 7 giờ.
+⚠ **GIỜ (đổi 20/09/2026, GĐ chốt sau khi xóa sạch tin cũ): `zalo_messages` lưu GIỜ VN NAIVE** — 13 cột giờ của
+`ZaloMessage` dùng `apps/oa/models.GioVNField` (ghi aware → VN naive, đọc gắn lại múi VN), thống nhất với KHCD vốn ghi giờ
+VN và để phpMyAdmin thấy đúng giờ tiệm. Code vẫn gán datetime AWARE, KHÔNG cộng/trừ tay 7 giờ. `smoke_oa` kịch bản 5
+đã đổi theo (12:03:43 VN ⇒ 12:03:43 trong bảng).
+⚠ **TOÀN HỆ ĐÃ LÀ GIỜ VN từ 02:30 ngày 20/09/2026** (GĐ duyệt, làm lúc tiệm đóng): CẢ DB `khj_bl` + `khj_hr` (+
+`khj_cd.auth_user`) đã +7h — 90 bảng · 445.039 dòng bằng lệnh `manage.py doi_gio_vn` (bảng đánh dấu `tz_doi_gio_vn`,
+lùi được bằng `--lui`; backup trước khi đổi ở `D:\PYTHON\KHJ\backups\TRUOC_DOI_GIO_20260920`) và `DATABASES["default"]
+["TIME_ZONE"] = "Asia/Ho_Chi_Minh"` (KHBL default · KHJ default + alias `oa`). ⚠ Phục hồi backup CŨ HƠN mốc này phải
+trừ 7h trước. Mọi bảng Django nay lưu giờ VN naive, `__date` dùng được; `GioVNField` trùng hành vi, giữ làm bảo vệ.
+KHJ `ghi_so.py` (INSERT thô tin tay) đã đổi `_gio_vn_naive`. Kế hoạch + số liệu: `docs/KE_HOACH_DOI_GIO_VN.md`.
 ⚠ `scheduled_at = eligible_at + delay_minutes`, mà `eligible_at` = **GIỜ TẠO HÓA ĐƠN**, không phải
 giờ xếp hàng.
 
@@ -822,6 +831,14 @@ bằng nhau (16.657 → 16.657). Cột `is_test` **KHÔNG TỒN TẠI** trong DD
 > tiệm trả tiền 2 lần**, không có gì báo động.
 > **Giám đốc CHƯA chốt bỏ hay giữ đường gửi riêng này** ⇒ chưa chốt thì chưa được điền `provider_id`,
 > chưa được cấp token, và chưa được bật quy tắc nào cho `635720`.
+> **19/09/2026 — thêm nguồn thứ ba `khbl_deposit`**: nút "📱 GỬI SMS" trang Đặt-cọc (`apps/pos/deposit_sms.py`)
+> xếp tin `635720` BẤM TAY vào sổ này (queued, không gọi mạng). **Lịch nhắc (20/09/2026)** cho phiếu tiến độ SẴN SÀNG:
+> Thông báo sẵn sàng (ngay) · Nhắc 1/2/3 khi quá hẹn ≥ 10/20/30 ngày · phiếu vừa có tin ẩn 10 ngày · mức ghi ở
+> `source_status`, dedupe `sha256("1|khbl_deposit|{TrnID}|{mức}")` (mức sẵn sàng giữ chữ `hang_san_sang`);
+> DS CHỜ có Xem (thẻ tin đúng biến) + XÓA hẳn (tin đã gửi không xóa); mọi câu ghi lọc `source_type='khbl_deposit'`; tôn trọng
+> `STOP_ZNS.flag` + đích kk, KHÔNG áp `ZNS_XEP_HANG`). Tức là **đã có tin 635720 nằm chờ trong sổ** — ngày bật
+> bộ gửi cho mẫu này (mẫu đang DISABLE) thì các tin đó đi thật, nên càng phải chốt bỏ đường `deposit_messages` trước.
+> Bộ kiểm `manage.py test tests.test_deposit_sms --settings=config.settings.test_price_save`.
 
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 

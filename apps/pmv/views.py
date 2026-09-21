@@ -267,7 +267,7 @@ def _resolve_snapshot(token):
         snap = PmvSnapshot.objects.filter(pk=int(token[5:])).first()
         if not snap:
             return None, "(snapshot đã xóa)"
-        return snap.payload, f"#{snap.pk} {snap.label} · {snap.created_at:%d/%m %H:%M} · {snap.mode}"
+        return snap.payload, f"#{snap.pk} {snap.label} · {timezone.localtime(snap.created_at):%d/%m %H:%M} · {snap.mode}"
     if token in ("pmv", "sandbox"):
         data = diffmod.snapshot(token, mode="fast")
         nhan = "PMV thật (live)" if token == "pmv" else "Sandbox (live)"

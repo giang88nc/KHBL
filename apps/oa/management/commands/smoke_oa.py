@@ -198,10 +198,11 @@ class Command(BaseCommand):
                     all(len(r.tracking_id) == 32 and re.fullmatch(r"[0-9a-f]{32}", r.tracking_id)
                         and ZaloMessage.objects.filter(tracking_id=r.tracking_id).count() == 1
                         for r in rows))
-            # 5 — MÚI GIỜ: hóa đơn 12:03:43 giờ VN ⇒ cột trong bảng phải là 05:03:43 (UTC naive)
+            # 5 — MÚI GIỜ (đổi 20/09/2026, GĐ chốt): sổ zalo_messages lưu GIỜ VN naive ⇒ hóa đơn 12:03:43 giờ VN
+            # thì cột trong bảng cũng là 12:03:43 (trước 20/09 là UTC naive 05:03:43). Xem apps/oa/models.GioVNField.
             tho = self._thoi(trn1)
-            self.ok("5. múi giờ: CreatedDate 12:03:43 VN ⇒ eligible_at 05:03:43 trong bảng",
-                    all(e.hour == 5 and e.minute == 3 and e.second == 43 for _, e, _ in tho),
+            self.ok("5. múi giờ: CreatedDate 12:03:43 VN ⇒ eligible_at 12:03:43 (giờ VN) trong bảng",
+                    all(e.hour == 12 and e.minute == 3 and e.second == 43 for _, e, _ in tho),
                     str([str(e) for _, e, _ in tho]))
             # 6 — lịch gửi đếm từ GIỜ TẠO HÓA ĐƠN
             delta = {rid: (s - e).total_seconds() / 60 for rid, e, s in tho}

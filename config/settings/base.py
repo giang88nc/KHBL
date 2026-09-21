@@ -34,7 +34,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.pos.mobile_auth.MobileSessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -79,6 +79,10 @@ DATABASES = {
         "HOST": env("DB_HOST", default="127.0.0.1"),
         "PORT": env("DB_PORT", default="3308"),
         "OPTIONS": {"charset": "utf8mb4"},
+        # Cột datetime lưu GIỜ VN naive (đổi từ UTC đêm 20/09/2026 — docs/KE_HOACH_DOI_GIO_VN.md).
+        # ⚠ Phải ĐÚNG chuỗi này (trùng TIME_ZONE bên dưới): khác tên là Django sinh CONVERT_TZ,
+        # MySQL máy này chưa nạp bảng múi giờ ⇒ lọc theo ngày ra RỖNG.
+        "TIME_ZONE": "Asia/Ho_Chi_Minh",
     }
 }
 

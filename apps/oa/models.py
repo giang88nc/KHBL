@@ -25,13 +25,44 @@
    ở MySQL mà quên sửa bên KHJ ⇒ trang "OA TIN NHẮN" nổ MySQL 1054, hoặc tệ hơn: mở được mà số
    ra 0 không báo lỗi.
 
-GIỜ GIẤC — BẪY ĐÃ TRẢ GIÁ: mọi cột ``datetime`` trong bảng là **UTC NAIVE** (CARE360 ghi bằng
-``_mssql_local_to_utc()``; dữ liệu thật: hóa đơn 12:03:43 giờ VN ⇒ ``eligible_at = 05:03:43``).
-KHBL chạy ``USE_TZ=True`` nên Django tự quy đổi: gán datetime **AWARE** vào field là ghi ra UTC
-naive đúng chuẩn CARE360. **KHÔNG BAO GIỜ gán datetime naive** (Django diễn giải ngầm + cảnh báo)
-và **KHÔNG BAO GIỜ trừ tay 7 giờ**.
+GIỜ GIẤC — ĐỔI 20/09/2026 (GĐ chốt, sau khi đã xóa sạch tin cũ):
+  · ``zalo_messages`` lưu **GIỜ VN NAIVE** (Asia/Ho_Chi_Minh) — thống nhất với KHCD (vốn ghi giờ VN) và để
+    mở phpMyAdmin là thấy đúng giờ tiệm. Các cột giờ của ZaloMessage dùng :class:`GioVNField`: code vẫn gán
+    datetime **AWARE** như cũ, field tự đổi sang giờ VN khi ghi và gắn lại múi VN khi đọc — không trừ/cộng tay.
+  · Cùng đêm 20/09 CẢ DB khj_bl + khj_hr đã đổi +7h sang giờ VN (lệnh ``doi_gio_vn``, kể cả ``zalo_templates`` /
+    ``zalo_send_rules``) và kết nối khai ``DATABASES TIME_ZONE = "Asia/Ho_Chi_Minh"`` ⇒ mọi DateTimeField thường
+    cũng đã đọc/ghi giờ VN; ``GioVNField`` giờ trùng hành vi, GIỮ LẠI làm lớp bảo vệ cho sổ dùng chung.
+  Trước 20/09 cả ``zalo_messages`` là UTC naive (CARE360 ``_mssql_local_to_utc()``: 12:03:43 VN ⇒ 05:03:43).
+  **KHÔNG BAO GIỜ gán datetime naive** (Django diễn giải ngầm + cảnh báo).
 """
+from zoneinfo import ZoneInfo
+
 from django.db import models
+from django.utils import timezone
+
+GIO_VN = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+class GioVNField(models.DateTimeField):
+    """Cột ngày giờ lưu GIỜ VN NAIVE trong MySQL — GĐ chốt 20/09/2026 (từ đêm đó kết nối cũng giờ VN ⇒ no-op, giữ làm bảo vệ).
+
+    Ghi: datetime aware → quy về giờ VN rồi bỏ múi (mọi đường ghi ORM: create · save · update · lọc/so sánh).
+    Đọc: giá trị naive trong bảng → gắn múi VN (Django gắn nhầm UTC trước, ở đây gỡ ra gắn lại).
+    """
+
+    def get_db_prep_value(self, value, connection, prepared=False):
+        if not prepared:
+            value = self.get_prep_value(value)
+        if value is not None and not hasattr(value, "resolve_expression") and timezone.is_aware(value):
+            value = timezone.make_naive(value, GIO_VN)
+        return connection.ops.adapt_datetimefield_value(value)
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        if timezone.is_aware(value):
+            value = value.replace(tzinfo=None)
+        return timezone.make_aware(value, GIO_VN)
 
 
 # ───────────────────────────── zalo_templates ─────────────────────────────
@@ -182,10 +213,10 @@ class ZaloMessage(models.Model):
     employee_name = models.CharField(max_length=200, null=True, blank=True)
     shop_id = models.CharField(max_length=30, null=True, blank=True)
     till_id = models.CharField(max_length=30, null=True, blank=True)
-    transaction_at = models.DateTimeField(null=True, blank=True)
-    eligible_at = models.DateTimeField(null=True, blank=True)
+    transaction_at = GioVNField(null=True, blank=True)
+    eligible_at = GioVNField(null=True, blank=True)
     source_status = models.CharField(max_length=10, null=True, blank=True)
-    source_updated_at = models.DateTimeField(null=True, blank=True)
+    source_updated_at = GioVNField(null=True, blank=True)
     source_eligible = models.BooleanField(default=True)
     pay_amount = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
     # NOT NULL. CARE360 ghi token Fernet 'gAAAAAB…'; KHBL KHÔNG giữ khóa của KH_GATEWAY nên ghi
@@ -198,30 +229,30 @@ class ZaloMessage(models.Model):
     dedupe_key = models.CharField(max_length=64, unique=True)
     msg_id = models.CharField(max_length=100, null=True, blank=True)  # có sau khi API trả (bước 2)
     status = models.CharField(max_length=30)
-    scheduled_at = models.DateTimeField(null=True, blank=True)
+    scheduled_at = GioVNField(null=True, blank=True)
     lease_token = models.CharField(max_length=40, null=True, blank=True)
-    locked_until = models.DateTimeField(null=True, blank=True)
+    locked_until = GioVNField(null=True, blank=True)
     attempt_count = models.IntegerField(default=0)
-    next_retry_at = models.DateTimeField(null=True, blank=True)
-    attempted_at = models.DateTimeField(null=True, blank=True)
-    sent_at = models.DateTimeField(null=True, blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    seen_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = GioVNField(null=True, blank=True)
+    attempted_at = GioVNField(null=True, blank=True)
+    sent_at = GioVNField(null=True, blank=True)
+    delivered_at = GioVNField(null=True, blank=True)
+    seen_at = GioVNField(null=True, blank=True)
     sending_mode = models.CharField(max_length=10, null=True, blank=True)
     estimated_cost = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     # ⚠ DDL thật để varchar(11) (không phải số) và NULL 100% trên dòng thật — giữ nguyên kiểu.
     paid_cost = models.CharField(max_length=11, null=True, blank=True)
     error_code = models.CharField(max_length=50, null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
-    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = GioVNField(null=True, blank=True)
     cancel_reason = models.CharField(max_length=100, null=True, blank=True)
     rule_snapshot_json = models.TextField(null=True, blank=True)
     response_json = models.TextField(null=True, blank=True)
     created_by = models.BigIntegerField(null=True, blank=True)
     # ⚠ KHÔNG có DEFAULT ở DB và KHÔNG dùng auto_now_add/auto_now (bảng không thuộc Django,
     # và auto_now sẽ âm thầm đè khi save(update_fields=…) quên liệt kê). Đường ghi tự cấp giá trị.
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    created_at = GioVNField()
+    updated_at = GioVNField()
 
     class Meta:
         managed = False
