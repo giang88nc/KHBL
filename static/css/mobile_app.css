@@ -1,0 +1,29 @@
+[hidden]{display:none!important}
+:root{--app-height:100dvh;--app-top:0px}
+.mobile-login{margin:0;min-height:100dvh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 30%,#30281a 0,#191711 55%,#12110e 100%);color:#f4e8cb;font:16px system-ui;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.mobile-login main{width:min(100%,420px);padding:28px 30px;box-sizing:border-box;text-align:center}
+.mobile-login .app-icon{display:block;width:min(76vw,280px);height:auto;aspect-ratio:1;margin:0 auto;border-radius:30%;box-shadow:0 20px 70px #0004}
+.mobile-login h1{font-size:30px;margin:24px 0 38px;letter-spacing:.06em;font-weight:750}.mobile-login h1 span{font-weight:350;color:#c9b47e;letter-spacing:.01em}.mobile-login p{line-height:1.5;font-size:14px}
+.mobile-login button,.mobile-login .primary{display:block;box-sizing:border-box;min-height:54px;padding:16px 20px;border:1px solid #e6c675;border-radius:16px;background:linear-gradient(110deg,#b6872d,#f4d68d 55%,#d0a44b);color:#30220c;font:inherit;font-weight:750;width:100%;text-decoration:none;cursor:pointer;box-shadow:0 6px 26px #b587251f}
+.mobile-login button:disabled{opacity:.45}.mobile-login .error{color:#ffa99f}.mobile-login a{color:inherit}.mobile-login a.primary{color:#30220c}
+.mobile-login .mobile-login-fallback{display:inline-block;min-height:44px;align-content:center;margin-top:22px;font-size:13px;color:#ad9e7e;text-decoration:none}
+.mobile-login :focus-visible{outline:2px solid #ffe4a3;outline-offset:5px}
+.mapp-brand>img{width:42px;height:42px;border-radius:12px}.mapp-brand b{letter-spacing:.02em}
+@media(max-height:600px) and (orientation:landscape){.mobile-login main{padding:18px 30px}.mobile-login .app-icon{width:130px}.mobile-login h1{margin:10px 0 16px}}
+.mobile-connection{position:fixed;z-index:20000;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:max(8px,env(safe-area-inset-top));max-width:680px;margin:0 auto;padding:12px;display:flex;align-items:center;gap:12px;border:1px solid #ecc28a;border-radius:12px;background:#fff3d9;color:#754807;font:14px/1.4 system-ui;box-shadow:0 4px 20px #0002}
+.mobile-connection button{margin-left:auto;flex-shrink:0;min-height:44px;padding:6px 12px;background:white;border:1px solid #d8b171;border-radius:8px;color:inherit;font:inherit}
+.mapp-shell{padding-bottom:calc(82px + env(safe-area-inset-bottom));padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.mapp-shell .mapp-top{height:auto;min-height:calc(68px + env(safe-area-inset-top));padding-top:calc(10px + env(safe-area-inset-top));gap:8px}
+.mapp-live{min-width:0}.mapp-live>span{overflow-wrap:anywhere}.mapp-live button{min-height:44px;min-width:44px}
+.mapp-shell .mapp-nav{padding-bottom:calc(8px + env(safe-area-inset-bottom));height:auto;min-height:70px;padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right))}
+.mapp-nav a{min-height:48px}.mapp-search input,.mapp-search select{font-size:16px!important}.mapp-section-head>a,.mapp-staff-toggle{min-height:44px!important;min-width:44px}
+.app-keyboard-open .mapp-nav{display:none}
+.qr-share-note{grid-column:1/-1;font-size:12px;line-height:1.5;color:#66786e;margin:0;text-align:center}
+@media(max-width:720px){
+ .khbl-modal__box:has(.transfer-panel){top:var(--app-top)!important;bottom:auto!important;height:var(--app-height)!important}
+ .khbl-modal__box:has(.transfer-panel) .khbl-modal__body{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));overscroll-behavior:contain}
+ .transfer-panel .transfer-form select{font-size:16px}.transfer-panel .transfer-bank{grid-auto-flow:row;overflow-wrap:anywhere}
+ .khbl-modal__box:has(.transfer-panel--qr) .khbl-modal__foot{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .transfer-panel--qr{align-content:start!important}
+}
+@media(prefers-reduced-motion:reduce){.mapp-enter,.transfer-dots,.transfer-loading i,.transfer-qr-frame:before{animation:none!important}*{scroll-behavior:auto!important}}

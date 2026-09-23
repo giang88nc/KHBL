@@ -19,7 +19,7 @@ class ThauPaymentsTests(TransactionTestCase):
 
     def setUp(self):
         with connection.cursor() as c:
-            c.execute('CREATE TABLE bank_notifications (id integer primary key, provider text, ref_code text, bank_number text, bank_name text, trans_amount decimal, transaction_time text, direction text, description text, bill_code_raw text)')
+            c.execute('CREATE TABLE bank_notifications (id integer primary key, provider text, ref_code text, bank_number text, bank_name text, trans_amount decimal, transaction_time text, direction text, description text, bill_code_raw text, ma_chung_tu text, loai_chung_tu text)')
             c.execute('CREATE TABLE gold_bank (bank_number text, Active integer)')
             c.execute("INSERT INTO gold_bank VALUES ('666141168',1)")
         self.user = get_user_model().objects.create_superuser('thau-test', password='test')
@@ -56,7 +56,7 @@ class ThauPaymentsTests(TransactionTestCase):
         if description is None:
             description = self.nd_chuan()
         with connection.cursor() as c:
-            c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            c.execute('INSERT INTO bank_notifications (id,provider,ref_code,bank_number,bank_name,trans_amount,transaction_time,direction,description,bill_code_raw) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                       [id,'sepay',ref or f'REF{id}',tk or self.TK,'ACB',amount,self.day+' 12:00:00','out',description,''])
 
     def inspect(self):
@@ -202,17 +202,17 @@ class ThauPaymentsTests(TransactionTestCase):
         self.assertTrue(order['candidates'][0]['can_link'])
 
     def test_default_transfer_note_uses_bill_suffix(self):
-        # Ô nội dung CK trên trang thâu mặc định "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" (GĐ chốt 10/09/2026)
+        # GĐ chốt 22/09/2026 (ĐẢO 10/09): "THANH TOAN TIEN VANG {4 số cuối SỐ HĐ đầu}" — không còn theo TrnID
         from apps.pos import thau_cart as TC
-        self.assertEqual(TC.noi_dung_ck({'trn_ids': ['TBG260900001445']}), 'THANH TOAN TIEN VANG 1445')
-        self.assertEqual(TC.noi_dung_ck({'trn_ids': ['TBG260900000495', 'TBG260900000496']}),
-                         'THANH TOAN TIEN VANG 0495')          # nhóm → lấy phiếu ĐẦU
-        self.assertEqual(TC.noi_dung_ck({}), 'THANH TOAN TIEN VANG')   # chưa chốt, chưa có mã
-        self.assertLessEqual(len(TC.noi_dung_ck({'trn_ids': ['TBG260900001445']})), 25)   # maxlength của ô nhập
-        # chuỗi sinh ra phải khớp lại được đúng phiếu đó
+        g = {'bill_codes': ['26-09-10-000058', '26-09-10-000059'], 'trn_ids': ['TBG260900001445', 'TBG260900001446']}
+        self.assertEqual(TC.noi_dung_ck(g), 'THANH TOAN TIEN VANG 0058')          # nhóm → lấy HĐ ĐẦU
+        self.assertEqual(TC.noi_dung_ck({'trn_ids': ['TBG260900001445']}), 'THANH TOAN TIEN VANG')   # chưa có số HĐ
+        self.assertEqual(TC.noi_dung_ck({}), 'THANH TOAN TIEN VANG')
+        self.assertLessEqual(len(TC.noi_dung_ck(g)), 25)                           # maxlength của ô nhập
+        # chuỗi sinh ra phải khớp lại được đúng phiếu đó — và KHÔNG khớp kiểu TrnID cũ nữa
         order = dict(ids=['TBG260900001445'], members=[dict(BillCode='26-09-10-000058')])
-        self.assertTrue(P.code_match(order, dict(description=TC.noi_dung_ck({'trn_ids': ['TBG260900001445']})
-                                                 + '-100926-10:47:17 6253ASCB')))
+        self.assertTrue(P.code_match(order, dict(description=TC.noi_dung_ck(g) + '-100926-10:47:17 6253ASCB')))
+        self.assertFalse(P.code_match(order, dict(description='THANH TOAN TIEN VANG 1445')))
 
     def test_api_permission_and_today_guard(self):
         self.bank()
@@ -245,3 +245,59 @@ class ThauPaymentsTests(TransactionTestCase):
             response = self.client.post('/banle/thau-vao-2/doi-soat/',data)
         self.assertEqual(response.status_code,409)
         self.assertFalse(ThauPaymentLink.objects.exists())
+
+
+    # ── Cầm đồ (22/09/2026): Cầm đồ (22/09/2026): nhóm KHCD ghi → hiện ở Thâu vào 2, khớp 6 số log phiên, chỉ TK cầm đồ (type pawn), không KK ──
+    def cam_do(self):
+        self.raw = []
+        with connection.cursor() as c:
+            c.execute('ALTER TABLE gold_bank ADD COLUMN type text')
+            c.execute("INSERT INTO gold_bank VALUES ('127606',1,'pawn')")
+        from apps.pos.models import ThauNhom
+        self.g = ThauNhom.objects.create(nghiep_vu=ThauNhom.CAMDO, trn_ids=['KH22609020928'],
+                                         bill_codes=['26-09-09-006830'], kieu=[], cust_name='Trương Ngọc Giang',
+                                         pay_method='bank', tien_mat=0, tien_ck=5000000,
+                                         ck_nd='THANH TOAN TIEN VANG 006830', ck_ten='TRUONG NGOC GIANG')
+        ThauNhom.objects.filter(pk=self.g.pk).update(created_at=timezone.make_aware(dt.datetime(2026, 9, 9, 7, 55)))
+
+    def test_cam_do_hien_va_khop_tk_cam_do(self):
+        self.cam_do()
+        self.bank(id=5, description='THANH TOAN TIEN VANG 006830-090926-08:00', amount=5000000, tk='127606')
+        self.bank(id=6, description='THANH TOAN TIEN VANG 006830-090926-08:00', amount=5000000)   # TK thâu: không nhận
+        o = [x for x in self.inspect() if x['nghiep_vu'] == 'camdo'][0]
+        self.assertEqual((o['TrnID'], o['required'], o['SoTien']), ('KH22609020928', Decimal(5000000), Decimal(5000000)))
+        self.assertEqual([c['id'] for c in o['candidates']], [5])
+        self.assertTrue(o['candidates'][0]['can_link'])
+
+    def test_cam_do_4_so_khong_nham(self):
+        self.cam_do()
+        self.bank(id=7, description='THANH TOAN TIEN VANG 6830-090926', amount=5000000, tk='127606')
+        o = [x for x in self.inspect() if x['nghiep_vu'] == 'camdo'][0]
+        self.assertEqual(o['candidates'], [])
+
+    # ── 22/09/2026: đối soát = ma_phieu(ck_nd) == bank_notifications.ma_chung_tu ──
+    def test_ma_chung_tu_cot_skill_quyet_dinh(self):
+        self.bank(description='CK KHONG CO MA')        # nội dung không mang mã, nhưng cột skill đã ghi đúng mã
+        with connection.cursor() as c:
+            c.execute("UPDATE bank_notifications SET ma_chung_tu='260909000001', loai_chung_tu='TV' WHERE id=1")
+        cand = self.inspect()[0]['candidates']
+        self.assertEqual(len(cand), 1)
+        self.assertTrue(cand[0]['exact'])
+
+    def test_ck_khac_ngay_chi_xac_nhan_tay(self):
+        self.bank()
+        with connection.cursor() as c:
+            c.execute("UPDATE bank_notifications SET transaction_time='2026-09-10 08:00:00' WHERE id=1")
+        o = P.inspect(self.day, '2026-09-10')[0][0]
+        self.assertEqual(len(o['candidates']), 1)
+        self.assertFalse(o['candidates'][0]['exact'])    # đuôi khớp, khác ngày → không tự nối
+
+    def test_tu_dong_khong_can_dang_nhap(self):
+        from django.test import Client
+        self.bank()
+        with patch.object(P.timezone, 'localdate', return_value=dt.date(2026, 9, 9)), patch.object(P, 'single_run', return_value=nullcontext(True)):
+            r = Client().post('/banle/thau-vao-2/doi-soat/', {'d1': self.day, 'd2': self.day, 'action': 'scan', 'automatic': '1'})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()['changed'], 1)
+            r = Client().post('/banle/thau-vao-2/doi-soat/', {'d1': self.day, 'd2': self.day, 'action': 'scan'})
+            self.assertEqual(r.status_code, 403)    # bấm tay vẫn cần quyền

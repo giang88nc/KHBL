@@ -26,10 +26,13 @@ Badge: ✎ ĐANG SỬA mã · 🔒 ĐÃ CHỐT dd/mm/yyyy HH:MM. Không còn KH�
   {% endif %}
 
   <span class="pg-ban__foot-sp"></span>
+  <button class="khbl-btn khbl-btn--outline" type="button" aria-label="Phân loại hóa đơn"
+          {% if phieu_chot or not co_don or not g.trn_id %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% elif not co_don %}Chưa có đơn{% else %}Phiếu đang chờ lưu vào PMV{% endif %}"
+          {% else %}title="Phân loại HĐ và ghi nhận tiền khách đưa" hx-get="{% url 'pos:ban_phan_loai' %}" hx-target="#modal-root" hx-disabled-elt="this"{% endif %}>📝</button>
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% endif %}
-          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN</button>
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-include="[name=document_phone]" hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">💰 THANH TOÁN</button>
   <button class="khbl-btn khbl-btn--gold" type="button" {% if phieu_chot or not co_don %}disabled title="{% if phieu_chot %}Đơn đã thanh toán{% else %}Chưa có đơn{% endif %}"{% else %}title="Chốt, in Giấy đảm bảo ngay (không popup) rồi mở phiếu trắng cho khách kế"{% endif %}
-          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">
+          hx-post="{% url 'pos:ban_thanh_toan' %}" hx-include="[name=document_phone]" hx-vals='{"in": "1"}' hx-swap="none" hx-sync="closest footer:drop" hx-disabled-elt="this">
     💰 THANH TOÁN &amp; IN</button>
   <button class="khbl-btn khbl-btn--outline" type="button" {% if khoa_ngay_cu %}disabled title="Hóa đơn ngày khác — chỉ xem"{% elif not phieu_chot %}disabled title="Thanh toán xong mới in Giấy đảm bảo"{% else %}title="Xem trước Giấy đảm bảo — bấm IN trong popup: in thẳng, đóng popup, mở phiếu trắng"
           hx-get="{% url 'pos:hoa_don_chi_tiet' %}?trn_id={{ g.trn_id|urlencode }}&loai={% if g.doi %}BAN_DOI{% else %}BAN{% endif %}&nguon=live&in=1" hx-target="#modal-root"{% endif %}>🖨 IN HÓA ĐƠN</button>

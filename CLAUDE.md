@@ -904,6 +904,7 @@ bằng nhau (16.657 → 16.657). Cột `is_test` **KHÔNG TỒN TẠI** trong DD
    khớp mới được go-live. Viết smoke test theo truyền thống KHJ.
 9. **SỬA GÌ VỀ PMV PHẢI ĐỌC SKILL TRƯỚC**: `.claude/skills/pmv-proc-map/`.
 10. **SỬA GÌ VỀ CẮT ẢNH CCCD (khách hay nhân viên) PHẢI ĐỌC SKILL TRƯỚC**: `.claude/skills/cat-anh-cccd/` — thuật toán dùng chung `apps/pos/anh_cccd.py`, API `cat_cccd(data, goc)`, công thức tích hợp popup kéo xoay, 10 bẫy đã dính.
+11. **ĐỌC MÃ CHỨNG TỪ TỪ NỘI DUNG CHUYỂN KHOẢN PHẢI ĐỌC SKILL TRƯỚC**: `.claude/skills/nhan-dien-ma-chung-tu-ck/` — module dùng chung `apps/pos/ma_chung_tu_ck.py`, đặc tả GĐ chốt 22/09/2026: CHỈ TRONG NGÀY, tách IN/OUT. IN: 12 số (bán/cọc) · 14 số (cầm đồ) · `KHBL`+10 số (QR độc lập). OUT: `THANH TOAN TIEN VANG`+4 số cuối SỐ HĐ đầu (thâu/đổi dư — đổi từ TrnID sang số HĐ) · `…VANG 1`+5 số phiên (chi cầm đồ, chưa nối). Dạng cũ không nhận diện nữa. Không viết regex bóc mã ở chỗ khác.
 
 ## 6. DATABASE
 

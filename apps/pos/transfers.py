@@ -68,8 +68,8 @@ def listing(data, page):
             where.append(f"{column} {op} %s")
             params.append(data[field])
     if data.get("key"):
-        where.append("description LIKE %s")
-        params.append("%" + connection.ops.prep_for_like_query(data["key"]) + "%")
+        where.append("(description LIKE %s OR ma_chung_tu LIKE %s)")     # 22/09/2026: tìm được theo Mã HĐ
+        params += ["%" + connection.ops.prep_for_like_query(data["key"]) + "%"] * 2
     clause = " WHERE " + " AND ".join(where)
     stats = query(
         "SELECT COUNT(*) AS n, "
@@ -79,7 +79,7 @@ def listing(data, page):
     total = stats["n"]
     pages = max(1, (total + 99) // 100)
     page = min(max(1, page), pages)
-    rows = query("SELECT id, transaction_time, bank_number, bank_name, direction, bill_code_raw, trans_amount, description, ref_code FROM bank_notifications" + clause + " ORDER BY transaction_time DESC, id DESC LIMIT 100 OFFSET %s", params + [(page - 1) * 100])
+    rows = query("SELECT id, transaction_time, bank_number, bank_name, direction, ma_chung_tu, loai_chung_tu, trans_amount, description, ref_code FROM bank_notifications" + clause + " ORDER BY transaction_time DESC, id DESC LIMIT 100 OFFSET %s", params + [(page - 1) * 100])
     signature = hashlib.sha256(json.dumps([stats, page, rows], default=str, ensure_ascii=False).encode()).hexdigest()
     return dict(rows=rows, total=total, tien_vao=stats["tien_vao"], tien_ra=stats["tien_ra"],
                 page=page, pages=pages, signature=signature)

@@ -35,7 +35,7 @@ if %errorlevel%==0 (
     echo [KHBL] Web waitress DA CHAY san tren 127.0.0.1:8101. Bo qua.
 ) else (
     echo [KHBL] Dang bat web waitress 127.0.0.1:8101...
-    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8101 --threads=8 config.wsgi:application >> logs\server.log 2>&1"
+    wscript //B "%~dp0run_hidden_khbl.vbs" "venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8101 --threads=8 --trusted-proxy=127.0.0.1 --trusted-proxy-headers=x-forwarded-proto config.wsgi:application >> logs\server.log 2>&1"
 )
 
 REM --- 2) CADDY HTTPS *:8100 (CA dung chung KIMHANH: root.crt/root.key copy sang runtime neu chua co) ---

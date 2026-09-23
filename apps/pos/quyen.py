@@ -45,6 +45,8 @@ def duoc(user, ma, muc="can_view"):
 
 def chan(request, ma, muc="can_view"):
     """Chặn ngay đầu view nếu chưa được cấp quyền — trang 403 có hướng dẫn xin quyền."""
+    if getattr(request,'khbl_mobile_admin',False) and request.path.startswith('/banle/mobile/'):
+        return
     if not duoc(getattr(request, "user", None), ma, muc):
         raise PermissionDenied(f"Tài khoản chưa được cấp quyền {MUC.get(ma, (ma, ma))[1]}.")
 

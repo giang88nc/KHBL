@@ -249,6 +249,11 @@ class DepositOrderState(GoldBill):
         self.bill_kind = 'deposit'
         self.nguon = 'KHBL'
         super().save(*args, **kwargs)
+        # 21/09/2026: phiếu cọc lên trang mobile Tạo QR NGAY (money_flow) — chỉ MySQL, sau khi commit.
+        from django.db import transaction
+        from . import money_flow as MF
+        trn = self.trn_id
+        transaction.on_commit(lambda: MF.project_now(trn))
 
 
 class PriceBatch(models.Model):
@@ -362,6 +367,9 @@ class MoneyFlow(models.Model):
     expected_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     cash_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
     bank_amount = models.DecimalField(max_digits=18, decimal_places=3, default=0)
+    # 2 cột GĐ đã thêm tay trên khj_bl (tiền khách đưa / tiền thừa trả khách) — khai vào model 23/09/2026, migration --fake
+    cus_cash = models.DecimalField('Tiền mặt khách đưa', max_digits=18, decimal_places=3, default=0)
+    cus_change = models.DecimalField('Tiền thừa trả khách', max_digits=18, decimal_places=3, default=0)
     business_date = models.DateField(db_index=True)
     source_status = models.CharField(max_length=20, blank=True, default="")
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUSES, default=WAITING, db_index=True)
@@ -487,8 +495,12 @@ class DocumentContactWrite(models.Model):
     target = models.CharField(max_length=32)
     snapshot = models.JSONField(default=dict)
     status = models.CharField(max_length=16, default='pending')
+    active_key = models.CharField(max_length=180, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'document_contact_writes'
+        indexes = [models.Index(fields=['source_type','source_id','status'],name='contact_write_source_idx')]
+from .check_bill_models import CheckBill  # noqa: E402,F401  CHECK BILL V2 (21/09/2026)
+from .check_gold_models import GoldCheckEntry  # noqa: E402,F401  CHECK GOLD V4 (23/09/2026)

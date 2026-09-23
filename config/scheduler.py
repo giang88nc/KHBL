@@ -36,6 +36,29 @@ def _job_sync_gold_bill():
     call_command("sync_gold_bill")
 
 
+def _job_sync_money_flow():
+    # Sổ IN/OUT chỉ đọc nguồn KHBL + KHCD; quét lại 3 ngày để bắt hoàn tác muộn + đọc KK bổ sung SĐT / tiền thối.
+    import datetime
+    today = datetime.date.today()
+    call_command("sync_money_flow", d1=(today - datetime.timedelta(days=2)).isoformat(), d2=today.isoformat(), kk=True)
+
+
+def _job_gan_ma_ck():
+    # 22/09/2026: nhận diện mã chứng từ trong nội dung CK mới về → cột riêng KHBL (ma_chung_tu / loai_chung_tu) trên
+    # bank_notifications. Skill nhan-dien-ma-chung-tu-ck. Chỉ ghi 3 cột mới, không đụng cột BANLE_V5 chép sang.
+    from django.db import connection, transaction
+    from apps.pos import ma_chung_tu_ck as MC
+    with transaction.atomic(), connection.cursor() as cur:
+        MC.gan_ma(cur, gioi_han=1000)
+
+
+def _job_sync_money_flow_nhanh():
+    # 21/09/2026: trang mobile Tạo QR cần HĐ gần realtime — chỉ HÔM NAY, chỉ MySQL (gold_bill + thau_nhom + khj_cd).
+    import datetime
+    today = datetime.date.today().isoformat()
+    call_command("sync_money_flow", d1=today, d2=today)
+
+
 def _job_doi_soat_ck():
     # Đối soát tiền CK của phiếu thâu với thông báo ngân hàng — GĐ chốt 10/09/2026: BỎ nút trên trang, máy chủ tự làm.
     # Soát 3 ngày gần nhất để bắt cả khoản chuyển trễ; luật nối vẫn y như bấm tay, không nới lỏng.
@@ -44,6 +67,10 @@ def _job_doi_soat_ck():
 
 def _job_deposit_work():
     call_command('process_deposit_work')
+
+
+def _job_pawn_in():
+    call_command('reconcile_pawn_in', apply=True)
 
 
 def _job_sync_hist():
@@ -71,9 +98,17 @@ def start():
                       max_instances=1, coalesce=True)
     scheduler.add_job(_job_deposit_work, IntervalTrigger(minutes=1), name="Đối soát cọc & lịch OA 1 phút",
                       max_instances=1, coalesce=True, misfire_grace_time=60)
+    scheduler.add_job(_job_pawn_in, IntervalTrigger(seconds=30), name='Đối soát IN KHBL + KHCD',
+                      max_instances=1, coalesce=True, misfire_grace_time=30)
+    scheduler.add_job(_job_sync_money_flow, IntervalTrigger(minutes=5), name="Đồng bộ sổ IN/OUT KHBL + KHCD 5 phút (3 ngày + KK)",
+                      max_instances=1, coalesce=True, misfire_grace_time=300)
+    scheduler.add_job(_job_gan_ma_ck, IntervalTrigger(seconds=15), name="Nhận diện mã CK mới 15 giây",
+                      max_instances=1, coalesce=True, misfire_grace_time=15)
+    scheduler.add_job(_job_sync_money_flow_nhanh, IntervalTrigger(seconds=20), name="Đồng bộ sổ IN/OUT hôm nay 20 giây (MySQL)",
+                      max_instances=1, coalesce=True, misfire_grace_time=20)
     # flush=True: stdout đổ vào logs/scheduler.log bị block-buffer, BlockingScheduler không bao giờ thoát
     # → banner nằm kẹt trong buffer, nhìn log tưởng chưa nạp job mới (đã dính 06/09/2026).
     print("KHBL scheduler khởi động: sync lịch sử 09:00/21:00 + backup PMV+kho 09:30/21:30 (bù 1h) + check KK 60' "
-          "+ đối soát CK phiếu thâu 5' + đối soát cọc/lịch OA 1'. "
+          "+ đối soát CK phiếu thâu 5' + đối soát cọc/lịch OA 1' + sổ IN/OUT 20s hôm nay + 5' 3 ngày. "
           "(Thu thập hành vi 2' đã tắt — dùng ĐÁNH DẤU tay.) Ctrl+C để dừng.", flush=True)
     scheduler.start()

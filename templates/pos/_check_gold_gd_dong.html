@@ -1,0 +1,18 @@
+{% load pos_extras %}{% comment %}
+MỘT THẺ GIAO DỊCH — khuôn 4 dòng × 3 cột GĐ chốt 23/09/2026:
+   mã HĐ            | trạng thái      | giờ
+   dịch vụ          |                 | tổng tiền (tiền RA có dấu −)
+   khách            | TM …            | CK …
+   nhân viên        | Nhận … / Đưa khách | Thối … / số tiền đưa khách   (cột này màu đỏ)
+Màu: bán hàng · chuộc đồ · cọc = vàng kim · thâu vàng · cầm đồ = đỏ; tổng tiền kế thừa màu nhóm.
+⚠ JS trong check_gold.html (hàm veDong) dựng ĐÚNG khuôn này — sửa đây phải sửa luôn bên đó.
+{% endcomment %}
+<article class="cg-gd cg-gd--{{ g.nhom }} cg-gd--tt-{{ g.tt }}{% if g.huy %} cg-gd--huy{% endif %}"
+         data-id="{{ g.id }}" data-ky="{{ g.ky }}">
+  <span class="cg-gd__ma mono">{{ g.ma }}</span><span class="cg-gd__tt">{% if g.huy %}Đã hủy{% else %}{{ g.tt_nhan }}{% endif %}</span><time>{{ g.gio }}</time>
+  <span class="cg-gd__dv">{{ g.dich_vu }}</span><span></span><b class="cg-gd__tong mono">{% if g.ra_tien %}−{% endif %}{{ g.tong|tien_tran }} ₫</b>
+  <span class="cg-gd__kh">{{ g.khach }}</span><span class="cg-gd__tm">TM {{ g.tien_mat|tien_tran }}</span><span class="cg-gd__ck">CK {{ g.ck|tien_tran }}</span>
+  <span class="cg-gd__nv">{{ g.nv|default:"—" }}</span>
+  {% if g.ra_tien %}<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do mono">{{ g.tong|tien_tran }}</span>
+  {% else %}<span class="cg-gd__nhan mono">Nhận {{ g.khach_dua|tien_tran }}</span><span class="cg-gd__do mono">Thối {{ g.thoi_lai|tien_tran }}</span>{% endif %}
+</article>

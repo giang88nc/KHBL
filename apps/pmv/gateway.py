@@ -25,6 +25,7 @@ GHI có đích là KK — dù proc nằm trong allowlist, dù người gọi tru
 Cú pháp SQL phải tương thích SQL Server 2005 (compat 90): không MERGE, không kiểu
 DATE — tham số ngày truyền CHUỖI ISO 'YYYY-MM-DD'.
 """
+import json
 import re
 import time
 from decimal import Decimal
@@ -601,8 +602,23 @@ def pmv_retail_cash_default(trn_id, *, target, verify_only=False):
             cn.close()
 
 
-def pmv_in_allocate(service, expected, bank, *, target='kk', verify_only=False):
-    """User approved 17/09/2026: only CashPay/CardPay. No proc, till, stock or C/W."""
+def _deposit_description_account(raw, account):
+    """Preserve the deposit payload and store the receiving account as Description.Desc4."""
+    try:
+        data=json.loads(raw or '{}')
+    except (TypeError,ValueError):
+        data=None
+    if not isinstance(data,dict):
+        from apps.pos import deposit_orders as orders
+        legacy=orders.parse_description(raw)
+        data=json.loads(orders.pack_description(
+            legacy['promise_date'],orders.note_entries(raw),legacy['estimate']))
+    data['Desc4']=str(account or '').strip()
+    return json.dumps(data,ensure_ascii=False,separators=(',',':'))
+
+
+def pmv_in_allocate(service, expected, bank, *, bank_account='', target='kk', verify_only=False):
+    """Write the cumulative reconciled split and receiving account. No till/stock/status write."""
     from .models import PmvState
     if verify_only and target!='sandbox':raise ValueError('Dry verification is sandbox-only.')
     if target not in ('kk','sandbox') or (target=='kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock','0')=='1':
@@ -631,19 +647,137 @@ def pmv_in_allocate(service, expected, bank, *, target='kk', verify_only=False):
         split=(Decimal(actual['CashPay'] or 0),Decimal(actual['CardPay'] or 0))
         before=(Decimal(expected['CashPay'] or 0),Decimal(expected['CardPay'] or 0))
         if split not in (before,(cash,bank)):raise ValueError('Phân bổ nguồn đã được tác vụ khác sửa.')
-        if split!=(cash,bank):
-            cur.execute(f'UPDATE {table} SET CashPay=?,CardPay=? WHERE TrnID=? AND BillCode=?',
-                        (cash,bank,expected['TrnID'],expected['BillCode']))
+        account=str(bank_account or '').strip()
+        if service=='RETAIL':
+            cur.execute(f'SELECT Desc4 FROM {table} WHERE TrnID=? AND BillCode=?',
+                        (expected['TrnID'],expected['BillCode']))
+            current_account=str(cur.fetchone()[0] or '')
+            account_value=account or current_account
+            changed=split!=(cash,bank) or current_account!=account_value
+            if changed:
+                cur.execute(f'UPDATE {table} SET CashPay=?,CardPay=?,Desc4=? WHERE TrnID=? AND BillCode=?',
+                            (cash,bank,account_value,expected['TrnID'],expected['BillCode']))
+        else:
+            cur.execute(f'SELECT Description FROM {table} WHERE TrnID=? AND BillCode=?',
+                        (expected['TrnID'],expected['BillCode']))
+            current_description=str(cur.fetchone()[0] or '')
+            description=_deposit_description_account(current_description,account) if account else current_description
+            changed=split!=(cash,bank) or current_description!=description
+            if changed:
+                cur.execute(f'UPDATE {table} SET CashPay=?,CardPay=?,Description=? WHERE TrnID=? AND BillCode=?',
+                            (cash,bank,description,expected['TrnID'],expected['BillCode']))
+        if changed:
             if cur.rowcount!=1:raise ValueError('Không cập nhật đúng một chứng từ.')
-        cur.execute(f'SELECT {total_col},CashPay,CardPay FROM {table} WHERE TrnID=? AND BillCode=?',
+        meta_col='Desc4' if service=='RETAIL' else 'Description'
+        cur.execute(f'SELECT {total_col},CashPay,CardPay,{meta_col} FROM {table} WHERE TrnID=? AND BillCode=?',
                     (expected['TrnID'],expected['BillCode']))
-        if tuple(cur.fetchone())!=(total,cash,bank):raise ValueError('Đọc lại tiền nguồn không khớp.')
+        saved=cur.fetchone()
+        if tuple(saved[:3])!=(total,cash,bank):raise ValueError('Đọc lại tiền nguồn không khớp.')
+        if service=='RETAIL' and account and str(saved[3] or '')!=account:
+            raise ValueError('Đọc lại tài khoản nhận không khớp.')
+        if service=='DEPOSIT' and account:
+            try:saved_account=json.loads(saved[3] or '{}').get('Desc4')
+            except (TypeError,ValueError):saved_account=None
+            if saved_account!=account:raise ValueError('Đọc lại tài khoản nhận của phiếu cọc không khớp.')
         if verify_only:cn.rollback()
         else:cn.commit()
-        _audit('EXEC','money-in-direct',f'[{target}] {table} {expected["BillCode"]}: CashPay={cash}; CardPay={bank}; no till')
+        _audit('EXEC','money-in-direct',f'[{target}] {table} {expected["BillCode"]}: CashPay={cash}; CardPay={bank}; account={account}; no till')
     except Exception as exc:
         if cn is not None:cn.rollback()
         _audit('EXEC','money-in-direct',f'[{target}] {table} {expected.get("BillCode")}',ok=False,error=exc)
+        raise
+    finally:
+        if cn is not None:cn.close()
+
+
+# ─────── SỬA HÓA ĐƠN BÁN từ trang CHECK GOLD V4 (GĐ chốt 23/09/2026) ───────
+# Bản V3 bên BANLE_V5 UPDATE thẳng TRN_RT_BUYSELL không kiểm gì. V4 đi qua cổng này: khóa ghi PMV, kiểm trigger,
+# khóa dòng, CHỈ 6 cột được phép, ràng buộc CashPay + CardPay = PayAmount, đọc lại đối chiếu rồi mới commit + audit.
+BILLSELL_COT = ('CustID', 'EmpID', 'Desc4', 'Desc5', 'CashPay', 'CardPay')
+
+
+def pmv_billsell_edit(trn_id, updates, *, target='kk'):
+    """Sửa hóa đơn bán: khách / nhân viên / ngân hàng / ghi chú CK / tách tiền mặt–chuyển khoản."""
+    from decimal import Decimal
+    from .models import PmvState
+    trn_id = str(trn_id or '').strip()
+    updates = {k: v for k, v in (updates or {}).items() if k in BILLSELL_COT}
+    if not trn_id or not updates:
+        raise ValueError('Thiếu hóa đơn hoặc không có thay đổi nào.')
+    if target not in ('kk', 'sandbox') or (target == 'kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock', '0') == '1':
+        raise PmvBlocked('Chốt ghi PMV đang đóng; chưa sửa hóa đơn.')
+    cn = None
+    try:
+        cn = _connect_dich(target, autocommit=False); cn.timeout = 15; cur = cn.cursor()
+        cur.execute("SELECT name FROM sys.triggers WHERE parent_id=OBJECT_ID('TRN_RT_BUYSELL') AND is_disabled=0")
+        if cur.fetchone():
+            raise ValueError('Bảng hóa đơn có trigger đang bật; chưa ghi để tránh tác động ngoài phạm vi.')
+        cur.execute('SELECT PayAmount, Status, IsDel, CashPay, CardPay FROM TRN_RT_BUYSELL WITH (UPDLOCK,HOLDLOCK) WHERE TrnID=?', (trn_id,))
+        row = cur.fetchone()
+        if not row:
+            raise ValueError('Không tìm thấy hóa đơn trên máy KK.')
+        tong, trang_thai, da_xoa = Decimal(row[0] or 0), str(row[1] or '').strip().upper(), str(row[2] or '0')
+        if trang_thai == 'D' or da_xoa != '0':
+            raise ValueError('Hóa đơn đã hủy/xóa — không sửa.')
+        if 'CashPay' in updates or 'CardPay' in updates:
+            tien_mat = Decimal(str(updates.get('CashPay', row[3] or 0)))
+            ck = Decimal(str(updates.get('CardPay', row[4] or 0)))
+            if tien_mat < 0 or ck < 0 or tien_mat + ck != tong:
+                raise ValueError(f'Tiền mặt + chuyển khoản phải bằng tổng thanh toán ({tong:,.0f}).'.replace(',', '.'))
+            updates['CashPay'], updates['CardPay'] = tien_mat, ck
+        cot = list(updates)
+        cur.execute('UPDATE TRN_RT_BUYSELL SET ' + ','.join(f'{c}=?' for c in cot) + ' WHERE TrnID=?',
+                    tuple(updates[c] for c in cot) + (trn_id,))
+        if cur.rowcount != 1:
+            raise ValueError('Không cập nhật đúng một hóa đơn.')
+        cur.execute('SELECT ' + ','.join(cot) + ' FROM TRN_RT_BUYSELL WHERE TrnID=?', (trn_id,))
+        doc_lai = cur.fetchone()
+        for i, c in enumerate(cot):
+            moi, cu = doc_lai[i], updates[c]
+            khop = Decimal(str(moi or 0)) == Decimal(str(cu)) if c in ('CashPay', 'CardPay') else str(moi or '').strip() == str(cu or '').strip()
+            if not khop:
+                raise ValueError('Đọc lại hóa đơn không khớp; đã hủy ghi.')
+        cn.commit()
+        _audit('EXEC', 'check-gold-bill-edit', f'[{target}] {trn_id}: ' + ', '.join(f'{c}={updates[c]}' for c in cot))
+    except Exception as exc:
+        if cn is not None: cn.rollback()
+        _audit('EXEC', 'check-gold-bill-edit', f'[{target}] {trn_id}', ok=False, error=exc)
+        raise
+    finally:
+        if cn is not None: cn.close()
+
+
+def pmv_buygold_payment_account(trn_ids, bank_account, *, target='kk', verify_only=False):
+    """Store the shop account used for a reconciled BUYGOLD transfer in MaPhieuChi."""
+    from .models import PmvState
+    ids=[str(value or '').strip() for value in trn_ids if str(value or '').strip()]
+    account=str(bank_account or '').strip()
+    if not ids or not account:raise ValueError('Thiếu phiếu thâu hoặc số tài khoản chuyển.')
+    if verify_only and target!='sandbox':raise ValueError('Dry verification is sandbox-only.')
+    if target not in ('kk','sandbox') or (target=='kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock','0')=='1':
+        raise PmvBlocked('Chốt ghi PMV đang đóng; chưa lưu số tài khoản chuyển.')
+    cn=None
+    try:
+        cn=_connect_dich(target,autocommit=False);cn.timeout=15;cur=cn.cursor()
+        cur.execute("SELECT name FROM sys.triggers WHERE parent_id=OBJECT_ID('TRN_RT_BUYGOLD') AND is_disabled=0")
+        if cur.fetchone():raise ValueError('Bảng phiếu thâu có trigger mới; cần kiểm tra trước khi ghi.')
+        for trn_id in ids:
+            cur.execute('SELECT Status,IsDel,MaPhieuChi FROM TRN_RT_BUYGOLD WITH (UPDLOCK,HOLDLOCK) WHERE TrnID=?',(trn_id,))
+            row=cur.fetchone()
+            if not row or row[0]!='C' or str(row[1])!='0':raise ValueError('Phiếu thâu chưa chốt hoặc đã hủy.')
+            current=str(row[2] or '').strip()
+            if current not in ('',account):raise ValueError('Phiếu thâu đã ghi một số tài khoản chuyển khác.')
+            if current!=account:
+                cur.execute('UPDATE TRN_RT_BUYGOLD SET MaPhieuChi=? WHERE TrnID=?',(account,trn_id))
+                if cur.rowcount!=1:raise ValueError('Không cập nhật đúng một phiếu thâu.')
+            cur.execute('SELECT MaPhieuChi FROM TRN_RT_BUYGOLD WHERE TrnID=?',(trn_id,))
+            if str(cur.fetchone()[0] or '').strip()!=account:raise ValueError('Đọc lại số tài khoản chuyển không khớp.')
+        if verify_only:cn.rollback()
+        else:cn.commit()
+        _audit('EXEC','buygold-payment-account',f'[{target}] {len(ids)} phiếu; account={account}')
+    except Exception as exc:
+        if cn is not None:cn.rollback()
+        _audit('EXEC','buygold-payment-account',f'[{target}] {len(ids)} phiếu',ok=False,error=exc)
         raise
     finally:
         if cn is not None:cn.close()

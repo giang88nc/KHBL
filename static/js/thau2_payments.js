@@ -1,5 +1,5 @@
 (() => {
-  let busy = false, stopped = false, revision = '', delay = 5000;
+  let busy = false, stopped = false, revision = '', delay = 15000;
   const root = () => document.getElementById('thau2-list');
   const message = text => { const el = document.getElementById('th2-scan-message'); if (el) el.textContent = text; };
   const refresh = () => {
@@ -17,7 +17,7 @@
   }
   async function scan(automatic) {
     const el = root(), form = el?.querySelector('.th2-filter');
-    if (busy || !form || el.dataset.canManage !== '1') return;
+    if (busy || !form || (!automatic && el.dataset.canManage !== '1') || (automatic && el.dataset.autoScan !== '1')) return;
     if (automatic && (document.hidden || form.elements.d2.value !== el.dataset.today || document.querySelector('#modal-root .th2-detail') || form.contains(document.activeElement))) return;
     const data = new FormData();
     data.set('d1', form.elements.d1.value); data.set('d2', form.elements.d2.value);
@@ -27,7 +27,7 @@
       const result = await post(el.dataset.paymentUrl, data);
       if (!automatic || result.changed || (result.revision && result.revision !== revision)) await refresh();
       if (result.revision) revision = result.revision;
-      delay = 5000;
+      delay = 15000;     // 22/09/2026: tự đối soát 15 giây/lần khi đến ngày = hôm nay
       message(result.message || 'Đã kiểm tra CK.');
     }
     catch (error) { delay = Math.min(delay * 2, 60000); message(error.message); }

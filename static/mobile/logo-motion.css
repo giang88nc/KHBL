@@ -1,0 +1,7 @@
+/* Two transform layers: continuous rotation and a gentle double heartbeat. */
+.kh2-logo-motion{width:min(70vw,280px);aspect-ratio:1;margin:0 auto;overflow:hidden;border-radius:50%;background:#191711;animation:kh2-heartbeat 2.4s ease-in-out infinite;transform-origin:center}
+.kh2-logo-motion>img,.mobile-login .kh2-logo-motion>.app-icon{display:block;width:100%;height:100%;margin:0;border-radius:50%;object-fit:contain;box-shadow:none;animation:kh2-logo-orbit 24s linear infinite;transform-origin:center}
+@keyframes kh2-logo-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes kh2-heartbeat{0%,32%,100%{transform:scale(1)}10%{transform:scale(1.045)}18%{transform:scale(1)}25%{transform:scale(1.025)}}
+@media(max-height:600px) and (orientation:landscape){.kh2-logo-motion{width:130px}}
+@media(prefers-reduced-motion:reduce){.kh2-logo-motion,.kh2-logo-motion>img,.mobile-login .kh2-logo-motion>.app-icon{animation:none!important}}

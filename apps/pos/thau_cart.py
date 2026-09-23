@@ -21,15 +21,17 @@ CK_ND_CHU = "THANH TOAN TIEN VANG"
 
 
 def noi_dung_ck(g=None, ma=""):
-    """Nội dung chuyển khoản CHUẨN khi tiệm TRẢ tiền thâu (GĐ chốt 10/09/2026):
-    "THANH TOAN TIEN VANG {4 số cuối MÃ PHIẾU}" — phiếu TBG260900001445 → "THANH TOAN TIEN VANG 1445".
+    """Nội dung chuyển khoản CHUẨN khi tiệm TRẢ tiền thâu / đổi dư:
+    "THANH TOAN TIEN VANG {4 số cuối SỐ HÓA ĐƠN}" — HĐ 26-09-21-000234 → "THANH TOAN TIEN VANG 0234".
 
-    · Lấy 4 số cuối của MÃ PHIẾU (TrnID), không phải số hóa đơn: hai mã có đuôi khác nhau.
-    · Nhóm nhiều phiếu thì lấy phiếu ĐẦU, vì khách đứng tên phiếu đó nhận tiền cho cả nhóm.
+    · GĐ chốt 22/09/2026 (ĐẢO quyết định 10/09 lấy 4 số cuối TrnID): lấy 4 số cuối BILL_CODE = STT trong ngày —
+      bán · thâu · cọc dùng CHUNG một dãy STT/ngày (thực đo 21/09: 212 HĐ không trùng) nên trong ngày là duy nhất.
+      Cắt ngay, không nhận kiểu TrnID nữa (skill nhan-dien-ma-chung-tu-ck).
+    · Nhóm nhiều phiếu thì lấy HĐ ĐẦU, vì khách đứng tên phiếu đó nhận tiền cho cả nhóm.
     · Phiếu chưa THANH TOÁN thì chưa có mã, trả về phần chữ; chốt xong ô tự hiện đủ số.
     Đối soát đọc lại đúng form này ở thau_payments.code_match — sửa một bên phải sửa bên kia.
     """
-    so = re.sub(r"\D", "", ma or ((g or {}).get("trn_ids") or [""])[0])[-4:]
+    so = re.sub(r"\D", "", ma or ((g or {}).get("bill_codes") or [""])[0])[-4:]
     return f"{CK_ND_CHU} {so}" if so else CK_ND_CHU
 
 

@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const input={value:'1000000',addEventListener(k,fn){this[k]=fn;},setCustomValidity(v){this.error=v;}};
+const option={value:'1',dataset:{bank:'ACB',account:'123',owner:'TEST'}},select={value:'1',options:[option],selectedOptions:[option],addEventListener(k,fn){this[k]=fn;}};
+const labels={b:{},strong:{},span:{}};
+const amount={},words={},reference={},radios=['CD','BH','DC','KH'].map((value,i)=>({value,checked:i===3,dataset:{bankType:['pawn','cty','gold','gold'][i]},addEventListener(k,fn){this[k]=fn;}}));
+option.dataset.type='gold';select.options.push({value:'2',dataset:{type:'pawn'}},{value:'3',dataset:{type:'cty'}});
+const form={dataset:{referenceSuffix:'ABCDEFGH2345'},elements:{bank_id:select,amount:{value:'1000000'}},querySelectorAll:()=>radios,querySelector:s=>({'[data-standalone-amount]':input,'[data-manual-amount]':amount,'[data-manual-words]':words,'[data-manual-reference]':reference}[s]||{querySelector:s=>labels[s]})};
+vm.runInNewContext(fs.readFileSync('static/js/mobile_standalone_qr.js','utf8'),{document:{getElementById:()=>form},localStorage:{getItem:()=>null,setItem(){}}});
+assert.equal(input.value,'1.000.000');assert.equal(form.elements.amount.value,'1000000');assert.equal(labels.strong.textContent,'123');
+assert.equal(words.textContent,'Một triệu đồng');assert.equal(reference.value,'KHABCDEFGH2345');assert.equal(select.value,'1');
+radios[3].checked=false;radios[0].checked=true;radios[0].change();assert.equal(select.value,'2');assert.equal(reference.value,'CDABCDEFGH2345');
+select.value='1';select.change();assert.equal(select.value,'1');
+radios[0].checked=false;radios[1].checked=true;radios[1].change();assert.equal(select.value,'3');
+select.options.pop();radios[1].change();assert.equal(select.value,'');
+input.value='2500000';input.input();assert.equal(input.value,'2.500.000');assert.equal(form.elements.amount.value,'2500000');
+input.value='-1';input.input();assert.ok(input.error);input.value='0';input.input();assert.ok(input.error);
+console.log('PASS: standalone QR currency and bank selection');

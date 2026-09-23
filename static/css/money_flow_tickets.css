@@ -1,0 +1,29 @@
+/* Compact service cards, scoped to the mobile IN list. */
+.mapp-in .mapp-section-head{gap:5px;margin:0 0 5px;padding:0}
+.mapp-in .mapp-section-head>a{width:32px;height:32px;border-radius:9px;font-size:24px}
+.mapp-in .mapp-section-head h1{font-size:18px;margin:0}
+.mapp-in .mapp-section-head h1 small{font-size:12px;color:var(--muted)}
+.mapp-in .mapp-search{gap:4px;margin:0;padding:0;grid-template-columns:minmax(0,1fr) 100px 44px;align-items:center}
+.mapp-in .mapp-search input,.mapp-in .mapp-search select{height:36px;border-radius:9px;font-size:13px}
+.mapp-in .mapp-search input{padding:3px 5px 3px 29px}
+.mapp-in .mapp-search select{padding:3px 5px}
+.mapp-in .mapp-search svg{width:16px;left:8px;top:10px}
+.mapp-in .mapp-result{margin:5px 0;font-size:11px}
+.mapp-transactions{gap:5px}
+.mapp-transactions .qr-ticket{--ticket-ink:#94630b;--ticket-soft:#fff4d6;--ticket-line:#ead49b;padding:5px;gap:5px;border-color:var(--ticket-line);border-left:3px solid var(--ticket-ink);border-radius:12px}
+.mapp-transactions .qr-ticket--deposit{--ticket-ink:#8050b7;--ticket-soft:#f3eafa;--ticket-line:#dec8ef}
+.mapp-transactions .qr-ticket--pawn{--ticket-ink:#b85b65;--ticket-soft:#fff0f1;--ticket-line:#edc9ce}
+.qr-ticket .qr-ticket__identity,.qr-ticket .qr-ticket__customer,.qr-ticket .qr-ticket__footer{gap:5px;margin:0;padding:0}
+.qr-ticket .mapp-service{padding:3px 5px;background:var(--ticket-soft);color:var(--ticket-ink)}
+.qr-ticket .qr-ticket__total{gap:3px;margin:0;padding:0}
+.qr-ticket .qr-ticket__total strong{color:var(--ticket-ink)}
+.qr-ticket .qr-ticket__money{gap:5px;padding:3px 5px;margin:0;background:var(--ticket-soft);border-color:var(--ticket-line);border-radius:7px}
+.qr-ticket .qr-ticket__money>span{column-gap:3px}
+.qr-ticket .qr-ticket__money i{height:18px;background:var(--ticket-line)}
+.qr-ticket .qr-ticket__button{gap:5px;padding:3px 5px;margin:0;min-width:66px;background:var(--ticket-ink);box-shadow:none;border-radius:8px}
+.qr-ticket .qr-ticket__button.is-ready{background:var(--ticket-soft);color:var(--ticket-ink);border:1px solid var(--ticket-line)}
+.qr-ticket:hover{border-color:var(--ticket-ink)}
+.mapp-transactions .qr-ticket--paid{--ticket-ink:#218253;--ticket-soft:#e7f7ed;--ticket-line:#b9dfc7;background:#f3fcf6}
+.qr-ticket--paid .qr-ticket__button:disabled{opacity:.65;cursor:default;background:var(--ticket-soft);color:var(--ticket-ink)}
+.qr-ticket .qr-ticket__money{flex-wrap:wrap}
+.qr-ticket .qr-ticket__money>.qr-ticket__transfers{display:flex;flex-wrap:wrap;gap:3px}

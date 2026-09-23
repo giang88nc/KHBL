@@ -32,7 +32,7 @@ THÔNG TIN phiếu thâu — 1 DÒNG như màn bán: ＋ PHIẾU MỚI · Ngày 
     {% if g.cust %}
       <div class="pg-chon">
         <b>{{ g.cust.name }}</b>
-        <i class="mono">{{ g.cust.phone }}{% if g.cust.code %} · {{ g.cust.code }}{% endif %}</i>
+        <label class="document-phone-field">SĐT trên phiếu<input class="khbl-input" type="tel" list="document-phone-options" name="document_phone" value="{{ g.cust.phone }}" maxlength="20" {% if phieu_chot %}disabled{% endif %} hx-post="{% url 'pos:thau_dat' %}" hx-trigger="change" hx-swap="none" title="Dùng trên bản in và SMS; không sửa hồ sơ khách"></label><datalist id="document-phone-options">{% for phone in g.cust.phones %}<option value="{{ phone }}"></option>{% endfor %}</datalist>
         {% if not phieu_chot %}
         <button class="pg-chon__x" type="button" title="Bỏ chọn khách"
                 hx-post="{% url 'pos:thau_dat' %}" hx-vals='{"cust_id": ""}' hx-swap="none">×</button>

@@ -746,10 +746,10 @@ class Command(BaseCommand):
                 r = web.post("/banle/thau-vao/thanh-toan/", {})
                 nhomq = ThauNhom.objects.order_by("-pk").first()
                 g = web.session.get(TC.KEY)
-                nd_chuan = TC.noi_dung_ck({"trn_ids": nhomq.trn_ids})       # "THANH TOAN TIEN VANG {4 số cuối mã phiếu}"
+                nd_chuan = TC.noi_dung_ck({"bill_codes": nhomq.bill_codes})  # "THANH TOAN TIEN VANG {4 số cuối SỐ HĐ}" (22/09/2026)
                 self._ok("THANH TOÁN → nhóm lưu NH/STK, nội dung CK theo form chuẩn 'THANH TOAN TIEN VANG {4 số cuối mã phiếu}' (GĐ chốt 10/09/2026)",
                          nhomq.ck_bank == "ACB" and nhomq.ck_stk == "123456789" and nhomq.ck_nd == nd_chuan
-                         and g["ck_nd"] == nd_chuan and nd_chuan.endswith(nhomq.trn_ids[0][-4:]) and len(nd_chuan) <= 25,
+                         and g["ck_nd"] == nd_chuan and nd_chuan.endswith(nhomq.bill_codes[0][-4:]) and len(nd_chuan) <= 25,
                          f"{nhomq.ck_nd} vs {nd_chuan}")
                 from apps.pos import thau_payments as TPay
                 self._ok("nội dung ấy đối soát đọc lại ĐÚNG phiếu (kể cả khi ngân hàng nối đuôi ngày giờ)",

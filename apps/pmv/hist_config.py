@@ -21,10 +21,20 @@ _EXTRA_REF = ("T_EMPLOYEE", "T_SECTION", "T_MAINSECTION", "I_GOLD", "I_GOLD_BAL"
 _INCLUDE = (
     "TABLE_NAME='I_CUSTOMER' OR TABLE_NAME LIKE 'TRN_RT_BUYSELL%' "
     "OR TABLE_NAME LIKE 'TRN_RT_BUYGOLD%' OR TABLE_NAME LIKE 'T_PRODUCT%' "
+    "OR TABLE_NAME LIKE 'TRN_DATCOC%' OR TABLE_NAME IN ('TRN_RT_CHANGE','TRN_RT_CHANGE_DATCOC') "
     "OR TABLE_NAME LIKE '%[_]LOG' "
     "OR TABLE_NAME IN (" + ", ".join(f"'{t}'" for t in _EXTRA_REF) + ")"
 )
 _SNAPSHOT = {"I_CUSTOMER", "T_PRODUCT"}
+# Direct mobile edits need not advance TrnDateTime_Upd; deposits are small enough
+# to reconcile all live rows every scheduled run.
+_SNAPSHOT.add('TRN_DATCOC')
+DEPOSIT_CHILDREN = {
+    'TRN_DATCOC_DT': 'TRN_DATCOC',
+    'TRN_DATCOC_CardPay': 'TRN_DATCOC',
+    'TRN_RT_BUYSELL_DATCOC': 'TRN_RT_BUYSELL',
+    'TRN_RT_CHANGE_DATCOC': 'TRN_RT_CHANGE',
+}
 # Cha của các bảng con (để Phase 2 làm mới con theo cha); key nối luôn là TrnID.
 _PARENT = {
     "TRN_RT_BUYSELL_SELL": "TRN_RT_BUYSELL", "TRN_RT_BUYSELL_BUYGOLD": "TRN_RT_BUYSELL",
@@ -78,7 +88,7 @@ def discover():
         strategy, watermark = _strategy(t, pk, t in upd_raw, cols)
         metas.append({
             "table": t, "columns": cols, "pk": pk,
-            "strategy": strategy, "watermark": watermark, "parent": _PARENT.get(t),
+            "strategy": strategy, "watermark": watermark, "parent": DEPOSIT_CHILDREN.get(t) or _PARENT.get(t),
         })
     return metas
 
@@ -108,6 +118,8 @@ def _col_meta(c):
 
 def _strategy(table, pk, has_upd, cols):
     up = table.upper()
+    if table in DEPOSIT_CHILDREN:
+        return 'deposit_child', None
     if up.endswith("_LOG"):
         # watermark = PK 1 cột (LogID/IDLog/PromotionLogID…) hoặc cột identity
         wm = pk[0] if len(pk) == 1 else next(

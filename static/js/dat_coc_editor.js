@@ -148,9 +148,12 @@
   function hideCustomers() { const r=document.getElementById('dc-customer-results'); if (r) r.hidden=true; document.getElementById('dc-customer-search')?.setAttribute('aria-expanded','false'); }
   function selectCustomer(c) {
     if (!form()) return;
+    const same=form().elements.CustID.value===c.CustID;
     form().elements.CustID.value=c.CustID;
     document.getElementById('dc-customer-search').value=c.CustName||c.CustID;
-    document.getElementById('dc-customer-contact').textContent=`${c.Phone||'Chưa có SĐT'} · CCCD ${c.CMND||'—'} · ${c.CustID}`;
+    const choices=document.getElementById('dc-phone-options');if(choices){choices.replaceChildren();for(const value of new Set([c.Phone,c.GhiChu2,c.GhiChu3].filter(Boolean))){const option=document.createElement('option');option.value=value;choices.append(option);}}
+    if(form().elements.DocumentPhone && (c.selected_phone!==undefined || !same || !form().elements.DocumentPhone.value))form().elements.DocumentPhone.value=c.selected_phone??c.Phone??'';
+    document.getElementById('dc-customer-contact').textContent=`${form().elements.DocumentPhone?.value||c.Phone||'Chưa có SĐT'} · CCCD ${c.CMND||'—'} · ${c.CustID}`;
     document.getElementById('dc-customer-address').textContent=c.Address||'Chưa có địa chỉ'; hideCustomers();
     document.getElementById('dc-customer-search').setCustomValidity('');
   }
@@ -172,7 +175,7 @@
         if (!data.rows.length) result.textContent='Chưa tìm thấy khách. Bấm + để thêm khách hàng.';
         data.rows.forEach(c=>{
           const b=document.createElement('button'); b.type='button'; b.className='dc-customer-option'; b.setAttribute('role','option');
-          const title=document.createElement('b'),detail=document.createElement('small'); title.textContent=c.CustName||c.CustID; detail.textContent=`${c.Phone||'—'} · ${c.CMND||c.CustID}`;
+          const title=document.createElement('b'),detail=document.createElement('small'); title.textContent=c.CustName||c.CustID; detail.textContent=`${c.selected_phone||c.Phone||'—'} · ${c.Address||c.CMND||c.CustID}`;
           b.append(title,detail); b.addEventListener('click',()=>selectCustomer(c)); result.append(b);
         });
       } catch(e) { if(e.name!=='AbortError') result.textContent=e.message; }

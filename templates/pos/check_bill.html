@@ -1,0 +1,91 @@
+{% load static %}<!DOCTYPE html>{% comment %}
+CHECK BILL V2 (GĐ chốt 21/09/2026) — kiểm hóa đơn giấy cuối ngày, mở từ trang BÁO CÁO (tab mới).
+TRANG ĐỨNG RIÊNG (GĐ chốt): KHÔNG đăng nhập, KHÔNG menu/topbar — không extend base.html, chỉ tập trung nghiệp vụ.
+Khung ngoài: tiêu đề + chọn ngày + THANH QUÉT (đứng yên, luôn giữ con trỏ); phần số liệu ở _check_bill_so_lieu.html
+để HTMX chỉ thay đúng khối đó sau mỗi lần quét / bỏ kiểm. Thuật toán + quy tắc: apps/pos/check_bill.py.
+{% endcomment %}
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHECK BILL · Kim Hạnh 2</title>
+<link rel="icon" href="{% static 'img/favicon.png' %}">
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260911.coc-identity">
+<link rel="stylesheet" href="{% static 'css/check_bill.css' %}?v=20260923.1">
+<script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
+</head>
+<body class="cb-body" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<section class="cb-page">
+  <header class="cb-hero">
+    <div class="cb-heading">
+      <img src="{% static 'img/ico/hoadon.png' %}" width="58" height="58" alt="">
+      <div><span class="cb-eyebrow">ĐỐI SOÁT CUỐI NGÀY</span><h1>CHECK BILL</h1></div>
+    </div>
+    <div class="cb-ngay">
+      <a class="cb-ngay__nut" href="?d={{ ngay|date:'Y-m-d'|default:'' }}" data-lui="1" title="Ngày trước" aria-label="Ngày trước">‹</a>
+      <label><span>Ngày làm việc</span>
+        <input type="date" value="{{ ngay|date:'Y-m-d' }}" max="{{ hom_nay|date:'Y-m-d' }}"
+               onchange="if(this.value)location.search='?d='+this.value+(document.getElementById('cb-do').value==='1'?'&do=1':'')"></label>
+      <a class="cb-ngay__nut" href="#" data-toi="1" title="Ngày sau" aria-label="Ngày sau">›</a>
+      {% if ngay != hom_nay %}<a class="cb-hom-nay" href="?">Hôm nay</a>{% endif %}
+    </div>
+  </header>
+
+  <form id="cb-quet" class="cb-quet" hx-post="{% url 'pos:check_bill_quet' %}" hx-target="#cb-so-lieu" hx-swap="innerHTML"
+        hx-indicator="#cb-quet" hx-disabled-elt="find button">
+    <input type="hidden" name="d" value="{{ ngay|date:'Y-m-d' }}">
+    <input type="hidden" id="cb-do" name="do" value="{{ do|yesno:'1,0' }}">
+    <span class="cb-quet__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5v14M6 5v14M9 5v14M12 5v14M16 5v14M19 5v14M21 5v14"/></svg></span>
+    <input id="cb-ma" name="ma" autocomplete="off" inputmode="numeric" autofocus required
+           placeholder="Quét mã vạch hoặc nhập mã hóa đơn" aria-label="Mã hóa đơn">
+    <button class="cb-quet__nut" type="submit">KIỂM</button>
+    <button id="cb-do-nut" class="cb-do-nut{% if do %} on{% endif %}" type="button" aria-pressed="{{ do|yesno:'true,false' }}"
+            title="Hiện / ẩn: HĐ còn thiếu + CK trong ngày">{% if do %}✕ Ẩn dò phiếu{% else %}🔍 Dò phiếu{% endif %}</button>
+    <span class="cb-quet__cho" aria-hidden="true">Đang đối chiếu KK…</span>
+  </form>
+
+  <div id="cb-modal"></div>
+  <div id="cb-so-lieu" aria-live="polite">{% include 'pos/_check_bill_so_lieu.html' %}</div>
+</section>
+<script>
+(function(){
+  var ma=document.getElementById('cb-ma'), f=document.getElementById('cb-quet');
+  function tapTrung(){ ma.focus(); }
+  // Máy quét gửi Enter sau mã → form tự submit; xong thì xóa ô + đặt lại con trỏ để quét tờ kế.
+  f.addEventListener('htmx:afterRequest',function(){ ma.value=''; tapTrung(); });
+  document.body.addEventListener('htmx:afterSwap',function(e){
+    if(e.detail.target.id!=='cb-so-lieu')return;
+    var loi=document.querySelector('#cb-so-lieu .cb-tin--loi');
+    try{ var a=new (window.AudioContext||window.webkitAudioContext)(), o=a.createOscillator(), g=a.createGain();
+      o.frequency.value=loi?220:880; g.gain.value=.06; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+(loi?.35:.09));
+    }catch(_){}
+  });
+  // DÒ PHIẾU: bật/tắt 2 bảng (HĐ còn thiếu + CK trong ngày); cờ nằm trong form quét nên quét tiếp vẫn giữ trạng thái
+  var co=document.getElementById('cb-do'), nut=document.getElementById('cb-do-nut');
+  nut.addEventListener('click',function(){
+    var bat=co.value!=='1'; co.value=bat?'1':'0';
+    nut.classList.toggle('on',bat); nut.setAttribute('aria-pressed',bat); nut.textContent=bat?'✕ Ẩn dò phiếu':'🔍 Dò phiếu';
+    htmx.ajax('GET','{% url "pos:check_bill" %}?d={{ ngay|date:"Y-m-d" }}&do='+co.value,{target:'#cb-so-lieu',swap:'innerHTML'});
+    tapTrung();
+  });
+  // Ngày trước / sau — tính ở máy khách, không cần route riêng
+  var d=new Date('{{ ngay|date:"Y-m-d" }}T00:00:00');
+  function hai(v){ return (v<10?'0':'')+v; }
+  // KHÔNG dùng toISOString(): đó là giờ UTC, ở VN (+7) sẽ lùi mất 1 ngày
+  function chuyen(n){ var x=new Date(d); x.setDate(x.getDate()+n); var s=x.getFullYear()+'-'+hai(x.getMonth()+1)+'-'+hai(x.getDate());
+    if(s>'{{ hom_nay|date:"Y-m-d" }}')return; location.search='?d='+s+(co.value==='1'?'&do=1':''); }
+  document.querySelector('[data-lui]').addEventListener('click',function(e){e.preventDefault();chuyen(-1);});
+  document.querySelector('[data-toi]').addEventListener('click',function(e){e.preventDefault();chuyen(1);});
+  // 22/09/2026: BỎ tự đưa con trỏ về ô quét khi bấm lên nền trang (GĐ chốt) — bôi đen/chép số trên bảng không bị cướp focus
+  // CK VÀO: lọc Tất cả / Checked / Uncheck — lọc tại máy, nhớ lựa chọn khi bảng được vẽ lại (quét tờ kế)
+  var locCk='';
+  function apLoc(){ var h=document.querySelector('[data-cb-loc-ck]'); if(!h)return;
+    h.querySelectorAll('button').forEach(function(b){ b.classList.toggle('is-on',b.dataset.loc===locCk); });
+    document.querySelectorAll('.cb-the--ck tbody tr').forEach(function(tr){ tr.hidden=locCk!=='' && tr.dataset.checked!==locCk; }); }
+  document.addEventListener('click',function(e){ var b=e.target.closest('[data-cb-loc-ck] button'); if(!b)return; locCk=b.dataset.loc; apLoc(); tapTrung(); });
+  document.body.addEventListener('htmx:afterSwap',function(e){ if(e.detail.target.id==='cb-so-lieu') apLoc(); });
+})();
+</script>
+</body>
+</html>

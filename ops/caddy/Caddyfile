@@ -22,6 +22,31 @@
 	}
 }
 
+# Mobile HTTP listener is deliberately separate; desktop HTTPS 8100 is unchanged.
+http://192.168.1.6:8102 {
+	bind 192.168.1.6
+	@outside not remote_ip 192.168.1.0/24 127.0.0.1 ::1
+	respond @outside 403
+	redir / /banle/mobile/ 302
+	@mobile path /banle/mobile/* /static/*
+	handle @mobile {
+		reverse_proxy 127.0.0.1:8101 {
+			header_up X-Forwarded-Proto http
+			header_up X-KHBL-Mobile 1
+		}
+	}
+	@qr path_regexp qr ^/banle/check-money-flow/([0-9]+/payment/BANK/|payment/[0-9]+/reconcile/)$
+	handle @qr {
+		reverse_proxy 127.0.0.1:8101 {
+			header_up X-Forwarded-Proto http
+			header_up X-KHBL-Mobile 1
+		}
+	}
+	handle {
+		respond 404
+	}
+}
+
 https://tiemvangkimhanh2:8100, https://localhost:8100, https://127.0.0.1:8100, https://192.168.1.6:8100, https://mrgiang:8100 {
 	tls internal
 	encode zstd gzip

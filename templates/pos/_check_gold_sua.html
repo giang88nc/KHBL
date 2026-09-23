@@ -1,0 +1,75 @@
+{% load pos_extras %}{% comment %}
+POPUP SỬA HÓA ĐƠN (CHECK GOLD V4, 23/09/2026) — như V3 nhưng ghi qua cổng an toàn gateway.pmv_billsell_edit:
+khóa ghi PMV · kiểm trigger · chỉ 6 cột · ràng buộc TIỀN MẶT + CHUYỂN KHOẢN = TỔNG · đọc lại đối chiếu · audit.
+{% endcomment %}
+<div class="cg-lop" onclick="if(event.target===this)this.remove()">
+  <div class="cg-hop cg-hop--sua">
+    {% if not hd %}<h3>SỬA HÓA ĐƠN<button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
+      <p class="cg-tin cg-tin--loi">✕ {{ loi }}</p>
+    {% else %}
+    <form hx-post="{% url 'pos:check_gold_sua_luu' hd.BillCode %}" hx-target="#cg-khoi" hx-swap="innerHTML">
+      {% csrf_token %}
+      <input type="hidden" name="d" value="{{ ngay|date:'Y-m-d' }}"><input type="hidden" name="nv" value="{{ nv }}">
+      <input type="hidden" name="trn_id" value="{{ hd.TrnID }}">
+      <h3>SỬA HÓA ĐƠN <b class="mono">{{ hd.BillCode }}</b>
+        <small>{{ hd.TrnDate|date:"d/m/Y" }} {{ hd.TrnTime|slice:":5" }} · tổng {{ hd.PayAmount|tien_tran }} ₫</small>
+        <button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
+      {% if loi %}<p class="cg-tin cg-tin--loi" role="alert">✕ {{ loi }}</p>{% endif %}
+      <div class="cg-luoi">
+        <label class="cg-o-nhap cg-o-nhap--rong"><span>Khách hàng</span>
+          <input id="cg-kh-tim" placeholder="Gõ tên, SĐT hoặc CCCD…" autocomplete="off"
+                 value="{{ hd.CustName }}{% if hd.Phone %} · {{ hd.Phone }}{% endif %}">
+          <input type="hidden" name="cust_id" id="cg-kh-id" value="{{ hd.CustID }}">
+          <div class="cg-goi-y" id="cg-kh-goi-y" hidden></div></label>
+        <label class="cg-o-nhap"><span>Nhân viên bán</span>
+          <select name="emp_id">
+            <option value="">— Không đổi —</option>
+            {% for e in nhan_vien_ds %}<option value="{{ e.EmpID }}" {% if e.EmpName == hd.EmpName %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+          </select></label>
+        <label class="cg-o-nhap"><span>Tài khoản nhận CK</span>
+          <select name="desc4">
+            <option value="">— Không có —</option>
+            {% for b in bank_ds %}<option value="{{ b.NumberBank }}" {% if b.NumberBank|stringformat:"s" == hd.Desc4|stringformat:"s" %}selected{% endif %}>{{ b.BankName }} · {{ b.NumberBank }}</option>{% endfor %}
+          </select></label>
+        <label class="cg-o-nhap"><span>Ghi chú CK (Desc5)</span>
+          <input name="desc5" value="{{ hd.Desc5|default:'' }}" autocomplete="off"></label>
+        <label class="cg-o-nhap"><span>Tiền mặt</span>
+          <input name="cash_pay" id="cg-tm" class="cg-tien" inputmode="numeric" value="{{ hd.CashPay|tien_tran }}"></label>
+        <label class="cg-o-nhap"><span>Chuyển khoản</span>
+          <input name="card_pay" id="cg-ck" class="cg-tien" inputmode="numeric" value="{{ hd.CardPay|tien_tran }}"></label>
+      </div>
+      <p class="cg-hop__ghi">Tiền mặt + chuyển khoản phải bằng <b id="cg-tong-chu">{{ hd.PayAmount|tien_tran }}</b> ₫.
+        Gõ một ô thì ô kia tự tính. Lưu là ghi thẳng lên máy KK (có ghi nhật ký).</p>
+      <div class="cg-hop__nut"><button type="button" class="cg-nut" onclick="document.getElementById('cg-modal').innerHTML=''">Đóng</button>
+        <button type="submit" class="cg-nut cg-nut--vang">LƯU LÊN KK</button></div>
+    </form>
+    <script>
+    (function(){
+      var tong={{ hd.PayAmount|floatformat:"0" }}, tm=document.getElementById('cg-tm'), ck=document.getElementById('cg-ck');
+      function so(el){ return Number((el.value||'').replace(/\D/g,''))||0; }
+      function ve(el,v){ el.value=Math.max(0,Math.round(v)).toLocaleString('vi-VN'); }
+      tm.addEventListener('input',function(){ ve(ck,tong-so(tm)); });
+      ck.addEventListener('input',function(){ ve(tm,tong-so(ck)); });
+      // gợi ý khách hàng (>= 2 ký tự)
+      var o=document.getElementById('cg-kh-tim'), hop=document.getElementById('cg-kh-goi-y'), id=document.getElementById('cg-kh-id'), hen;
+      o.addEventListener('input',function(){
+        clearTimeout(hen); var q=o.value.trim();
+        if(q.length<2){ hop.hidden=true; return; }
+        hen=setTimeout(async function(){
+          try{
+            var r=await fetch('{% url "pos:check_gold_tim_khach" %}?q='+encodeURIComponent(q),{credentials:'same-origin'});
+            var j=await r.json();
+            hop.innerHTML=(j.rows||[]).map(function(k){
+              return '<button type="button" data-id="'+k.id+'" data-ten="'+k.ten+'">'+k.ten+'<small>'+(k.dt||'')+(k.cccd?' · '+k.cccd:'')+'</small></button>';
+            }).join('')||'<i>Không tìm thấy khách.</i>';
+            hop.hidden=false;
+          }catch(e){ hop.hidden=true; }
+        },280);
+      });
+      hop.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b)return;
+        id.value=b.dataset.id; o.value=b.dataset.ten; hop.hidden=true; });
+    })();
+    </script>
+    {% endif %}
+  </div>
+</div>

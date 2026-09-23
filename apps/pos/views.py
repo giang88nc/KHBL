@@ -634,6 +634,7 @@ def ban_dat(request):
         previous_cust=g.get("cust") or {}
         g["cust"] = {"id": k["CustID"], "code": k["CustCode"], "name": k["CustName"],
                      "phone": k["Phone"] or "", "diem": str(M.dec(k["Diem"]))} if k else None
+        if k: g["cust"]["phones"]=[k.get(field) for field in ("Phone","GhiChu2","GhiChu3") if k.get(field)]
         if k and previous_cust.get("id")==k["CustID"]: g["cust"]["phone"]=previous_cust.get("phone","")
     if "document_phone" in request.POST and g.get("cust"):
         from .document_contacts import normalize_phone
@@ -709,7 +710,7 @@ def ban_coc(request):
         dang = [x for x in dang if x != ma] if ma in dang else dang + [ma]
     if len(dang)==1 and not g.get("trn_id") and not g.get("document_phone_explicit"):
         from .document_contacts import read
-        saved_contact=read("KHBL_DEPOSIT",dang[0],cust)
+        saved_contact=read("KHBL_DEPOSIT",dang[0],cust) if S.client("document_contact_deposit").target=="kk" else None
         if saved_contact: g["cust"]["phone"]=saved_contact.phone
     g["coc_ids"] = dang
     g["coc"] = BC.chuoi_tien(BC.tong_tien(ds, dang))
@@ -763,11 +764,12 @@ def ban_tim_khach(request):
     12 số CCCD ở trường đầu, lọc khách ĐÚNG số đó; đúng 1 khách → tự chọn (script trong _khach_goiy), 0 → báo
     chưa có để bấm ＋ THÊM."""
     q = request.GET.get("q", "")
+    from .customer_phones import suggestion_rows
     cccd = S.cccd_tu_qr(q)
     if not cccd:
-        return render(request, "pos/_khach_goiy.html", {"ds": S.tim_khach(q)})
+        return render(request, "pos/_khach_goiy.html", {"ds": suggestion_rows(S.tim_khach(q),q)})
     ds = [k for k in S.tim_khach(cccd, limit=50) if re.sub(r"\D", "", str(k.get("CMND") or "")) == cccd]
-    return render(request, "pos/_khach_goiy.html", {"ds": ds, "qr_cccd": cccd, "auto": len(ds) == 1})
+    return render(request, "pos/_khach_goiy.html", {"ds": suggestion_rows(ds,cccd), "qr_cccd": cccd, "auto": len(suggestion_rows(ds,cccd)) == 1})
 
 
 def ban_tim_nv(request):
@@ -806,6 +808,10 @@ def ban_ds(request):
         loi = ""
         if d2 == hom_nay:                        # đơn hôm nay: làm tươi gold_bill theo KK khi mở DS (08/09)
             GB.lam_tuoi_ds(ds)
+        # Đơn ngày cũ xóa sau khi qua ngày có thể vẫn còn trong ảnh chụp HIST. Tombstone đã
+        # đối chiếu từ KK phải thắng bản lịch sử, nếu không phiếu đã xóa lại hiện như đơn W.
+        ds = GB.bo_phieu_da_xoa(ds)
+        tk = B.thong_ke_ds(ds)
     except Exception as exc:
         ds, tk, loi = [], B.thong_ke_ds([]), str(exc)
     ids = [r["TrnID"] for r in ds]
@@ -1037,6 +1043,8 @@ def ban_thanh_toan(request):
         # Complete có thể thành công trước khi mất kết nối. Chỉ tiếp tục xác minh/kết sổ hóa đơn đó.
         if resume and resume['Status'] == 'C':
             doc = B.doc(g['trn_id'],c)
+            from .mobile_invoice import apply_staged_retail
+            apply_staged_retail(g,target=c.target)
             B.chot(g['trn_id'],till_id=ph['till_id'],user_id=ph['user_id'],c=c)
             from . import ban_coc as BC
             ids = A.linked_ids(c,g['trn_id'])
@@ -1067,7 +1075,7 @@ def ban_thanh_toan(request):
         from . import document_contacts as DC
         import uuid
         token=g.setdefault("contact_token",uuid.uuid4().hex);cart.save(request,g);request.session.save()
-        intent=DC.begin("KHBL_BUYSELL",token,DC.save_cart("KHBL_BUYSELL",g,request.user.username),c.target,g.get("trn_id"))
+        intent=dict(token=token,contact=DC.save_cart("KHBL_BUYSELL",g,request.user.username))
         kq = B.luu(trn_id=g.get("trn_id") or "", ban=cart.dong_ban(g), doi=cart.dong_doi(g),
                    ngay=c.fmt_date(now.date()), gio=c.fmt_time(now),
                    cust_id=(g.get("cust") or {}).get("id") or S.WALK_IN,
@@ -1079,6 +1087,10 @@ def ban_thanh_toan(request):
         # Giữ mã hóa đơn ngay khi lưu xong; liên kết/chốt lỗi không tạo hóa đơn mới khi bấm lại.
         g['trn_id'],g['bill_code']=kq['trn_id'],kq['bill_code']
         cart.save(request,g)
+        # 📝 Phân loại HĐ lưu trước thanh toán: vendor Upd luôn đặt tiền khách đưa/trả lại về 0,
+        # nên áp dữ liệu đã kiểm tra SAU B.luu và TRƯỚC Complete để PMV giữ đúng kết quả cuối.
+        from .mobile_invoice import apply_staged_retail
+        apply_staged_retail(g,target=c.target)
         # Phiếu ĐẶT-CỌC (11/09/2026): gắn vào hóa đơn khi còn LƯU TẠM, ngay trước khi chốt. Gắn hỏng
         # giữa chừng thì dừng lại và kéo Tiền cọc về đúng phần đã gắn — bill.chot chặn nếu lệch.
         coc_ids = [str(x) for x in (g.get("coc_ids") or [])]
@@ -1090,6 +1102,13 @@ def ban_thanh_toan(request):
                 cache.delete(khoa)
                 cache.delete(_coc_cache_key(cust_id))
                 return _loi(request, f"{loi_coc} Hóa đơn {kq['bill_code']} đã lưu; mở Chứng từ cọc để kiểm tra liên kết trước khi tiếp tục.")
+        # Hóa đơn mở SỬA giữ nguyên bằng chứng CK đã đối soát trong money_flow.
+        # Sau khi proc _Upd lưu tổng mới, áp lại đúng CardPay đã nhận và phần còn
+        # lại vào CashPay trước khi Complete; không yêu cầu khách chuyển lần nữa.
+        if g.get('sua_lai') and g.get('pay_method') == 'bank':
+            from .money_in import apply_verified_retail_on_checkout
+            apply_verified_retail_on_checkout(
+                kq['trn_id'], kq['bill_code'], kq['tong']['khach_tra'], target=c.target)
         B.chot(kq["trn_id"], till_id=ph["till_id"], user_id=ph["user_id"], c=c)
     except Exception as exc:
         if reservation and not reservation.invoice_id:
@@ -1521,8 +1540,13 @@ def _so_dt_tu(q):
 def khach_form(request, cust_id=None):
     """Popup THÊM / SỬA khách hàng — UI đầy đủ, có ô quét QR thẻ CCCD.
     GĐ 09/09/2026: gõ SĐT ở ô tìm khách mà lọc không ra → bấm ＋ → popup mở sẵn SĐT đó ở ô Điện thoại (nút ＋ hx-include #o-khach → ?q=)."""
+    k = S.khach_theo_id(cust_id) if cust_id else None
+    guard = ""
+    if request.GET.get("append_phone"):
+        try: k, guard = C.prepare_append(S.client("khach_append"), k, request.GET["append_phone"], request.GET.get("cmnd", ""))
+        except C.CustomerSaveError as exc: return render(request, "pos/_khach_luu_kq.html", {"loi": [str(exc)]})
     return render(request, "pos/_khach_form.html", {
-        "k": S.khach_theo_id(cust_id) if cust_id else None,
+        "k": k, "append_guard": guard,
         "goi_y_dt": "" if cust_id else _so_dt_tu(request.GET.get("q")),
         "loai_ds": S.CUST_TYPES, "duong_dan_anh": S.DUONG_DAN_ANH,
         "save_token": secrets.token_urlsafe(24),
@@ -1666,18 +1690,25 @@ def khach_kiem_sdt(request):
     """Gợi ý trùng khi đủ 10 số; kiểm tra quyết định vẫn nằm trong khóa lúc UPSERT."""
     Q.chan(request, "KHACH_HANG")
     phone = C.P.phone_key(request.GET.get("phone"))
-    if not C.P.valid(phone):
-        return JsonResponse({"error": "SĐT phải gồm đúng 10 chữ số"}, status=400)
+    cmnd = (request.GET.get("cmnd") or "").strip()
+    if not C.P.valid(phone) and not re.fullmatch(r"[0-9]{9}|[0-9]{12}",cmnd):
+        return JsonResponse({"error": "Nhập SĐT 10 số hoặc CCCD/CMND 9–12 số."}, status=400)
     try:
-        rows = (getattr(request, "customer_client", None) or S.client("khach_kiem_sdt")).query(
-            "SELECT CustID, CustCode, CustName FROM I_CUSTOMER WITH (NOLOCK) WHERE "
-            + C.P.exact_sql() + " AND CustID<>? ORDER BY CustID",
-            (phone, phone, phone, request.GET.get("cust_id", "")))
-        response = JsonResponse({"matches": rows})
-        response["Cache-Control"] = "no-store"
+        from django.urls import reverse
+        c=getattr(request,"customer_client",None) or S.client("khach_kiem_sdt")
+        columns="SELECT CustID, CustCode, CustName, CMND, Phone, GhiChu2, GhiChu3 FROM I_CUSTOMER WITH (NOLOCK) WHERE "
+        if cmnd:
+            rows=c.query(columns+"CMND=? AND CustID<>? ORDER BY CustID",(cmnd,request.GET.get("cust_id", "")))
+            for row in rows:
+                row['edit_url']=reverse('pos:khach_sua',args=[row['CustID']])
+                row['has_slot']=any(not C.P.phone_key(row.get(k)) for k in C.P.COLUMNS[1:])
+        else:
+            rows=c.query(columns+C.P.exact_sql()+" AND CustID<>? ORDER BY CustID",(phone,phone,phone,request.GET.get("cust_id", "")))
+        response=JsonResponse({"matches":rows})
+        response["Cache-Control"]="no-store"
         return response
     except Exception:
-        return JsonResponse({"error": "Chưa kiểm tra được SĐT. Hệ thống sẽ kiểm tra lại khi lưu."}, status=503)
+        return JsonResponse({"error":"Chưa kiểm tra được thông tin khách. Hệ thống sẽ kiểm tra lại khi lưu."},status=503)
 
 
 # ─────────────────────────── THÂU VÀO ───────────────────────────
@@ -1795,13 +1826,16 @@ def _gdb_ctx(trn_id, loai, nguon="live"):
         c = PmvClient(tag="hd_xem") if nguon == "live" else PmvClient(nguon, tag="hd_xem")
         extra = "t.TotalAmount AS TienMua, t.TotalAmount AS SoTien, 0 AS TienBan, 0 AS TienVangThem, 0 AS TienCongThem, 0 AS TienBot, 0 AS TienCoc, t.GoldCode, t.GoldWeight, t.WeightUnit, t.BuyRate" if loai == "THAU" else "b.SellTotalAmount AS TienBan, b.BuyTotalAmount AS TienMua, b.PayAmount AS SoTien, ISNULL(b.AddMoney,0) AS TienVangThem, ISNULL(b.TaskPriceAdd,0) AS TienCongThem, ISNULL(b.Discount,0) AS TienBot, ISNULL(b.TienCoc,0) AS TienCoc"
         alias = "t" if loai == "THAU" else "b"
-        row = c.query(f"SELECT {alias}.TrnID, {alias}.BillCode, {alias}.TrnDate, {alias}.TrnTime, {alias}.Status, {alias}.IsDel, {extra}, ISNULL(k.CustName,'') AS CustName, ISNULL(k.Phone,'') AS Phone, ISNULL(k.Address,'') AS Address, ISNULL(e.EmpName,'') AS EmpName FROM {bang} {alias} WITH (NOLOCK) LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID={alias}.CustID LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID={alias}.EmpID WHERE {alias}.TrnID=?", (trn_id,))
+        row = c.query(f"SELECT {alias}.TrnID, {alias}.CustID, {alias}.BillCode, {alias}.TrnDate, {alias}.TrnTime, {alias}.Status, {alias}.IsDel, {extra}, ISNULL(k.CustName,'') AS CustName, ISNULL(k.Phone,'') AS Phone, ISNULL(k.Address,'') AS Address, ISNULL(e.EmpName,'') AS EmpName FROM {bang} {alias} WITH (NOLOCK) LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID={alias}.CustID LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID={alias}.EmpID WHERE {alias}.TrnID=?", (trn_id,))
     except Exception as exc:
         return None, HttpResponse("Không thể đọc thông tin phiếu: " + S.error_message(exc), status=503)
     if not row:
         return None, HttpResponse("Không tìm thấy phiếu.", status=404)
     from . import document_contacts as DC
-    r = DC.overlay("KHBL_BUYGOLD" if loai=="THAU" else "KHBL_BUYSELL",row[0],c.target)
+    try:
+        r = DC.overlay("KHBL_BUYGOLD" if loai=="THAU" else "KHBL_BUYSELL",row[0],c.target)
+    except ValueError as exc:
+        return None, HttpResponse(str(exc), status=409)
 
     def _tl_chi(value, unit="L", co_don_vi=True):
         """GĐB luôn ghi trọng lượng theo chỉ: MSSQL lưu vàng theo ly."""

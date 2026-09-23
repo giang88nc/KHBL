@@ -7,6 +7,8 @@ description: Bản đồ "API" của PMVGoldRT — stored proc + bảng trực t
 
 Với nghiệp vụ **UPSERT khách từ webapp** (kể cả cầm đồ/trang khác), đọc thêm [upsert-customer](../upsert-customer/SKILL.md): service dùng chung, ba SĐT, ảnh CCCD, chống trùng, partial/retry và khác biệt rule webapp/PMV. Bản đồ proc ở đây không thay thế hợp đồng lưu khách đó.
 
+**Ngoại lệ có phạm vi — GĐ chốt 18/09/2026, THANH TOÁN bán hàng:** trước Complete (cả khi retry đơn đã C), `bill.chot` gọi `PmvClient.sync_retail_cash` → `gateway.pmv_retail_cash_default`. Khóa đúng dòng `TRN_RT_BUYSELL`, chỉ UPDATE `CashPay = PayAmount - ISNULL(CardPay,0)` từ số liệu vừa đọc dưới khóa; giữ CardPay/PayAmount, không gọi CARDPAY_Ins, không sửa két hay trạng thái. Hóa đơn mới có CardPay=0 do proc Ins nên CashPay=PayAmount. Gateway kiểm chốt ghi, trigger, trạng thái W/C, IsDel và đọc lại trước commit. Không chạy bù hàng loạt hóa đơn cũ. Kiểm: `tests.test_retail_cash_default`; hai ca sandbox chạy UPDATE trong transaction rồi rollback, giữ nguyên dữ liệu/sổ quỹ. Chi tiết: `docs/THANH_TOAN_CASHPAY.md`.
+
 Vendor KHÔNG có tài liệu API. Toàn bộ tri thức dưới đây tự khảo sát 02/09/2026 bằng
 3 script trong `tools/khaosat/` (chỉ-đọc, chạy lại được bất cứ lúc nào): đọc source
 1.049 proc + soi cache thực thi (dm_exec_query_stats) + truy vết hóa đơn thật.

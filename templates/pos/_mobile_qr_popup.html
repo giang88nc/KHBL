@@ -1,0 +1,28 @@
+{% extends 'partials/modal_shell.html' %}{% load static pos_extras %}
+{% block modal_title %}{% if qr %}Mã QR chuyển khoản{% else %}Xác nhận tạo mã QR{% endif %}{% endblock %}
+{% block modal_style %}--transfer-tone:#94630b;--transfer-soft:#fff4d6;--transfer-line:#ead49b;{% endblock %}
+{% block modal_body %}
+<link rel="stylesheet" href="{% static 'css/money_flow_transfer.css' %}?v=5"><link rel="stylesheet" href="{% static 'css/money_flow_transfer_theme.css' %}?v=8">
+<div class="transfer-panel{% if qr %} transfer-panel--qr{% endif %}">
+{% if error %}<p role="alert" class="mf-pay__error">{{ error }}</p>{% endif %}
+{% if qr %}
+{% if qr.status == 'ready' %}<form hidden data-pawn-poll="{% url 'pos:mobile_qr_check' qr.pk %}">{% csrf_token %}</form>{% endif %}
+<section class="transfer-hero transfer-qr-hero" data-qr-amount="{{ qr.amount|stringformat:'.0f' }}"><small>SỐ TIỀN CHUYỂN</small><strong>{{ qr.amount|tien_tran }}đ</strong><span data-amount-words></span></section>
+<div class="transfer-processing" role="status">{% if qr.status == 'success' %}<strong>✔ THÀNH CÔNG</strong>{% else %}<div class="transfer-loading" aria-hidden="true"><i></i></div><span>Đang xử lý<span class="transfer-dots">…</span></span><small>Chờ xác nhận chuyển khoản</small>{% endif %}</div>
+<div class="transfer-qr-frame{% if qr.status == 'success' %} is-success{% endif %}">{% if qr.status == 'success' %}<strong class="transfer-success-mark">✓ ĐÃ NHẬN TIỀN</strong>{% else %}<div class="transfer-qr-brand"><b>{{ qr.bank_name }} - {{ qr.bank_account }} - {{ qr.bank_owner }}</b></div><img class="transfer-qr" src="{{ qr_img }}" alt="QR chuyển khoản" width="280" height="280"><div class="transfer-qr-caption"><strong>{{ qr.amount|tien_tran }}đ</strong></div>{% endif %}</div>
+{% else %}
+<form id="standalone-qr-form" class="transfer-form" data-reference-suffix="{{ suffix }}" data-keep-bank="{{ keep_bank|yesno:'1,0' }}" hx-post="{% url 'pos:mobile_qr_new' %}" hx-target="#modal-root" hx-disabled-elt="find button[type='submit']">
+{% csrf_token %}<input type="hidden" name="token" value="{{ token }}">
+<section class="transfer-bank"><b></b><strong></strong><span></span></section>
+<section class="transfer-amount transfer-hero" aria-live="polite"><strong data-manual-amount>0đ</strong><span data-manual-words>Không đồng</span></section>
+<fieldset style="margin:0;padding:4px;border:0;display:flex;flex-wrap:wrap;gap:4px"><legend>Loại QR</legend>{% for item in categories %}<label style="display:flex;align-items:center;gap:3px;min-height:44px"><input style="width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#94630b" type="radio" name="category" value="{{ item.code }}" data-bank-type="{{ item.bank_type }}" {% if category == item.code %}checked{% endif %} required>{{ item.label }}</label>{% endfor %}</fieldset>
+<label>Ngân hàng nhận<select name="bank_id" required><option value="">Chọn ngân hàng</option>{% for bank in banks %}<option value="{{ bank.id }}" data-type="{{ bank.type }}" data-bank="{{ bank.bank_name }}" data-account="{{ bank.bank_number }}" data-owner="{{ bank.bank_user }}" {% if bank_id == bank.id|stringformat:'s' %}selected{% endif %}>{{ bank.bank_name }} · {{ bank.bank_number }}</option>{% endfor %}</select></label>
+<label>Số tiền chuyển khoản<input data-standalone-amount type="text" inputmode="numeric" autocomplete="off" required value="{{ amount }}"><input name="amount" type="hidden" value="{{ amount }}"></label>
+<label>Ghi chú<input name="note" value="{{ note }}" maxlength="500" autocomplete="off"></label>
+<label>Nội dung chuyển khoản<input data-manual-reference disabled></label>
+<button type="submit" class="khbl-btn khbl-btn--gold">Tạo QR</button>
+</form><script src="{% static 'js/mobile_standalone_qr.js' %}?v=2"></script>
+{% endif %}
+<script src="{% static 'js/money_flow_transfer.js' %}?v=10"></script>
+</div>{% endblock %}
+{% block modal_foot %}{% if qr and qr.status == 'ready' %}<button type="button" class="khbl-btn khbl-btn--outline" hx-get="{% url 'pos:mobile_qr_new' %}" hx-target="#modal-root">Thêm QR</button><a data-qr-save class="khbl-btn khbl-btn--outline" href="#" download="QR-{{ qr.pk }}.png">Lưu hình</a>{% endif %}<button type="button" class="khbl-btn khbl-btn--gold" onclick="closeKhblModal();document.dispatchEvent(new CustomEvent('money-flow-reconciled'))">Xong</button>{% if qr %}<script src="{% static 'js/mobile_qr_share.js' %}?v=2"></script>{% endif %}{% endblock %}

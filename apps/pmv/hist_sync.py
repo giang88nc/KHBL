@@ -189,6 +189,9 @@ def sync_one(meta):
     fast = not _has_max_col(meta)
     strat = meta["strategy"]
 
+    if strat == 'deposit_child':
+        return sync_deposit_child(meta)
+
     if strat == "append":
         wm = meta["watermark"]
         if not wm:                       # log không có khóa → bỏ qua incremental (đã backfill)
@@ -229,6 +232,37 @@ def sync_one(meta):
         return {"ins": ins, "upd": upd, "changed": set()}
 
     return {"ins": 0, "upd": 0, "changed": set()}   # child xử lý riêng theo cha
+
+
+def sync_deposit_child(meta):
+    """Atomic replace for live parent keys only; retain archived-only children.
+
+    Read parent keys and details from one consistent KK transaction. No writes
+    on KK, no DROP/TRUNCATE on HIST, including retry after a failed first sync.
+    """
+    table=meta['table'];parent=HC.DEPOSIT_CHILDREN[table]
+    cols=[c['name'] for c in meta['columns']]
+    collist=', '.join(f'[{c}]' for c in cols)
+    with G._connect_dich('kk',autocommit=False) as source:
+        cur=source.cursor()
+        cur.execute(f'SELECT TrnID FROM [{parent}] WITH (HOLDLOCK)')
+        keys=[r[0] for r in cur.fetchall()]
+        cur.execute(f'SELECT {collist} FROM [{table}] WITH (HOLDLOCK)')
+        rows=[tuple(r) for r in cur.fetchall()]
+        source.commit()
+    # Include orphan links as well; never silently omit source rows.
+    ki=cols.index('TrnID');keys=set(keys)|{r[ki] for r in rows}
+    with G._hist_connect(autocommit=False) as dest:
+        cur=dest.cursor()
+        cur.execute(f'SELECT TOP 0 TrnID INTO #deposit_keys FROM [{table}]')
+        if keys:
+            cur.executemany('INSERT INTO #deposit_keys (TrnID) VALUES (?)',[(k,) for k in keys])
+            cur.execute(f'DELETE t FROM [{table}] t JOIN #deposit_keys k ON k.TrnID=t.TrnID')
+        if rows:
+            cur.executemany(f'INSERT INTO [{table}] ({collist},[_sync_seen_at]) VALUES ({",".join("?" for _ in cols)},GETDATE())',rows)
+        cur.execute('DROP TABLE #deposit_keys')
+        dest.commit()
+    return {'ins':len(rows),'upd':0,'changed':set()}
 
 
 def refresh_children(meta, changed_keys):

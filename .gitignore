@@ -21,3 +21,6 @@ media/
 # Bản lưu .env trước khi đổi cấu hình — CHỨA MẬT KHẨU THẬT, không bao giờ commit
 .env.bak*
 .env.*.bak
+
+# Local SQL backups contain bank/customer data.
+/backups/

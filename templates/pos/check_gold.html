@@ -1,0 +1,153 @@
+{% load static %}<!doctype html>
+{% comment %}
+CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, không menu.
+· Quét mã sản phẩm = LẤY món ra khỏi tủ (chủ yếu vàng 9999); quét lại đúng mã = TRẢ về tủ.
+· Quét mã hóa đơn = mở panel hóa đơn, có nút Sửa (ghi KK qua cổng an toàn gateway.pmv_billsell_edit).
+· Nhịp 2 giây: hỏi chữ ký + dòng GIAO DỊCH (chỉ MySQL). Bảng hàng (có hỏi KK) chỉ tải lại khi phần của nó đổi.
+{% endcomment %}
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHECK GOLD · Kim Hạnh 2</title>
+{# Biểu tượng riêng của trang (GĐ cấp 23/09/2026): tab trình duyệt · lối tắt · icon khi lưu vào màn hình chính #}
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/check-gold-32.png' %}">
+<link rel="icon" type="image/png" sizes="100x100" href="{% static 'img/check-gold.png' %}">
+<link rel="shortcut icon" href="{% static 'img/check-gold.ico' %}">
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/check-gold-180.png' %}">
+<meta name="theme-color" content="#C9A02C">
+<meta name="apple-mobile-web-app-title" content="CHECK GOLD">
+<link rel="manifest" href="{% url 'pos:check_gold_manifest' %}">
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/check_gold.css' %}?v=20260923.4">
+<script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<div class="cg-nen" aria-hidden="true"></div>
+<section class="cg-trang">
+  <header class="cg-top">
+    <div class="cg-top__ten"><b>CHECK<span>GOLD</span></b><small>Kim Hạnh 2 · Quản lý giao dịch trong ngày</small></div>
+    <nav class="cg-top__nut">
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ck' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">₫ Chuyển khoản</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'thau' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">⇩ Phiếu thâu</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ban' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">⇧ Phiếu bán</button>
+    </nav>
+  </header>
+
+  <form id="cg-quet" class="cg-lenh" hx-post="{% url 'pos:check_gold_quet' %}" hx-target="#cg-khoi" hx-swap="innerHTML"
+        hx-indicator="#cg-quet">
+    {% csrf_token %}
+    <label class="cg-lenh__o"><span>Ngày</span>
+      <input type="date" name="d" id="cg-ngay" value="{{ ngay|date:'Y-m-d' }}" max="{{ hom_nay|date:'Y-m-d' }}"></label>
+    <label class="cg-lenh__o"><span>Nhân viên</span>
+      <select name="nv" id="cg-nv">
+        <option value="">— Chưa chọn —</option>
+        {% for e in nhan_vien_ds %}<option value="{{ e.EmpName }}" {% if e.EmpName == nv %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+      </select></label>
+    <label class="cg-lenh__o cg-lenh__o--ma"><span>Quét mã sản phẩm (lấy ra / trả về) hoặc mã hóa đơn</span>
+      <input name="ma" id="cg-ma" autocomplete="off" autofocus placeholder="SCAN MÃ…"><i class="cg-quet-tia"></i></label>
+    <button type="submit" class="cg-lenh__quet">QUÉT</button>
+    <button type="button" class="cg-lenh__lam-moi" id="cg-lam-moi" title="Tải lại">⟳</button>
+  </form>
+
+  <div id="cg-modal"></div>
+  <div id="cg-khoi">{% include 'pos/_check_gold_khoi.html' %}</div>
+
+  <footer class="cg-chan"><span class="cg-pill">CHECK GOLD V4</span>
+    <span class="cg-pill" id="cg-dong-ho">--:--:--</span>
+    <span class="cg-pill cg-pill--ok" id="cg-nhip"><i></i>Realtime</span></footer>
+</section>
+
+<script>
+(function(){
+  var ma=document.getElementById('cg-ma'), form=document.getElementById('cg-quet');
+  var tienVN=function(v){ v=Math.round(Number(v)||0); return v.toLocaleString('vi-VN'); };
+  function coPopup(){ return !!document.querySelector('#cg-modal .cg-lop'); }
+  function tapTrung(){ if(!coPopup()) ma.focus(); }
+  form.addEventListener('htmx:afterRequest',function(){ ma.value=''; tapTrung(); });
+  function taiLai(){ htmx.ajax('GET','{% url "pos:check_gold" %}?d='+document.getElementById('cg-ngay').value
+      +'&nv='+encodeURIComponent(document.getElementById('cg-nv').value),{target:'#cg-khoi',swap:'innerHTML'}); }
+  document.getElementById('cg-ngay').addEventListener('change',taiLai);
+  document.getElementById('cg-nv').addEventListener('change',taiLai);
+  document.getElementById('cg-lam-moi').addEventListener('click',function(){ taiLai(); tapTrung(); });
+  setInterval(function(){ document.getElementById('cg-dong-ho').textContent=new Date().toLocaleTimeString('vi-VN'); },1000);
+
+  // ───── DÒNG GIAO DỊCH kiểu bình luận livestream: dựng dòng tại máy, chỉ chèn/nháy phần đổi ─────
+  function veDong(g){
+    var el=document.createElement('article');
+    el.className='cg-gd cg-gd--'+g.nhom+' cg-gd--tt-'+g.tt+(g.huy?' cg-gd--huy':'');
+    el.dataset.id=g.id; el.dataset.ky=g.ky;
+    var cuoi = g.ra_tien
+      ? '<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do mono">'+tienVN(g.tong)+'</span>'
+      : '<span class="cg-gd__nhan mono">Nhận '+tienVN(g.khach_dua)+'</span>'
+        +'<span class="cg-gd__do mono">Thối '+tienVN(g.thoi_lai)+'</span>';
+    el.innerHTML='<span class="cg-gd__ma mono">'+g.ma+'</span><span class="cg-gd__tt">'+(g.huy?'Đã hủy':g.tt_nhan)+'</span>'
+      +'<time>'+g.gio+'</time>'
+      +'<span class="cg-gd__dv">'+g.dich_vu+'</span><span></span>'
+      +'<b class="cg-gd__tong mono">'+(g.ra_tien?'−':'')+tienVN(g.tong)+' ₫</b>'
+      +'<span class="cg-gd__kh">'+g.khach+'</span><span class="cg-gd__tm">TM '+tienVN(g.tien_mat)+'</span>'
+      +'<span class="cg-gd__ck">CK '+tienVN(g.ck)+'</span>'
+      +'<span class="cg-gd__nv">'+(g.nv||'—')+'</span>'+cuoi;
+    return el;
+  }
+  function veSong(ds){
+    var song=document.getElementById('cg-song'); if(!song) return;
+    var trong=document.getElementById('cg-gd-trong'); if(trong && ds.length) trong.remove();
+    var co={}; song.querySelectorAll('.cg-gd').forEach(function(e){ co[e.dataset.id]=e; });
+    ds.slice().reverse().forEach(function(g){          // cũ → mới, dòng mới luôn nằm TRÊN CÙNG
+      var cu=co[g.id];
+      if(!cu){ var m=veDong(g); m.classList.add('cg-gd--moi'); song.prepend(m);
+        setTimeout(function(){ m.classList.remove('cg-gd--moi'); },1600); return; }
+      if(cu.dataset.ky!==g.ky){ var moi=veDong(g); moi.classList.add('cg-gd--doi'); cu.replaceWith(moi);
+        setTimeout(function(){ moi.classList.remove('cg-gd--doi'); },1600); }
+    });
+    var ids={}; ds.forEach(function(g){ ids[g.id]=1; });
+    song.querySelectorAll('.cg-gd').forEach(function(e){        // hết giờ sống (3 phút IN · 10 phút OUT) → mờ rồi rời bảng
+      if(ids[e.dataset.id] || e.classList.contains('cg-gd--het')) return;
+      e.classList.add('cg-gd--het'); setTimeout(function(){ e.remove(); },420); });
+    var dem=document.getElementById('cg-dem-gd'); if(dem) dem.textContent=ds.length;
+  }
+
+  // ───── Nhịp 2 giây: chữ ký + dòng giao dịch (chỉ MySQL). Bảng hàng chỉ tải lại khi phần của nó đổi ─────
+  var nhip=document.getElementById('cg-nhip'), kyHang='';
+  async function theoDoi(){
+    var el=document.querySelector('[data-chu-ky]');
+    if(!el || document.hidden) return;
+    try{
+      var r=await fetch('{% url "pos:check_gold_theo_doi" %}?d='+document.getElementById('cg-ngay').value
+                        +'&ky='+encodeURIComponent(el.dataset.chuKy),{credentials:'same-origin'});
+      var j=await r.json();
+      nhip.className='cg-pill cg-pill--ok'; nhip.innerHTML='<i></i>Realtime';
+      veSong(j.gd||[]);
+      var moc=(j.chu_ky||'').split('|').slice(0,3).join('|');     // phần của BẢNG HÀNG (gold_check_entry)
+      if(kyHang && moc!==kyHang && !coPopup()) taiLai(); else el.dataset.chuKy=j.chu_ky;
+      kyHang=moc;
+    }catch(e){ nhip.className='cg-pill cg-pill--loi'; nhip.innerHTML='<i></i>Mất kết nối'; }
+  }
+  setInterval(theoDoi,2000);
+
+  // ───── Lọc + tìm trên bảng hàng (mặc định TRONG KHO), giữ lựa chọn khi bảng vẽ lại ─────
+  var locTT='I', timKiem='';
+  window.cgApLoc=function(){
+    var o=document.querySelector('[data-cg-loc]'); if(!o)return;
+    o.querySelectorAll('button').forEach(function(b){ b.classList.toggle('is-on',b.dataset.tt===locTT); });
+    var t=document.getElementById('cg-tim'); if(t && t.value!==timKiem) t.value=timKiem;
+    var hien=0;
+    document.querySelectorAll('#cg-bang tbody tr').forEach(function(tr){
+      var hop=(locTT===''||tr.dataset.tt===locTT)
+        && (timKiem===''||tr.innerText.toLowerCase().indexOf(timKiem.toLowerCase())>=0);
+      tr.hidden=!hop; if(hop) hien++;
+    });
+    var dem=document.getElementById('cg-dem-sp'); if(dem) dem.textContent=hien;
+  };
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-cg-loc] button'); if(!b)return;
+    locTT=b.dataset.tt; window.cgApLoc(); tapTrung();
+  });
+  document.addEventListener('input',function(e){ if(e.target.id==='cg-tim'){ timKiem=e.target.value; window.cgApLoc(); } });
+  document.body.addEventListener('htmx:afterSwap',function(e){ if(e.detail.target.id==='cg-khoi'){ window.cgApLoc(); tapTrung(); } });
+  window.cgApLoc(); tapTrung(); theoDoi();
+})();
+</script>
+</body>
+</html>

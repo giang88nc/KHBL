@@ -20,7 +20,7 @@ from apps.pos.models import MoneyFlow, ThauNhom, ThauPaymentLink
 
 DAY = '2026-09-09'
 TK = '666141168'
-TRB = 'TRB260900000220'       # hóa đơn bán-đổi — 4 số cuối 0220
+TRB = 'TRB260900000220'       # hóa đơn bán-đổi — nội dung CK theo 4 số cuối SỐ HĐ (0058), không theo TrnID (22/09/2026)
 TBG = 'TBG260900000220'       # phiếu thâu TRÙNG đuôi 0220 (tình huống tranh chấp)
 
 
@@ -139,7 +139,7 @@ class NhomSauChotTests(TransactionTestCase):
 
     def gio(self, **kw):
         g = g_gio(10_000_000, 20_000_000, **kw)
-        g.update(trn_id=TRB, cust={'id': 'KH1', 'name': 'Nguyễn Thị Lan'}, emp='NV1',
+        g.update(trn_id=TRB, bill_code='26-09-19-000058', cust={'id': 'KH1', 'name': 'Nguyễn Thị Lan'}, emp='NV1',
                  ck_bank='ACB', ck_stk='123456', ck_ten='NGUYEN THI LAN')
         return g
 
@@ -161,7 +161,7 @@ class NhomSauChotTests(TransactionTestCase):
         n = CK.ghi_nhom_sau_chot(self.req, g, cart.tong_cua(g), '26-09-19-000058')
         self.assertEqual((n.nghiep_vu, n.trn_ids, n.tien_mat, n.tien_ck, n.pay_method),
                          ('doi', [TRB], 4_000_000, 6_000_000, 'mixed'))
-        self.assertEqual(n.ck_nd, 'THANH TOAN TIEN VANG 0220')
+        self.assertEqual(n.ck_nd, 'THANH TOAN TIEN VANG 0058')
         self.assertEqual(CK.nhom_doi(TRB).pk, n.pk)
 
     def test_khong_ghi_khi_khach_tra_hoac_tien_mat(self):
@@ -187,7 +187,7 @@ class NhomSauChotTests(TransactionTestCase):
         tin, loi = CK.quet_qr(g, chuoi)
         self.assertEqual(loi, '')
         self.assertEqual((g['ck_bank'], g['ck_stk'], g['pay_method']), ('ACB', '987654321', 'bank'))
-        self.assertEqual(g['ck_nd'], 'THANH TOAN TIEN VANG 0220')
+        self.assertEqual(g['ck_nd'], 'THANH TOAN TIEN VANG 0058')
 
 
 class DoiSoatDoiTests(TransactionTestCase):
@@ -195,7 +195,7 @@ class DoiSoatDoiTests(TransactionTestCase):
 
     def setUp(self):
         with connection.cursor() as c:
-            c.execute('CREATE TABLE bank_notifications (id integer primary key, provider text, ref_code text, bank_number text, bank_name text, trans_amount decimal, transaction_time text, direction text, description text, bill_code_raw text)')
+            c.execute('CREATE TABLE bank_notifications (id integer primary key, provider text, ref_code text, bank_number text, bank_name text, trans_amount decimal, transaction_time text, direction text, description text, bill_code_raw text, ma_chung_tu text, loai_chung_tu text)')
             c.execute('CREATE TABLE gold_bank (bank_number text, Active integer)')
             c.execute("INSERT INTO gold_bank VALUES ('666141168',1)")
         self.user = get_user_model().objects.create_superuser('doi-test', password='test')
@@ -212,7 +212,7 @@ class DoiSoatDoiTests(TransactionTestCase):
         self.nhom = ThauNhom.objects.create(nghiep_vu='doi', trn_ids=[TRB], bill_codes=['26-09-09-000058'],
                                             cust_id='KH1', cust_name='Lan', pay_method='mixed', tien_mat=4_000_000,
                                             tien_ck=6_000_000, ck_bank='ACB', ck_stk='123', ck_ten='LAN',
-                                            ck_nd='THANH TOAN TIEN VANG 0220')
+                                            ck_nd='THANH TOAN TIEN VANG 0058')
 
     def tearDown(self):
         with connection.cursor() as c:
@@ -225,9 +225,9 @@ class DoiSoatDoiTests(TransactionTestCase):
                     CreatedDate=dt.datetime(2026, 9, 9, 11, 40), CustID='KH1', CustName='Lan', Phone='09', CMND='0',
                     EmpName='NV')
 
-    def bank(self, id=1, amount=6_000_000, duoi='0220'):
+    def bank(self, id=1, amount=6_000_000, duoi='0058'):   # 4 số cuối SỐ HĐ 26-09-09-000058 (22/09/2026)
         with connection.cursor() as c:
-            c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            c.execute('INSERT INTO bank_notifications (id,provider,ref_code,bank_number,bank_name,trans_amount,transaction_time,direction,description,bill_code_raw) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                       [id, 'sepay', f'REF{id}', TK, 'ACB', amount, DAY + ' 12:00:00', 'out',
                        f'THANH TOAN TIEN VANG {duoi}-090926-12:00:00 6253ASCB', ''])
 
@@ -249,7 +249,7 @@ class DoiSoatDoiTests(TransactionTestCase):
         self.assertFalse(self.orders()[TRB]['candidates'][0]['can_link'])
 
     def test_trung_duoi_voi_phieu_thau_khac_tien_khong_tranh_chap(self):
-        self.thau_raw = [dict(TrnID=TBG, BillCode='26-09-09-000220', CreatedDate=dt.datetime(2026, 9, 9, 11),
+        self.thau_raw = [dict(TrnID=TBG, BillCode='26-09-08-000058', CreatedDate=dt.datetime(2026, 9, 9, 11),
                               Status='C', IsDel='0', CardPay=-Decimal(2_000_000), SoTien=Decimal(2_000_000),
                               TienMua=Decimal(2_000_000), loai='THAU', TrnDate=dt.datetime(2026, 9, 9), TrnTime='11:00:00')]
         self.bank()                                       # 6tr — đúng hóa đơn đổi, lệch phiếu thâu
@@ -259,7 +259,7 @@ class DoiSoatDoiTests(TransactionTestCase):
         self.assertFalse(ds[TBG]['candidates'][0]['can_link'])
 
     def test_trung_duoi_cung_tien_la_tranh_chap(self):
-        self.thau_raw = [dict(TrnID=TBG, BillCode='26-09-09-000220', CreatedDate=dt.datetime(2026, 9, 9, 11),
+        self.thau_raw = [dict(TrnID=TBG, BillCode='26-09-08-000058', CreatedDate=dt.datetime(2026, 9, 9, 11),
                               Status='C', IsDel='0', CardPay=-Decimal(6_000_000), SoTien=Decimal(6_000_000),
                               TienMua=Decimal(6_000_000), loai='THAU', TrnDate=dt.datetime(2026, 9, 9), TrnTime='11:00:00')]
         self.bank()

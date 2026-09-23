@@ -5,8 +5,8 @@
   {% if kind == "nv" %}
   <button type="button" class="pg-goiy__i" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-vals='{"emp": "{{ x.EmpID }}"}'><b>{{ x.EmpName }}</b></button>
   {% else %}
-  <button type="button" class="pg-goiy__i" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-vals='{"cust_id": "{{ x.CustID }}"}'>
-    <b>{{ x.CustName }}</b><i class="mono">{{ x.Phone }}{% if x.CMND %} · {{ x.CMND }}{% endif %}</i></button>
+  <button type="button" class="pg-goiy__i" hx-post="{% url 'pos:thau_dat' %}" hx-swap="none" hx-vals='{"cust_id": "{{ x.CustID }}", "document_phone": "{{ x.selected_phone|escapejs }}"}'>
+    <b>{{ x.CustName }}</b><i class="mono">{{ x.selected_phone|default:"Chưa có SĐT" }}{% if x.Address %} · {{ x.Address }}{% endif %}</i></button>
   {% endif %}
   {% endfor %}
 </div>

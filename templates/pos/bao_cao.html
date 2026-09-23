@@ -24,6 +24,8 @@ Ba con số doanh thu (thực · ròng · HH) do GĐ chốt — xem docstring ap
       <label>Từ ngày<input type="date" name="d1" value="{{ d1 }}" max="{{ hom_nay }}"></label>
       <label>Đến ngày<input type="date" name="d2" value="{{ d2 }}" max="{{ hom_nay }}"></label>
       <button class="bc-nut bc-nut--chinh" type="submit">Xem</button>
+      {# CHECK BILL V2 (21/09/2026): kiểm hóa đơn giấy theo ngày "Đến ngày", mở tab mới #}
+      <a class="bc-nut" href="{% url 'pos:check_bill' %}?d={{ d2 }}" target="_blank" rel="noopener" title="Kiểm hóa đơn giấy cuối ngày — mở tab mới">CHECK BILL ↗</a>
       <span id="bc-cho" class="htmx-indicator">Đang tổng hợp…</span>
     </form>
   </header>

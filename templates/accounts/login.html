@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
@@ -18,10 +18,12 @@
   .err { background:#FDF2F0; color:#B3402A; border:1px solid #E4B5AC; border-radius:6px; padding:8px 10px; font-size:13px; margin-bottom:8px; }
   .note { margin-top:14px; font-size:12px; color:#a8a29e; }
 </style>
+{% if request.khbl_mobile_session %}<link rel="stylesheet" href="{% static 'mobile/logo-motion.css' %}?v=1">{% endif %}
 </head>
 <body>
 <form class="card" method="post">
   {% csrf_token %}
+  {% if request.khbl_mobile_session %}<div class="kh2-logo-motion" style="width:130px;margin-bottom:20px"><img src="{% static 'mobile/kh2-icon-180.png' %}" alt="Logo Kim Hạnh 2" width="130" height="130"></div>{% endif %}
   <h1>KHBL</h1>
   <div class="sub">Bán lẻ Kim Hạnh 2 — đăng nhập bằng tài khoản app (admin / kimhanh2)</div>
   {% if form.errors %}<div class="err">Sai tên đăng nhập hoặc mật khẩu.</div>{% endif %}

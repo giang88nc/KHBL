@@ -43,3 +43,21 @@ def search(q, alias="c"):
         return expression(alias + ".CMND") + "=?", (number,)
     cols = (*COLUMNS, "CMND", "CustName", "CustCode")
     return "(" + " OR ".join(alias + "." + c + " LIKE ?" for c in cols) + ")", ("%" + q + "%",) * len(cols)
+
+
+def suggestion_rows(rows, query='', columns=('Phone', 'GhiChu2', 'GhiChu3')):
+    """One choice per phone, matched phone first; never mutate customer records."""
+    key=lambda value: str(value or '').translate(str.maketrans('', '', ' .()-\t\r\n\u00a0'))
+    term=key(query)
+    numeric=bool(term) and term.isascii() and term.isdigit()
+    choices=[]
+    for row in rows:
+        seen=set()
+        for column in columns:
+            phone=key(row.get(column))
+            if not phone or phone in seen: continue
+            seen.add(phone)
+            rank=0 if numeric and phone==term else 1 if numeric and term in phone else 2
+            choices.append((rank, dict(row, selected_phone=phone)))
+        if not seen: choices.append((2, dict(row, selected_phone='')))
+    return [row for _,row in sorted(choices,key=lambda pair:pair[0])]

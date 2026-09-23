@@ -1,0 +1,45 @@
+{% load pos_extras %}{% comment %}
+POPUP DANH SÁCH NHANH TRONG NGÀY (CHECK GOLD V4): ck = chuyển khoản (khj_bl) · thau = phiếu thâu · ban = phiếu bán (KK, chỉ đọc).
+{% endcomment %}
+<div class="cg-lop" onclick="if(event.target===this)this.remove()">
+  <div class="cg-hop">
+    <h3>{% if kieu == 'ck' %}CHUYỂN KHOẢN{% elif kieu == 'thau' %}PHIẾU THÂU{% else %}PHIẾU BÁN{% endif %}
+      <small>ngày {{ ngay|date:"d/m/Y" }}</small>
+      <button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
+    {% if loi %}<p class="cg-tin cg-tin--loi">✕ {{ loi }}</p>{% else %}
+    <div class="cg-chip">
+      <span>{{ tong.so }} dòng</span>
+      {% if kieu == 'ck' %}<span class="cg-chip--vao">Vào {{ tong.vao|tien_tran }} ₫</span>
+        <span class="cg-chip--ra">Ra {{ tong.ra|tien_tran }} ₫</span><span>Ròng {{ tong.rong|tien_tran }} ₫</span>
+      {% elif kieu == 'thau' %}<span>Tổng {{ tong.tong|tien_tran }} ₫</span><span>CK {{ tong.ck|tien_tran }} ₫</span>
+      {% else %}<span>Tổng {{ tong.tong|tien_tran }} ₫</span><span>TM {{ tong.tien_mat|tien_tran }} ₫</span><span>CK {{ tong.ck|tien_tran }} ₫</span>{% endif %}
+    </div>
+    <div class="cg-cuon cg-cuon--cao"><table class="cg-bang">
+      {% if kieu == 'ck' %}
+        <thead><tr><th>GIỜ</th><th>CHIỀU</th><th>MÃ HĐ</th><th>TK</th><th class="cg-so">SỐ TIỀN</th><th>NỘI DUNG</th></tr></thead>
+        <tbody>{% for r in rows %}<tr><td class="cg-mo">{{ r.gio }}</td>
+          <td><span class="cg-tt cg-tt--{% if r.vao %}I{% else %}O{% endif %}">{% if r.vao %}Vào{% else %}Ra{% endif %}</span></td>
+          <td class="mono">{% if r.ma_chung_tu %}{{ r.ma_chung_tu }} <small class="cg-mo">{{ r.loai_chung_tu }}</small>{% else %}—{% endif %}</td>
+          <td class="cg-mo">{{ r.bank_name }} {{ r.bank_number }}</td>
+          <td class="cg-so"><b>{{ r.trans_amount|tien_tran }}</b></td>
+          <td class="cg-mo cg-nd">{{ r.description|default:"—" }}</td></tr>{% empty %}<tr><td colspan="6" class="cg-trong">Không có giao dịch.</td></tr>{% endfor %}</tbody>
+      {% elif kieu == 'thau' %}
+        <thead><tr><th>MÃ PHIẾU</th><th>GIỜ</th><th>KHÁCH</th><th>NV</th><th class="cg-so">TỔNG TIỀN</th><th class="cg-so">CK</th><th>TT</th></tr></thead>
+        <tbody>{% for r in rows %}<tr><td class="mono">{{ r.BillCode|default:r.TrnID }}</td><td class="cg-mo">{{ r.TrnTime|slice:":5" }}</td>
+          <td>{{ r.CustName|default:"Khách lẻ" }}</td><td class="cg-mo">{{ r.EmpName|default:"—" }}</td>
+          <td class="cg-so">{{ r.TotalAmount|tien_tran }}</td><td class="cg-so">{{ r.CardPay|tien_tran }}</td>
+          <td>{% if r.IsDel != '0' %}<span class="cg-tt cg-tt--O">Đã hủy</span>{% elif r.Status == 'C' %}<span class="cg-tt cg-tt--S">Đã chốt</span>{% else %}<span class="cg-tt cg-tt--I">Còn chờ</span>{% endif %}</td></tr>
+          {% empty %}<tr><td colspan="7" class="cg-trong">Không có phiếu thâu.</td></tr>{% endfor %}</tbody>
+      {% else %}
+        <thead><tr><th>MÃ HĐ</th><th>GIỜ</th><th>KHÁCH</th><th>NV</th><th class="cg-so">TỔNG</th><th class="cg-so">TM</th><th class="cg-so">CK</th><th>TT</th></tr></thead>
+        <tbody>{% for r in rows %}<tr><td class="mono"><button type="button" class="cg-xem-hd" title="Mở chi tiết hóa đơn"
+              hx-get="{% url 'pos:check_gold_hoa_don' r.BillCode %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-khoi" hx-swap="innerHTML"
+              onclick="document.getElementById('cg-modal').innerHTML=''">{{ r.BillCode|default:r.TrnID }}</button></td>
+          <td class="cg-mo">{{ r.TrnTime|slice:":5" }}</td><td>{{ r.CustName|default:"Khách lẻ" }}</td><td class="cg-mo">{{ r.EmpName|default:"—" }}</td>
+          <td class="cg-so">{{ r.PayAmount|tien_tran }}</td><td class="cg-so">{{ r.CashPay|tien_tran }}</td><td class="cg-so">{{ r.CardPay|tien_tran }}</td>
+          <td>{% if r.IsDel != '0' %}<span class="cg-tt cg-tt--O">Đã hủy</span>{% elif r.Status == 'C' %}<span class="cg-tt cg-tt--S">Đã chốt</span>{% else %}<span class="cg-tt cg-tt--I">Còn chờ</span>{% endif %}</td></tr>
+          {% empty %}<tr><td colspan="8" class="cg-trong">Không có hóa đơn bán.</td></tr>{% endfor %}</tbody>
+      {% endif %}
+    </table></div>{% endif %}
+  </div>
+</div>

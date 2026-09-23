@@ -13,6 +13,9 @@ from . import mobile_online
 from . import mobile_qr
 from . import deposit_editing
 from . import bao_cao
+from . import check_bill, check_gold
+from . import gan_ma_api
+from . import sepay_v2
 from . import qr_learning_views
 from . import customer_camera
 from . import customer_sync
@@ -52,6 +55,28 @@ urlpatterns = [
     path("banle/mobile/dashboard/", login_required(money_flow_views.mobile_home, login_url='/banle/mobile/'), name="money_flow_mobile_dashboard"),
     path("banle/mobile/money-in/", login_required(money_flow_views.mobile_in, login_url='/banle/mobile/'), name="money_flow_mobile_in"),
     path('banle/bao-cao/', bao_cao.trang, name='bao_cao'),        # BÁO CÁO (12/09/2026)
+    path('banle/api/gan-ma-ck/', gan_ma_api.gan_ma_ck, name='gan_ma_ck'),
+    # WEBHOOK SEPAY V2 (22/09/2026) — nhận cả có/không '/' cuối: POST bị chuyển hướng sẽ mất nội dung
+    path('banle/webhook/sepay2/', sepay_v2.webhook, name='sepay_v2'),     # NỘI BỘ: https://127.0.0.1:8100/banle/webhook/sepay2
+    path('banle/webhook/sepay2', sepay_v2.webhook),
+    path('webhook/sepay2/', sepay_v2.webhook),                            # dự phòng cho giai đoạn ngrok (…/webhook/sepay2)
+    path('webhook/sepay2', sepay_v2.webhook),          # BANLE_V5 gọi sau upsert bank_notifications (22/09/2026)
+    path('banle/bao-cao/check-bill/', check_bill.trang, name='check_bill'),              # CHECK BILL V2 (21/09/2026)
+    path('banle/bao-cao/check-bill/quet/', check_bill.quet, name='check_bill_quet'),
+    path('banle/bao-cao/check-bill/<int:pk>/xoa/', check_bill.xoa, name='check_bill_xoa'),
+    path('banle/bao-cao/check-bill/kiem-lai/', check_bill.kiem_lai, name='check_bill_kiem_lai'),
+    path('banle/bao-cao/check-bill/ck/<int:pk>/sua/', check_bill.ck_sua, name='check_bill_ck_sua'),
+    # CHECK GOLD V4 (23/09/2026) — kiểm vàng trong ngày, trang đứng riêng không đăng nhập
+    path('banle/bao-cao/check-gold/', check_gold.trang, name='check_gold'),
+    path('banle/bao-cao/check-gold/quet/', check_gold.quet_view, name='check_gold_quet'),
+    path('banle/bao-cao/check-gold/<int:pk>/go/', check_gold.go_view, name='check_gold_go'),
+    path('banle/bao-cao/check-gold/theo-doi/', check_gold.theo_doi, name='check_gold_theo_doi'),
+    path('banle/bao-cao/check-gold/hd/<str:bill_code>/', check_gold.hoa_don_view, name='check_gold_hoa_don'),
+    path('banle/bao-cao/check-gold/ds/<str:kieu>/', check_gold.popup, name='check_gold_popup'),
+    path('banle/bao-cao/check-gold/hd/<str:bill_code>/sua/', check_gold.sua_form, name='check_gold_sua'),
+    path('banle/bao-cao/check-gold/hd/<str:bill_code>/luu/', check_gold.sua_luu, name='check_gold_sua_luu'),
+    path('banle/bao-cao/check-gold/tim-khach/', check_gold.tim_khach, name='check_gold_tim_khach'),
+    path('banle/bao-cao/check-gold/manifest.json', check_gold.manifest, name='check_gold_manifest'),
     path('banle/dat-coc/', deposits.index, name='dat_coc'),
     path('banle/dat-coc/bao-cao/', deposits.report, name='dat_coc_report'),
     # 📱 GỬI SMS (19/09/2026) — ĐẶT TRƯỚC 'dat-coc/<pk>/<action>/' kẻo 'gui-sms/tao/' bị hiểu là phiếu 'gui-sms'
@@ -131,6 +156,7 @@ urlpatterns = [
     path("tai-khoan/passcode/", views.passcode_form, name="passcode_form"),
     path("tai-khoan/passcode/luu/", views.passcode_save, name="passcode_save"),
     path("banle/ban-hang/thanh-toan/", views.ban_thanh_toan, name="ban_thanh_toan"),
+    path("banle/ban-hang/phan-loai/", mobile_invoice.retail_popup, name="ban_phan_loai"),
     # 08/09 chiều dọn code chết: bỏ bot-le · mo-lai · mo-khoa · in/ (in_phieu.html); XÓA nháp đi qua thuc-hien/xoa_nhap
     path("banle/ban-hang/huy/", views.ban_huy, name="ban_huy"),
     path("banle/ban-hang/in/dem/", views.ban_in_dem, name="ban_in_dem"),

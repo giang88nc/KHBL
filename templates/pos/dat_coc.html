@@ -10,4 +10,4 @@
   <div id="dc-content" hx-get="{% url 'pos:dat_coc' %}" hx-trigger="depositRefresh from:body" hx-include="#dc-filter,#dc-message-filter" hx-target="this">{% if tab == 'notifications' %}{% include 'pos/_dat_coc_messages.html' %}{% else %}{% include 'pos/_dat_coc_list.html' %}{% endif %}</div>
 </section>
 {% endblock %}
-{% block extra_js %}<script defer src="{% static 'js/dat_coc.js' %}?v=20260913.promise-filter1"></script><script defer src="{% static 'js/dat_coc_editor.js' %}?v=20260921.document-contact"></script>{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/dat_coc.js' %}?v=20260913.promise-filter1"></script><script defer src="{% static 'js/dat_coc_editor.js' %}?v=20260921.phone-choices"></script>{% endblock %}

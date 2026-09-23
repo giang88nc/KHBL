@@ -1,0 +1,19 @@
+{% load pos_extras %}{# POPUP SỬA MÃ CHỨNG TỪ 1 KHOẢN CK (23/09/2026) — lưu là ghi thẳng CardPay/CashPay lên KK #}
+<div class="cb-lop" onclick="if(event.target===this)this.remove()">
+  <form class="cb-hop" hx-post="{% url 'pos:check_bill_ck_sua' ck.id %}" hx-target="#cb-modal" hx-swap="innerHTML">
+    <input type="hidden" name="d" value="{{ ngay|date:'Y-m-d' }}"><input type="hidden" name="do" value="1">
+    <h3>GẮN MÃ HĐ CHO KHOẢN CK</h3>
+    <dl class="cb-hop__tt">
+      <div><dt>Giờ</dt><dd>{{ ck.gio }}</dd></div>
+      <div><dt>TK nhận</dt><dd>{{ ck.bank_name }} {{ ck.bank_number }}</dd></div>
+      <div><dt>Số tiền</dt><dd><b>{{ ck.tien|tien_tran }} ₫</b></dd></div>
+      <div><dt>Nội dung</dt><dd class="cb-hop__nd">{{ ck.mo_ta|default:"—" }}</dd></div>
+    </dl>
+    {% if loi %}<p class="cb-tin cb-tin--loi" role="alert">✕ {{ loi }}</p>{% endif %}
+    <label>Mã chứng từ (mã HĐ)
+      <input name="ma" value="{{ ma_nhap|default:ck.ma|default:'' }}" placeholder="26-09-23-000096" autofocus required></label>
+      
+    <div class="cb-hop__nut"><button type="button" onclick="document.getElementById('cb-modal').innerHTML=''">Đóng</button>
+      <button type="submit" class="cb-hop__luu">LƯU</button></div>
+  </form>
+</div>

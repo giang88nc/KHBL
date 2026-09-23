@@ -71,6 +71,7 @@ def save(payload,user,client,files=None):
         merged=form_values(current) if current else {'NoiCap':'Cục Cảnh Sát QLHC về TTXH','Active':'1'}
         merged.update({k:v for k,v in supplied.items() if k in FORM_FIELDS and v is not None})
         merged['CustID']=cid
+        merged['append_guard']=supplied.get('append_guard') or ''
         data,errors,warnings=C.clean_form(merged)
         if errors:return {'complete':False,'errors':errors,'cust_id':cid}
         # Validation errors before a vendor write are safe to correct and resubmit.
@@ -78,6 +79,8 @@ def save(payload,user,client,files=None):
         effective=dict(data)
         for column,key in zip(P.COLUMNS,P.KEYS):
             if effective.get(key) is None:effective[key]=P.phone_key((current or {}).get(column))
+        try:C.validate_append(data,current)
+        except C.CustomerSaveError as error:return {'complete':False,'errors':[str(error)],'cust_id':cid}
         errors=C.duplicate_errors(client,effective)
         if errors:return {'complete':False,'errors':errors,'cust_id':cid}
         receipt=CustomerBridgeReceipt.objects.create(token=token,target=client.target,user_id=user.pk,
@@ -127,9 +130,22 @@ def dispatch(payload,user,target):
         tags=dict(QR._tach_tlv(text));service=dict(QR._tach_tlv(tags.get('38',''))).get('02')
         if not result['hop_le'] or service!='QRIBFTTA':
             raise ValueError(result.get('loi') or 'Chỉ nhận VietQR chuyển khoản tới tài khoản ngân hàng.')
-        from .views_thau import _qr_png_b64
+        from .views_thau import _qr_png_b64, _ten_tk_da_biet
+        holder=result['ten'] or _ten_tk_da_biet(result['bank_code'],result['account'])
+        suggested=False
+        if not holder:
+            holder=QR.khong_dau(str(payload.get('customer_name') or ''))[:100]
+            suggested=bool(holder)
+        if result['ten']:
+            warning=''
+        elif holder and not suggested:
+            warning='Tên chủ tài khoản lấy từ giao dịch trước có cùng ngân hàng và số tài khoản. Vui lòng đối chiếu.'
+        elif holder:
+            warning='QR không có tên chủ tài khoản; đang gợi ý theo tên khách trên phiếu. Vui lòng đối chiếu.'
+        else:
+            warning='QR không có tên chủ tài khoản. Nhập và đối chiếu tên người nhận.'
         return {'qr_image':_qr_png_b64(text),'bank_name':result['bank_ten'],'bank_code':result['bank_code'],'bank_account':result['account'],
-                'bank_holder':result['ten'],'warning':'' if result['ten'] else 'QR không có tên chủ tài khoản. Nhập và đối chiếu tên người nhận.'}
+                'bank_holder':holder,'warning':warning,'bank_holder_source':'qr' if result['ten'] else ('history' if holder and not suggested else ('customer' if holder else 'missing'))}
     if action=='employees':
         return {'rows':client.query("SELECT EmpID,EmpName FROM T_EMPLOYEE WITH (NOLOCK) WHERE ISNULL(Active,'1')='1' ORDER BY EmpName,EmpID")}
     if action=='pawn_images':

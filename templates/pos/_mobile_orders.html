@@ -1,0 +1,21 @@
+{% load static pos_extras %}
+<link rel="stylesheet" href="{% static 'css/mobile_orders.css' %}?v=2">
+<section class="mo mapp-enter">
+<header class="mo-head"><a href="{% url 'pos:money_flow_mobile_dashboard' %}" aria-label="Trang chủ">‹</a><h1>Đặt hàng</h1><span>Chỉ đọc</span></header>
+<form class="mo-filter" hx-get="{% url 'pos:mobile_orders' %}" hx-target="#mobile-stage" hx-push-url="true" action="{% url 'pos:mobile_orders' %}">
+<div class="mo-search"><input name="q" value="{{ q }}" placeholder="Mã phiếu / tên khách / SĐT" aria-label="Tìm phiếu" maxlength="100"><button name="tab" value="{{ tab }}" aria-label="Tìm và làm mới">↻</button></div>
+<div class="mo-tabs">{% for value,label in tabs %}<button name="tab" value="{{ value }}" class="{% if tab == value %}active{% endif %}">{{ label }}</button>{% endfor %}</div>
+<div class="mo-options"><label><input type="checkbox" name="mine" value="1" {% if mine %}checked{% endif %}> Tôi</label><select name="due" aria-label="Lịch hẹn"><option value="">Mọi lịch hẹn</option value="overdue" {% if due == 'overdue' %}selected{% endif %}>Quá hẹn</option><option value="today" {% if due == 'today' %}selected{% endif %}>Hẹn hôm nay</option></select><button name="tab" value="{{ tab }}">Lọc</button></div>
+</form>
+{% if error %}<p class="mo-error" role="alert">{{ error }}</p>{% else %}
+<div class="mo-summary"><b>{{ total }} phiếu</b><span>Quá hẹn {{ overdue_count }} · Hôm nay {{ today_count }}</span></div>
+{% for row in page %}<button type="button" class="mo-card" hx-get="{% url 'pos:mobile_order_detail' row.TrnID %}" hx-target="#modal-root" hx-disabled-elt="this">
+<div class="mo-line"><b>{{ row.BillCode }}</b><span class="mo-badge">{{ row.state_label }}</span></div>
+<div class="mo-customer"><strong>{{ row.CustName|default:'Chưa có tên khách' }}</strong><span>{{ row.Phone|default:'' }}</span></div>
+<p class="mo-item-summary">{{ row.item_summary|default:'Chưa có món' }}</p>
+<div class="mo-line"><span class="{% if row.overdue %}mo-overdue{% endif %}">Hẹn {{ row.promise_date|date:'d/m/Y'|default:'—' }}{% if row.overdue %} · Quá hẹn{% endif %}</span><strong>Cọc {{ row.TienCoc|tien_tran }}đ</strong></div>
+<div class="mo-line mo-muted"><span>TM {{ row.CashPay|tien_tran }} · CK {{ row.CardPay|tien_tran }}</span>{% if not row.split_ok %}<span class="mo-overdue">Lệch phân bổ</span>{% endif %}</div>
+<div class="mo-line mo-muted"><span>{{ row.EmpName|default:'Chưa có NV' }}</span><span>Chi tiết ›</span></div>
+</button>{% empty %}<div class="mo-empty">Không có phiếu phù hợp.</div>{% endfor %}
+<nav class="mo-pages">{% if page.has_previous %}<a href="?{{ query }}&page={{ page.previous_page_number }}" hx-get="?{{ query }}&page={{ page.previous_page_number }}" hx-target="#mobile-stage" hx-push-url="true">‹ Trước</a>{% endif %}<span>{{ page.number }}/{{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{{ query }}&page={{ page.next_page_number }}" hx-get="?{{ query }}&page={{ page.next_page_number }}" hx-target="#mobile-stage" hx-push-url="true">Tiếp ›</a>{% endif %}</nav>
+{% endif %}</section>

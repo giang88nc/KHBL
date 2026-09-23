@@ -1,0 +1,26 @@
+{% extends 'partials/modal_shell.html' %}{% load static pos_extras %}
+{% block modal_title %}{{ invoice_title|default:'Thông tin phiếu & tiền khách' }}{% endblock %}
+{% block modal_body %}
+<link rel="stylesheet" href="{% static 'css/mobile_invoice.css' %}?v=3">
+<section class="invoice-panel">
+{% if error %}<p class="invoice-error" role="alert">{{ error }}</p>{% endif %}
+{% if saved %}<p class="invoice-saved" role="status">Đã lưu xác nhận tiền.</p>{% endif %}
+<header class="invoice-party"><b>{{ flow.source_bill_code }}</b><div class="invoice-party__customer"><strong>{{ party.CustName|default:flow.customer_name }}</strong><span>{{ party.Phone }}</span></div><small>Nhân viên: {{ party.EmpName|default:'—' }}</small></header>
+{% if can_save %}
+<form id="mobile-invoice-form" method="post" hx-post="{{ invoice_post_url }}" hx-target="#modal-root" data-cash="{{ cash|stringformat:'.0f' }}">
+{% csrf_token %}<input type="hidden" name="version" value="{{ version }}">
+{% if retail %}<fieldset><legend>Phân loại phiếu</legend>
+<small>KÊNH</small><div class="invoice-types"><label><input type="radio" name="channel" value="store" {% if channel != 'online' %}checked{% endif %}>Tại tiệm</label><label><input type="radio" name="channel" value="online" {% if channel == 'online' %}checked{% endif %}>Online</label></div>
+<div data-online-row><div class="invoice-types" style="flex-wrap:wrap;gap:4px">{% for label in social_choices %}<label><input type="radio" name="social" value="{{ label }}" {% if social == label %}checked{% endif %}>{{ label }}</label>{% endfor %}<label><input type="checkbox" name="customer_hold" value="1" {% if customer_hold %}checked{% endif %}>Khách gửi</label></div></div>
+<small>MỤC ĐÍCH</small><div class="invoice-types"><label><input type="checkbox" name="is_wedding" value="1" {% if wedding_selected %}checked{% endif %}>Vàng cưới</label></div>
+<div data-wedding-row><div class="invoice-totals"><div><small>Số lượng trên bill</small><b>{{ bill_quantity|default_if_none:'—' }}</b></div><div><small>Tổng tiền bill</small><b>{{ total|tien_tran }}đ</b></div></div><label>Ngày cưới · không bắt buộc<input type="date" name="wedding" value="{{ wedding }}"></label></div>
+<label>Ghi chú chung<textarea name="note" maxlength="2000" rows="2">{{ note }}</textarea></label></fieldset>{% endif %}
+<div class="invoice-totals"><div><small>Tổng phải thu</small><b>{{ total|tien_tran }}đ</b></div><div><small>Chuyển khoản</small><b>{{ bank|tien_tran }}đ</b></div><div><small>Tiền mặt cần thu</small><b>{{ cash|tien_tran }}đ</b></div></div>
+<div class="invoice-tender"><label for="invoice-tender-input">Khách đưa</label><div class="invoice-tender__field"><input id="invoice-tender-input" data-tender type="text" inputmode="numeric" autocomplete="off" value="{{ tender|stringformat:'.0f' }}" {% if cash == 0 %}disabled{% endif %}><div class="invoice-tender__actions"><button type="button" data-tender-clear aria-label="Xóa tiền khách đưa" {% if cash == 0 %}disabled{% endif %}>×</button><button type="button" data-tender-exact {% if cash == 0 %}disabled{% endif %}>Nhận đủ</button></div></div><input type="hidden" name="tender" value="{{ tender|stringformat:'.0f' }}"></div>
+<div class="invoice-quick" data-quick></div>
+<div class="invoice-change"><span data-change-label>Tiền trả lại</span><strong data-change>{{ change|tien_tran }}đ</strong></div>
+{% if cash == 0 %}<small>Không còn tiền mặt cần thu. Giữ nguyên thông tin tiền khách đã lưu.</small>{% endif %}
+</form>{% endif %}
+</section><script src="{% static 'js/mobile_invoice.js' %}?v=3"></script>
+{% endblock %}
+{% block modal_foot %}<button type="button" class="khbl-btn khbl-btn--outline" onclick="closeKhblModal()">Đóng</button>{% if can_save %}<button type="submit" form="mobile-invoice-form" class="khbl-btn khbl-btn--gold" hx-disabled-elt="this">{{ invoice_save_label|default:'Lưu thông tin' }}</button>{% endif %}{% endblock %}

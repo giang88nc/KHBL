@@ -4,6 +4,8 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 · data-can-manage="0" (GĐ chốt 10/09/2026): máy chủ tự đối soát 5 phút/lần (job trong config/scheduler.py →
   manage.py doi_soat_ck) nên trang KHÔNG tự gọi nữa. Cờ này chỉ tắt vòng tự gọi trong thau2_payments.js; nút
   xác nhận/gỡ trong popup chi tiết vẫn dùng quyền thật ở máy chủ. Nút "Đối soát CK" đã bỏ cùng ngày.
+· data-auto-scan="1" (GĐ chốt 22/09/2026): trang TỰ đối soát 15 giây/lần khi d2 = hôm nay (thau2_payments.js) —
+  so thau_nhom.ck_nd (qua skill tách mã) với bank_notifications.ma_chung_tu, đủ 12 số + đủ tiền mới tự xác nhận.
 · Hai nút tải tệp (Excel danh mục NCC · Word ảnh CCCD) đứng ngay trên bảng, giữ nguyên bộ lọc đang xem.
 · Cột NỘI DUNG có tick ✓ sau Tên chủ thẻ khi đúng khuôn đối soát, ✕ khi sai (GĐ chốt 11/09/2026).
 · Cột CHUYỂN KHOẢN dòng 2: khớp rồi thì hiện mã giao dịch ngân hàng + số tiền thay chữ "Đã xác nhận CK".
@@ -12,7 +14,7 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
   bộ lọc Nghiệp vụ (Tất cả · Thâu vào · Bán đổi dư); hai tệp xuất cũng theo đúng bộ lọc này.
 {% endcomment %}
 {% load pos_extras %}
-<section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0">
+<section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0" data-auto-scan="1">
 <header class="th2-head"><h1>PHIẾU THÂU VÀO</h1><span>{{ rows|length }} đơn / nhóm · {% if source == 'hist' %}Kho lịch sử{% else %}Dữ liệu KK{% endif %}</span></header>
 <form class="th2-filter" hx-get="{% url 'pos:thau_vao_2' %}" hx-target="#thau2-list" hx-swap="outerHTML" hx-trigger="change, submit" hx-sync="this:replace">
 <label>Từ ngày<input class="khbl-input" type="date" name="d1" value="{{ d1 }}"></label>
@@ -34,7 +36,7 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 {% if error %}<p class="khbl-alert khbl-alert--do">{{ error }}</p>{% endif %}
 <div class="th2-table"><table class="pg-tb"><thead><tr><th>MÃ PHIẾU</th><th>GIỜ</th><th>KHÁCH</th><th>NỘI DUNG</th><th>HÌNH ẢNH</th><th class="r">TỔNG TIỀN</th><th class="r">CHUYỂN KHOẢN</th><th>TRẠNG THÁI</th><th></th></tr></thead><tbody>
 {% for r in rows %}<tr>
-<td>{% if r.nghiep_vu == 'doi' %}<span class="khbl-badge khbl-badge--cam" title="Hóa đơn bán-đổi dư — tiệm chuyển khoản trả khách">Đổi</span>{% endif %}{% for m in r.members %}<b class="th2-code">{{ m.BillCode|default:m.TrnID }}</b>{% endfor %}{% if r.partial_group %}<small>{{ r.members|length }}/{{ r.group_size }} phiếu trong khoảng ngày</small>{% endif %}</td>
+<td>{% if r.nghiep_vu == 'doi' %}<span class="khbl-badge khbl-badge--cam" title="Hóa đơn bán-đổi dư — tiệm chuyển khoản trả khách">Đổi</span>{% elif r.nghiep_vu == 'camdo' %}<span class="khbl-badge khbl-badge--xanh" title="Cầm đồ — tiệm chuyển khoản tiền cầm cho khách">Cầm đồ</span>{% endif %}{% for m in r.members %}<b class="th2-code">{{ m.BillCode|default:m.TrnID }}</b>{% endfor %}{% if r.partial_group %}<small>{{ r.members|length }}/{{ r.group_size }} phiếu trong khoảng ngày</small>{% endif %}</td>
 <td>{{ r.TrnTime|slice:":5" }}{% if d1 != d2 %}<small>{{ r.TrnDate|date:"d/m/Y" }}</small>{% endif %}</td>
 <td>{{ r.CustName|default:"Khách lẻ" }}<small>{{ r.Phone }}</small></td>
 <td>{% include 'pos/_thau2_bank.html' %}</td>

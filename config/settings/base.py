@@ -94,6 +94,11 @@ LANGUAGE_CODE = "vi"
 TIME_ZONE = "Asia/Ho_Chi_Minh"
 USE_I18N = True
 USE_TZ = True
+
+# API nội bộ BANLE_V5 → KHBL nhận diện mã CK ngay sau upsert bank_notifications (22/09/2026) — cùng giá trị ở .env BANLE_V5
+KHBL_GAN_MA_TOKEN = env("KHBL_GAN_MA_TOKEN", default="")
+# Webhook SePay V2 — giai đoạn 2 SePay gọi thẳng: header "Authorization: Apikey <SEPAY_API_KEY>" (trống = chỉ nhận V1 chuyển tiếp)
+SEPAY_API_KEY = env("SEPAY_API_KEY", default="")
 USE_L10N = True
 # Định dạng ngày/số VN cho template; số trần trong data-*/value= vẫn giữ nguyên
 FORMAT_MODULE_PATH = ["config.formats"]

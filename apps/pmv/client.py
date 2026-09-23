@@ -160,6 +160,9 @@ class PmvClient:
         return gateway.pmv_deposit_money(expected, cash, bank, till_id=till_id,
                                         target=self.target, tag=self.tag)
 
+    def sync_retail_cash(self, trn_id):
+        return gateway.pmv_retail_cash_default(trn_id, target=self.target)
+
     # ---------- gọi ----------
     def call(self, proc, write=False, raise_on_rc=True, day_du=False, **params):
         """Gọi proc với tham số đặt tên. Trả (rc, sets). rc≠0 → PmvProcError (mặc định).

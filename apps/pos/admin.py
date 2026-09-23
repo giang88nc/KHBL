@@ -1,7 +1,14 @@
 """Nhật ký hóa đơn (bill_audit) — CHỈ XEM trong Django admin: không thêm/sửa/xóa (append-only)."""
 from django.contrib import admin
 
-from .models import BillAudit
+from .models import BillAudit, MobileEmployeeIdentity
+
+
+@admin.register(MobileEmployeeIdentity)
+class MobileEmployeeIdentityAdmin(admin.ModelAdmin):
+    list_display = ('employee_id','user','employee_pmv','mobile_only','enabled')
+    search_fields = ('user__username',)
+    list_filter = ('enabled',)
 
 
 @admin.register(BillAudit)

@@ -58,11 +58,12 @@ MỞ → nạp cả nhóm lên form.
           {% if b.co_huy and not b.da_huy %}<i class="pg-tb__phu">có dòng đã hủy</i>{% endif %}
           {% if b.da_xac_nhan %}<i class="pg-tb__phu pg-ds__da-ck">✓ đã xác nhận CK</i>{% endif %}</td>
         <td class="r">
+          {# XEM mọi dòng (GĐ chốt 21/09/2026): popup CHI TIẾT PHIẾU THÂU chỉ xem, không mở form sửa #}
+          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Xem chi tiết phiếu thâu — chỉ xem, không sửa"
+                  hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ b.mo_id }}{% if nguon_hist %}&source=hist{% endif %}" hx-target="#modal-root" hx-swap="innerHTML">XEM</button>
           {% if not b.da_huy %}
           {% if b.da_xac_nhan %}
-          {# Đã đối soát đủ tiền chuyển khoản → chỉ cho XEM, không mở ra sửa nữa (GĐ chốt 10/09/2026) #}
-          <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Đã xác nhận chuyển khoản — chỉ xem, không sửa được nữa"
-                  hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ b.mo_id }}" hx-target="#modal-root" hx-swap="innerHTML">XEM</button>
+          {# Đã đối soát đủ tiền chuyển khoản → chỉ XEM (nút trên), không mở ra sửa nữa (GĐ chốt 10/09/2026) #}
           {% else %}
           <button class="khbl-btn khbl-btn--outline khbl-btn--sm" type="button" title="Mở lên form (cả nhóm dòng)"
                   hx-post="{% url 'pos:thau_mo' %}" hx-vals='{"trn_id": "{{ b.mo_id }}"{% if standalone %}, "from_list_page": "1"{% endif %}}' hx-swap="none">MỞ</button>

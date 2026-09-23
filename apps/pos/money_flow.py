@@ -80,8 +80,11 @@ def _upsert(*, service, source_type, source_id, direction, amount, cash, bank,
     # Metadata is populated by the source projector, not the legacy bill cache.
     existing = MoneyFlow.objects.filter(source_system=source_system,service=service,
         source_type=source_type,source_id=str(source_id),flow_role='settlement').first()
-    if existing and 'mobile' in (existing.source_snapshot or {}) and 'mobile' not in defaults['source_snapshot']:
-        defaults['source_snapshot']['mobile'] = existing.source_snapshot['mobile']
+    if existing:
+        for key in ('mobile','tender'):
+            if key in (existing.source_snapshot or {}) and key not in defaults['source_snapshot']:
+                defaults['source_snapshot'][key] = existing.source_snapshot[key]
+    if existing and 'mobile' in (existing.source_snapshot or {}):
         defaults['customer_id'], defaults['customer_name'] = existing.customer_id, existing.customer_name
     return MoneyFlow.objects.update_or_create(
         source_system=source_system, service=service, source_type=source_type,
@@ -97,7 +100,8 @@ def sync_gold_bills(d1=None, d2=None, trn_ids=None):
     if trn_ids:     # 19/09/2026: chiếu lại ĐÚNG hóa đơn vừa chốt (TẠO QR màn Bán hàng) — job 2 phút không truyền, y cũ
         qs = qs.filter(trn_id__in=list(trn_ids))
     # Các TBG có nhóm do sync_thau_groups sở hữu; chỉ giữ TBG cũ không có nhóm.
-    grouped = set(t for ids in ThauNhom.objects.values_list("trn_ids", flat=True) for t in (ids or []))
+    # Quét thau_nhom CHỈ khi gặp TBG (21/09/2026): ghi ngay 1 HĐ bán/cọc không phải đọc cả bảng.
+    grouped = None
     count = 0
     for bill in qs.iterator(chunk_size=300):
         if bill.bill_kind == "deposit":
@@ -118,6 +122,8 @@ def sync_gold_bills(d1=None, d2=None, trn_ids=None):
                         bill.status, bill.is_del, abs(bank), explicit=explicit),
                     snapshot={"bill_kind": bill.bill_kind, "bank_status": plan.get("bank_status", "")})
         elif bill.trn_id.startswith("TBG"):
+            if grouped is None:
+                grouped = set(t for ids in ThauNhom.objects.values_list("trn_ids", flat=True) for t in (ids or []))
             if bill.trn_id in grouped:
                 continue
             _upsert(service="GOLD_BUY", source_type="gold_bill_ungrouped", source_id=bill.trn_id,
@@ -126,9 +132,18 @@ def sync_gold_bills(d1=None, d2=None, trn_ids=None):
                     bill_code=bill.bill_code, trn_ids=[bill.trn_id], customer_id=bill.cust_id,
                     customer_name=bill.cust_name, snapshot={"nguon": bill.nguon})
         else:
-            if dec(bill.tong) == 0:
+            if dec(bill.tong) == 0 and bill.is_del:
                 MoneyFlow.objects.filter(source_system="KHBL", service="RETAIL",
                     source_type="gold_bill_retail", source_id=bill.trn_id).update(is_void=True,payment_status=MoneyFlow.VOID)
+                continue
+            if dec(bill.tong) == 0:     # ĐỔI NGANG (GĐ chốt 22/09/2026): không thu tiền nhưng hóa đơn vẫn SỐNG — KHÔNG đánh VOID
+                _upsert(service="RETAIL", source_type="gold_bill_retail", source_id=bill.trn_id,
+                        direction=MoneyFlow.IN, amount=0, cash=0, bank=0, business_date=bill.trn_date,
+                        source_status=bill.status, is_void=False, bill_code=bill.bill_code,
+                        trn_ids=[bill.trn_id], customer_id=bill.cust_id, customer_name=bill.cust_name,
+                        payment_status=MoneyFlow.CONFIRMED if bill.status == "C" else MoneyFlow.WAITING,
+                        snapshot={"nguon": bill.nguon, "pay_method": bill.pay_method, "doi_ngang": True})
+                count += 1
                 continue
             direction = MoneyFlow.OUT if dec(bill.tong) < 0 else MoneyFlow.IN
             _upsert(service="RETAIL", source_type="gold_bill_retail", source_id=bill.trn_id,
@@ -309,8 +324,31 @@ def sync_khcd(d1=None, d2=None):
     return len(sessions)
 
 
-def sync(d1=None, d2=None):
-    """Cập nhật sổ phụ từ nguồn có sẵn; tuyệt đối không ghi nguồn."""
+_KHOA_SYNC = __import__("threading").Lock()
+
+
+def sync(d1=None, d2=None, kk=False):
+    """Cập nhật sổ phụ từ nguồn có sẵn; tuyệt đối không ghi nguồn.
+
+    kk=False (job nhanh 20 giây): CHỈ MySQL. kk=True (job 5 phút): thêm lượt đọc KK bổ sung SĐT + tiền thối lại.
+    Khóa trong tiến trình: job nhanh và job chậm cùng scheduler không chạy chồng lên nhau."""
+    with _KHOA_SYNC:
+        return _sync(d1, d2, kk)
+
+
+def project_now(trn_id):
+    """Chiếu NGAY 1 hóa đơn KHBL (bán / cọc) vào money_flow sau khi gold_bill vừa ghi — chỉ MySQL.
+    Lỗi không được làm hỏng thao tác bán hàng: job 20 giây là lưới an toàn."""
+    import logging
+    try:
+        sync_gold_bills(trn_ids=[trn_id])
+        from .mobile_projection import refresh
+        refresh(trn_ids=[trn_id])
+    except Exception:
+        logging.getLogger(__name__).exception("money_flow: chưa chiếu ngay được %s (job 20 giây sẽ bù)", trn_id)
+
+
+def _sync(d1=None, d2=None, kk=False):
     result = {"gold_bill": sync_gold_bills(d1, d2), "thau_nhom": sync_thau_groups(d1, d2)}
     try:
         result["khcd"] = sync_khcd(d1, d2)
@@ -319,6 +357,13 @@ def sync(d1=None, d2=None):
         import logging
         logging.getLogger(__name__).exception("Không đồng bộ được money_flow từ KHCD")
         result["khcd_error"] = str(exc)[:240]
-    from .mobile_projection import refresh
+    from .mobile_projection import refresh, enrich_from_kk
     result['mobile_metadata'] = refresh(d1, d2)
+    if kk:
+        try:
+            result['mobile_kk'] = enrich_from_kk(d1, d2)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).exception("Không bổ sung được SĐT/tiền thối từ KK")
+            result['mobile_kk_error'] = str(exc)[:240]
     return result

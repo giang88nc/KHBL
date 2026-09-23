@@ -75,7 +75,18 @@ def upsert_tu_gio(g, *, status=None, is_del=None, user=None, nguon="KHBL"):
             d["is_del"] = bool(is_del)
         if user is not None and getattr(user, "username", ""):
             d["user_web"] = user.username
+        from django.db.models import Sum
+        from .models import MoneyFlowBankReceipt
+        verified=MoneyFlowBankReceipt.objects.filter(flow__source_system='KHBL',flow__source_id=trn,
+            flow__direction='IN',status='applied').aggregate(n=Sum('amount'))['n']
+        if verified is not None and 0<=verified<=d['tong']:
+            d.update(tien_mat=d['tong']-verified,tien_ck=verified,tien_the=M.D0,
+                     pay_method='bank' if verified==d['tong'] else 'mixed')
         obj, _ = GoldBill.objects.update_or_create(trn_id=trn, defaults=d)
+        # 21/09/2026: HĐ lên trang mobile Tạo QR NGAY (money_flow), không chờ job — chỉ MySQL, sau khi commit.
+        from django.db import transaction
+        from . import money_flow as MF
+        transaction.on_commit(lambda: MF.project_now(trn))
         return obj
     except Exception:
         logger.exception("gold_bill: không ghi được %s (KK vẫn đúng, đối soát sẽ chữa)", trn)
@@ -124,6 +135,19 @@ def lam_tuoi_ds(rows, c=None):
     except Exception:
         logger.exception("gold_bill: làm tươi danh sách lỗi")
         return 0
+
+
+def bo_phieu_da_xoa(rows):
+    """Bỏ tombstone MySQL khỏi DS đọc từ kho lịch sử.
+
+    Hóa đơn ngày cũ có thể bị xóa trên KK sau khi kho lịch sử đã chụp dữ liệu; khi đó
+    bản lịch sử vẫn còn IsDel=0. ``gold_bill.is_del`` là dấu xóa đã đối chiếu từ KK.
+    """
+    rows=list(rows or [])
+    ids=[str(r.get('TrnID') or '') for r in rows if r.get('TrnID')]
+    if not ids:return rows
+    deleted=set(GoldBill.objects.filter(trn_id__in=ids,is_del=True).values_list('trn_id',flat=True))
+    return [r for r in rows if str(r.get('TrnID') or '') not in deleted]
 
 
 def doi_soat_hom_nay(c=None):

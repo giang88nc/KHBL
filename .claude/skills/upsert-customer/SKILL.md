@@ -21,7 +21,7 @@ Quy tắc GĐ chốt 14/09/2026. Repo chuẩn: `D:\PYTHON\KHBL`. Đây là hư�
 
 1. **Giữ nguyên I_CUSTOMER cũ.** Không tự gộp/xóa CustID, xóa số cũ, liên kết hồ sơ, chuyển điểm/công nợ hoặc đổi khách của giao dịch lịch sử.
 2. UPSERT xác định theo **CustID**: trống → tạo mới, có → sửa đúng khách. Không dùng CCCD/tên để UPDATE nhiều dòng. Nếu CustID đã mất, báo lỗi, không tự chuyển sang INSERT.
-3. CCCD trùng chưa có nghĩa được tự thêm SĐT vào khách đó. Đề xuất UPDATE theo CCCD trước đây **chưa nằm trong luồng đã triển khai**; chốt cuối là ba số và giữ nguyên hồ sơ cũ.
+3. Chốt 21/09/2026: thêm mới trùng CCCD và khác SĐT → hiện tên, CCCD, CustID và nút “Thêm số điện thoại cho khách này”. Người dùng chọn rõ hồ sơ; `prepare_append` nạp hồ sơ theo CustID và điền số mới vào SĐT 2, rồi SĐT 3 nếu trống. Người dùng kiểm tra rồi Lưu qua UPSERT UPDATE. Không tự gộp, không tự chọn một CustID khi có nhiều kết quả. Đủ 3 số thì từ chối; kiểm trùng chéo và guard có chữ ký kiểm lại các số/CCCD trong khóa trước ghi để tránh ghi đè số vừa thay đổi.
 4. Lưu khách không tự tạo/chốt hợp đồng cầm đồ, hóa đơn, thanh toán hoặc chuyển số dư. Trang gọi tiếp tục nghiệp vụ của mình với CustID trả về sau khi lưu khách hoàn tất.
 
 ## Quy tắc phía webapp

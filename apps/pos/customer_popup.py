@@ -105,7 +105,12 @@ def dispatch(payload, user, client):
             if cid and not row:
                 return envelope(HttpResponse('Không tìm thấy khách KK.', status=404))
             k = S.khach_theo_id(cid, pmv_client=client) if cid else None
+            guard = ''
+            if request.GET.get('append_phone'):
+                try: k,guard=C.prepare_append(client,k,request.GET['append_phone'],request.GET.get('cmnd',''))
+                except C.CustomerSaveError as exc: return envelope(render(request,'pos/_khach_luu_kq.html',{'loi':[str(exc)]}))
             response = render(request, 'pos/_khach_form.html', {
+                'append_guard':guard,
                 'k': k, 'goi_y_dt': '' if cid else views._so_dt_tu(request.GET.get('q')),
                 'loai_ds': S.CUST_TYPES, 'duong_dan_anh': S.DUONG_DAN_ANH,
                 'save_token': secrets.token_urlsafe(24), 'customer_version': B.version(row) if row else ''})

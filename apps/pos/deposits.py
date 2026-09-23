@@ -138,6 +138,13 @@ class WeightInput(forms.TextInput):
 
 
 class DepositForm(forms.Form):
+    DocumentPhone = forms.CharField(label='SĐT trên phiếu', max_length=20, required=False, widget=forms.TextInput(attrs={'type':'tel','list':'dc-phone-options'}))
+
+    def clean_DocumentPhone(self):
+        from .document_contacts import normalize_phone
+        try: return normalize_phone(self.cleaned_data.get('DocumentPhone'))
+        except ValueError as exc: raise forms.ValidationError(str(exc))
+
     CustID = forms.CharField(label='Mã khách hàng', max_length=15,
                             error_messages={'required': 'Chọn khách hàng trước khi lưu phiếu.'},
                             widget=forms.TextInput(attrs={'placeholder': 'Chọn khách bằng ô tìm kiếm bên dưới'}))
@@ -225,11 +232,12 @@ LineSet = formset_factory(OrderLineForm, extra=0, can_delete=True, min_num=1, va
                          max_num=50, validate_max=True, absolute_max=60)
 
 
-def header(c, pk):
+def header(c, pk, contact=True):
     rows = c.query('SELECT d.*, k.CustName, k.Phone, k.CMND, k.Address, e.EmpName FROM TRN_DATCOC d WITH (NOLOCK) '
                    'LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID=d.CustID '
                    'LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID=d.EmpID WHERE d.TrnID=?', (pk,))
-    return rows[0] if rows else None
+    from .document_contacts import overlay
+    return (overlay("KHBL_DEPOSIT",rows[0],c.target) if contact else rows[0]) if rows else None
 
 
 def lines(c, pk):
@@ -332,11 +340,14 @@ def customers(request):
         try:
             term = '%' + q.replace('[', '[[]').replace('%', '[%]').replace('_', '[_]') + '%'
             c=PmvClient(tag='datcoc-customer')
-            columns='SELECT TOP 12 CustID,CustName,Phone,CMND,Address FROM I_CUSTOMER WITH (NOLOCK) '
+            columns='SELECT TOP 12 CustID,CustName,Phone,GhiChu2,GhiChu3,CMND,Address FROM I_CUSTOMER WITH (NOLOCK) '
             if request.GET.get('cust_id'):
                 rows=c.query(columns+'WHERE CustID=?',(request.GET['cust_id'][:15],))
             else:
-                rows=c.query(columns+'WHERE CustName LIKE ? OR Phone LIKE ? OR CustID LIKE ? OR CMND LIKE ? ORDER BY CustName',(term,term,term,term))
+                from .customer_phones import search, suggestion_rows
+                condition, params = search(q, alias='c')
+                rows=c.query(columns.replace('FROM I_CUSTOMER WITH', 'FROM I_CUSTOMER c WITH')+'WHERE '+condition+' ORDER BY CustName',params)
+                rows=suggestion_rows(rows,q)
         except Exception:
             log.exception('Tìm khách đặt cọc'); error = 'Không tải được khách hàng.'
     if request.GET.get('format')=='json': return JsonResponse({'rows':rows,'error':error},status=503 if error else 200)
@@ -392,7 +403,7 @@ def xml_lines(cleaned, pk=''):
     return tostring(root, encoding='unicode')
 
 
-def save(c, data, cleaned_lines, user, old=None):
+def save(c, data, cleaned_lines, user, old=None, contact_intent=None):
     data=dict(data)
     if O._json_description(data.get('Description')) is None:
         legacy=O.parse_description(data.get('Description'))
@@ -403,7 +414,8 @@ def save(c, data, cleaned_lines, user, old=None):
         if zalo is not None: data['Description']=O.merge_zalo(data['Description'],zalo)
     if O.description_length(data['Description'])>500:
         raise ValueError('Nội dung JSON vượt giới hạn 500 ký tự của thủ tục PMV; chưa ghi phiếu.')
-    if not c.query('SELECT CustID FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID=?', (data['CustID'],)):
+    customers=c.query('SELECT CustID,CustName,Phone FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID=?', (data['CustID'],))
+    if not customers:
         raise ValueError('Mã khách hàng không tồn tại. Hãy tìm và chọn khách trong danh sách.')
     pk = old['TrnID'] if old else ''
     stock_codes = {r.get('ProductCode') for r in cleaned_lines if r and not r.get('DELETE') and r.get('Mode') == 'stock'}
@@ -428,12 +440,19 @@ def save(c, data, cleaned_lines, user, old=None):
         params.update(p_TrnID=pk, p_UserUpd=user.user_id, p_TrnDateTime_Upd=old['TrnDateTime_Upd'])
     else:
         params.update(p_CreatedBy=user.user_id, p_ShopID=user.shop_id)
+    if contact_intent:
+        from . import document_contacts as DC
+        contact=DC.payload(data['CustID'],customers[0].get('CustName'),data.get('DocumentPhone',customers[0].get('Phone')),contact_intent['actor'])
+        contact_intent=DC.begin('KHBL_DEPOSIT',contact_intent['token'],contact,c.target,pk)
     _, sets = c.call('TRN_DATCOC_Upd' if old else 'TRN_DATCOC_Ins', write=True, **params)
     result = next((r for rs in sets for r in rs if 'ErrCode' in r), None)
     if not result or result.get('ErrCode') != 0 or not result.get('TrnID'):
         raise ValueError('PMV chưa xác nhận lưu phiếu. Hãy kiểm tra danh sách trước khi thử lại.')
     pk = result['TrnID']
-    actual = header(c, pk)
+    if contact_intent:
+        from .document_contacts import bind
+        bind(contact_intent,pk)
+    actual = header(c, pk, contact=False)
     if (not actual or Decimal(actual['TienCoc']) != data['TienCoc'] or
             any((actual.get(k) or '') != data[k] for k in ('CustID', 'EmpID', 'Description'))):
         raise ValueError('Chưa xác minh được phiếu sau khi lưu. Hãy tải lại danh sách để kiểm tra.')
@@ -447,6 +466,9 @@ def save(c, data, cleaned_lines, user, old=None):
                 any(Decimal(got.get(k) or 0) != Decimal(wanted[k]) for k in
                     ('SL', 'TotalWeight', 'DiamondWeight', 'GoldWeight', 'TaskPrice'))):
             raise ValueError('Chi tiết món trên PMV chưa khớp. Hãy mở lại phiếu để kiểm tra.')
+    if contact_intent:
+        from .document_contacts import finish
+        finish(contact_intent,actual.get("BillCode"))
     return pk
 
 
@@ -599,12 +621,13 @@ def popup(request, action, pk=None):
         else:
             pu=pmv_user_for_web_user(request.user)
             initial_header={'TienCoc':0,'CashDeposit':0,'BankDeposit':0,'EmpID':pu.emp_id if pu else ''}
+        initial_header['DocumentPhone']=h.get('Phone','') if h else ''
         form = DepositForm(request.POST if request.method == 'POST' else None, initial=initial_header)
         form.initial['NoteEntries']=X.entries(h,state) if h else []
         X.configure(form,state,ctx.get('work',{}))
         form.restricted_edit=restricted
         if restricted:
-            for key in ('CustID','TienCoc','CashDeposit','BankDeposit','Estimate'): form.fields[key].disabled=True
+            for key in ('CustID','DocumentPhone','TienCoc','CashDeposit','BankDeposit','Estimate'): form.fields[key].disabled=True
             if h['Status']!='W': form.initial['Estimate']=None
         form.fields['Description'].widget=forms.HiddenInput()
         if request.method=='GET' or request.POST.get('description_format')=='json':
@@ -761,7 +784,8 @@ def popup(request, action, pk=None):
                             record.completed = True
                             record.save(update_fields=['completed'])
                         # Khi kết nối có kết quả không chắc chắn, giữ token đã dùng để không tạo cọc hai lần.
-                        saved_pk=save(c, form.cleaned_data, save_lines, pu, current)
+                        saved_pk=save(c, form.cleaned_data, save_lines, pu, current,
+                            contact_intent={'token':token_hash,'actor':request.user.username})
                         W.invalidate(c.target)
                         from .deposit_models import DepositOrderState
                         with transaction.atomic():

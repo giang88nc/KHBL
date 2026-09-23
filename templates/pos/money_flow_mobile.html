@@ -1,0 +1,14 @@
+{% extends "pos/_money_flow_mobile_shell.html" %}
+{% block app_content %}
+<section class="kh2-dashboard mapp-enter" aria-labelledby="dashboard-title">
+<header class="kh2-dashboard__heading"><p>Hỗ trợ bán hàng</p></header>
+<div class="kh2-dashboard__grid">
+<a href="{% url 'pos:money_flow_mobile_in' %}" hx-get="{% url 'pos:money_flow_mobile_in' %}" hx-target="#mobile-stage" hx-push-url="true" class="kh2-module kh2-module--gold"><span class="kh2-module__arrow" aria-hidden="true">↗</span><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 7h12v12H7zM29 7h12v12H29zM7 29h12v12H7zM29 29h5v5h-5zM40 28v7h-5v6h-7"/></svg></span><strong>Tạo QR</strong><small>Nhận chuyển khoản</small></a>
+<a href="{% url 'pos:mobile_orders' %}" hx-get="{% url 'pos:mobile_orders' %}" hx-target="#mobile-stage" hx-push-url="true" class="kh2-module kh2-module--violet"><span class="kh2-module__arrow" aria-hidden="true">↗</span><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 12h24v30H12zM19 8h10v8H19zM19 24h10M19 31h6"/></svg></span><strong>Đặt hàng</strong><small>Theo dõi đặt · cọc</small></a>
+<button type="button" disabled class="kh2-module kh2-module--soon"><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 9h20l13 15-18 18L8 27zM16 18h4M25 24l7 7"/></svg></span><strong>Tra cứu giá</strong><small>Đang phát triển</small></button>
+<button type="button" disabled class="kh2-module kh2-module--soon"><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="m7 17 17-9 17 9-17 10zM7 17v17l17 9 17-9V17M24 27v16M16 12l17 10"/></svg></span><strong>Sản phẩm</strong><small>Đang phát triển</small></button>
+<button type="button" disabled class="kh2-module kh2-module--soon"><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 8h24v34H12zM19 7v7h10V7M19 23l2 2 4-5M28 24h3M19 33l2 2 4-5M28 34h3"/></svg></span><strong>Kiểm kê</strong><small>Đang phát triển</small></button>
+<a href="{% url 'pos:mobile_online' %}" hx-get="{% url 'pos:mobile_online' %}" hx-target="#mobile-stage" hx-push-url="true" class="kh2-module kh2-module--violet"><span class="kh2-module__arrow" aria-hidden="true">↗</span><span class="kh2-module__icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 17h28l3 25H7zM17 19v-8a7 7 0 0 1 14 0v8M18 29h12"/></svg></span><strong>Đơn online</strong><small>Thống kê · Khách gửi</small></a>
+</div>
+</section>
+{% endblock %}

@@ -15,6 +15,7 @@ from . import services as S, bill as B, thau_payments as TP
 from .models import ThauNhom, ThauPaymentLink
 from .invoice_display import groups_for, membership_for, compact
 
+NGHIEP_VU_LOC = (ThauNhom.THAU, ThauNhom.DOI, ThauNhom.CAMDO)
 SLOTS = [('hinh1', 'Hình 1'), ('hinh2', 'Hình 2'), ('qr', 'QR chuyển khoản')]
 
 
@@ -35,19 +36,20 @@ def enrich(rows, membership):
         row['qr_image'] = by_slot.get('qr')
         row['photo_grid'] = [im for im in row['images'] if im['slot'] != 'qr']
         ids = [m['TrnID'] for m in row.get('members', [])] or [row['TrnID']]
+        bills = getattr(group, 'bill_codes', None) or [m.get('BillCode') for m in row.get('members', [])]
         # dấu ✓ sau Tên chủ thẻ cũng phải có ở DANH SÁCH, không riêng popup chi tiết (GĐ bắt lỗi 11/09/2026)
         ten_kh = row.get('CustName') or (row.get('members') or [{}])[0].get('CustName')
         row['ten_khop'] = doi_chieu_ten(getattr(group, 'ck_ten', ''), ten_kh)
-        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), ids)
+        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), bills, getattr(group, 'nghiep_vu', None))
         row['qr_het_han'] = not qr_con_han(row.get('TrnDate') or (row.get('members') or [{}])[0].get('CreatedDate'))
         row['gd_khop'] = giao_dich_da_khop(ids)
     return rows
 
 
 def loc_nghiep_vu(request):
-    """Bộ lọc NGHIỆP VỤ (19/09/2026): '' = tất cả · thau = phiếu thâu · doi = hóa đơn bán-đổi tiệm trả khách."""
+    """Bộ lọc NGHIỆP VỤ (19/09/2026): '' = tất cả · thau = phiếu thâu · doi = hóa đơn bán-đổi tiệm trả khách · camdo = tiền cầm (22/09)."""
     v = request.GET.get('nghiep_vu', '')
-    return v if v in (ThauNhom.THAU, ThauNhom.DOI) else ''
+    return v if v in NGHIEP_VU_LOC else ''
 
 
 @login_not_required     # GĐ chốt 10/09/2026: trang xem công khai trong mạng tiệm
@@ -79,7 +81,7 @@ def listing(request):
         logging.getLogger(__name__).exception('Không đọc được danh sách thâu 2')
         error = 'Không đọc được danh sách. Vui lòng thử lại.'
     ctx = dict(rows=rows, d1=d1, d2=d2, today=today, method=method, khach=customer, nghiep_vu=nghiep_vu,
-               nghiep_vu_ds=[(k, v) for k, v in ThauNhom.NGHIEP_VU if k in (ThauNhom.THAU, ThauNhom.DOI)],
+               nghiep_vu_ds=[(k, v) for k, v in ThauNhom.NGHIEP_VU if k in NGHIEP_VU_LOC],
                trang_thai=status, source='kk' if live else 'hist', error=error,
                payment_status=request.GET.get('payment_status', ''), payment_labels=TP.LABELS.items(), can_manage=TP.permitted(request.user))
     return render(request, 'pos/_thau2_list.html' if request.headers.get('HX-Request') else 'pos/thau2.html', ctx)
@@ -108,18 +110,19 @@ def doi_chieu_ten(chu_the, khach):
     return None if not a or not b else a == b
 
 
-def nd_dung_chuan(ck_nd, ids):
+def nd_dung_chuan(ck_nd, bill_codes, nghiep_vu=None):
     """Nội dung chuyển khoản của phiếu có đúng khuôn đối soát không (GĐ chốt 11/09/2026).
 
-    Đúng khuôn nghĩa là chứa "THANH TOAN TIEN VANG {4 số cuối mã phiếu}" — chính chuỗi mà bên đối soát đi tìm
+    Đúng khuôn nghĩa là chứa "THANH TOAN TIEN VANG {4 số cuối SỐ HĐ}" (22/09/2026) — chính chuỗi mà bên đối soát đi tìm
     trong nội dung ngân hàng. Trả None khi chưa có nội dung hoặc chưa có mã phiếu (không kết luận được).
     """
     from . import thau_payments as TP
 
     nd = (ck_nd or "").strip().upper()
-    if not nd or not ids:
+    bill_codes = [b for b in (bill_codes or []) if b]
+    if not nd or not bill_codes:
         return None
-    return TP.code_match({"ids": list(ids), "members": []}, {"description": nd})
+    return TP.code_match({"ids": [], "bill_codes": bill_codes, "members": [], "nghiep_vu": nghiep_vu}, {"description": nd})
 
 
 def qr_con_han(ngay_phieu):
@@ -176,6 +179,27 @@ def doc_hoa_don_doi(trn, client):
         "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID WHERE b.TrnID = ?", (trn,))
 
 
+def chi_tiet_cam_do(request, trn, group, membership):
+    """Popup chi tiết CẦM ĐỒ (22/09/2026): dựng từ nhóm KHCD ghi, KHÔNG đọc KK (cầm đồ không có chứng từ trên KK)."""
+    row = next((o for o in TP.catalog_camdo(timezone.localtime(group.created_at).date().isoformat(),
+                                             timezone.localtime(group.created_at).date().isoformat()) if o['TrnID'] == trn), None)
+    if not row:
+        return HttpResponse('Không tìm thấy phiếu.', status=404)
+    items = row['members']
+    p = {'tien_ck': M.dec(group.tien_ck), 'tien_mat': M.dec(group.tien_mat), 'tra_khach': items[0]['SoTien'],
+         'ghi_chu': group.ghi_chu or ''}
+    r = {'TrnID': trn, 'members': items, 'tien_ck': p['tien_ck']}
+    enrich([r], membership)
+    r['da_xac_nhan'], r['ck_da_tra'] = da_xac_nhan_ck([trn], p['tien_ck'])
+    r['ten_khop'] = doi_chieu_ten(group.ck_ten, group.cust_name)
+    r['nd_khop'] = nd_dung_chuan(group.ck_nd, group.bill_codes, ThauNhom.CAMDO)
+    r['qr_het_han'] = not qr_con_han(items[0]['TrnDate'])
+    r['gd_khop'] = giao_dich_da_khop([trn])
+    r['cccd_images'] = []
+    return render(request, 'pos/_thau2_detail.html', {'p': p, 'r': r, 'items': items, 'doi': False, 'camdo': True,
+                  'tiem': S.thong_tin_tiem(), 'in_luc': timezone.now()})
+
+
 @login_not_required     # GĐ chốt 10/09/2026: trang xem công khai trong mạng tiệm
 @require_GET
 def detail(request):
@@ -186,6 +210,8 @@ def detail(request):
     group = membership.get(trn)
     ids = [t for t in group.trn_ids if membership[t].pk == group.pk] if group else [trn]
     doi = bool(group and group.nghiep_vu == ThauNhom.DOI)
+    if group and group.nghiep_vu == ThauNhom.CAMDO:
+        return chi_tiet_cam_do(request, trn, group, membership)
     try:
         client = PmvClient(source, tag='thau2_detail')
         if doi:     # hóa đơn BÁN-ĐỔI tiệm trả khách (19/09/2026): đọc đúng 1 hóa đơn, tóm tắt thay tờ in phiếu thâu
@@ -204,7 +230,8 @@ def detail(request):
         enrich([row], membership)
         row['da_xac_nhan'], row['ck_da_tra'] = da_xac_nhan_ck([i['TrnID'] for i in items], p['tien_ck'])
         row['ten_khop'] = doi_chieu_ten(getattr(group, 'ck_ten', ''), items[0].get('CustName'))
-        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''), ids)
+        row['nd_khop'] = nd_dung_chuan(getattr(group, 'ck_nd', ''),
+                                       getattr(group, 'bill_codes', None) or [i.get('BillCode') for i in items])
         row['qr_het_han'] = not qr_con_han(items[0].get('TrnDate') or items[0].get('CreatedDate'))
         row['gd_khop'] = giao_dich_da_khop(ids)
         from . import customer as C

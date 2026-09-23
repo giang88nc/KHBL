@@ -11,6 +11,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--from", dest="d1")
         parser.add_argument("--to", dest="d2")
+        parser.add_argument("--kk", action="store_true",
+                            help="Thêm lượt đọc KK bổ sung SĐT khách + tiền thối lại (job 5 phút)")
 
     def handle(self, *args, **options):
         try:
@@ -20,7 +22,7 @@ class Command(BaseCommand):
             raise CommandError("Ngày phải có dạng YYYY-MM-DD") from exc
         if d1 and d2 and d1 > d2:
             raise CommandError("--from không được sau --to")
-        result = sync(d1, d2)
+        result = sync(d1, d2, kk=options.get("kk", False))
+        khcd = f"KHCD {result.get('khcd', 0)}" if not result.get('khcd_error') else "KHCD lỗi: " + result['khcd_error']
         self.stdout.write(self.style.SUCCESS(
-            f"money_flow: gold_bill {result['gold_bill']} · thau_nhom {result['thau_nhom']}"))
-
+            f"money_flow: gold_bill {result['gold_bill']} · thau_nhom {result['thau_nhom']} · {khcd}"))

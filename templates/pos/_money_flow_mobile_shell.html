@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% load static %}
+{% block topbar %}{% endblock %}{% block footer %}{% endblock %}{% block page_head %}{% endblock %}
+{% block title %}KH2 mApp{% endblock %}
+{% block viewport %}<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">{% endblock %}
+{% block extra_head %}<meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><link rel="stylesheet" href="{% static 'css/money_flow.css' %}?v=20260916.3"><link rel="stylesheet" href="{% static 'css/money_flow_mobile.css' %}?v=20260919.2"><link rel="stylesheet" href="{% static 'css/money_flow_tickets.css' %}?v=4">{% include 'pos/_mobile_app_head.html' %}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/mobile_invoice.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/mobile_dashboard.css' %}?v=2">
+{% include 'pos/_mobile_connection.html' %}
+<div class="mapp-shell" hx-headers='{"X-KHBL-Mobile":"1"}'>
+  <header class="mapp-top"><div class="mapp-brand"><img src="{% static 'mobile/kh2-icon-180.png' %}" alt="Kim Hạnh 2" width="42" height="42"><div><b>KH2 mApp</b></div></div>
+    <div class="mapp-live"><span>{{ request.session.mobile_employee.full_name|default:request.user.get_full_name|default:request.user.username }}</span><form method="post" action="{% url 'pos:mobile_logout' %}">{% csrf_token %}<button type="submit" aria-label="Đăng xuất" style="border:0;background:transparent;color:inherit">↪</button></form></div></header>
+  <main id="mobile-stage" class="mapp-stage" aria-live="polite">{% block app_content %}{% endblock %}</main>
+  <nav class="mapp-nav" aria-label="Điều hướng ứng dụng">
+    <a href="{% url 'pos:money_flow_mobile' %}" class="{% if mobile_section == 'home' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5zM9 21v-7h6v7"/></svg><span>Trang chủ</span></a>
+    <a href="{% url 'pos:mobile_qr_list' %}" class="{% if mobile_section == 'standalone_qr' %}active{% endif %}" hx-get="{% url 'pos:mobile_qr_list' %}" hx-target="#mobile-stage" hx-push-url="true"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM15 14h2v2h-2zM19 14h1v3h-3v3h-3v-2h2v-2h3z"/></svg><span>QR</span></a>
+    {% if not request.session.mobile_employee.mobile_only %}<a href="{% url 'pos:money_flow' %}"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m6 14v-7m5 7V3"/></svg><span>Đối soát</span></a>
+    <a href="{% url 'pos:money_flow' %}"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 5v4l3 2"/></svg><span>Lịch sử</span></a>
+    {% endif %}</nav>
+</div>
+{% endblock %}
+{% block extra_js %}<script defer src="{% static 'js/money_flow_mobile.js' %}?v=20260919.3"></script>{% endblock %}

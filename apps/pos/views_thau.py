@@ -582,8 +582,15 @@ def thau_dat(request):
     if "cust_id" in P:
         cid = (P.get("cust_id") or "").strip()
         k = S.khach_theo_id(cid) if cid and cid != S.WALK_IN else None
+        previous_cust=g.get("cust") or {}
         g["cust"] = {"id": k["CustID"], "code": k.get("CustCode") or "", "name": k["CustName"],
                      "phone": k.get("Phone") or ""} if k else None
+        if k: g["cust"]["phones"]=[k.get(field) for field in ("Phone","GhiChu2","GhiChu3") if k.get(field)]
+        if k and previous_cust.get("id")==k["CustID"]: g["cust"]["phone"]=previous_cust.get("phone","")
+    if "document_phone" in P and g.get("cust"):
+        from .document_contacts import normalize_phone
+        try: g["cust"]["phone"] = normalize_phone(P.get("document_phone"))
+        except ValueError as exc: return _loi(request,str(exc))
     if "emp" in P:
         g["emp"] = (P.get("emp") or "").strip()
     if "ghi_chu" in P:
@@ -744,6 +751,9 @@ def thau_tim(request):
         ds = [k for k in S.tim_khach(cccd, limit=50) if (k.get("CMND") or "").strip() == cccd] if cccd else (S.tim_khach(q) if q.strip() else [])
     else:
         ds = S.tim_nhan_vien(q)
+    if kind == "khach":
+        from .customer_phones import suggestion_rows
+        ds = suggestion_rows(ds, cccd or q)
     return render(request, "pos/_thau_goiy.html", {"ds": ds, "kind": kind})
 
 
@@ -1036,6 +1046,10 @@ def _phieu_ctx(rows, nhom=None):
 def thau_thanh_toan(request):
     """Lưu từng dòng (Ins/Upd) rồi CHỐT CẢ NHÓM: CompleteMore 'A@B@' → CARDPAY_Ins (dòng có CK) → T_TILL_TXN_Proc 'A@B@'."""
     g = TC.get(request)
+    if "document_phone" in request.POST and g.get("cust"):
+        from .document_contacts import normalize_phone
+        try: g["cust"]["phone"]=normalize_phone(request.POST["document_phone"])
+        except ValueError as exc: return _loi(request,str(exc))
     ph = _phien(request)
     if _dang_khoa(request):
         return _loi(request, KHOA_MSG)
@@ -1050,10 +1064,16 @@ def thau_thanh_toan(request):
     ids, ck_map = [], {}
     try:
         for x, (tien, add, ck, td) in zip(g["lines"], TC.phan_bo(g)):
+            from . import document_contacts as DC
+            import uuid
+            token=x.setdefault("contact_token",uuid.uuid4().hex);TC.save(request,g);request.session.save()
+            intent=dict(token=token,contact=DC.save_cart("KHBL_BUYGOLD",g,request.user.username))
+            def created(trn_id):
+                x["trn_id"]=trn_id;TC.save(request,g);request.session.save()
             row = B.luu_thau(trn_id=x.get("trn_id") or "", cust_id=cust_id, emp_id=g["emp"], till_id=ph["till_id"],
                              shop_id=ph["shop_id"], user_id=ph["user_id"], gold_code=x["gold"], gw=M.dec(x["tl_vang"]),
                              dw=M.dec(x["tl_hot"]), rate=M.dec(x["gia"]), pct=100, add_money=add,
-                             notes=g.get("ghi_chu") or "", unit=x["unit"], c=c)
+                             notes=g.get("ghi_chu") or "", unit=x["unit"], c=c, contact_intent=intent, on_created=created)
             ids.append(row["TrnID"])
             if ck > 0:
                 ck_map[row["TrnID"]] = ck
@@ -1077,7 +1097,7 @@ def thau_thanh_toan(request):
                                    pay_method=g.get("pay_method") or "cash", tien_mat=t["tien_mat"], tien_ck=t["tien_ck"],
                                    bu=t["bu"], bot=t["bot"], ghi_chu=g.get("ghi_chu") or "", kieu=[x["kieu"] for x in g["lines"]],
                                    ck_bank=g.get("ck_bank") or "", ck_stk=g.get("ck_stk") or "",
-                                   ck_nd=TC.ck_nd_day_du(g, ids[0]) if t["tien_ck"] else "",
+                                   ck_nd=TC.ck_nd_day_du(g, rows[0].get("BillCode") or "") if t["tien_ck"] else "",
                                    ck_ten=g.get("ck_ten") or "")
     gateway.canh_bao("thau_tt", f"THÂU {', '.join(nhom.bill_codes)} — tiệm trả {M.money_vn(t['khach_tra'])} "
                                 f"(CK {M.money_vn(t['tien_ck'])}); người: {request.user.username}")

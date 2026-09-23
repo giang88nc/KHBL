@@ -150,6 +150,11 @@ def doc(trn_id, c=None):
     h = b["header"]
     if not h:
         return None
+    from . import document_contacts as DC
+    h = DC.overlay("KHBL_BUYSELL", h, c.target)
+    if "Phone" not in h and h.get("CustID"):
+        contact_rows=c.query('SELECT Phone FROM I_CUSTOMER WITH (NOLOCK) WHERE CustID=?',(h['CustID'],))
+        h=dict(h,Phone=(contact_rows[0].get('Phone') if contact_rows else '') or '')
     ban = [dong_ban_tu_phieu(x) for x in b["lines"]]
     doi = [dong_doi_tu_phieu(x) for x in b["old_gold"]]
     return {
@@ -157,7 +162,7 @@ def doc(trn_id, c=None):
         "status": h.get("Status"), "ten_trang_thai": TEN_TRANG_THAI.get(h.get("Status"), h.get("Status")),
         "sua_duoc": h.get("Status") == NHAP,      # luật 1
         "ngay": h.get("TrnDate"), "gio": h.get("TrnTime"),
-        "cust_id": h.get("CustID") or "", "khach": h.get("CustName") or "",
+        "cust_id": h.get("CustID") or "", "khach": h.get("CustName") or "", "phone": h.get("Phone") or "",
         "emp_id": h.get("EmpID") or "", "nhan_vien": h.get("EmpName") or "",
         "ghi_chu": h.get("Description") or "",
         # mốc khóa lạc quan lúc ĐỌC — views so lại trước Sửa/Hủy đơn chốt (chống 2 người cùng sửa, 07/09).
@@ -264,7 +269,7 @@ def _tham_so(c, proc, **rieng):
 
 
 def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_id,
-        ghi_chu="", bot=0, cong_them=0, vang_them=0, coc=0, c=None, on_created=None):
+        ghi_chu="", bot=0, cong_them=0, vang_them=0, coc=0, c=None, on_created=None, contact_intent=None):
     """trn_id rỗng = TẠO MỚI, có trn_id = SỬA. Trả dict(trn_id, bill_code, tong).
 
     Sau khi ghi LUÔN đọc lại đối chiếu — proc có thể trả rc=0 mà không đổi gì (luật 2)."""
@@ -292,12 +297,17 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
     check_holds(ma_hang, c.target)
 
     if not trn_id:
+        from .document_contacts import start
+        contact_intent=start(contact_intent,"KHBL_BUYSELL",c.target,trn_id)
         rc, sets = c.call("TRN_RT_BUYSELL_Ins", write=True, day_du=True, raise_on_rc=False,
                           **_tham_so(c, "TRN_RT_BUYSELL_Ins", p_TrnID="", **chung))
         moi = next((r["TrnID"] for s in sets for r in s if r.get("TrnID")), None)
         if rc != 0 or not moi:
             raise PmvProcError("TRN_RT_BUYSELL_Ins", rc, sets)
         trn_id = moi
+        if contact_intent:
+            from .document_contacts import bind
+            bind(contact_intent,trn_id)
         if on_created: on_created(trn_id)
         # Proc Ins của vendor không nhận p_TienCoc (luôn ghi 0), dù PayAmount đã trừ cọc.
         # Upd có tham số này: bổ sung ngay rồi kiểm chứng cả cột cọc và tiền khách trả.
@@ -314,6 +324,8 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
             raise PmvProcError("TRN_RT_BUYSELL_Upd", -1, [{
                 "loi": "Hóa đơn đã chốt — phải MỞ LẠI (hủy phần két) rồi mới sửa được."}])
         moc = c.moc_khoa("TRN_RT_BUYSELL", "TrnID", trn_id)
+        from .document_contacts import start
+        contact_intent=start(contact_intent,"KHBL_BUYSELL",c.target,trn_id)
         rc, sets = c.call("TRN_RT_BUYSELL_Upd", write=True, day_du=True, raise_on_rc=False,
                           **_tham_so(c, "TRN_RT_BUYSELL_Upd", p_TrnID=trn_id, p_UserUpd=user_id,
                                      p_TrnDateTime_Upd=PmvClient.fmt_moc(moc), **chung))
@@ -321,15 +333,23 @@ def luu(*, trn_id, ban, doi, ngay, gio, cust_id, emp_id, till_id, shop_id, user_
             raise PmvProcError("TRN_RT_BUYSELL_Upd", rc, sets)
 
     # ── đối chiếu lại: rc=0 KHÔNG bảo đảm dữ liệu đã đổi (luật 2) ──
-    h = c.query("SELECT BillCode, Status, PayAmount, TienCoc FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
+    h = c.query("SELECT BillCode, Status, PayAmount, TienCoc, CustID, TienKhachTraThuc, TienTraLai "
+                "FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?",
                 (trn_id,))
     thuc = sorted(x["ProductCode"] for x in c.query(
         "SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)))
-    if not h or thuc != ma_hang or M.dec(h[0]["PayAmount"]) != tong["khach_tra"] or M.dec(h[0].get('TienCoc')) != M.dec(c.money(coc)):
+    if (not h or thuc != ma_hang or M.dec(h[0]["PayAmount"]) != tong["khach_tra"]
+            or M.dec(h[0].get('TienCoc')) != M.dec(c.money(coc))
+            or M.dec(h[0].get('TienKhachTraThuc')) != 0 or M.dec(h[0].get('TienTraLai')) != 0):
         raise PmvProcError("TRN_RT_BUYSELL", -2, [{
             "loi": f"Lưu xong nhưng đọc lại KHÔNG khớp — hàng {thuc} ≠ {ma_hang} "
                    f"hoặc tiền {h and h[0]['PayAmount']} ≠ {tong['khach_tra']}. "
+                   "Tiền khách trả thực/tiền trả lại phải được đặt về 0 khi tạo hoặc cập nhật hóa đơn. "
                    "Nhiều khả năng mốc khóa đã cũ (phiếu vừa bị sửa ở máy khác)."}])
+    if contact_intent:
+        if h[0].get("CustID") != (cust_id or S.WALK_IN): raise ValueError("CustID sau lưu chưa khớp; dừng chốt để đối soát.")
+        from .document_contacts import bind, finish
+        bind(contact_intent,trn_id);finish(contact_intent,h[0]["BillCode"])
     return {"trn_id": trn_id, "bill_code": h[0]["BillCode"] or "", "tong": tong}
 
 
@@ -353,6 +373,9 @@ def chot(trn_id, *, till_id, user_id, c=None):
         if err: raise ValueError(err)
     from .deposit_operations import check_holds
     check_holds([r['ProductCode'] for r in c.query('SELECT ProductCode FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?',(trn_id,))],c.target)
+    # GĐ chốt 18/09/2026: mới CardPay=0 → CashPay=PayAmount; sửa/retry giữ CK
+    # hiện tại trên KK. Ghi/đọc kiểm trước Complete; lỗi thì không chốt tiếp.
+    c.sync_retail_cash(trn_id)
     st = (c.query("SELECT Status FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,)) or [{}])[0].get("Status")
     if st != CHOT_ROI:
         c.call("TRN_RT_BUYSELL_Complete", write=True, p_TrnID=trn_id, p_UserID=user_id, p_ThuHo="0")
@@ -366,10 +389,12 @@ def chot(trn_id, *, till_id, user_id, c=None):
     if not da_vao_ket:
         c.call("T_TILL_TXN_Proc", write=True, p_TrnIDs=trn_id, p_TillID=till_id, p_UserID=user_id)
     # ── kiểm sau DUYỆT (v5 5.40) ──
-    h = c.query("SELECT Status, PayAmount FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
+    h = c.query("SELECT Status, PayAmount, CashPay, CardPay FROM TRN_RT_BUYSELL WITH (NOLOCK) WHERE TrnID=?", (trn_id,))
     if not h or h[0]["Status"] != CHOT_ROI:
         raise PmvProcError("TRN_RT_BUYSELL_Complete", -2, [{
             "loi": f"Chốt xong mà trạng thái vẫn {h and h[0]['Status']} — chưa vào sổ quỹ."}])
+    if M.dec(h[0]['CashPay']) != M.dec(h[0]['PayAmount']) - M.dec(h[0]['CardPay']):
+        raise PmvProcError('TRN_RT_BUYSELL', -2, [{'loi': 'Tiền mặt đọc lại chưa bằng tiền phải trả trừ chuyển khoản; chưa xác nhận hoàn tất.'}])
     chua_s = c.query(
         "SELECT s.ProductCode FROM TRN_RT_BUYSELL_SELL s WITH (NOLOCK) JOIN T_PRODUCT p WITH (NOLOCK) "
         "ON p.ProductID = s.ProductID WHERE s.TrnID = ? AND p.Status <> 'S'", (trn_id,))
@@ -477,14 +502,15 @@ THAU_COT = ("t.TrnID, t.BillCode, t.TrnDate, t.TrnTime, t.CustID, t.EmpID, t.Til
             "ISNULL(k.CMND,'') AS CMND, ISNULL(e.EmpName,'') AS EmpName, ISNULL(g.GoldDesc, t.GoldCode) AS GoldDesc")
 
 
-def phieu_thau(trn_id, c=None):
+def phieu_thau(trn_id, c=None, contact=True):
     """1 dòng phiếu thâu kèm tên khách / NV / loại vàng (None nếu không có)."""
     c = c or S.client("phieu_thau")
     r = c.query(f"SELECT {THAU_COT} FROM TRN_RT_BUYGOLD t WITH (NOLOCK) "
                 "LEFT JOIN I_CUSTOMER k WITH (NOLOCK) ON k.CustID = t.CustID "
                 "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = t.EmpID "
                 "LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = t.GoldCode WHERE t.TrnID = ?", (trn_id,))
-    return r[0] if r else None
+    from . import document_contacts as DC
+    return (DC.overlay("KHBL_BUYGOLD", r[0], c.target) if contact else r[0]) if r else None
 
 
 def _tham_so_thau(*, cust_id, emp_id, till_id, shop_id, user_id, gold_code, gw, dw, rate, pct, add_money, tien, notes):
@@ -503,7 +529,7 @@ def _tham_so_thau(*, cust_id, emp_id, till_id, shop_id, user_id, gold_code, gw, 
 
 
 def luu_thau(*, trn_id="", cust_id, emp_id, till_id, shop_id, user_id, gold_code, gw, dw=0, rate, pct=100,
-             add_money=0, notes="", unit="L", c=None):
+             add_money=0, notes="", unit="L", c=None, contact_intent=None, on_created=None):
     """LƯU NHÁP phiếu thâu (Status W). trn_id trống → TRN_RT_BUYGOLD_Ins (vendor sinh TrnID + BillCode ngay);
     có trn_id → TRN_RT_BUYGOLD_Upd với mốc khóa lạc quan (phiếu C → vendor từ chối B-002). Trả dòng phiếu đọc lại."""
     c = c or S.client("luu_thau")
@@ -515,7 +541,7 @@ def luu_thau(*, trn_id="", cust_id, emp_id, till_id, shop_id, user_id, gold_code
     p = _tham_so_thau(cust_id=cust_id, emp_id=emp_id, till_id=till_id, shop_id=shop_id, user_id=user_id,
                       gold_code=gold_code, gw=gw, dw=dw, rate=rate, pct=pct, add_money=add_money, tien=tien, notes=notes)
     if trn_id:
-        cu = phieu_thau(trn_id, c)
+        cu = phieu_thau(trn_id, c, contact=False)
         if not cu or str(cu.get("IsDel")) != "0":
             raise ValueError("Phiếu thâu không còn tồn tại")
         if cu.get("Status") != NHAP:
@@ -525,17 +551,30 @@ def luu_thau(*, trn_id="", cust_id, emp_id, till_id, shop_id, user_id, gold_code
         full = c.tham_so_day_du("TRN_RT_BUYGOLD_Upd", p)
         full.pop("p_TrnDateTime_Upd", None)
         moc_cu = cu.get("TrnDateTime_Upd")
+        from .document_contacts import start
+        contact_intent=start(contact_intent,"KHBL_BUYGOLD",c.target,trn_id)
         c.goi_co_khoa("TRN_RT_BUYGOLD_Upd", bang="TRN_RT_BUYGOLD", cot_id="TrnID", gia_tri=trn_id,
                       kiem_tra=lambda cl: cl.moc_khoa("TRN_RT_BUYGOLD", "TrnID", trn_id) != moc_cu, **full)
     else:
+        from .document_contacts import start
+        contact_intent=start(contact_intent,"KHBL_BUYGOLD",c.target,trn_id)
         _, sets = c.call("TRN_RT_BUYGOLD_Ins", write=True, day_du=True, p_TrnID="", **p)
         kq = (sets[0][0] if sets and sets[0] else {}) or {}
         if str(kq.get("ErrCode", "0")) != "0" or not kq.get("TrnID"):
             raise PmvProcError("TRN_RT_BUYGOLD_Ins", kq.get("ErrCode", -1), sets)
         trn_id = str(kq["TrnID"]).strip()
-    row = phieu_thau(trn_id, c)
+        if contact_intent:
+            from .document_contacts import bind
+            bind(contact_intent,trn_id)
+        if on_created: on_created(trn_id)
+    row = phieu_thau(trn_id, c, contact=False)
     if not row or M.dec(row["TotalAmount"]) != tien:
         raise PmvProcError("TRN_RT_BUYGOLD", -2, [{"loi": f"Đọc lại phiếu {trn_id} không khớp tiền {tien}"}])
+    if contact_intent:
+        if row.get("CustID") != (cust_id or S.WALK_IN): raise ValueError("CustID sau lưu chưa khớp; dừng chốt để đối soát.")
+        from .document_contacts import bind, finish
+        bind(contact_intent,trn_id);finish(contact_intent,row.get("BillCode"))
+        row=phieu_thau(trn_id,c)
     return row
 
 

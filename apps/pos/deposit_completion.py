@@ -16,7 +16,7 @@ def sync(c, pk, *, financial=None, detached=False, username='system'):
             progress = 'applied'
         elif (not f['changes'] and (
               (detached and not f['links']) or
-              (f['valid'] and f['h']['Status']=='P'
+              (f.get('settlement_valid', f['valid']) and f['h']['Status']=='P'
                and (not f['links'] or all(x['Status']=='W' for x in f['links']))
                and state and state.fulfilment=='applied'))):
             progress = 'ready'

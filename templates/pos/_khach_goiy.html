@@ -6,7 +6,7 @@ luôn mục đầu = chọn khách; không có → báo để bấm ＋ THÊM. S
   {% if auto %}/* ⚠ không b.click(): script chạy lúc htmx CHƯA gắn hx-post cho nút mới swap → click rơi. Gọi thẳng ban_dat. */
   setTimeout(function () {
     if (!window.htmx) return;
-    htmx.ajax("POST", "{% url 'pos:ban_dat' %}", { values: { cust_id: "{{ ds.0.CustID }}" }, swap: "none",
+    htmx.ajax("POST", "{% url 'pos:ban_dat' %}", { values: { cust_id: "{{ ds.0.CustID }}", document_phone: "{{ ds.0.selected_phone|escapejs }}" }, swap: "none",
       headers: { "X-CSRFToken": (window.KHBL_CSRF || "") } });
   }, 0);{% endif %}
 })();</script>
@@ -20,9 +20,9 @@ luôn mục đầu = chọn khách; không có → báo để bấm ＋ THÊM. S
 <div class="khbl-card khbl-card--flat" style="box-shadow:var(--sh-lift);width:420px;max-height:300px;overflow:auto">
   {% for k in ds %}
   <button type="button" style="all:unset;cursor:pointer;display:block;padding:7px 11px;border-bottom:1px solid var(--line);width:100%"
-          hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": "{{ k.CustID }}"}' hx-swap="none">
+          hx-post="{% url 'pos:ban_dat' %}" hx-vals='{"cust_id": "{{ k.CustID }}", "document_phone": "{{ k.selected_phone|escapejs }}"}' hx-swap="none">
     <div style="font-weight:600">{{ k.CustName }}</div>
-    <div class="dim" style="font-size:12px"><span class="mono">{{ k.Phone }}{% if k.GhiChu2 %} · {{ k.GhiChu2 }}{% endif %}{% if k.GhiChu3 %} · {{ k.GhiChu3 }}{% endif %}</span>
+    <div class="dim" style="font-size:12px"><span class="mono">{{ k.selected_phone|default:"Chưa có SĐT" }}</span>
       {% if k.Address %}· {{ k.Address|truncatechars:44 }}{% endif %}</div>
   </button>
   {% endfor %}

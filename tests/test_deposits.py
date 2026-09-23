@@ -142,6 +142,7 @@ class DepositViewTests(TestCase):
                       TrnDateTime_Upd=dt.datetime(2026, 9, 11, 10), Status='W', CustID='KH001',
                       EmpID='NV1', TienCoc=Decimal('1000000'), Description='Ghi chú <script>', CustName='Khách thử', Phone='')
         self.patchers = [patch.object(D, 'PmvClient', return_value=self.c),
+                         patch('apps.pos.services.nhan_vien_ban',return_value=[{'EmpID':'NV1','EmpName':'Nhân viên QA'}]),
                          patch('apps.pos.deposit_editor.S.gia_mysql',return_value={}),
                          patch('apps.pos.context_processors.S.thong_tin_tiem', return_value={}),
                          patch('apps.pos.context_processors.gateway.mo_ta_dich', return_value='Bản thử')]
@@ -293,7 +294,7 @@ class DepositViewTests(TestCase):
             self.c.query.return_value=[{'CustID':'KH001','CustName':'Khách mẫu','Phone':'0900000000','CMND':'000000000001','Address':'Địa chỉ mẫu'}]
             response=self.client.get(reverse('pos:dat_coc_customers'),{'customer_q':'QR mẫu','format':'json'})
         parse.assert_called_once_with('QR mẫu')
-        self.assertEqual(self.c.query.call_args.args[1],('%000000000001%',)*4)
+        self.assertEqual(self.c.query.call_args.args[1],('000000000001',))
         self.assertEqual(response.json()['rows'][0]['Address'],'Địa chỉ mẫu')
 
     def test_order_tab_controls_status_and_renders_compact_rows(self):

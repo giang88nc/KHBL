@@ -1,0 +1,129 @@
+/* CHECK BILL V2 (21/09/2026) — cùng ngôn ngữ vàng kim của BÁO CÁO, prefix .cb- để không đụng màn khác */
+/* trang ĐỨNG RIÊNG (không base.html, không menu) — tự lo nền + khung giữa màn hình */
+.cb-body{margin:0;min-height:100vh;background:var(--surface,#FDFCF9);font-family:var(--f-body,"Be Vietnam Pro",system-ui,sans-serif)}
+.cb-page{display:grid;gap:4px;max-width:1600px;margin:0 auto;padding:4px 6px 12px;color:var(--ink-700,#3A3430)}
+.cb-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  padding:4px 10px;border:1px solid var(--line,#EAE4D6);border-radius:8px;
+  background:linear-gradient(115deg,#FBF7EC,#FDFCF9 60%,#F6EFDC)}
+.cb-heading{display:flex;align-items:center;gap:4px}.cb-heading img{width:34px;height:34px}
+.cb-eyebrow{font-size:10px;font-weight:800;letter-spacing:2px;color:var(--gold-700,#8C6A1D)}
+.cb-hero h1{font-size:19px;letter-spacing:1px;margin:0;color:var(--ink,#1C1917)}
+.cb-hero p{margin:0;font-size:11.5px;color:var(--ink-500,#7A7168)}
+.cb-ngay{display:flex;align-items:center;gap:4px}
+.cb-ngay label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--ink-500,#7A7168)}
+.cb-ngay input{border:1px solid var(--line,#EAE4D6);border-radius:6px;padding:3px 6px;font:inherit;font-size:14px;font-weight:600}
+.cb-ngay__nut,.cb-hom-nay{display:inline-flex;align-items:center;justify-content:center;height:28px;min-width:28px;padding:0 6px;
+  border:1px solid var(--line,#EAE4D6);border-radius:8px;background:#fff;color:var(--ink-600,#5C554E);
+  font-size:18px;font-weight:700;text-decoration:none}
+.cb-hom-nay{font-size:12.5px}
+.cb-ngay__nut:hover,.cb-hom-nay:hover{border-color:var(--gold-300,#E4C56A);background:var(--gold-100,#F7EFD8)}
+
+/* thanh quét — to, luôn giữ con trỏ */
+.cb-quet{position:sticky;top:2px;z-index:5;display:flex;align-items:center;gap:4px;padding:4px 6px;
+  border:2px solid var(--gold-500,#C9A02C);border-radius:8px;background:#fff;box-shadow:0 6px 22px rgba(140,106,29,.14)}
+.cb-quet__ic svg{width:24px;height:24px;stroke:var(--gold-700,#8C6A1D);stroke-width:1.6;fill:none;display:block}
+.cb-quet input{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:19px;font-weight:700;letter-spacing:1px;
+  font-variant-numeric:tabular-nums;color:var(--ink,#1C1917);background:transparent}
+.cb-quet input::placeholder{font-size:14px;font-weight:500;letter-spacing:0;color:var(--ink-500,#7A7168)}
+.cb-quet__nut{cursor:pointer;font:inherit;font-size:14px;font-weight:800;letter-spacing:1px;padding:6px 18px;border-radius:6px;
+  border:0;color:#fff;background:linear-gradient(135deg,var(--gold-500,#C9A02C),var(--gold-700,#8C6A1D))}
+.cb-quet__cho{display:none;font-size:12px;color:var(--gold-700,#8C6A1D);white-space:nowrap}
+.cb-quet.htmx-request .cb-quet__cho{display:inline}
+.cb-quet.htmx-request{border-color:var(--gold-300,#E4C56A)}
+
+/* thông báo sau khi quét */
+.cb-tin{padding:4px 10px;border-radius:6px;font-size:14px;font-weight:700;animation:cb-vao .25s ease}
+.cb-tin--ok{background:#EAF5EE;border:1px solid #9FD0AE;color:#1F5C34}
+.cb-tin--loi{background:#FBEDE9;border:1px solid #E4B4A8;color:#8E2F22}
+@keyframes cb-vao{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* KPI */
+.cb-kpi{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr 1fr;gap:4px}
+.cb-kpi__o{border:1px solid var(--line,#EAE4D6);border-radius:8px;background:#fff;padding:4px 8px;display:flex;flex-direction:column;gap:2px;
+  box-shadow:0 4px 14px rgba(28,25,23,.05);border-top:3px solid var(--gold-300,#E4C56A)}
+.cb-kpi__o>span{font-size:10.5px;font-weight:800;letter-spacing:.07em;color:var(--gold-700,#8C6A1D)}
+.cb-kpi__o b{font-size:clamp(16px,1.5vw,21px);letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:var(--ink,#1C1917)}
+.cb-kpi__o b small{font-size:13px;font-weight:600;color:var(--ink-500,#7A7168);letter-spacing:0}
+.cb-kpi__o>small{font-size:11.5px;color:var(--ink-500,#7A7168)}
+.cb-kpi__o--tien-do{border-top-color:var(--gold-500,#C9A02C)}
+.cb-kpi__o--thieu{border-top-color:#B3402A}.cb-kpi__o--thieu>span,.cb-kpi__o--thieu b{color:#B3402A}
+.cb-kpi__o--du{border-top-color:#2E7D46}.cb-kpi__o--du>span{color:#2E7D46}
+.cb-kpi__o--lech{border-top-color:#C07A1A}.cb-kpi__o--lech em{color:#C07A1A;font-style:normal;font-weight:800}
+.cb-thanh{height:6px;border-radius:99px;background:#F1EBDD;overflow:hidden}
+.cb-thanh i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold-300,#E4C56A),#2E7D46);transition:width .4s ease}
+
+/* thẻ + bảng */
+.cb-doi{display:grid;grid-template-columns:1.25fr 1fr;gap:4px}
+.cb-nhom{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
+.cb-the{border:1px solid var(--line,#EAE4D6);border-radius:8px;background:#fff;padding:4px 6px;min-width:0}
+.cb-the h2{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;font-size:12.5px;letter-spacing:.06em;color:var(--gold-700,#8C6A1D);margin:0 0 2px}
+.cb-the h2 small{font-weight:500;color:var(--ink-500,#7A7168);letter-spacing:0;font-size:11.5px}
+.cb-the--thieu{border-top:3px solid #B3402A}.cb-the--thieu h2{color:#B3402A}
+.cb-the--canh-bao{border:1px solid #E7C07A;background:#FFF8EB}.cb-the--canh-bao h2{color:#9A5B0F}
+.cb-the--tm{border-top:3px solid #2E7D46}.cb-the--ck{border-top:3px solid #2F6DB5}
+.cb-the--tmck{border-top:3px solid var(--gold-500,#C9A02C)}.cb-the--db{border-top:3px solid #7A5AA8}
+.cb-dem{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 5px;border-radius:99px;
+  font-size:12px;letter-spacing:0;background:var(--gold-100,#F7EFD8);color:var(--gold-700,#8C6A1D)}
+.cb-dem--do{background:#B3402A;color:#fff}
+.cb-cuon{overflow:auto;max-height:460px}
+.cb-bang{width:100%;border-collapse:collapse;font-size:12.5px}
+.cb-bang th{position:sticky;top:0;text-align:left;font-size:10.5px;letter-spacing:.05em;font-weight:700;color:var(--gold-700,#8C6A1D);
+  background:var(--gold-100,#F7EFD8);padding:2px 4px;white-space:nowrap}
+.cb-bang td{padding:2px 4px;border-bottom:1px solid #F1EBDD;vertical-align:middle;white-space:nowrap}
+.cb-bang td small{display:inline;margin-left:4px;font-size:11px;color:var(--ink-500,#7A7168)}
+.cb-bang tbody tr:hover td{background:#FDFAF2}
+.cb-so{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cb-ma{font-family:var(--f-mono,ui-monospace,Consolas,monospace);font-weight:700;white-space:nowrap;color:var(--ink,#1C1917)}
+.cb-mo{white-space:nowrap;color:var(--ink-600,#5C554E)}
+.cb-khop{color:#2E7D46!important}.cb-lech{color:#C07A1A!important;font-weight:700}
+.cb-dong--huy td{text-decoration:line-through;color:#B3402A}
+.cb-nhan{display:inline-block;font-size:10px;font-weight:800;padding:0 4px;border-radius:4px;background:#EEF0F2;color:#4C5560}
+.cb-nhan--tm{background:#EAF5EE;color:#1F5C34}.cb-nhan--ck{background:#E8F0FA;color:#23548E}
+.cb-nhan--tmck{background:var(--gold-100,#F7EFD8);color:var(--gold-700,#8C6A1D)}.cb-nhan--db{background:#F1ECF8;color:#5D4289}
+.cb-hanh-dong{width:22px;text-align:right}
+/* 1 phiếu = 1 dòng: tên dài cắt bằng … thay vì xuống dòng */
+.cb-bang td.cb-ten{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.cb-xoa{cursor:pointer;width:20px;height:20px;padding:0;line-height:1;border-radius:4px;border:1px solid var(--line,#EAE4D6);background:#fff;color:var(--ink-500,#7A7168);font-size:12px}
+.cb-xoa:hover{border-color:#B3402A;color:#B3402A;background:#FBEFEC}
+.cb-trong{margin:2px 0;color:var(--ink-500,#7A7168);font-size:12.5px}
+.cb-chan{display:flex;justify-content:flex-end}
+.cb-kiem-lai{cursor:pointer;font:inherit;font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:6px;
+  border:1px solid #E4B4A8;background:#fff;color:#B3402A}
+.cb-kiem-lai:hover{background:#FBEDE9}
+@media(max-width:1100px){.cb-kpi{grid-template-columns:repeat(2,1fr)}.cb-doi,.cb-nhom{grid-template-columns:1fr}}
+/* DÒ PHIẾU (21/09/2026) */
+.cb-do-nut{cursor:pointer;font:inherit;font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;white-space:nowrap;
+  border:1px solid var(--gold-500,#C9A02C);background:#fff;color:var(--gold-700,#8C6A1D)}
+.cb-do-nut:hover{background:var(--gold-100,#F7EFD8)}
+.cb-do-nut.on{background:var(--gold-100,#F7EFD8)}
+.cb-dong--lech td{background:#FFF6E8}
+.cb-bang tbody tr.cb-dong--lech:hover td{background:#FDEBD0}
+/* bảng CK VÀO: nhãn nguồn + dòng chưa xác nhận / không rõ nguồn */
+.cb-nguon{display:inline-block;font-size:10.5px;font-weight:700;padding:0 5px;border-radius:4px;background:#EAF5EE;color:#1F5C34;white-space:nowrap}
+.cb-nguon--chua_xac_nhan{background:#FFF1DC;color:#9A5B0F}
+.cb-nguon--khong_ro{background:#FBE3DE;color:#8E2F22}
+.cb-ck--khong_ro td{background:#FDF1EE}
+.cb-ck--chua_xac_nhan td{background:#FFF8EC}
+.cb-loi{color:#B3402A!important;font-weight:700}
+.cb-nguon--co_ma{background:#FFF1DC;color:#9A5B0F}.cb-ck--co_ma td{background:#FFF8EC}
+.cb-nguon--qr{background:#E8F0FA;color:#23548E}
+
+/* CK VÀO — nút lọc Tất cả / Checked / Uncheck (22/09/2026) */
+.cb-loc-ck{margin-left:auto;display:inline-flex;gap:2px}
+.cb-loc-ck button{font:inherit;font-size:11px;padding:1px 8px;border:1px solid #EAE4D6;background:#fff;border-radius:4px;cursor:pointer;color:#57534E}
+.cb-loc-ck button.is-on{background:#F7EFD8;border-color:#C9A02C;color:#8C6A1D;font-weight:600}
+
+/* Popup gắn mã HĐ cho khoản CK (23/09/2026) */
+.cb-lop{position:fixed;inset:0;background:rgba(28,25,23,.45);display:flex;align-items:center;justify-content:center;z-index:50}
+.cb-hop{background:#fff;border:1px solid #EAE4D6;border-radius:8px;padding:12px 14px;width:min(420px,94vw);box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.cb-hop h3{margin:0 0 8px;font-size:13px;letter-spacing:.06em;color:#8C6A1D}
+.cb-hop__tt{margin:0 0 8px;display:grid;gap:2px;font-size:12px}
+.cb-hop__tt div{display:flex;gap:6px}.cb-hop__tt dt{min-width:70px;color:#7A7168;margin:0}.cb-hop__tt dd{margin:0}
+.cb-hop__nd{word-break:break-all;color:#57534E}
+.cb-hop label{display:block;font-size:11.5px;color:#57534E}
+.cb-hop input{width:100%;margin-top:3px;padding:6px 8px;border:1px solid #EAE4D6;border-radius:5px;font:inherit;font-size:14px}
+.cb-hop__ghi{margin:8px 0 10px;font-size:11.5px;color:#7A7168}
+.cb-hop__nut{display:flex;justify-content:flex-end;gap:6px; margin: 10px;}
+.cb-hop__nut button{font:inherit;font-size:12px;padding:5px 12px;border:1px solid #EAE4D6;background:#fff;border-radius:5px;cursor:pointer}
+.cb-hop__luu{background:#C9A02C;border-color:#8C6A1D;font-weight:600}
+.cb-sua{font:inherit;font-size:11px;margin-left:4px;padding:0 5px;border:1px solid #EAE4D6;background:#fff;border-radius:4px;cursor:pointer;color:#8C6A1D}

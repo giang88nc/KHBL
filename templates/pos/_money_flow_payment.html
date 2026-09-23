@@ -1,0 +1,31 @@
+{% extends "partials/modal_shell.html" %}{% load pos_extras %}
+{% block modal_title %}{% if flow.direction == 'IN' %}KHÁCH TRẢ · IN{% else %}TRẢ KHÁCH · OUT{% endif %}{% endblock %}
+{% block modal_body %}
+<div class="mf-pay">
+  <div class="mf-pay__summary"><b>{{ service_label }} · {{ flow.source_bill_code|default:flow.source_id }}</b>
+    <span>{{ flow.customer_name|default:'Khách lẻ' }}</span><strong>{{ amount|tien_tran }}đ · {% if method == 'BANK' %}Chuyển khoản{% else %}Tiền mặt{% endif %}</strong></div>
+  {% if flow.is_void %}<div class="mf-pay__error">Dòng tiền đã vô hiệu lực, không thể tạo thanh toán.</div>
+  {% elif amount <= 0 %}<div class="mf-pay__error">Dòng tiền không có số tiền cho phương thức này.</div>
+  {% elif instruction %}
+    <div class="mf-pay__ok">Đã chuẩn hóa chỉ dẫn thanh toán. Việc tạo QR chưa đồng nghĩa tiền đã được đối soát.</div>
+    {% if qr_img %}<div class="mf-pay__qr"><img src="{{ qr_img }}" width="280" height="280" alt="QR chuyển khoản">
+      <div><b>{{ instruction.bank_name }}</b><strong>{{ instruction.bank_account }}</strong><span>{{ instruction.bank_owner }}</span>
+        <em>{{ instruction.amount|tien_tran }}đ</em><small>Nội dung: {{ instruction.transfer_content }}</small></div></div>
+    {% else %}<p class="mf-pay__cash">Thu/chi tiền mặt: <b>{{ instruction.amount|tien_tran }}đ</b>. Chờ bước xác nhận quỹ ở GĐ3.</p>{% endif %}
+  {% else %}
+    {% if error %}<div class="mf-pay__error">{{ error }}</div>{% endif %}
+    <form id="mf-payment-form" class="mf-pay__form" method="post" hx-post="{% url 'pos:money_flow_payment' flow.pk method %}" hx-target="#modal-root" hx-swap="innerHTML">
+      {% csrf_token %}
+      {% if method == 'BANK' and flow.direction == 'IN' %}
+        <label>Tài khoản công ty nhận tiền<select name="bank_id" required>{% for bank in banks %}<option value="{{ bank.id }}" {% if existing.bank_account == bank.bank_number %}selected{% endif %}>{{ bank.bank_name }} · {{ bank.bank_number }} · {{ bank.bank_user }}</option>{% empty %}<option value="">Chưa cấu hình tài khoản nhận</option>{% endfor %}</select></label>
+      {% elif method == 'BANK' %}
+        <label>Ngân hàng khách<select name="bank_code" required><option value="">Chọn ngân hàng</option>{% for code, bin, name in banks_vn %}<option value="{{ code }}" {% if initial.bank_code == code or initial.bank_code == bin %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label>Số tài khoản khách<input name="bank_account" value="{{ initial.bank_account }}" required maxlength="40" autocomplete="off"></label>
+        <label>Tên chủ tài khoản<input name="bank_owner" value="{{ initial.bank_owner }}" maxlength="160" autocomplete="off"></label>
+      {% else %}<p>Hệ thống sẽ lưu chỉ dẫn tiền mặt đúng số tiền trên chứng từ nguồn.</p>{% endif %}
+    </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block modal_foot %}<button class="khbl-btn khbl-btn--outline" type="button" onclick="closeKhblModal()">Đóng</button>
+{% if not instruction and not flow.is_void and amount > 0 %}<button class="khbl-btn khbl-btn--gold" type="submit" form="mf-payment-form">{% if method == 'BANK' %}Tạo QR chuẩn{% else %}Lưu phương thức tiền mặt{% endif %}</button>{% endif %}{% endblock %}

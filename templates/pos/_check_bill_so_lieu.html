@@ -1,0 +1,106 @@
+{% load pos_extras %}{% comment %}
+Khối SỐ LIỆU của CHECK BILL V2 — HTMX thay trọn khối này sau mỗi lần quét / bỏ kiểm / kiểm lại.
+⚠ hx-* của từng nút đặt NGAY trên nút (không đặt trên khối bọc) — tránh bẫy HTMX kế thừa thuộc tính.
+{% endcomment %}
+{% if tin %}<div class="cb-tin cb-tin--ok" role="status">{{ tin }}</div>{% endif %}
+{% if loi_quet %}<div class="cb-tin cb-tin--loi" role="alert">✕ {{ loi_quet }}</div>{% endif %}
+{% if loi %}<div class="cb-tin cb-tin--loi" role="alert">Không đọc được máy KK: {{ loi }} — sổ đã kiểm vẫn còn nguyên, thử lại sau.</div>{% endif %}
+
+{% if kpi %}
+<div class="cb-kpi">
+  <div class="cb-kpi__o cb-kpi__o--tien-do">
+    <span>ĐÃ KIỂM</span>
+    <b>{{ kpi.so_da }}<small> / {{ kpi.so_kk }} HĐ</small></b>
+    <div class="cb-thanh" role="progressbar" aria-valuenow="{{ kpi.phan_tram }}" aria-valuemin="0" aria-valuemax="100">
+      <i style="width:{{ kpi.phan_tram }}%"></i></div>
+    <small>{{ kpi.phan_tram }}% · {% if kpi.so_thieu %}còn {{ kpi.so_thieu }} tờ{% else %}đã đủ{% endif %}</small>
+  </div>
+  <div class="cb-kpi__o {% if kpi.so_thieu %}cb-kpi__o--thieu{% else %}cb-kpi__o--du{% endif %}">
+    <span>CÒN THIẾU</span><b>{{ kpi.so_thieu }}<small> HĐ</small></b>
+    <small>{% if kpi.so_thieu %}{{ kpi.thieu_tien|tien_tran }} ₫ chưa có tờ{% else %}✓ Khớp đủ với máy KK{% endif %}</small>
+  </div>
+  <div class="cb-kpi__o"><span>TỔNG TIỀN HĐ</span><b>{{ kpi.tong|tien_tran }}<small> ₫</small></b>
+    <small title="Σ PayAmount > 0 · {{ kpi.so_kk }} HĐ đã chốt trên KK">Σ Đổi dư {{ kpi.doi_du_so }} HĐ · {{ kpi.doi_du_tien|tien_tran }} ₫</small></div>
+  <div class="cb-kpi__o"><span>TIỀN MẶT</span><b>{{ kpi.tm|tien_tran }}<small> ₫</small></b><small title="Σ CashPay > 0 trên HĐ">Σ Nhận của khách {{ kpi.thu_khach|tien_tran }} ₫</small></div>
+  <div class="cb-kpi__o {% if kpi.ck_nhan != kpi.ck %}cb-kpi__o--lech{% endif %}"><span>CHUYỂN KHOẢN</span>
+    <b>{{ kpi.ck|tien_tran }}<small> ₫</small></b>
+    <small>Σ Ngân hàng nhận {{ kpi.ck_nhan|tien_tran }} ₫{% if kpi.ck_lech %} · <em>Lệch {{ kpi.ck_lech|tien_tran }} ₫</em>{% else %} · ✓ khớp{% endif %}</small></div>
+</div>
+
+{% if huy %}
+<div class="cb-the cb-the--canh-bao">
+  <h2>⚠ ĐÃ KIỂM NHƯNG KK NAY BÁO HỦY / KHÔNG CÒN <small>{{ huy|length }} hóa đơn — kiểm tra lại tờ giấy</small></h2>
+  <table class="cb-bang"><tbody>{% for x in huy %}<tr><td class="cb-ma">{{ x.bill_code }}</td><td class="cb-so">{{ x.tong|tien_tran }}</td>
+    <td>kiểm {{ x.kiem_luc|date:"H:i" }} · {{ x.nguoi_kiem }}</td>
+    <td class="cb-hanh-dong"><button type="button" class="cb-xoa" title="Bỏ kiểm" hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td></tr>{% endfor %}</tbody></table>
+</div>
+{% endif %}
+
+{% if do %}{# DÒ PHIẾU (21/09/2026): chỉ hiện khi bấm nút — HĐ còn thiếu + CK trong ngày (money_flow IN đã xác nhận) #}
+<div class="cb-doi">
+  <div class="cb-the cb-the--thieu">
+    <h2>HĐ CÒN THIẾU <span class="cb-dem {% if thieu %}cb-dem--do{% endif %}">{{ thieu|length }}</span>
+      <small>có trên máy KK, chưa quét tờ giấy{% if kpi.thieu_lech %} · <b class="cb-lech">⚠ {{ kpi.thieu_lech }} HĐ lệch tiền</b>{% endif %}</small></h2>
+    {% if thieu %}<div class="cb-cuon"><table class="cb-bang">
+      <thead><tr><th>MÃ HĐ</th><th>GIỜ</th><th>NHÂN VIÊN · KHÁCH</th><th class="cb-so">PayAmount</th><th class="cb-so" title="TienKhachTraThuc — tiền khách đưa thực">THU KHÁCH</th><th class="cb-so">CashPay</th>
+        <th class="cb-so">CardPay</th><th class="cb-so" title="PayAmount − CashPay − CardPay">C.LỆCH</th><th>LOẠI</th></tr></thead>
+      <tbody>{% for r in thieu %}<tr{% if r.lech %} class="cb-dong--lech" title="PayAmount − CashPay − CardPay = {{ r.lech|tien_tran }} ₫ — tiền trên HĐ chưa phân bổ đủ / phân bổ dư"{% endif %}>
+        <td class="cb-ma">{{ r.bill_code }}</td><td class="cb-mo">{{ r.lap_luc|date:"H:i" }}</td>
+        <td class="cb-ten" title="{{ r.nhan_vien }} · {{ r.khach|default:'Khách lẻ' }}"><b>{{ r.nhan_vien|default:"—" }}</b><small>· {{ r.khach|default:"Khách lẻ" }}</small></td>
+        <td class="cb-so">{{ r.pay|tien_tran }}</td><td class="cb-so">{{ r.thu_khach|tien_tran }}</td><td class="cb-so">{{ r.cash|tien_tran }}</td><td class="cb-so">{{ r.card|tien_tran }}</td>
+        <td class="cb-so">{% if r.lech %}<b class="cb-lech">⚠ {{ r.lech|tien_tran }}</b>{% else %}<span class="cb-khop">0</span>{% endif %}</td>
+        <td><span class="cb-nhan cb-nhan--{{ r.kieu|lower }}">{{ r.kieu }}</span></td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="cb-trong">✓ Không thiếu tờ nào.</p>{% endif %}
+  </div>
+  <div class="cb-the cb-the--ck">
+    <h2>CK VÀO TRONG NGÀY <span class="cb-dem">{{ ck|length }}</span>
+      <small>{{ kpi.ck_tong|tien_tran }} ₫ · bank_notifications tiền vào{% if kpi.ck_chua_xn %} · <b class="cb-lech">{{ kpi.ck_chua_xn }} uncheck</b>{% endif %}</small>
+      <span class="cb-loc-ck" data-cb-loc-ck>
+        <button type="button" class="is-on" data-loc="">Tất cả</button><button type="button" data-loc="1">✓ Checked</button><button type="button" data-loc="0">Uncheck</button>
+      </span></h2>
+    {% if ck %}<div class="cb-cuon"><table class="cb-bang">
+      <thead><tr><th>GIỜ</th><th>MÃ HĐ</th><th>TK NHẬN</th><th class="cb-so">SỐ TIỀN</th><th title="Checked = khoản đã xác nhận vào một phiếu trong ngày">CHECK</th></tr></thead>
+      <tbody>{% for r in ck %}<tr data-checked="{% if r.checked %}1{% else %}0{% endif %}" title="Nội dung CK: {{ r.mo_ta|default:'—' }}">
+        <td class="cb-mo">{{ r.gio|default:"—" }}</td>
+        <td class="cb-ma">{% if r.ma %}{{ r.ma }} <small class="cb-mo">{{ r.loai_ma }}</small>{% else %}—{% endif %}</td>
+        <td class="cb-mo">{{ r.tk_nhan|default:"—" }}</td>
+        <td class="cb-so"><b>{{ r.tien_ck|tien_tran }}</b></td>
+        <td>{% if r.checked %}<span class="cb-khop">✓</span>{% else %}<span class="cb-lech">uncheck</span>
+          <button type="button" class="cb-sua" title="Sửa mã chứng từ rồi ghi CardPay / CashPay lên KK"
+                  hx-get="{% url 'pos:check_bill_ck_sua' r.id %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cb-modal">✎</button>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="cb-trong">Chưa có khoản CK nào vào trong ngày.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="cb-nhom">
+  {% for g in nhom %}
+  <div class="cb-the cb-the--{{ g.css }}">
+    <h2>{{ g.nhan }} <span class="cb-dem">{{ g.so }}</span>
+      <small>{{ g.tong|tien_tran }} ₫{% if g.ma == 'TMCK' %} · TM {{ g.tm|tien_tran }} · CK {{ g.ck|tien_tran }}{% endif %}</small></h2>
+    {% if g.dong %}<div class="cb-cuon"><table class="cb-bang">
+      <thead><tr><th>MÃ HĐ</th><th>NV · KHÁCH</th><th class="cb-so">TỔNG</th>{% if g.ma != 'TM' and g.ma != 'DB' %}<th class="cb-so">CK / NHẬN</th>{% endif %}<th>KIỂM</th><th></th></tr></thead>
+      <tbody>{% for x in g.dong %}<tr{% if x.da_huy %} class="cb-dong--huy"{% endif %}>
+        <td class="cb-ma">{{ x.bill_code }}<small>{{ x.lap_luc|date:"H:i" }}</small></td>
+        <td class="cb-ten" title="{{ x.nhan_vien }} · {{ x.khach|default:'Khách lẻ' }}"><b>{{ x.nhan_vien|default:"—" }}</b><small>· {{ x.khach|default:"Khách lẻ" }}</small></td>
+        <td class="cb-so">{{ x.tong|tien_tran }}</td>
+        {% if g.ma != 'TM' and g.ma != 'DB' %}<td class="cb-so">{{ x.chuyen_khoan|tien_tran }}
+          <small class="{% if x.ck_lech %}cb-lech{% else %}cb-khop{% endif %}">{% if x.ck_lech %}⚠ nhận {{ x.ck_nhan_moi|tien_tran }}{% else %}✓ đã nhận{% endif %}</small></td>{% endif %}
+        <td class="cb-mo">{{ x.kiem_luc|date:"H:i" }}<small>· {{ x.nguoi_kiem }}</small></td>
+        <td class="cb-hanh-dong"><button type="button" class="cb-xoa" title="Bỏ kiểm tờ này" aria-label="Bỏ kiểm {{ x.bill_code }}"
+            hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td>
+      </tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="cb-trong">Chưa có tờ nào.</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if kpi.so_da %}
+<div class="cb-chan">
+  <button type="button" class="cb-kiem-lai" hx-post="{% url 'pos:check_bill_kiem_lai' %}" hx-vals='{"d": "{{ ngay|date:"Y-m-d" }}"}'
+          hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do"
+          hx-confirm="KIỂM LẠI cả ngày {{ ngay|date:'d/m/Y' }}? Toàn bộ {{ kpi.so_da }} tờ đã kiểm sẽ bị xóa để quét lại từ đầu.">↺ Kiểm lại cả ngày</button>
+</div>
+{% endif %}
+{% endif %}

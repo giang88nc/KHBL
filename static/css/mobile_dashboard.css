@@ -1,0 +1,40 @@
+/* Scoped to home: transaction and QR screens keep their existing styles. */
+.kh2-dashboard{padding:4px 0 12px;color:#30291b}
+.kh2-dashboard__heading{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:5px 2px 20px}
+.kh2-dashboard__heading p{margin:0 0 4px;color:#987939;font-size:11px;font-weight:750;letter-spacing:.12em}
+.kh2-dashboard__heading h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.04em}
+.kh2-dashboard__heading>span{font-size:11px;color:#827b6e;padding-bottom:4px}
+.kh2-dashboard__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kh2-module{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:174px;padding:18px 10px;border:1px solid #e8e3d8;border-radius:24px;background:#fff;color:#554835;text-align:center;text-decoration:none;font:inherit;box-shadow:0 5px 18px #40321806;-webkit-tap-highlight-color:transparent;transition:transform .18s,box-shadow .18s}
+.kh2-module__icon{display:grid;place-items:center;width:70px;height:70px;margin-bottom:13px;border-radius:22px;background:#f5f2eb}
+.kh2-module__icon svg{width:46px;height:46px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.kh2-module strong{font-size:17px;font-weight:800;line-height:1.4}.kh2-module small{margin-top:4px;font-size:11px;line-height:1.5;color:#777063}
+.kh2-module__arrow{position:absolute;top:12px;right:16px;font-size:20px;opacity:.65}
+.kh2-module--gold{background:linear-gradient(150deg,#fffdf7,#fff1cd);border-color:#edd59d;color:#946516}
+.kh2-module--gold .kh2-module__icon{background:linear-gradient(145deg,#ffeabd,#f6d688);box-shadow:inset 0 1px #fff9}
+.kh2-module--violet{background:linear-gradient(150deg,#fefcff,#eee5ff);border-color:#dfcef6;color:#7951ae}
+.kh2-module--violet .kh2-module__icon{background:linear-gradient(145deg,#ede0ff,#dbc7f6);box-shadow:inset 0 1px #fff9}
+.kh2-module--soon{background:#fafbf9;border-color:#e7eae4;color:#858b81;box-shadow:none}.kh2-module--soon .kh2-module__icon{background:#eef1eb;color:#919889}.kh2-module--soon small{color:#82887d}
+.kh2-module:disabled{cursor:default;opacity:1}a.kh2-module:active{transform:scale(.965)}a.kh2-module:focus-visible{outline:3px solid #ba8e36;outline-offset:3px}
+@media(hover:hover){a.kh2-module:hover{transform:translateY(-2px);box-shadow:0 9px 24px #40321812}}
+@media(max-width:360px){.kh2-dashboard__grid{gap:9px}.kh2-module{min-height:154px;border-radius:20px;padding:14px 8px}.kh2-module__icon{width:60px;height:60px;margin-bottom:10px}.kh2-module strong{font-size:16px}}
+/* Decorative layers never intercept taps or obscure the label. */
+.kh2-module{isolation:isolate;overflow:hidden;animation:kh2-card-in .55s cubic-bezier(.2,.7,.2,1) both;animation-delay:var(--entrance,0ms)}
+.kh2-module:nth-child(2){--entrance:60ms}.kh2-module:nth-child(3){--entrance:120ms}.kh2-module:nth-child(4){--entrance:180ms}.kh2-module:nth-child(5){--entrance:240ms}.kh2-module:nth-child(6){--entrance:300ms}
+.kh2-module--gold{box-shadow:inset 0 1px 0 #fff,0 8px 24px #b7831820;--glow:#e9b642;--halo:#e9b64225}
+.kh2-module--violet{box-shadow:inset 0 1px 0 #fff,0 8px 24px #8050b512;--glow:#a981d7;--halo:#a981d725}
+.kh2-module--gold:before,.kh2-module--violet:before{content:"";position:absolute;z-index:-1;width:150px;height:150px;right:-60px;top:-60px;border-radius:50%;border:1px solid var(--halo);box-shadow:0 0 0 18px var(--halo),0 0 0 38px var(--halo);pointer-events:none}
+a.kh2-module:after{content:"";position:absolute;inset:-50% -90%;background:linear-gradient(110deg,transparent 43%,#fff8 49%,transparent 55%);transform:translateX(-55%);animation:kh2-card-sheen 7s ease-in-out infinite;pointer-events:none;z-index:-1}
+.kh2-module__icon{position:relative;border:1px solid #ffffffa6;box-shadow:inset 0 2px 2px #ffffff8c,0 7px 15px #3d2b0710;transition:transform .25s,box-shadow .25s}
+a.kh2-module .kh2-module__icon{animation:kh2-icon-float 4s ease-in-out infinite}
+.kh2-module--gold .kh2-module__icon:after{content:"";position:absolute;left:11px;right:11px;top:15px;height:2px;border-radius:2px;background:#bd8628;box-shadow:0 0 6px #e7bb61;animation:kh2-qr-scan 4s ease-in-out infinite;pointer-events:none}
+.kh2-module--soon .kh2-module__icon{box-shadow:inset 0 1px #fff;border-color:#e4e8df}
+.kh2-module--soon small{padding:3px 8px;border-radius:20px;background:#eef1eb;font-size:10px}
+a.kh2-module .kh2-module__arrow{transition:transform .2s,opacity .2s}
+@media(hover:hover){a.kh2-module:hover{border-color:var(--glow);box-shadow:0 12px 28px var(--halo)}a.kh2-module:hover .kh2-module__arrow{transform:translate(2px,-2px);opacity:1}}
+a.kh2-module:active{scale:.965}a.kh2-module:active .kh2-module__icon{box-shadow:inset 0 2px 5px #3d2b0717}
+@keyframes kh2-card-in{from{opacity:0;translate:0 12px}to{opacity:1;translate:0 0}}
+@keyframes kh2-card-sheen{0%,65%{transform:translateX(-55%)}90%,100%{transform:translateX(55%)}}
+@keyframes kh2-icon-float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
+@keyframes kh2-qr-scan{0%,12%,88%,100%{opacity:0;transform:translateY(0)}22%{opacity:.7}72%{opacity:.7;transform:translateY(35px)}82%{opacity:0;transform:translateY(35px)}}
+@media(prefers-reduced-motion:reduce){.kh2-module,.kh2-module:before,.kh2-module:after,.kh2-module .kh2-module__icon,.kh2-module .kh2-module__icon:after,.kh2-module .kh2-module__arrow{animation:none;transition:none}.kh2-module--gold .kh2-module__icon:after{display:none}a.kh2-module:active{scale:1;transform:none}}

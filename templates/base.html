@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+{% block viewport %}<meta name="viewport" content="width=device-width, initial-scale=1">{% endblock %}
 <title>{% block title %}KHBL{% endblock %} · Kim Hạnh 2</title>
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
@@ -10,7 +10,7 @@
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
   <script defer src="{% static 'js/vn_text.js' %}?v=20260905.qr5"></script>
   <script defer src="{% static 'js/cccd.js' %}?v=20260910.qr-lattice2"></script>
-  <script defer src="{% static 'js/khbl.js' %}?v=20260914.phones"></script>
+  <script defer src="{% static 'js/khbl.js' %}?v=20260921.customer-identity-view"></script>
 {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>

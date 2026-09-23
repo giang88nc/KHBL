@@ -103,6 +103,9 @@ def reallocate(c, op):
 
 
 def reconcile(state):
+    state.refresh_from_db()
+    if state.payment_plan.get('money_flow_in_v2'):
+        return  # This invoice is owned by the direct IN allocator, never update tills here.
     code = state.trn_id
     plan = state.payment_plan
     source = Operation.objects.get(pk=plan['receipt_operation'], target='kk', trn_id=code, kind='receive', status='done')
@@ -134,7 +137,8 @@ def reconcile(state):
             return 'partial', 'CK đã khớp một phần; còn chờ chứng từ cho phần CK nhân viên xác nhận.'
         return 'matched' if old_rows else 'waiting', 'Đã đối soát CK; tiếp tục kiểm tra giao dịch mới.' if old_rows else 'Đã xác nhận thu; chưa có CK chứa mã ' + code + '.'
     for row in candidates:
-        codes = set(re.findall(r'(?:TDC|TRC)\d{12}', str(row.get('description') or '').upper()))
+        from .ma_chung_tu_ck import MA_COC           # regex dùng chung (22/09/2026) — chuỗi y nguyên bản cũ
+        codes = set(MA_COC.findall(str(row.get('description') or '').upper()))
         if codes - {code.upper()}:
             raise ValueError('Nội dung CK chứa nhiều mã phiếu; cần chọn phân bổ, chưa tự ghi.')
     allocation(f['amount'], plan.get('initial_bank'), old_rows, candidates)  # Kiểm tra cả lô trước khi ghi.

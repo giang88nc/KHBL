@@ -11,6 +11,7 @@
 <label for="dc-customer-search">Tìm hoặc quét CCCD · SĐT · tên khách <b class="dc-required">*</b></label>
 <div class="dc-customer-picker"><input id="dc-customer-search" type="search" placeholder="Nhập tên, số điện thoại hoặc quét CCCD…" autocomplete="off" maxlength="8192" role="combobox" aria-controls="dc-customer-results" aria-expanded="false" aria-autocomplete="list"><button type="button" class="dc-btn" data-dc-customer-add aria-label="Thêm khách hàng" title="Thêm khách hàng">＋</button>
 <div id="dc-customer-results" role="listbox" hidden></div></div>{{ form.CustID.errors }}
+<label>SĐT trên phiếu{{ form.DocumentPhone }}{{ form.DocumentPhone.errors }}</label><datalist id="dc-phone-options"></datalist>
 <div class="dc-customer-info"><span id="dc-customer-contact">Chưa chọn khách hàng</span><span id="dc-customer-address">Địa chỉ sẽ hiện khi chọn khách</span></div>
 </fieldset>
 <section class="dc-editor-section"><h3><span>02</span> Thông tin đặt</h3><div class="dc-order-fields">

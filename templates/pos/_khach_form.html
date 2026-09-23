@@ -6,6 +6,8 @@
 <form id="kh-form" data-phone-check="{% url 'pos:khach_kiem_sdt' %}" hx-post="{% url 'pos:khach_luu' %}" hx-target="#kh-luu-kq"
       hx-sync="this:drop" hx-disabled-elt="#kh-save-btn" enctype="multipart/form-data">
   {% csrf_token %}
+  {% if append_guard %}<input type="hidden" name="append_guard" value="{{ append_guard }}"><p class="khbl-alert">Đã nạp hồ sơ khách hiện có và điền SĐT mới vào ô phụ còn trống. Kiểm tra rồi bấm Lưu.</p>{% endif %}
+  <div id="kh-identity-status" role="status" aria-live="polite"></div>
   <input type="hidden" id="kh-cust-id" name="CustID" value="{{ k.CustID|default:'' }}">
   <input type="hidden" name="Active" value="{% if k %}{{ k.Active }}{% else %}1{% endif %}">
   <input type="hidden" name="save_token" value="{{ save_token }}">

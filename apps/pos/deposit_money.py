@@ -27,6 +27,32 @@ def safe_data(value):
     return json.loads(json.dumps(value,default=str))
 
 
+def direct_settlement_valid(pk, amount, cash, bank):
+    """Tiền cọc do money_flow IN v2 xác nhận không phụ thuộc chứng từ KÉT PMV.
+
+    Chỉ tin khi bản chiếu, ý định ghi nguồn và tổng bằng chứng ngân hàng đã cùng
+    trạng thái ``applied`` và khớp tuyệt đối phân bổ hiện có trên TRN_DATCOC.
+    """
+    from django.db.models import Sum
+    from .models import MoneyFlow, MoneyFlowBankReceipt, MoneyFlowSourceWrite
+    flow = MoneyFlow.objects.filter(
+        source_system='KHBL', source_type='gold_bill_deposit', source_id=pk,
+        direction='IN', is_void=False, expected_amount=amount,
+        cash_amount=cash, bank_amount=bank,
+    ).first()
+    if not flow:
+        return False
+    write_ok = MoneyFlowSourceWrite.objects.filter(
+        flow=flow, status='applied', total=amount, cash=cash, bank=bank,
+    ).exists()
+    if not write_ok:
+        return False
+    received = MoneyFlowBankReceipt.objects.filter(
+        flow=flow, status='applied', direction='IN',
+    ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+    return received == bank
+
+
 def financial(c, pk):
     h=D.header(c,pk)
     if not h: raise ValueError('Phiếu không còn tồn tại.')
@@ -40,6 +66,8 @@ def financial(c, pk):
     if valid:
         detail=c.query('SELECT Amount,CrDr,GoldCcy FROM T_TILL_TXN_DETAIL WITH (NOLOCK) WHERE TillTxnID=?',(tx[0]['TillTxnID'],))
         valid=len(detail)==1 and detail[0]['Amount'] is not None and detail[0]['Amount']==cash and detail[0]['CrDr']=='+' and detail[0]['GoldCcy']=='VND'
+    direct_valid=direct_settlement_valid(pk,amount,cash,bank)
+    settlement_valid=valid or direct_valid
     # 11/09/2026: MỘT hóa đơn cấn được NHIỀU phiếu cọc (GĐ chốt) → so Tiền cọc hóa đơn với TỔNG các
     # phiếu gắn vào nó, không so với riêng phiếu này như trước. Phiếu cọc cũ chưa qua két vẫn tính là
     # đã áp dụng (xem chung_tu_cu_du_dung) — nếu không thì bán xong màn ĐẶT-CỌC vẫn báo còn số dư.
@@ -48,18 +76,20 @@ def financial(c, pk):
         r=c.query('SELECT ISNULL(SUM(d.TienCoc),0) t FROM TRN_RT_BUYSELL_DatCoc l WITH (NOLOCK) '
                   'JOIN TRN_DATCOC d WITH (NOLOCK) ON d.TrnID=l.DatCocID WHERE l.TrnID=?',(links[0]['TrnID'],))
         tong_lk=Decimal(r[0]['t'] or 0) if r else Decimal(0)
-    applied=valid and h['Status']=='C' and len(links)==1 and not changes and links[0]['Status']=='C' and links[0]['TienCoc']==tong_lk and links[0]['CustID']==h['CustID']
+    applied=settlement_valid and h['Status']=='C' and len(links)==1 and not changes and links[0]['Status']=='C' and links[0]['TienCoc']==tong_lk and links[0]['CustID']==h['CustID']
     if applied:
         invoice_tx=c.query('SELECT Status,TillID FROM T_TILL_TXN WITH (NOLOCK) WHERE TrnRefID=?',(links[0]['TrnID'],))
         applied=len(invoice_tx)==1 and invoice_tx[0]['Status']=='P' and bool(invoice_tx[0]['TillID'])
-    confirmed=valid and not changes and ((not links and h['Status']=='P') or applied)
+    confirmed=settlement_valid and not changes and ((not links and h['Status']=='P') or applied)
     refunded=False
     if not tx and not links and not changes and h['Status']=='W' and cash==bank==0:
         latest=Operation.objects.filter(target=c.target,trn_id=pk,status='done').order_by('-id').first()
         refunded=bool(latest and latest.kind=='refund' and money_stamp(c,latest.evidence.get('after',{}).get('h',{}))==money_stamp(c,h))
         confirmed=confirmed or refunded
     return {'h':h,'tx':tx,'links':links,'changes':changes,'amount':amount,'cash':cash,'bank':bank,
-            'valid':valid,'confirmed':confirmed,'applied':applied,'refunded':refunded,'balance':Decimal(0) if applied or refunded else amount if confirmed else None}
+            'valid':valid,'settlement_valid':settlement_valid,'direct_valid':direct_valid,
+            'confirmed':confirmed,'applied':applied,'refunded':refunded,
+            'balance':Decimal(0) if applied or refunded else amount if confirmed else None}
 
 
 def money_stamp(c,h):

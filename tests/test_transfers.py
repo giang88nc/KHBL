@@ -17,10 +17,10 @@ class TransferTests(TransactionTestCase):
             p.start()
             self.addCleanup(p.stop)
         with connection.cursor() as c:
-            c.execute('CREATE TABLE bank_notifications (id integer primary key, transaction_time varchar(50), bank_number varchar(100), bank_name varchar(50), direction varchar(10), trans_amount decimal, description text, ref_code varchar(100), bill_code_raw varchar(100))')
+            c.execute('CREATE TABLE bank_notifications (id integer primary key, transaction_time varchar(50), bank_number varchar(100), bank_name varchar(50), direction varchar(10), trans_amount decimal, description text, ref_code varchar(100), bill_code_raw varchar(100), ma_chung_tu varchar(20), loai_chung_tu varchar(8))')
             c.execute('CREATE TABLE gold_bank (id integer primary key, bank_bin varchar(22), bank_number varchar(33), bank_name varchar(33), bank_user varchar(255), bank_addr varchar(255), type varchar(11), Active integer)')
             for i, day, direction, amount, text in [(1, '08', 'in', 100, 'ABC'), (2, '08', 'out', 200, 'XYZ'), (3, '09', 'in', 100, 'ABC')]:
-                c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', [i, f'2026-09-{day} 12:00:00', '001', 'ACB', direction, amount, text, str(i), "HD001"])
+                c.execute('INSERT INTO bank_notifications VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', [i, f'2026-09-{day} 12:00:00', '001', 'ACB', direction, amount, text, str(i), "HD001", '2609' + str(i).zfill(8), 'HD'])
 
     def tearDown(self):
         with connection.cursor() as c:

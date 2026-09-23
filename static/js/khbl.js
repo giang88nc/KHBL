@@ -313,6 +313,7 @@
       // Ghi cả giá trị trống, tránh giữ thông tin của thẻ quét trước.
       fields.forEach(function (f) { form.querySelector("#" + f[0]).value = d[f[1]]; });
       lastRaw = raw; lastValues = values(); block(false);
+      form.elements.CMND.dispatchEvent(new Event("input", {bubbles:true}));
       message("Đã điền thông tin từ thẻ. " + (d.canh_bao.length ? "Cần kiểm tra: " + d.canh_bao.join(" · ") : "Kiểm tra lại trước khi lưu khách."),
         d.canh_bao.length ? "warn" : "jade");
     }
@@ -715,7 +716,7 @@
         const messages = [];
         results.forEach(function ({field, matches}) {
           if (!matches.length) return;
-          const message = field.value + " đã thuộc " + matches.map(row => (row.CustCode || row.CustID) + " — " + row.CustName).join("; ");
+          const message = field.value + " đã thuộc " + matches.map(row => (row.CustCode || row.CustID) + " — " + row.CustName + " — CCCD/CMND: " + (row.CMND || "chưa có")).join("; ");
           field.setCustomValidity(message); messages.push(message);
         });
         status.textContent = messages.length ? messages.join(". ") : "Các số điện thoại chưa thuộc khách khác. Hệ thống sẽ kiểm tra lại khi lưu.";
@@ -724,4 +725,46 @@
       }
     }, 300);
   });
+})();
+
+/* Trùng CCCD: người dùng chọn hồ sơ và mở UPDATE; không tự lưu/gộp khách. */
+(function () {
+  let timer, generation=0;
+  function schedule() {
+    const form=document.getElementById('kh-form'); if(!form)return;
+    const box=form.querySelector('#kh-identity-status'); if(!box)return;
+    const version=++generation;clearTimeout(timer);box.replaceChildren();
+    if(form.elements.CustID.value)return;
+    const cmnd=form.elements.CMND.value.trim(),phone=form.elements.Phone.value.trim();
+    if(!/^(?:[0-9]{9}|[0-9]{12})$/.test(cmnd))return;
+    timer=setTimeout(async()=>{
+      try {
+        const response=await fetch(form.dataset.phoneCheck+'?'+new URLSearchParams({cmnd}),{cache:'no-store'});
+        const data=await response.json();if(!response.ok)throw Error(data.error);
+        if(version!==generation||!form.isConnected)return;
+        data.matches.forEach(row=>{
+          const panel=document.createElement('div');panel.className='khbl-alert khbl-alert--do';panel.style.cssText='display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 8px';
+          const text=document.createElement('span');text.textContent='CCCD đã có: '+row.CustName+' · '+row.CMND+(row.has_slot?'':' · đã có đủ 3 SĐT;');
+          panel.append(text);
+          if(row.has_slot && /^[0-9]{10}$/.test(phone) && ![row.Phone,row.GhiChu2,row.GhiChu3].includes(phone)) {
+            const button=document.createElement('button');button.type='button';button.className='khbl-btn khbl-btn--outline';button.textContent='Thêm số điện thoại cho khách này';
+            button.addEventListener('click',()=>{
+              if(!form.isConnected || form.elements.Phone.value.trim()!==phone || form.elements.CMND.value.trim()!==cmnd){schedule();return;}
+              htmx.ajax('GET',row.edit_url+'?'+new URLSearchParams({append_phone:phone,cmnd}),{target:'#modal-root',swap:'innerHTML'});
+            });panel.append(button);
+          }
+          const view=document.createElement('button');view.type='button';view.className='khbl-btn khbl-btn--outline';view.textContent='XEM';view.style.cssText='padding:3px 8px;min-height:26px';
+          view.addEventListener('click',()=>{
+            if(!form.isConnected || form.elements.CMND.value.trim()!==cmnd){schedule();return;}
+            htmx.ajax('GET',row.edit_url,{target:'#modal-root',swap:'innerHTML'});
+          });
+          panel.append(view);
+          box.append(panel);
+        });
+      }catch(error){if(version===generation&&form.isConnected)box.textContent=error.message;}
+    },300);
+  }
+  document.addEventListener('input',e=>{if(e.target.matches?.('#kh-form [name=CMND], #kh-form [name=Phone]'))schedule();});
+  document.addEventListener('change',e=>{if(e.target.matches?.('#kh-form [name=CMND], #kh-form [name=Phone]'))schedule();});
+  document.addEventListener('htmx:afterSwap',e=>{if(e.target.id==='modal-root')schedule();});
 })();

@@ -60,7 +60,7 @@ def noi_dung(g):
     from . import thau_cart as TC
 
     nd = (g.get("ck_nd") or "").strip()
-    return TC.noi_dung_ck(None, g.get("trn_id") or "") if not nd or nd == TC.CK_ND_CHU else nd
+    return TC.noi_dung_ck(None, g.get("bill_code") or "") if not nd or nd == TC.CK_ND_CHU else nd   # 4 số cuối SỐ HĐ (22/09/2026)
 
 
 def nhom_doi(trn_id):
@@ -374,7 +374,7 @@ def ghi_nhom_sau_chot(request, g, t, bill_code):
         user=request.user if request.user.is_authenticated else None,
         pay_method=("bank" if not M.dec(t.get("tien_mat")) else "mixed") if ck else "cash",
         tien_mat=abs(M.dec(t.get("tien_mat"))) if tra else M.D0, tien_ck=ck, ghi_chu=(g.get("ghi_chu") or "")[:300],
-        ck_nd=noi_dung(g) if ck else "", **tk)
+        ck_nd=noi_dung({**g, "bill_code": g.get("bill_code") or bill_code or ""}) if ck else "", **tk)   # 4 số cuối SỐ HĐ (cùng nguồn với _nhom_can_ghi_lai)
     from .views_thau import _nen_min
 
     doi = []

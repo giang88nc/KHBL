@@ -207,7 +207,7 @@ def khong_dau(s):
     return " ".join("".join(c if c.isalnum() or c == " " else " " for c in s).split()).upper()
 
 
-def payload(bank_code, account_no, amount=0, info="", ten=""):
+def payload(bank_code, account_no, amount=0, info="", ten="", *, exact_amount=False):
     """Chuỗi VietQR chuyển khoản TỚI TÀI KHOẢN. amount ≤ 0 → QR không kèm số tiền
     (người chuyển tự nhập). ten = tên chủ tài khoản, ghi vào tag 59 để app ngân hàng hiện sẵn khi quét.
     Ném ValueError nếu thiếu BIN/số tài khoản."""
@@ -220,7 +220,7 @@ def payload(bank_code, account_no, amount=0, info="", ten=""):
 
     ben = _tlv("00", bin_) + _tlv("01", account_no)          # tổ chức thụ hưởng
     mai = _tlv("00", "A000000727") + _tlv("01", ben) + _tlv("02", "QRIBFTTA")
-    amt = int(M.tron_ngan(amount)) if M.dec(amount) > 0 else 0
+    amt = int(M.dec(amount) if exact_amount else M.tron_ngan(amount)) if M.dec(amount) > 0 else 0
 
     body = _tlv("00", "01")
     body += _tlv("01", "12" if amt else "11")                 # có tiền = one-time

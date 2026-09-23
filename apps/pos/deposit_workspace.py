@@ -27,7 +27,10 @@ def read_snapshot(c, refresh=False):
     key = 'datcoc:workspace:v2:' + c.target
     result = None if refresh else cache.get(key)
     if result is not None:
-        return copy.deepcopy(result)
+        result=copy.deepcopy(result)
+        from .document_contacts import overlay_many
+        result["headers"]=overlay_many("KHBL_DEPOSIT",result["headers"],c.target)
+        return result
     headers = c.query(
         'SELECT TOP 20001 d.TrnID,d.BillCode,d.TrnDate,d.TrnTime,d.TrnDateTime_Upd,d.TienCoc,d.Status, '
         'd.Description,d.ShopID,d.UserID_Upd,d.CashPay,d.CardPay,d.EmpID,d.CustID,e.EmpName,k.CustName,k.Phone '
@@ -55,7 +58,10 @@ def read_snapshot(c, refresh=False):
         "UNION ALL SELECT DatCocID,TrnID,NULL,NULL,NULL,'change',NULL,0,0 FROM TRN_RT_CHANGE_DatCoc WITH (NOLOCK)")
     result = {'headers': headers, 'items': dict(grouped), 'funds':funds,'links':links,'as_of': timezone.now()}
     cache.set(key, result, 30)
-    return copy.deepcopy(result)
+    result=copy.deepcopy(result)
+    from .document_contacts import overlay_many
+    result["headers"]=overlay_many("KHBL_DEPOSIT",result["headers"],c.target)
+    return result
 
 
 def prepare(snapshot, today=None, now=None):

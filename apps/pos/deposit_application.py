@@ -13,7 +13,7 @@ def reason(f, cust_id, invoice_id='', invoice_status='W'):
     expected = 'C' if invoice_id and invoice_status == 'C' else 'P'
     if f['amount'] <= 0 or f['cash'] < 0 or f['bank'] < 0:
         return 'Số tiền cọc không hợp lệ.'
-    if not f['valid'] or status != expected:
+    if not f.get('settlement_valid', f['valid']) or status != expected:
         if not f['tx'] and (f['cash'] or f['bank']):
             return 'Cọc cũ chưa có chứng từ quỹ; cần đối soát nguồn tiền, không thu lại tự động.'
         if not f['tx'] and status == 'W':

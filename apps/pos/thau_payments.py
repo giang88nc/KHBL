@@ -11,6 +11,7 @@ from django.db import connection, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
+from django.contrib.auth.decorators import login_not_required
 from django.views.decorators.http import require_POST
 
 from apps.pmv import money as M
@@ -23,7 +24,8 @@ from .transfers import query
 
 LABELS = {'unconfirmed': 'Chưa xác nhận', 'confirmed': 'Đã xác nhận CK',
           'partial': 'Đã chuyển một phần', 'review': 'Cần kiểm tra', 'na': 'Không áp dụng'}
-BANK_FIELDS = 'id,provider,ref_code,bank_number,bank_name,trans_amount,transaction_time,direction,description,bill_code_raw'
+BANK_FIELDS = ('id,provider,ref_code,bank_number,bank_name,trans_amount,transaction_time,direction,description,bill_code_raw,'
+               'ma_chung_tu,loai_chung_tu')
 
 
 def serial(value):
@@ -73,7 +75,7 @@ def catalog(d1, d2):
                     'bills': serial([{k: m.get(k) for k in ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'CardPay', 'SoTien')}
                                      for m in sorted(row['members'], key=lambda m: m['TrnID'])])}
         row.update(order_key=key(ids), ids=ids, required=required, snapshot=snapshot, problems=problems, live=live, bank=group)
-    doi = catalog_doi(d1, d2)
+    doi = catalog_doi(d1, d2) + catalog_camdo(d1, d2)
     if doi:     # chỉ xếp lại khi thật có hóa đơn đổi — danh sách chỉ-thâu giữ nguyên thứ tự cũ
         orders = sorted(orders + doi, key=lambda o: (str(o.get('TrnDate') or ''), str(o.get('TrnTime') or ''),
                                                     str(o.get('CreatedDate') or '')), reverse=True)
@@ -141,6 +143,41 @@ def catalog_doi(d1, d2):
     return orders
 
 
+# ─────── CẦM ĐỒ — tiệm chuyển khoản tiền cầm cho khách (GĐ chốt 22/09/2026) ───────
+# Nguồn: nhóm ThauNhom(nghiep_vu='camdo') do KHCD ghi (live_loans.upsert_thau_nhom) — KHÔNG có chứng từ trên KK nên
+# không đọc/ghi KK. Nội dung chuẩn "THANH TOAN TIEN VANG {6 số log phiên}", chi từ TÀI KHOẢN CẦM ĐỒ (gold_bank type 'pawn').
+def catalog_camdo(d1, d2):
+    start = dt.datetime.combine(dt.date.fromisoformat(d1), dt.time.min)
+    end = dt.datetime.combine(dt.date.fromisoformat(d2) + dt.timedelta(days=1), dt.time.min)
+    if timezone.is_aware(timezone.now()):
+        start, end = timezone.make_aware(start), timezone.make_aware(end)
+    orders = []
+    for group in ThauNhom.objects.filter(nghiep_vu=ThauNhom.CAMDO, created_at__gte=start, created_at__lt=end).order_by('-pk'):
+        trn = (group.trn_ids or [''])[0]
+        if not trn:
+            continue
+        luc = timezone.localtime(group.created_at) if timezone.is_aware(group.created_at) else group.created_at
+        bill = (group.bill_codes or [''])[0]
+        required = M.dec(group.tien_ck)
+        member = {'TrnID': trn, 'BillCode': bill, 'TrnDate': luc.date(), 'TrnTime': luc.strftime('%H:%M:%S'),
+                  'CreatedDate': luc.replace(tzinfo=None).isoformat(sep=' '), 'Status': 'C', 'IsDel': '0',
+                  'SoTien': M.dec(group.tien_mat) + required, 'CustID': group.cust_id or '',
+                  'CustName': group.cust_name or '', 'Phone': '', 'CMND': '', 'EmpName': '', 'loai': 'CAMDO'}
+        receiver = {k: getattr(group, k, '') for k in ('ck_bank', 'ck_stk', 'ck_ten', 'ck_nd')}
+        snapshot = {'ids': [trn], 'receiver': receiver, 'required': str(required), 'nghiep_vu': ThauNhom.CAMDO,
+                    'bills': serial([{k: member[k] for k in ('TrnID', 'BillCode', 'SoTien')}])}
+        row = dict(member, members=[member], thau_lines=[], tien_ck=required, group_size=1, partial_group=False,
+                   mixed_status=False, nghiep_vu=ThauNhom.CAMDO, cust_id=group.cust_id, bill_codes=[bill] if bill else [])
+        row.update(order_key=key([trn]), ids=[trn], required=required, snapshot=snapshot, problems=[], live=True, bank=group)
+        orders.append(row)
+    return orders
+
+
+def tai_khoan_cam_do():
+    """Tài khoản chi tiền cầm đồ = gold_bank type 'pawn' đang dùng (127606)."""
+    return tuple(str(r['bank_number']) for r in query("SELECT bank_number FROM gold_bank WHERE Active=1 AND LOWER(type)='pawn'"))
+
+
 def tranh_chap(order, item, claimants):
     """Giao dịch ngân hàng này có bị nhóm KHÁC nhận cùng không (GĐ chốt 19/09/2026 — đối soát kèm LOẠI nghiệp vụ).
 
@@ -170,30 +207,77 @@ LOAI_TRU = "THANH TOAN TIEN VANG 1-"
 
 
 def duoi_ma(value):
-    """4 số cuối của mã phiếu: TBG260900001445 → 1445 (khớp phần người dùng gõ trong nội dung chuyển khoản)."""
+    """4 số cuối của SỐ HÓA ĐƠN: 26-09-21-000234 → 0234 (khớp phần quầy gõ trong nội dung chuyển khoản)."""
     so = re.sub(r'\D', '', str(value or ''))
     return so[-4:] if len(so) >= 4 else ''
 
 
+def ngay_phieu(order):
+    """Ngày của phiếu (yymmdd trong mã chứng từ) — TrnDate, không thì CreatedDate của phiếu đầu."""
+    for m in [order] + list(order.get('members') or []):
+        v = m.get('TrnDate') or m.get('CreatedDate')
+        if v:
+            try:
+                return v if isinstance(v, dt.date) and not isinstance(v, dt.datetime) else dt.date.fromisoformat(str(v)[:10])
+            except ValueError:
+                pass
+    return None
+
+
+def ma_phieu(order, ngay=None):
+    """MÃ CHỨNG TỪ mong đợi của phiếu = skill tách mã chạy trên thau_nhom.ck_nd (GĐ chốt 22/09/2026).
+
+    Thâu / đổi dư → TV yymmdd+00xxxx (…VANG 1014 → 260921001014) · cầm đồ → CD yymmdd+6 số (…VANG 101234 → 260922101234).
+    ck_nd trống/không mang mã → dựng lại nội dung chuẩn từ số HĐ đầu. ngay=None → mã trần 4/6 số.
+    """
+    from . import ma_chung_tu_ck as MC
+    loai = MC.CHI_CD if order.get('nghiep_vu') == ThauNhom.CAMDO else MC.STT
+    nd = ((order.get('snapshot') or {}).get('receiver') or {}).get('ck_nd') or order.get('ck_nd') or ''
+    ra = {(x.loai, x.ma) for x in MC.nhan_dien(nd, MC.OUT, ngay) if x.loai == loai}
+    if ra:
+        return ra
+    # ck_nd trống / không mang mã (nhóm cũ, phiếu không qua màn thâu) → dựng nội dung chuẩn từ số HĐ đầu
+    bills = order.get('bill_codes') or [m.get('BillCode') for m in order.get('members') or []]
+    so = re.sub(r'\D', '', str(next((b for b in bills if b), '')))
+    if not so:
+        return set()
+    nd = 'THANH TOAN TIEN VANG ' + (so[-6:] if loai == MC.CHI_CD else so[-4:])
+    return {(x.loai, x.ma) for x in MC.nhan_dien(nd, MC.OUT, ngay) if x.loai == loai}
+
+
+def ma_bank(bank):
+    """Mã chứng từ của giao dịch: cột ma_chung_tu (skill ghi ngay lúc webhook V2 upsert); dòng chưa nhận diện → tách tại chỗ."""
+    from . import ma_chung_tu_ck as MC
+    if bank.get('ma_chung_tu'):
+        return {(bank.get('loai_chung_tu') or '', bank['ma_chung_tu'])}
+    when = bank_time(bank)
+    return {(x.loai, x.ma) for x in MC.nhan_dien(bank.get('description') or '', MC.OUT, when.date() if when else None)}
+
+
 def code_match(order, bank):
-    """Nội dung ngân hàng có nhắc ĐÚNG phiếu của nhóm không — CHUẨN MỚI, chỉ đọc ô NỘI DUNG.
+    """ĐỐI SOÁT = so MÃ CHỨNG TỪ (GĐ chốt 22/09/2026): ma_phieu(thau_nhom.ck_nd) == bank_notifications.ma_chung_tu.
 
-    Khớp khi nội dung chứa "THANH TOAN TIEN VANG {4 số cuối mã phiếu}", đúng khuôn quầy đang gõ; ngân hàng nối
-    thêm đuôi ngày giờ phía sau vẫn khớp.
-
-    GĐ chốt 11/09/2026 BỎ hai đường khớp cũ — đọc mã đầy đủ ở ô mã hóa đơn, và đoán theo số tiền + thời gian —
-    chỉ giữ một đường này cho chắc, tránh nhận nhầm khoản chi khác.
-
-    Nhóm nhiều phiếu: nội dung chỉ cần nhắc MỘT phiếu (thường là phiếu đầu, người đứng tên nhận tiền cho cả nhóm).
-    Xác nhận vẫn ở mức NHÓM và số tiền vẫn phải bằng đúng tổng cần chuyển của nhóm.
+    Trả 'ma'   : trùng đủ 12 số (cùng NGÀY + cùng số) → ứng viên CHẮC, được tự xác nhận.
+         'duoi': chỉ trùng đuôi 4/6 số (CK khác ngày phiếu) → vẫn là ứng viên nhưng chỉ xác nhận TAY.
+         False : không liên quan. Nội dung "THANH TOAN TIEN VANG 1-…" (chi khác) luôn loại.
     """
     nd = (bank.get('description') or '').upper()
     if LOAI_TRU in nd:
         return False
-    # 4 số cuối lấy từ MÃ PHIẾU (TrnID), không lấy từ số hóa đơn: hai mã có đuôi khác nhau
-    # (TBG260900000495 ↔ 26-09-10-000058) nên gom cả hai chỉ làm rộng vùng trùng chứ không thêm ca khớp nào.
-    duoi = {duoi_ma(t) for t in order['ids']} - {''}
-    return any(m.group(1) in duoi for m in FORM_NOI_DUNG.finditer(nd))
+    if 'transaction_time' not in bank and 'ma_chung_tu' not in bank:      # chỉ có nội dung (kiểm khuôn ck_nd)
+        return bool(ma_phieu(order) & _ma_tran(nd))
+    of_bank = ma_bank(bank)
+    if not of_bank:
+        return False
+    if ma_phieu(order, ngay_phieu(order)) & of_bank:
+        return 'ma'
+    tran = ma_phieu(order)
+    return 'duoi' if any(lb == lt and len(m) == 12 and m[-len(t):] == t for lb, m in of_bank for lt, t in tran) else False
+
+
+def _ma_tran(nd):
+    from . import ma_chung_tu_ck as MC
+    return {(x.loai, x.ma) for x in MC.nhan_dien(nd, MC.OUT, None)}
 
 
 def near(order, bank):
@@ -204,7 +288,7 @@ def near(order, bank):
     return bool(times) and any(when-dt.timedelta(minutes=30) <= t <= when for t in times)
 
 
-def eligible(bank, accounts=None):
+def eligible(bank, accounts=None, nghiep_vu=None, tk_cam_do=()):
     """CHUẨN ĐỐI SOÁT MỚI (GĐ chốt 11/09/2026) — thay hẳn chuẩn cũ. Chỉ xét giao dịch đủ CẢ BỐN điều kiện:
 
         · direction = out (tiền rời tài khoản tiệm);
@@ -215,9 +299,10 @@ def eligible(bank, accounts=None):
     Tham số accounts giữ cho chỗ gọi cũ nhưng KHÔNG dùng nữa: danh sách tài khoản lấy từ hằng trên chứ không
     từ bảng gold_bank, để khỏi vô tình nhận tiền ra từ tài khoản khác của tiệm.
     """
+    tk = tk_cam_do if nghiep_vu == ThauNhom.CAMDO else TAI_KHOAN_TRA     # cầm đồ chi từ TK cầm đồ (22/09/2026)
     return (str(bank.get('direction', '')).lower() == 'out'
             and M.dec(bank['trans_amount']) > 0
-            and str(bank.get('bank_number') or '') in TAI_KHOAN_TRA
+            and str(bank.get('bank_number') or '') in tk
             and LOAI_TRU not in (bank.get('description') or '').upper())
 
 
@@ -232,6 +317,7 @@ def inspect(d1, d2):
     if d1 > d2 or (dt.date.fromisoformat(d2)-dt.date.fromisoformat(d1)).days > 31:
         raise ValueError('Chọn khoảng ngày tối đa 31 ngày để đối soát.')
     orders, live = catalog(d1, d2)
+    tk_cd = tai_khoan_cam_do() if any(o.get('nghiep_vu') == ThauNhom.CAMDO for o in orders) else ()
     accounts = {r['bank_number'] for r in query('SELECT bank_number FROM gold_bank WHERE Active=1')}
     start = (dt.date.fromisoformat(d1)-dt.timedelta(days=1)).isoformat()
     end = (dt.date.fromisoformat(d2)+dt.timedelta(days=2)).isoformat()
@@ -256,7 +342,7 @@ def inspect(d1, d2):
     for order in orders:
         candidates = []
         for bank in banks:
-            if not eligible(bank, accounts) or bank['id'] in used:
+            if not eligible(bank, accounts, order.get('nghiep_vu'), tk_cd) or bank['id'] in used:
                 continue
             ref = (bank['provider'], bank['bank_number'], bank['ref_code'])
             if bank['ref_code'] and ref in used_refs:
@@ -268,7 +354,7 @@ def inspect(d1, d2):
                 continue
             foreign = legacy.get(bank['id']) and legacy[bank['id']] not in order['ids']
             foreign = foreign or ((bank['bill_code_raw'] or '').startswith('TBG') and bank['bill_code_raw'] not in order['ids'])
-            item = dict(bank, exact=bool(exact), conflict=bool(foreign or (bank['ref_code'] and refs[ref] > 1)))
+            item = dict(bank, exact=exact == 'ma', conflict=bool(foreign or (bank['ref_code'] and refs[ref] > 1)))
             candidates.append(item)
             claims[bank['id']] += 1
             claimants.setdefault(bank['id'], []).append((order.get('nghiep_vu'), order['required'], order['order_key']))
@@ -282,7 +368,7 @@ def inspect(d1, d2):
             bank = by_id.get(link.notification_id)
             if link.order_key != order['order_key'] or link.snapshot != order['snapshot']:
                 problems.append('Phiếu/nhóm đã thay đổi sau khi xác nhận CK.')
-            if not bank or evidence(bank) != link.bank_snapshot or not eligible(bank, accounts):
+            if not bank or evidence(bank) != link.bank_snapshot or not eligible(bank, accounts, order.get('nghiep_vu'), tk_cd):
                 problems.append('Giao dịch ngân hàng đã thay đổi hoặc không còn hợp lệ.')
             if bank and bank.get('ref_code') and refs[(bank['provider'], bank['bank_number'], bank['ref_code'])] > 1:
                 problems.append('Mã giao dịch ngân hàng bị trùng sau khi liên kết.')
@@ -330,6 +416,19 @@ def create_link(order, bank, user=None, reason='', mode='auto'):
             user=user, username=getattr(user, 'username', '') if user else 'system', reason=reason)
 
 
+def write_buygold_account(order, bank):
+    """After evidence is linked, persist the sending shop account on PMV BUYGOLD rows."""
+    if order.get('nghiep_vu')!=ThauNhom.THAU:return ''
+    from apps.pmv.gateway import pmv_buygold_payment_account
+    try:
+        pmv_buygold_payment_account(order['ids'],bank.get('bank_number') or '')
+        return ' Đã lưu số tài khoản chuyển trên phiếu thâu.'
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('Chưa ghi được MaPhieuChi cho phiếu thâu đã đối soát')
+        return ' ⚠ Đã đối soát nhưng chưa ghi được số tài khoản chuyển lên KK.'
+
+
 def ghi_kk_sau(d1, d2, ids):
     """Sau khi nối / gỡ tay: nhóm là hóa đơn BÁN-ĐỔI thì ghi ngay CardPay lên KK theo tổng liên kết còn hiệu lực.
     Phiếu thâu (CardPay đã ghi lúc THANH TOÁN) không đụng gì. Lỗi không làm hỏng thao tác vừa xong — job 5 phút
@@ -347,9 +446,11 @@ def ghi_kk_sau(d1, d2, ids):
     return ' Đã cập nhật CK trên máy KK.' if xong else ''
 
 
+@login_not_required     # 22/09/2026: trang Thâu vào 2 công khai trong tiệm — lượt TỰ đối soát (automatic=1) không cần đăng nhập
 @require_POST
 def action(request):
-    if not permitted(request.user):
+    tu_dong = request.POST.get('automatic') == '1' and request.POST.get('action', 'scan') == 'scan'
+    if not tu_dong and not permitted(request.user):
         return JsonResponse({'error': 'Bạn cần quyền Duyệt/chốt Thâu vào.'}, status=403)
     try:
         d1 = dt.date.fromisoformat(request.POST.get('d1', '')).isoformat()
@@ -371,7 +472,7 @@ def action(request):
                 return JsonResponse({'changed': 0, 'message': 'Đang có lượt đối soát khác.'})
             if automatic:
                 last = float(PmvState.get('thau_payment_scan', '0'))
-                if timezone.now().timestamp()-last < 5:
+                if timezone.now().timestamp()-last < 10:     # mọi máy đang mở trang cộng lại: tối đa 1 lượt/10 giây
                     return JsonResponse({'changed': 0})
                 PmvState.set('thau_payment_scan', timezone.now().timestamp())
             if mode == 'unlink':
@@ -406,12 +507,13 @@ def action(request):
                     raise ValueError('Nhập căn cứ xác nhận (tối đa 500 ký tự).')
                 create_link(order, bank, request.user, reason, 'manual')
                 return JsonResponse({'changed': 1, 'message': 'Đã xác nhận liên kết giao dịch ngân hàng.'
-                                     + ghi_kk_sau(d1, d2, order['ids'])})
+                                     + ghi_kk_sau(d1, d2, order['ids']) + write_buygold_account(order,bank)})
             changed = 0
             for order in orders:
                 matches = [b for b in order['candidates'] if b['can_link'] and not b['ambiguous'] and b['exact'] and b.get('ref_code')]
                 if len(matches) == 1 and not order['auto_blocked']:
                     create_link(order, matches[0], reason='Khớp mã phiếu trong nội dung ngân hàng, đủ tiền, không tranh chấp.')
+                    write_buygold_account(order,matches[0])
                     changed += 1
                     if changed >= 30:
                         break

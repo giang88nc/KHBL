@@ -1,0 +1,14 @@
+{% load static %}<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="same-origin"><title>KH2 mApp</title>
+{% include 'pos/_mobile_app_head.html' %}<link rel="stylesheet" href="{% static 'mobile/logo-motion.css' %}?v=1"></head>
+<body class="mobile-login">{% include 'pos/_mobile_connection.html' %}
+<main><div class="kh2-logo-motion"><img class="app-icon" src="{% static 'mobile/kh2-icon-512.png' %}" width="256" height="256" alt="Logo Kim Hạnh 2"></div><h1>KH2 <span>mApp</span></h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if canonical %}<a class="primary" href="{{ canonical }}">Mở KH2 mApp</a>{% else %}
+<form id="mobile-faceid-start" method="post" action="{% url 'pos:mobile_auth_start' %}" data-pending="{{ app_pending|yesno:'1,0' }}">{% csrf_token %}<button>Xác nhận FACE ID</button></form>
+<a class="primary" data-faceid-open target="_blank" rel="noopener noreferrer" hidden>Xác nhận FACE ID</a>
+<div id="mobile-faceid-wait" hidden><p role="status" data-faceid-status></p><button type="button" data-faceid-check hidden>Thử lại</button></div>
+{{ app_authorize|json_script:'mobile-faceid-authorize' }}
+{{ app_created|json_script:'mobile-faceid-created' }}
+{% endif %}
+<a class="mobile-login-fallback" href="{% url 'pos:mobile_password_login' %}">Đăng nhập tài khoản</a></main>
+<script defer src="{% static 'js/mobile_faceid.js' %}?v=3"></script></body></html>

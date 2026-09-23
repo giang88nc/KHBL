@@ -180,6 +180,7 @@ def clean_form(post, *, allow_unknown_gender=False):
         errors.append("Loại khách không hợp lệ")
 
     return {
+        "append_guard": post.get("append_guard") or "",
         "cust_id": (post.get("CustID") or "").strip(),
         "name": name,
         **phones,
@@ -265,7 +266,7 @@ def duplicate_errors(client, data):
     rows = client.query(sql, tuple(params))
     errors = []
     for row in rows:
-        who = f"{row.get('CustCode') or row['CustID']} — {row.get('CustName') or 'khách đã có'}"
+        who = f"{row.get('CustCode') or row['CustID']} — {row.get('CustName') or 'khách đã có'} — CCCD/CMND: {row.get('CMND') or 'chưa có'}"
         for phone in sorted(phones & P.values(row)):
             errors.append(f"Số điện thoại {phone} đã thuộc {who}")
         if data["cmnd"] and row.get("CMND") == data["cmnd"]:
@@ -281,6 +282,7 @@ def upsert(data, images, shop_id="", client=None, *, on_created=None):
     if data["cust_id"] and not current:
         raise CustomerSaveError("Khách hàng không còn tồn tại; hãy đóng popup và tải lại danh sách")
     data = dict(data)
+    validate_append(data, current)
     for column, key in zip(P.COLUMNS, P.KEYS):
         if data.get(key) is None:
             data[key] = P.phone_key((current or {}).get(column))
@@ -691,3 +693,33 @@ def _proc_error(exc):
             if message:
                 return str(message)
     return f"PMV từ chối lưu khách (mã lỗi {exc.rc})"
+
+
+def prepare_append(client, row, phone, cmnd):
+    """Read-only form transition: choose an empty secondary slot explicitly."""
+    from django.core import signing
+    phone=P.phone_key(phone)
+    if not row or not cmnd or str(row.get('CMND') or '').strip()!=cmnd:
+        raise CustomerSaveError('CCCD không còn khớp khách đã chọn. Tìm lại khách.')
+    if not P.valid(phone): raise CustomerSaveError('SĐT mới phải gồm đúng 10 chữ số.')
+    if phone in P.values(row): raise CustomerSaveError('SĐT này đã có trong hồ sơ khách.')
+    slot=next((c for c in P.COLUMNS[1:] if not P.phone_key(row.get(c))),None)
+    if not slot: raise CustomerSaveError('Khách đã có đủ 3 SĐT; không thể thêm số mới.')
+    errors=duplicate_errors(client,dict(cust_id=row['CustID'],phone=phone,phone2='',phone3='',cmnd=''))
+    if errors: raise CustomerSaveError('\n'.join(errors))
+    guard=signing.dumps(dict(cid=row['CustID'],cmnd=cmnd,phones=[P.phone_key(row.get(c)) for c in P.COLUMNS],slot=slot,phone=phone),salt='customer-append-phone')
+    updated=dict(row);updated[slot]=phone
+    return updated,guard
+
+
+def validate_append(data, current):
+    from django.core import signing
+    token=data.get('append_guard')
+    if not token:return
+    try: guard=signing.loads(token,salt='customer-append-phone',max_age=3600)
+    except signing.BadSignature:raise CustomerSaveError('Phiên thêm SĐT đã hết hạn hoặc không hợp lệ. Mở lại hồ sơ.') from None
+    expected=list(guard['phones']);expected[P.COLUMNS.index(guard['slot'])]=guard['phone']
+    if not current or data['cust_id']!=guard['cid'] or (current.get('CMND') or '').strip()!=guard['cmnd'] or [P.phone_key(current.get(c)) for c in P.COLUMNS] not in (guard['phones'], expected):
+        raise CustomerSaveError('SĐT/CCCD khách vừa thay đổi. Mở lại hồ sơ để tránh ghi đè số cũ.')
+    if data['cmnd']!=guard['cmnd'] or [data.get(k) for k in P.KEYS]!=expected:
+        raise CustomerSaveError('Luồng thêm số chỉ giữ các số cũ và thêm đúng SĐT đã chọn vào ô trống.')
