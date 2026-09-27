@@ -4,6 +4,15 @@ CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, khôn
 · Quét mã sản phẩm = LẤY món ra khỏi tủ (chủ yếu vàng 9999); quét lại đúng mã = TRẢ về tủ.
 · Quét mã hóa đơn = mở panel hóa đơn, có nút Sửa (ghi KK qua cổng an toàn gateway.pmv_billsell_edit).
 · Nhịp 2 giây: hỏi chữ ký + dòng GIAO DỊCH (chỉ MySQL). Bảng hàng (có hỏi KK) chỉ tải lại khi phần của nó đổi.
+· Thanh QUÉT đã chuyển vào thẻ MÓN HÀNG bên trong #cg-khoi (GĐ chốt 27/09/2026 — quét là việc của sản phẩm).
+  Vì nó bị thay mới sau mỗi lượt swap, JS bên dưới phải UỶ QUYỀN sự kiện qua document, không giữ tham chiếu
+  tới #cg-quet / #cg-ma, và không tải lại khối khi quầy đang gõ dở mã.
+· Ô NGÀY nằm trên HEADER (27/09/2026) vì nó điều khiển CẢ trang, kèm nút ‹ Hôm nay ›. Mọi nút popup và
+  form quét lấy ngày bằng hx-include="#cg-ngay" — trước đây ?d= đúc cứng lúc tải trang nên đổi ngày xong
+  bấm popup vẫn ra ngày cũ.
+· Lớp phủ popup bắt đầu DƯỚI header (biến --cg-top-h do JS đo) → hàng nút header vẫn bấm được khi popup
+  đang mở, bấm là thay thẳng popup mới.
+· Nhịp 2 giây gửi `biet=id:h,…` và chỉ nhận lại TRỌN những thẻ vừa đổi (dấu vân tay h), còn lại chỉ id.
 {% endcomment %}
 <html lang="vi">
 <head>
@@ -19,37 +28,36 @@ CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, khôn
 <meta name="apple-mobile-web-app-title" content="CHECK GOLD">
 <link rel="manifest" href="{% url 'pos:check_gold_manifest' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-<link rel="stylesheet" href="{% static 'css/check_gold.css' %}?v=20260923.4">
+<link rel="stylesheet" href="{% static 'css/check_gold.css' %}?v=20260927.5">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-<div class="cg-nen" aria-hidden="true"></div>
+{# NỀN 4 LỚP: 2 lớp quầng sáng trôi ngược chiều · tia quét dọc · bụi vàng bay — xem cg-nen trong CSS #}
+<div class="cg-nen" aria-hidden="true"><i class="cg-nen__a"></i><i class="cg-nen__b"></i>
+  <i class="cg-nen__tia"></i><i class="cg-nen__hat"></i><i class="cg-nen__vong"></i></div>
 <section class="cg-trang">
   <header class="cg-top">
     <div class="cg-top__ten"><b>CHECK<span>GOLD</span></b><small>Kim Hạnh 2 · Quản lý giao dịch trong ngày</small></div>
+    <div class="cg-top__ngay" role="group" aria-label="Chọn ngày">
+      <button type="button" class="cg-ngay-nut" data-buoc="-1" title="Ngày trước">‹</button>
+      <input type="date" name="d" id="cg-ngay" value="{{ ngay|date:'Y-m-d' }}" max="{{ hom_nay|date:'Y-m-d' }}">
+      <button type="button" class="cg-ngay-nut" data-buoc="1" id="cg-ngay-sau" title="Ngày sau">›</button>
+      <button type="button" class="cg-ngay-nut cg-ngay-nut--nay" data-buoc="0" title="Về hôm nay">Hôm nay</button>
+    </div>
+    {# cột GIỮA topbar: thống kê VÀNG theo loại trong ngày (GĐ chốt 27/09/2026) #}
+    <nav class="cg-top__nut cg-top__nut--giua">
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'vang_ban' %}" hx-include="#cg-ngay" hx-target="#cg-modal">◆ Vàng bán</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'vang_thau' %}" hx-include="#cg-ngay" hx-target="#cg-modal">◇ Vàng thâu</button>
+    </nav>
     <nav class="cg-top__nut">
-      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ck' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">₫ Chuyển khoản</button>
-      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'thau' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">⇩ Phiếu thâu</button>
-      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ban' %}?d={{ ngay|date:'Y-m-d' }}" hx-target="#cg-modal">⇧ Phiếu bán</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ck' %}" hx-include="#cg-ngay" hx-target="#cg-modal">₫ Chuyển khoản</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'thau' %}" hx-include="#cg-ngay" hx-target="#cg-modal">⇩ Phiếu thâu</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'ban' %}" hx-include="#cg-ngay" hx-target="#cg-modal">⇧ Phiếu bán</button>
+      <button type="button" hx-get="{% url 'pos:check_gold_popup' 'cam' %}" hx-include="#cg-ngay" hx-target="#cg-modal">◈ Cầm đồ</button>
     </nav>
   </header>
 
-  <form id="cg-quet" class="cg-lenh" hx-post="{% url 'pos:check_gold_quet' %}" hx-target="#cg-khoi" hx-swap="innerHTML"
-        hx-indicator="#cg-quet">
-    {% csrf_token %}
-    <label class="cg-lenh__o"><span>Ngày</span>
-      <input type="date" name="d" id="cg-ngay" value="{{ ngay|date:'Y-m-d' }}" max="{{ hom_nay|date:'Y-m-d' }}"></label>
-    <label class="cg-lenh__o"><span>Nhân viên</span>
-      <select name="nv" id="cg-nv">
-        <option value="">— Chưa chọn —</option>
-        {% for e in nhan_vien_ds %}<option value="{{ e.EmpName }}" {% if e.EmpName == nv %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
-      </select></label>
-    <label class="cg-lenh__o cg-lenh__o--ma"><span>Quét mã sản phẩm (lấy ra / trả về) hoặc mã hóa đơn</span>
-      <input name="ma" id="cg-ma" autocomplete="off" autofocus placeholder="SCAN MÃ…"><i class="cg-quet-tia"></i></label>
-    <button type="submit" class="cg-lenh__quet">QUÉT</button>
-    <button type="button" class="cg-lenh__lam-moi" id="cg-lam-moi" title="Tải lại">⟳</button>
-  </form>
-
+  {# Thanh QUÉT nay nằm trong thẻ MÓN HÀNG (xem chú thích đầu tệp) #}
   <div id="cg-modal"></div>
   <div id="cg-khoi">{% include 'pos/_check_gold_khoi.html' %}</div>
 
@@ -60,53 +68,128 @@ CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, khôn
 
 <script>
 (function(){
-  var ma=document.getElementById('cg-ma'), form=document.getElementById('cg-quet');
+  // Thanh quét nằm trong #cg-khoi nên bị thay mới mỗi lượt swap: luôn TRA LẠI phần tử, không giữ tham chiếu
+  function oMa(){ return document.getElementById('cg-ma'); }
+  function giaTri(id){ var o=document.getElementById(id); return o ? o.value : ''; }
   var tienVN=function(v){ v=Math.round(Number(v)||0); return v.toLocaleString('vi-VN'); };
   function coPopup(){ return !!document.querySelector('#cg-modal .cg-lop'); }
-  function tapTrung(){ if(!coPopup()) ma.focus(); }
-  form.addEventListener('htmx:afterRequest',function(){ ma.value=''; tapTrung(); });
-  function taiLai(){ htmx.ajax('GET','{% url "pos:check_gold" %}?d='+document.getElementById('cg-ngay').value
-      +'&nv='+encodeURIComponent(document.getElementById('cg-nv').value),{target:'#cg-khoi',swap:'innerHTML'}); }
-  document.getElementById('cg-ngay').addEventListener('change',taiLai);
-  document.getElementById('cg-nv').addEventListener('change',taiLai);
-  document.getElementById('cg-lam-moi').addEventListener('click',function(){ taiLai(); tapTrung(); });
+  function tapTrung(){ var o=oMa(); if(o && !coPopup()) o.focus(); }
+  function dangGoMa(){ var o=oMa(); return !!(o && o.value.trim()); }   // đang gõ dở thì đừng tải lại đè lên
+  // ───── NGÀY trên header: ‹ lùi · › tiến (không quá hôm nay) · Hôm nay ─────
+  function hai(n){ return (n<10?'0':'')+n; }
+  function congNgay(s,n){ var t=new Date(s+'T00:00:00'); t.setDate(t.getDate()+n);
+    return t.getFullYear()+'-'+hai(t.getMonth()+1)+'-'+hai(t.getDate()); }
+  function capNutNgay(){ var o=document.getElementById('cg-ngay'), sau=document.getElementById('cg-ngay-sau');
+    if(o && sau) sau.disabled = !o.value || o.value>=o.max; }
+  document.addEventListener('click',function(e){
+    var b=e.target && e.target.closest && e.target.closest('.cg-ngay-nut'); if(!b) return;
+    var o=document.getElementById('cg-ngay'), buoc=+b.dataset.buoc;
+    var d = buoc===0 ? o.max : congNgay(o.value||o.max, buoc);
+    if(d>o.max) d=o.max;
+    if(d===o.value) return;
+    o.value=d; capNutNgay(); taiLai(); });
+  // ───── Lớp phủ popup bắt đầu DƯỚI header để hàng nút header vẫn bấm được ─────
+  function doTop(){ var t=document.querySelector('.cg-top');
+    var b=t ? Math.max(0, Math.round(t.getBoundingClientRect().bottom)) : 0;
+    document.documentElement.style.setProperty('--cg-top-h', b+'px'); }
+  window.addEventListener('resize',doTop); window.addEventListener('scroll',doTop,{passive:true});
+  document.body.addEventListener('htmx:beforeSwap',function(e){ if(e.detail.target.id==='cg-modal') doTop(); });
+  document.body.addEventListener('htmx:afterRequest',function(e){
+    if(e.target && e.target.id==='cg-quet'){ var o=oMa(); if(o) o.value=''; tapTrung(); } });
+  function taiLai(){ htmx.ajax('GET','{% url "pos:check_gold" %}?d='+giaTri('cg-ngay')
+      +'&nv='+encodeURIComponent(giaTri('cg-nv')),{target:'#cg-khoi',swap:'innerHTML'}); }
+  document.addEventListener('change',function(e){
+    if(e.target && (e.target.id==='cg-ngay' || e.target.id==='cg-nv')){ capNutNgay(); taiLai(); } });
+  document.addEventListener('click',function(e){
+    if(e.target && e.target.closest && e.target.closest('#cg-lam-moi')){ taiLai(); tapTrung(); } });
   setInterval(function(){ document.getElementById('cg-dong-ho').textContent=new Date().toLocaleTimeString('vi-VN'); },1000);
 
   // ───── DÒNG GIAO DỊCH kiểu bình luận livestream: dựng dòng tại máy, chỉ chèn/nháy phần đổi ─────
   function veDong(g){
     var el=document.createElement('article');
-    el.className='cg-gd cg-gd--'+g.nhom+' cg-gd--tt-'+g.tt+(g.huy?' cg-gd--huy':'');
-    el.dataset.id=g.id; el.dataset.ky=g.ky;
+    el.className='cg-gd cg-gd--'+g.nhom+' cg-gd--tt-'+g.tt+(g.huy?' cg-gd--huy':'')+(g.gon?' cg-gd--gon':'');
+    el.dataset.id=g.id; el.dataset.ky=g.ky; el.dataset.con=g.con; el.dataset.h=g.h;
+    el.style.setProperty('--cg-con',g.con+'s');
+    el.style.setProperty('--cg-phan',Math.max(0,Math.min(100,g.con/g.song*100))+'%');
     var cuoi = g.ra_tien
-      ? '<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do mono">'+tienVN(g.tong)+'</span>'
-      : '<span class="cg-gd__nhan mono">Nhận '+tienVN(g.khach_dua)+'</span>'
-        +'<span class="cg-gd__do mono">Thối '+tienVN(g.thoi_lai)+'</span>';
+      ? (g.nhan_ck
+          ? '<span></span><span class="'+g.nhan_ck_lop+'">'+g.nhan_ck+'</span>'
+          : '<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do cg-gd__dua mono'+(g.noi_bat?' cg-gd__noi':'')+'"'
+            +(g.noi_bat?' data-noi="'+g.noi_bat+'"':'')+'>'+tienVN(g.dua_khach)+'</span>')
+      : g.cho_tm
+        ? '<span></span><span class="cg-gd__do cg-gd__cho">Chưa xác nhận tiền mặt</span>'
+        : g.nhan_ck
+        ? '<span></span><span class="'+g.nhan_ck_lop+'">'+g.nhan_ck+'</span>'
+        : '<span class="cg-gd__nhan mono">Nhận '+tienVN(g.khach_dua)+'</span>'
+          +'<span class="cg-gd__do cg-gd__thoi mono'+(g.noi_bat?' cg-gd__noi':'')+'"'
+          +(g.noi_bat?' data-noi="'+g.noi_bat+'"':'')+'>Thối '+tienVN(g.thoi_lai)+'</span>';
     el.innerHTML='<span class="cg-gd__ma mono">'+g.ma+'</span><span class="cg-gd__tt">'+(g.huy?'Đã hủy':g.tt_nhan)+'</span>'
       +'<time>'+g.gio+'</time>'
       +'<span class="cg-gd__dv">'+g.dich_vu+'</span><span></span>'
       +'<b class="cg-gd__tong mono">'+(g.ra_tien?'−':'')+tienVN(g.tong)+' ₫</b>'
       +'<span class="cg-gd__kh">'+g.khach+'</span><span class="cg-gd__tm">TM '+tienVN(g.tien_mat)+'</span>'
       +'<span class="cg-gd__ck">CK '+tienVN(g.ck)+'</span>'
-      +'<span class="cg-gd__nv">'+(g.nv||'—')+'</span>'+cuoi;
+      +'<span class="cg-gd__nv">'+(g.nv||'—')+'</span>'+cuoi
+      +'<span class="cg-gd__viec '+g.viec_lop+'"></span>'
+      +'<i class="cg-gd__vach" aria-hidden="true"></i>';
+    el.querySelector('.cg-gd__viec').textContent=g.viec;      // chữ do máy chủ gửi, không nhúng vào HTML
+    el.addEventListener('animationend',function(e){      // vạch cạn → thẻ tự rời bảng, không chờ nhịp sau
+      if(e.animationName!=='cg-vach') return;
+      el.classList.add('cg-gd--het'); setTimeout(function(){ el.remove(); },420); });
     return el;
   }
-  function veSong(ds){
-    var song=document.getElementById('cg-song'); if(!song) return;
-    var trong=document.getElementById('cg-gd-trong'); if(trong && ds.length) trong.remove();
-    var co={}; song.querySelectorAll('.cg-gd').forEach(function(e){ co[e.dataset.id]=e; });
-    ds.slice().reverse().forEach(function(g){          // cũ → mới, dòng mới luôn nằm TRÊN CÙNG
-      var cu=co[g.id];
-      if(!cu){ var m=veDong(g); m.classList.add('cg-gd--moi'); song.prepend(m);
-        setTimeout(function(){ m.classList.remove('cg-gd--moi'); },1600); return; }
-      if(cu.dataset.ky!==g.ky){ var moi=veDong(g); moi.classList.add('cg-gd--doi'); cu.replaceWith(moi);
-        setTimeout(function(){ moi.classList.remove('cg-gd--doi'); },1600); }
+  // Nhãn còn CHỜ: tách thành từng chữ để nhấp nhô trái → phải (một lần cho mỗi nhãn, cờ data-cho)
+  function veChuCho(goc){
+    (goc||document).querySelectorAll('.cg-gd__cho:not([data-cho])').forEach(function(e){
+      var chu=e.textContent; e.dataset.cho='1'; e.textContent='';
+      chu.split('').forEach(function(c,i){
+        var o=document.createElement('i');
+        o.textContent=(c===' '?String.fromCharCode(160):c);   // khoảng trắng cứng giữa các chữ
+        o.style.animationDelay=(i*0.055).toFixed(3)+'s';
+        e.appendChild(o);
+      });
     });
-    var ids={}; ds.forEach(function(g){ ids[g.id]=1; });
-    song.querySelectorAll('.cg-gd').forEach(function(e){        // hết giờ sống (3 phút IN · 10 phút OUT) → mờ rồi rời bảng
+  }
+  // "Thối …" / "Đưa khách" chỉ nổi bật trong khoảng thời gian máy chủ gửi về, hết thì trở lại chữ thường
+  function henTatNoiBat(goc){
+    (goc||document).querySelectorAll('.cg-gd__noi[data-noi]').forEach(function(e){
+      var con=parseFloat(e.dataset.noi)||0; delete e.dataset.noi;
+      if(con<=0){ e.classList.remove('cg-gd__noi'); return; }
+      setTimeout(function(){ e.classList.remove('cg-gd__noi'); },con*1000);
+    });
+  }
+  // j.ds = [[id,h],…] mọi thẻ còn sống (mới → cũ) · j.moi = TRỌN thẻ vừa đổi · j.gon = id thẻ thu gọn
+  function veSong(j){
+    var song=document.getElementById('cg-song'); if(!song) return;
+    var ds=j.ds||[], mau={}, gon={};
+    (j.moi||[]).forEach(function(g){ mau[g.id]=g; });
+    (j.gon||[]).forEach(function(id){ gon[id]=1; });
+    var trong=document.getElementById('cg-gd-trong'); if(trong && ds.length) trong.remove();
+    var co={}; song.querySelectorAll('.cg-gd:not(.cg-gd--het)').forEach(function(e){ co[e.dataset.id]=e; });
+    ds.slice().reverse().forEach(function(p){          // cũ → mới, dòng mới luôn nằm TRÊN CÙNG
+      var id=p[0], cu=co[id], g=mau[id];
+      if(!cu){ if(!g) return; var m=veDong(g); m.classList.add('cg-gd--moi'); song.prepend(m);
+        setTimeout(function(){ m.classList.remove('cg-gd--moi'); },6000); return; }
+      cu.classList.toggle('cg-gd--gon',!!gon[id]);       // chờ lâu thì tự co còn 2 dòng, không nháy
+      if(g && cu.dataset.h!==g.h){ var moi=veDong(g); moi.classList.add('cg-gd--doi'); cu.replaceWith(moi);
+        // đổi tiền nào thì chính con số đó nảy lên, không chỉ nháy cả thẻ
+        ['tong','tm','ck','nhan','thoi','dua'].forEach(function(k){
+          var a=cu.querySelector('.cg-gd__'+k), b=moi.querySelector('.cg-gd__'+k);
+          if(a&&b&&a.textContent!==b.textContent) b.classList.add('cg-gd__so--doi');
+        });
+        setTimeout(function(){ moi.classList.remove('cg-gd--doi');
+          moi.querySelectorAll('.cg-gd__so--doi').forEach(function(e){ e.classList.remove('cg-gd__so--doi'); }); },6000); }
+    });
+    var ids={}; ds.forEach(function(p){ ids[p[0]]=1; });
+    song.querySelectorAll('.cg-gd').forEach(function(e){        // hết nhịp chờ máy chủ gửi về → mờ rồi rời bảng
       if(ids[e.dataset.id] || e.classList.contains('cg-gd--het')) return;
       e.classList.add('cg-gd--het'); setTimeout(function(){ e.remove(); },420); });
+    henTatNoiBat(song); veChuCho(song);
     var dem=document.getElementById('cg-dem-gd'); if(dem) dem.textContent=ds.length;
   }
+  function bietHienTai(){ var song=document.getElementById('cg-song'); if(!song) return '';
+    return [].map.call(song.querySelectorAll('.cg-gd:not(.cg-gd--het)'),
+      function(e){ return e.dataset.id+':'+(e.dataset.h||''); }).join(','); }
 
   // ───── Nhịp 2 giây: chữ ký + dòng giao dịch (chỉ MySQL). Bảng hàng chỉ tải lại khi phần của nó đổi ─────
   var nhip=document.getElementById('cg-nhip'), kyHang='';
@@ -114,13 +197,15 @@ CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, khôn
     var el=document.querySelector('[data-chu-ky]');
     if(!el || document.hidden) return;
     try{
-      var r=await fetch('{% url "pos:check_gold_theo_doi" %}?d='+document.getElementById('cg-ngay').value
-                        +'&ky='+encodeURIComponent(el.dataset.chuKy),{credentials:'same-origin'});
+      var r=await fetch('{% url "pos:check_gold_theo_doi" %}?d='+giaTri('cg-ngay')
+                        +'&ky='+encodeURIComponent(el.dataset.chuKy)
+                        +'&biet='+encodeURIComponent(bietHienTai()),{credentials:'same-origin'});
       var j=await r.json();
       nhip.className='cg-pill cg-pill--ok'; nhip.innerHTML='<i></i>Realtime';
-      veSong(j.gd||[]);
+      veSong(j);
       var moc=(j.chu_ky||'').split('|').slice(0,3).join('|');     // phần của BẢNG HÀNG (gold_check_entry)
-      if(kyHang && moc!==kyHang && !coPopup()) taiLai(); else el.dataset.chuKy=j.chu_ky;
+      // KHÔNG tải lại khi đang mở popup hoặc quầy đang gõ dở mã — swap sẽ xoá trắng ô quét
+      if(kyHang && moc!==kyHang && !coPopup() && !dangGoMa()) taiLai(); else el.dataset.chuKy=j.chu_ky;
       kyHang=moc;
     }catch(e){ nhip.className='cg-pill cg-pill--loi'; nhip.innerHTML='<i></i>Mất kết nối'; }
   }
@@ -132,21 +217,40 @@ CHECK GOLD V4 (23/09/2026) — trang ĐỨNG RIÊNG, không đăng nhập, khôn
     var o=document.querySelector('[data-cg-loc]'); if(!o)return;
     o.querySelectorAll('button').forEach(function(b){ b.classList.toggle('is-on',b.dataset.tt===locTT); });
     var t=document.getElementById('cg-tim'); if(t && t.value!==timKiem) t.value=timKiem;
-    var hien=0;
+    var hien=0, theoNv={};
     document.querySelectorAll('#cg-bang tbody tr').forEach(function(tr){
       var hop=(locTT===''||tr.dataset.tt===locTT)
         && (timKiem===''||tr.innerText.toLowerCase().indexOf(timKiem.toLowerCase())>=0);
-      tr.hidden=!hop; if(hop) hien++;
+      tr.hidden=!hop;
+      if(hop){ hien++; var n=(tr.dataset.nv||'').trim(); if(n) theoNv[n]=(theoNv[n]||0)+1; }
     });
     var dem=document.getElementById('cg-dem-sp'); if(dem) dem.textContent=hien;
+    var trong=document.getElementById('cg-khong-khop'); if(trong) trong.hidden=hien>0;
+    veNvDem(theoNv);
   };
+  // Dòng badge dưới tiêu đề: ai đang giữ bao nhiêu món (nhiều nhất lên trước); không ai thì ẩn cả dòng
+  function veNvDem(theoNv){
+    var o=document.getElementById('cg-nv-dem'); if(!o) return;
+    var ds=Object.keys(theoNv).sort(function(a,b){ return theoNv[b]-theoNv[a] || a.localeCompare(b,'vi'); });
+    o.textContent='';
+    ds.forEach(function(n){
+      var s=document.createElement('span'); s.className='cg-nvd__b';
+      var d=document.createElement('i');                 // chữ cái đầu trong vòng kim
+      d.textContent=(n.trim().split(/\s+/).pop()[0]||'?').toUpperCase();
+      var t=document.createElement('span'); t.textContent=n;
+      var b=document.createElement('b'); b.textContent=theoNv[n];
+      s.appendChild(d); s.appendChild(t); s.appendChild(b); o.appendChild(s);
+    });
+    o.hidden=!ds.length;
+  }
   document.addEventListener('click',function(e){
     var b=e.target.closest('[data-cg-loc] button'); if(!b)return;
     locTT=b.dataset.tt; window.cgApLoc(); tapTrung();
   });
   document.addEventListener('input',function(e){ if(e.target.id==='cg-tim'){ timKiem=e.target.value; window.cgApLoc(); } });
-  document.body.addEventListener('htmx:afterSwap',function(e){ if(e.detail.target.id==='cg-khoi'){ window.cgApLoc(); tapTrung(); } });
-  window.cgApLoc(); tapTrung(); theoDoi();
+  document.body.addEventListener('htmx:afterSwap',function(e){
+    if(e.detail.target.id==='cg-khoi'){ window.cgApLoc(); tapTrung(); veChuCho(); } });
+  window.cgApLoc(); tapTrung(); henTatNoiBat(); veChuCho(); capNutNgay(); doTop(); theoDoi();
 })();
 </script>
 </body>

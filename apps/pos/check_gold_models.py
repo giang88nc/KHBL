@@ -28,3 +28,26 @@ class GoldCheckEntry(models.Model):
 
     def __str__(self):
         return f'{self.product_code} · {self.ngay:%d/%m/%Y}'
+
+
+class GoldCheckMoc(models.Model):
+    """MỐC THỜI GIAN của thẻ GIAO DỊCH trên CHECK GOLD (GĐ chốt 27/09/2026). CHỈ CHECK GOLD đọc/ghi.
+
+    Thay cho bộ nhớ đệm tiến trình web (mất sạch mỗi lần RESET) và cho money_flow.synced_at (job chiếu lại MỌI
+    dòng vài giây một lần nên cột đó luôn là "vừa xong"). Bảng riêng, khóa = id dòng money_flow nhưng CỐ Ý không
+    đặt khóa ngoại: không khóa bảng money_flow đang ghi liên tục, và không đụng 4 chỗ ghi trạng thái tiền.
+
+        · xong_luc    — lúc phiếu TRỞ THÀNH xong (hủy / đối soát khớp) → thẻ còn 30 giây rồi rời bảng;
+        · noi_bat_luc — lúc phiếu BẮT ĐẦU có tiền phải thối / phải đưa khách → nhấp nháy đúng 2 phút.
+
+    Có dòng = CHECK GOLD đã từng nhìn thấy phiếu này (dùng để phân biệt phiếu vừa xong với phiếu xong từ lâu).
+    """
+    flow_id = models.PositiveBigIntegerField('Dòng money_flow', primary_key=True)
+    xong_luc = models.DateTimeField('Lúc xong', null=True, blank=True)
+    noi_bat_luc = models.DateTimeField('Lúc bắt đầu nổi bật', null=True, blank=True)
+    tao_luc = models.DateTimeField('Lần đầu thấy', auto_now_add=True)
+
+    class Meta:
+        db_table = 'gold_check_moc'
+        verbose_name = 'Mốc thẻ CHECK GOLD'
+        verbose_name_plural = 'Mốc thẻ CHECK GOLD'

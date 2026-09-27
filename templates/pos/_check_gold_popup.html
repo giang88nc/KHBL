@@ -1,16 +1,52 @@
 {% load pos_extras %}{% comment %}
-POPUP DANH SÁCH NHANH TRONG NGÀY (CHECK GOLD V4): ck = chuyển khoản (khj_bl) · thau = phiếu thâu · ban = phiếu bán (KK, chỉ đọc).
+POPUP DANH SÁCH NHANH TRONG NGÀY (CHECK GOLD V4): ck = chuyển khoản (khj_bl) · thau = phiếu thâu · ban = phiếu bán (KK, chỉ đọc)
+· cam = CẦM ĐỒ (thêm 26/09/2026) đọc thẳng khj_cd: cd_loan_logs + cd_loans + cd_payments, một dòng = một phiên với khách
+· vang_ban / vang_thau (thêm 27/09/2026) = thống kê VÀNG theo LOẠI trong ngày, máy KK gom sẵn bằng SQL;
+  vang_thau tách BA khối: THÂU (phiếu thâu độc lập) · ĐỔI - THÂU VÀO · ĐỔI - NGANG VÀNG (vàng cũ trong hóa đơn
+  bán, tách theo giá: tính giá bán ra = đổi ngang); header thêm dòng tổng theo nhóm tuổi 610 · 980 · 9999.
+  Hai popup này dùng khuôn bảng riêng _check_gold_vang_bang.html, không đi chung nhánh bảng bên dưới.
 {% endcomment %}
 <div class="cg-lop" onclick="if(event.target===this)this.remove()">
   <div class="cg-hop">
-    <h3>{% if kieu == 'ck' %}CHUYỂN KHOẢN{% elif kieu == 'thau' %}PHIẾU THÂU{% else %}PHIẾU BÁN{% endif %}
+    <h3>{% if kieu == 'ck' %}CHUYỂN KHOẢN{% elif kieu == 'thau' %}PHIẾU THÂU{% elif kieu == 'cam' %}CẦM ĐỒ
+      {% elif kieu == 'vang_ban' %}VÀNG BÁN THEO LOẠI{% elif kieu == 'vang_thau' %}VÀNG THÂU &amp; ĐỔI THEO LOẠI
+      {% else %}PHIẾU BÁN{% endif %}
       <small>ngày {{ ngay|date:"d/m/Y" }}</small>
       <button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
-    {% if loi %}<p class="cg-tin cg-tin--loi">✕ {{ loi }}</p>{% else %}
+    {% if loi %}<p class="cg-tin cg-tin--loi">✕ {{ loi }}</p>
+    {% elif kieu == 'vang_ban' or kieu == 'vang_thau' %}
+    {% if kieu == 'vang_ban' %}<div class="cg-chip">
+      <span>{{ tong.so_mon }} món</span>
+      <span>{{ tong.chi|floatformat:"2" }} chỉ</span>
+      <span class="cg-chip--vao">{{ tong.tien|tien_tran }} ₫</span>
+    </div>
+    {% else %}<div class="cg-tuoi">
+      {% for nhan, ds_nhom in tuoi_dong %}<div class="cg-tuoi__dong{% if forloop.last %} cg-tuoi__dong--tong{% endif %}">
+        <b class="cg-tuoi__nhan">{{ nhan }}:</b>
+        {% for n in ds_nhom %}<span><b>{{ n.ten }}</b> {{ n.chi_vang|floatformat:"2" }} - {{ n.chi|floatformat:"2" }}</span>{% empty %}<span class="cg-mo">—</span>{% endfor %}
+      </div>{% endfor %}
+      <small class="cg-mo">mỗi nhóm: TL vàng - tổng TL (chỉ)</small>
+    </div>{% endif %}
+    <div class="cg-cuon cg-cuon--cao">
+      {% if kieu == 'vang_ban' %}
+        {% include 'pos/_check_gold_vang_bang.html' with ds=rows tong_bang=tong nhan='HÀNG BÁN RA' %}
+      {% else %}
+        {% include 'pos/_check_gold_vang_bang.html' with ds=rows.thau tong_bang=tong.thau nhan='PHIẾU THÂU · khách bán vàng' %}
+        {% include 'pos/_check_gold_vang_bang.html' with ds=rows.doi_thau tong_bang=tong.doi_thau nhan='ĐỔI - THÂU VÀO · vàng cũ tính giá thâu' %}
+        {% include 'pos/_check_gold_vang_bang.html' with ds=rows.doi_ngang tong_bang=tong.doi_ngang nhan='ĐỔI - NGANG VÀNG · vàng cũ tính giá bán ra' %}
+      {% endif %}
+    </div>
+    {% else %}
     <div class="cg-chip">
       <span>{{ tong.so }} dòng</span>
+      {% if tong.tat_ca %}<span class="cg-chip--ra" title="Tổng tiền ở các ô bên cạnh vẫn tính trên TẤT CẢ phiếu">Đang hiện {{ rows|length }}/{{ tong.tat_ca }} dòng mới nhất</span>{% endif %}
       {% if kieu == 'ck' %}<span class="cg-chip--vao">Vào {{ tong.vao|tien_tran }} ₫</span>
         <span class="cg-chip--ra">Ra {{ tong.ra|tien_tran }} ₫</span><span>Ròng {{ tong.rong|tien_tran }} ₫</span>
+      {% elif kieu == 'cam' %}<span class="cg-chip--ra">Chi ra {{ tong.chi|tien_tran }} ₫</span>
+        <span class="cg-chip--vao">Thu vào {{ tong.thu|tien_tran }} ₫</span>
+        <span>TM {{ tong.tien_mat|tien_tran }} ₫</span><span>CK {{ tong.ck|tien_tran }} ₫</span>
+        <span>Lãi {{ tong.lai|tien_tran }} ₫</span>
+        {% if tong.cho_ck %}<span class="cg-chip--ra">{{ tong.cho_ck }} phiên chờ đối soát CK</span>{% endif %}
       {% elif kieu == 'thau' %}<span>Tổng {{ tong.tong|tien_tran }} ₫</span><span>CK {{ tong.ck|tien_tran }} ₫</span>
       {% else %}<span>Tổng {{ tong.tong|tien_tran }} ₫</span><span>TM {{ tong.tien_mat|tien_tran }} ₫</span><span>CK {{ tong.ck|tien_tran }} ₫</span>{% endif %}
     </div>
@@ -23,6 +59,23 @@ POPUP DANH SÁCH NHANH TRONG NGÀY (CHECK GOLD V4): ck = chuyển khoản (khj_b
           <td class="cg-mo">{{ r.bank_name }} {{ r.bank_number }}</td>
           <td class="cg-so"><b>{{ r.trans_amount|tien_tran }}</b></td>
           <td class="cg-mo cg-nd">{{ r.description|default:"—" }}</td></tr>{% empty %}<tr><td colspan="6" class="cg-trong">Không có giao dịch.</td></tr>{% endfor %}</tbody>
+      {% elif kieu == 'cam' %}
+        {# NGHIỆP VỤ mang luôn màu của chiều tiền (đỏ = tiệm chi ra · xanh = khách trả vào) nên bỏ cột CHIỀU #}
+        <thead><tr><th>GIỜ</th><th>MÃ PHIẾU</th><th>NGHIỆP VỤ</th><th>KHÁCH</th><th>NV</th>
+          <th class="cg-so">TỔNG</th><th class="cg-so">TM</th><th class="cg-so">CK</th><th class="cg-so">LÃI</th>
+          <th>ĐỐI SOÁT</th></tr></thead>
+        <tbody>{% for r in rows %}<tr{% if r.huy %} class="cg-huy"{% endif %}>
+          <td class="cg-mo">{{ r.gio }}</td>
+          <td class="mono"><b>{{ r.ma }}</b></td>
+          <td><span class="cg-tt cg-tt--{% if r.ra_tien %}x{% else %}S{% endif %}">{{ r.nghiep_vu }}</span></td>
+          <td>{{ r.khach }}{% if r.dt %} <small class="cg-mo">{{ r.dt }}</small>{% endif %}</td>
+          <td class="cg-mo">{{ r.nv|default:"—" }}</td>
+          <td class="cg-so cg-so--{% if r.ra_tien %}ra{% else %}vao{% endif %}"><b>{{ r.tong|tien_tran }}</b></td>
+          <td class="cg-so">{{ r.tien_mat|tien_tran }}</td>
+          <td class="cg-so">{{ r.ck|tien_tran }}</td>
+          <td class="cg-so">{{ r.lai|tien_tran }}</td>
+          <td><span class="cg-tt cg-tt--{{ r.doi_soat_lop }}">{% if r.huy %}Đã hủy{% else %}{{ r.doi_soat }}{% endif %}</span></td></tr>
+          {% empty %}<tr><td colspan="10" class="cg-trong">Không có phiên cầm đồ nào trong ngày.</td></tr>{% endfor %}</tbody>
       {% elif kieu == 'thau' %}
         <thead><tr><th>MÃ PHIẾU</th><th>GIỜ</th><th>KHÁCH</th><th>NV</th><th class="cg-so">TỔNG TIỀN</th><th class="cg-so">CK</th><th>TT</th></tr></thead>
         <tbody>{% for r in rows %}<tr><td class="mono">{{ r.BillCode|default:r.TrnID }}</td><td class="cg-mo">{{ r.TrnTime|slice:":5" }}</td>

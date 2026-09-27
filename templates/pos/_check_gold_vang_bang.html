@@ -1,0 +1,35 @@
+{% load pos_extras %}{% comment %}
+MỘT BẢNG THỐNG KÊ VÀNG THEO LOẠI (CHECK GOLD V4 — GĐ chốt 27/09/2026).
+Nhận vào: ds = danh sách dòng {ma, ten, so_mon, chi, tien} · tong_bang = {loai, so_mon, chi, tien} · nhan = tiêu đề khối.
+Dùng chung cho popup "Vàng bán" (một bảng) và "Vàng thâu" (hai bảng: phiếu thâu và vàng đổi).
+Bảng vàng THÂU / ĐỔI (có chi_vang) hiện thêm TL vàng · TL hột · ĐƠN GIÁ = tiền ÷ TL vàng (GĐ chốt 27/09/2026).
+{% endcomment %}
+<table class="cg-bang cg-bang--nho">
+  <thead>
+    <tr><th colspan="{% if 'chi_vang' in tong_bang %}8{% else %}5{% endif %}" class="cg-vang-nhan">{{ nhan }}</th></tr>
+    <tr><th>LOẠI VÀNG</th><th>MÃ</th><th class="cg-so">SỐ MÓN</th><th class="cg-so">TỔNG TL (chỉ)</th>
+      {% if 'chi_vang' in tong_bang %}<th class="cg-so">TL VÀNG</th><th class="cg-so">TL HỘT</th>{% endif %}
+      <th class="cg-so">THÀNH TIỀN</th>{% if 'chi_vang' in tong_bang %}<th class="cg-so">ĐƠN GIÁ / chỉ</th>{% endif %}</tr>
+  </thead>
+  <tbody>
+    {% for r in ds %}<tr>
+      <td>{{ r.ten|default:"—" }}</td>
+      <td class="mono">{{ r.ma }}</td>
+      <td class="cg-so">{{ r.so_mon }}</td>
+      <td class="cg-so">{{ r.chi|floatformat:"2" }}</td>
+      {% if 'chi_vang' in tong_bang %}<td class="cg-so">{{ r.chi_vang|floatformat:"2" }}</td>
+        <td class="cg-so cg-mo">{{ r.chi_hot|floatformat:"2" }}</td>{% endif %}
+      <td class="cg-so"><b>{{ r.tien|tien_tran }}</b></td>
+      {% if 'chi_vang' in tong_bang %}<td class="cg-so">{{ r.don_gia|tien_tran }}</td>{% endif %}
+    </tr>{% empty %}<tr><td colspan="8" class="cg-trong">Không có món nào trong ngày.</td></tr>{% endfor %}
+  </tbody>
+  {% if ds %}<tfoot><tr class="cg-vang-tong">
+    <td colspan="2">Tổng — {{ tong_bang.loai }} loại</td>
+    <td class="cg-so">{{ tong_bang.so_mon }}</td>
+    <td class="cg-so">{{ tong_bang.chi|floatformat:"2" }}</td>
+    {% if 'chi_vang' in tong_bang %}<td class="cg-so">{{ tong_bang.chi_vang|floatformat:"2" }}</td>
+      <td class="cg-so">{{ tong_bang.chi_hot|floatformat:"2" }}</td>{% endif %}
+    <td class="cg-so"><b>{{ tong_bang.tien|tien_tran }}</b></td>
+    {% if 'chi_vang' in tong_bang %}<td class="cg-so">{{ tong_bang.don_gia|tien_tran }}</td>{% endif %}
+  </tr></tfoot>{% endif %}
+</table>

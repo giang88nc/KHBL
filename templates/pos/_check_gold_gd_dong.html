@@ -3,16 +3,34 @@ MỘT THẺ GIAO DỊCH — khuôn 4 dòng × 3 cột GĐ chốt 23/09/2026:
    mã HĐ            | trạng thái      | giờ
    dịch vụ          |                 | tổng tiền (tiền RA có dấu −)
    khách            | TM …            | CK …
-   nhân viên        | Nhận … / Đưa khách | Thối … / số tiền đưa khách   (cột này màu đỏ)
+   nhân viên        | Nhận … / Đưa khách | Thối … / TIỀN MẶT đưa khách  (cột này màu đỏ)
+                    | (phiếu còn CHỜ XÁC NHẬN TIỀN MẶT thì dòng 4 ghi thẳng "Chưa xác nhận tiền mặt")
+                    | (phiếu KHÔNG có tiền mặt — cả vào lẫn ra — thì dòng 4 ghi "Chờ chuyển khoản",
+                    |  đối soát khớp thì đổi thành "Đã chuyển khoản" màu xám)
+Thẻ chờ quá 15 phút mang thêm lớp .cg-gd--gon: CSS ép cả thẻ xuống CÒN HAI DÒNG
+   dòng 1: mã · dịch vụ                       | trạng thái | giờ
+   dòng 2: NHÂN VIÊN | việc còn lại (span .cg-gd__viec) | tổng tiền
+Span .cg-gd__viec luôn có trong thẻ nhưng CSS ẩn ở thẻ đầy đủ, chỉ hiện khi thu gọn.
 Màu: bán hàng · chuộc đồ · cọc = vàng kim · thâu vàng · cầm đồ = đỏ; tổng tiền kế thừa màu nhóm.
+"Thối …" vừa xác nhận và "Đưa khách" > 0 (noi_bat > 0) thì phóng to + nhấp nháy đỏ trong 2 phút.
+Nhãn còn CHỜ (.cg-gd__cho) được JS rải thành từng chữ, nhấp nhô trái → phải cho tới khi đối soát xong.
+Đáy thẻ là VẠCH THỜI GIAN CÒN LẠI (--cg-con giây, bắt đầu từ --cg-phan bề rộng) — cạn là thẻ tự rời bảng.
 ⚠ JS trong check_gold.html (hàm veDong) dựng ĐÚNG khuôn này — sửa đây phải sửa luôn bên đó.
 {% endcomment %}
-<article class="cg-gd cg-gd--{{ g.nhom }} cg-gd--tt-{{ g.tt }}{% if g.huy %} cg-gd--huy{% endif %}"
-         data-id="{{ g.id }}" data-ky="{{ g.ky }}">
+<article class="cg-gd cg-gd--{{ g.nhom }} cg-gd--tt-{{ g.tt }}{% if g.huy %} cg-gd--huy{% endif %}{% if g.gon %} cg-gd--gon{% endif %}"
+         data-id="{{ g.id }}" data-ky="{{ g.ky }}" data-h="{{ g.h }}" data-con="{{ g.con }}"
+         style="--cg-con:{{ g.con }}s;--cg-phan:{% widthratio g.con g.song 100 %}%">
   <span class="cg-gd__ma mono">{{ g.ma }}</span><span class="cg-gd__tt">{% if g.huy %}Đã hủy{% else %}{{ g.tt_nhan }}{% endif %}</span><time>{{ g.gio }}</time>
   <span class="cg-gd__dv">{{ g.dich_vu }}</span><span></span><b class="cg-gd__tong mono">{% if g.ra_tien %}−{% endif %}{{ g.tong|tien_tran }} ₫</b>
   <span class="cg-gd__kh">{{ g.khach }}</span><span class="cg-gd__tm">TM {{ g.tien_mat|tien_tran }}</span><span class="cg-gd__ck">CK {{ g.ck|tien_tran }}</span>
   <span class="cg-gd__nv">{{ g.nv|default:"—" }}</span>
-  {% if g.ra_tien %}<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do mono">{{ g.tong|tien_tran }}</span>
-  {% else %}<span class="cg-gd__nhan mono">Nhận {{ g.khach_dua|tien_tran }}</span><span class="cg-gd__do mono">Thối {{ g.thoi_lai|tien_tran }}</span>{% endif %}
+  {% if g.ra_tien %}{% if g.nhan_ck %}<span></span><span class="{{ g.nhan_ck_lop }}">{{ g.nhan_ck }}</span>
+  {% else %}<span class="cg-gd__do">Đưa khách</span><span class="cg-gd__do cg-gd__dua mono{% if g.noi_bat %} cg-gd__noi{% endif %}"
+    {% if g.noi_bat %}data-noi="{{ g.noi_bat }}"{% endif %}>{{ g.dua_khach|tien_tran }}</span>{% endif %}
+  {% elif g.cho_tm %}<span></span><span class="cg-gd__do cg-gd__cho">Chưa xác nhận tiền mặt</span>
+  {% elif g.nhan_ck %}<span></span><span class="{{ g.nhan_ck_lop }}">{{ g.nhan_ck }}</span>
+  {% else %}<span class="cg-gd__nhan mono">Nhận {{ g.khach_dua|tien_tran }}</span><span class="cg-gd__do cg-gd__thoi mono{% if g.noi_bat %} cg-gd__noi{% endif %}"
+    {% if g.noi_bat %}data-noi="{{ g.noi_bat }}"{% endif %}>Thối {{ g.thoi_lai|tien_tran }}</span>{% endif %}
+  <span class="cg-gd__viec {{ g.viec_lop }}">{{ g.viec }}</span>
+  <i class="cg-gd__vach" aria-hidden="true"></i>
 </article>

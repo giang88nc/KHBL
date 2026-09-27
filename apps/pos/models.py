@@ -503,4 +503,4 @@ class DocumentContactWrite(models.Model):
         db_table = 'document_contact_writes'
         indexes = [models.Index(fields=['source_type','source_id','status'],name='contact_write_source_idx')]
 from .check_bill_models import CheckBill  # noqa: E402,F401  CHECK BILL V2 (21/09/2026)
-from .check_gold_models import GoldCheckEntry  # noqa: E402,F401  CHECK GOLD V4 (23/09/2026)
+from .check_gold_models import GoldCheckEntry, GoldCheckMoc  # noqa: E402,F401  CHECK GOLD V4 (23/09/2026)

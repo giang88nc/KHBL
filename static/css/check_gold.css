@@ -55,6 +55,15 @@ body{margin:0;background:var(--nen);color:var(--ink);font-family:'Be Vietnam Pro
 .cg-dem{background:var(--gold-100);color:var(--gold-700);border-radius:10px;padding:0 7px;font-size:11.5px}
 .cg-dem--do{background:#FCF1EF;color:var(--do)}
 .cg-cong-cu{margin-left:auto;display:flex;gap:4px;align-items:center}
+/* Thông báo của lượt quét nằm ngay trên dòng tiêu đề MÓN HÀNG; dài quá thì cắt, rê chuột xem đủ (26/09/2026) */
+.cg-tin--dong{margin:0;padding:2px 8px;font-weight:500;letter-spacing:0;font-size:11.5px;
+  min-width:0;max-width:52%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Dòng badge "nhân viên — số món đang giữ ngoài tủ", đếm theo đúng bộ lọc đang bật (JS cgApLoc) */
+.cg-nvd{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 5px}
+.cg-nvd[hidden]{display:none}
+.cg-nvd__b{display:inline-flex;align-items:center;gap:5px;padding:1px 3px 1px 8px;border-radius:10px;
+  font-size:11px;background:var(--gold-100);color:var(--gold-700);border:1px solid var(--gold-300,#E4C56A)}
+.cg-nvd__b b{background:#fff;border-radius:8px;padding:0 6px;font-size:10.5px}
 .cg-cong-cu input{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;width:170px}
 .cg-loc{display:inline-flex;gap:2px}
 .cg-loc button{font:inherit;font-size:11px;padding:2px 8px;border:1px solid var(--line);background:#fff;
@@ -112,14 +121,17 @@ body{margin:0;background:var(--nen);color:var(--ink);font-family:'Be Vietnam Pro
 .cg-pill--loi{border-color:var(--do);color:var(--do)}
 
 /* ═══════ V4 · thiết kế lại 23/09/2026: nền chuyển sắc, kính mờ, hiệu ứng vào/nháy ═══════ */
-.cg-nen{position:fixed;inset:0;z-index:-1;background:
-  radial-gradient(900px 500px at 12% -10%,rgba(201,160,44,.20),transparent 60%),
-  radial-gradient(700px 420px at 95% 0%,rgba(46,125,70,.12),transparent 55%),
-  linear-gradient(180deg,#FFFDF7 0%,#FBF8F0 45%,#F7F3E9 100%)}
-.cg-nen::after{content:'';position:absolute;inset:0;
-  background-image:linear-gradient(rgba(140,106,29,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(140,106,29,.05) 1px,transparent 1px);
-  background-size:38px 38px;-webkit-mask-image:radial-gradient(70% 55% at 50% 0%,#000,transparent);
-  mask-image:radial-gradient(70% 55% at 50% 0%,#000,transparent)}
+.cg-nen{position:fixed;inset:0;z-index:-1;overflow:hidden;background:
+  radial-gradient(1000px 560px at 10% -12%,rgba(201,160,44,.30),transparent 62%),
+  radial-gradient(780px 460px at 96% -4%,rgba(46,125,70,.16),transparent 58%),
+  linear-gradient(180deg,#FFFCF4 0%,#FAF6EA 42%,#F3EEDF 100%)}
+/* lưới kỹ thuật: rõ hơn, phủ rộng hơn và TRƯỢT CHÉO chậm (dịch đúng 1 ô nên nối liền mạch) */
+.cg-nen::after{content:'';position:absolute;inset:-44px;
+  background-image:linear-gradient(rgba(140,106,29,.115) 1px,transparent 1px),linear-gradient(90deg,rgba(140,106,29,.115) 1px,transparent 1px);
+  background-size:44px 44px;-webkit-mask-image:radial-gradient(85% 80% at 50% 0%,#000,transparent);
+  mask-image:radial-gradient(85% 80% at 50% 0%,#000,transparent);
+  animation:cg-luoi 26s linear infinite}
+@keyframes cg-luoi{to{transform:translate3d(44px,44px,0)}}
 body{background:transparent}
 
 .cg-top{backdrop-filter:blur(8px);background:rgba(255,255,255,.72);box-shadow:0 6px 22px rgba(140,106,29,.08)}
@@ -238,3 +250,264 @@ body{background:transparent}
 .cg-gd--huy{opacity:.55}.cg-gd--huy .cg-gd__tong{text-decoration:line-through}
 .cg-gd--het{animation:cg-gd-ra .4s ease both}
 @keyframes cg-gd-ra{to{opacity:0;transform:translateX(14px) scale(.98);max-height:0;padding-top:0;padding-bottom:0;margin-top:-4px}}
+
+/* Vạch thời gian còn lại ở ĐÁY thẻ giao dịch (GĐ chốt 24/09/2026) — cạn là thẻ rời bảng */
+.cg-gd{position:relative;padding-bottom:6px;border-bottom-width:1px}
+.cg-gd__vach{position:absolute;left:0;bottom:0;height:2px;width:var(--cg-phan,100%);border-radius:0 0 0 8px;
+  background:linear-gradient(90deg,var(--gold-500),#E4C56A);opacity:.85;
+  animation:cg-vach var(--cg-con,180s) linear forwards}
+.cg-gd--ra .cg-gd__vach{background:linear-gradient(90deg,var(--do),#E08B76)}
+.cg-gd--moi .cg-gd__vach{box-shadow:0 0 6px rgba(201,160,44,.6)}
+@keyframes cg-vach{to{width:0}}
+
+/* ───── Hiệu ứng nổi bật (GĐ chốt 24/09/2026) ───── */
+/* Tiền THỐI vừa xác nhận · TIỀN MẶT phải ĐƯA KHÁCH của phiếu thâu (GĐ chốt 25/09/2026): chữ to gấp rưỡi,
+   nền đỏ nhạt, nhấp nháy suốt 2 phút để quầy nhớ đưa/trả lại tiền cho khách */
+.cg-gd__noi{font-size:15px!important;font-weight:800;padding:0 7px;border-radius:8px;
+  background:#FCE9E4;box-shadow:0 0 0 2px rgba(179,64,42,.25);
+  animation:cg-thoi-nhay 1.1s ease-in-out infinite}
+@keyframes cg-thoi-nhay{0%,100%{transform:scale(1);box-shadow:0 0 0 2px rgba(179,64,42,.25)}
+  50%{transform:scale(1.10);box-shadow:0 0 12px 3px rgba(179,64,42,.45)}}
+
+/* Nhãn CÒN CHỜ ("Chưa xác nhận tiền mặt" · "Chờ chuyển khoản"): từng chữ nhấp nhô trái → phải, chạy mãi
+   tới khi đối soát xong thì nhãn đổi/biến mất (GĐ chốt 25/09/2026). JS tách chữ, xem hàm veChuCho. */
+.cg-gd__cho i{display:inline-block;font-style:normal;animation:cg-chu-nhap 1.5s ease-in-out infinite}
+@keyframes cg-chu-nhap{0%,55%,100%{transform:translateY(0)}
+  25%{transform:translateY(-3px);filter:brightness(1.25)}}
+
+/* Thẻ MỚI: trượt vào + quét ánh vàng chạy ngang, giữ viền sáng 6 giây */
+.cg-gd--moi{animation:cg-gd-vao .5s cubic-bezier(.2,.9,.25,1.1) both, cg-sang 6s ease-out}
+.cg-gd--moi::before{content:'';position:absolute;inset:0;border-radius:8px;pointer-events:none;
+  background:linear-gradient(100deg,transparent 20%,rgba(201,160,44,.30) 45%,transparent 70%);
+  background-size:220% 100%;animation:cg-quet 1.5s ease-out 2}
+.cg-gd--ra.cg-gd--moi::before{background-image:linear-gradient(100deg,transparent 20%,rgba(179,64,42,.28) 45%,transparent 70%)}
+@keyframes cg-quet{from{background-position:180% 0}to{background-position:-60% 0}}
+@keyframes cg-sang{0%{box-shadow:0 0 0 4px rgba(201,160,44,.45)}60%{box-shadow:0 0 0 2px rgba(201,160,44,.20)}
+  100%{box-shadow:0 0 0 0 rgba(201,160,44,0)}}
+
+/* Thẻ VỪA ĐỔI: nền nháy 3 nhịp rồi lặng, kéo dài 6 giây */
+.cg-gd--doi{animation:cg-nhay 6s ease-out}
+@keyframes cg-nhay{0%{background:#FFF3D0}18%{background:#fff}36%{background:#FFF3D0}54%{background:#fff}
+  72%{background:#FFF3D0}100%{background:#fff}}
+/* Con số vừa đổi thì nảy lên rồi trở lại */
+.cg-gd__so--doi{animation:cg-so-nay 1s cubic-bezier(.2,.9,.25,1.2) 3}
+@keyframes cg-so-nay{0%,100%{transform:scale(1)}30%{transform:scale(1.18);filter:brightness(1.15)}}
+
+/* ════════════ LỚP "LED VÀNG" — GĐ chốt 26/09/2026: thêm chiều sâu, ánh kim, cảm giác công nghệ ════════════
+   Nguyên tắc: chỉ dùng transform/opacity/box-shadow, SỐ PHẦN TỬ CHẠY VÔ HẠN GIỮ Ở MỨC ĐẾM ĐƯỢC (~6) để máy
+   quầy Edge --app không nóng máy; mọi thứ còn lại chỉ sáng lên khi rê chuột. Ai tắt hiệu ứng trong Windows
+   (prefers-reduced-motion) thì khối cuối tệp tắt sạch chuyển động.                                        */
+
+/* ── Dải LED chạy dọc mép trên của TOPBAR và từng THẺ ── */
+.cg-top,.cg-the{position:relative}
+.cg-top::after,.cg-the::before{content:'';position:absolute;left:10px;right:10px;top:-1px;height:2px;
+  border-radius:2px;pointer-events:none;background-repeat:no-repeat;background-size:38% 100%;
+  background-image:linear-gradient(90deg,transparent,var(--gold-500),#FFF3D0,var(--gold-500),transparent);
+  animation:cg-led 6s linear infinite}
+.cg-the--gd::before{background-image:linear-gradient(90deg,transparent,var(--xanh),#BFE3CB,var(--xanh),transparent)}
+@keyframes cg-led{from{background-position:-45% 0}to{background-position:145% 0}}
+
+/* ── Chấm LED đầu tiêu đề: thêm vòng sáng lan ra ── */
+.cg-cham{position:relative}
+.cg-cham::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid var(--gold-500);
+  opacity:0;animation:cg-lan 2.8s ease-out infinite}
+.cg-cham--song::after{border-color:var(--xanh)}
+@keyframes cg-lan{0%{transform:scale(.6);opacity:.55}70%{transform:scale(2.1);opacity:0}100%{opacity:0}}
+
+/* ── Ô SCAN: viền kim khi gõ, nút QUÉT có ánh sáng lướt qua ── */
+.cg-lenh__o--ma input:focus{box-shadow:0 0 0 3px rgba(201,160,44,.20),0 0 18px rgba(201,160,44,.28)}
+.cg-lenh__quet{position:relative;overflow:hidden}
+.cg-lenh__quet::after{content:'';position:absolute;inset:0;pointer-events:none;background-repeat:no-repeat;
+  background-size:60% 100%;background-image:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);
+  animation:cg-luot 3.4s ease-in-out infinite}
+@keyframes cg-luot{0%{background-position:-70% 0}55%,100%{background-position:170% 0}}
+
+/* ── Bảng MÓN HÀNG: gạch kim dưới hàng tiêu đề, hàng sáng lên và nhô ra khi rê chuột ── */
+.cg-bang thead th{background:linear-gradient(180deg,#FBF4E2,var(--gold-100));
+  box-shadow:inset 0 -1px 0 rgba(201,160,44,.45)}
+.cg-bang tbody tr{transition:background .16s,box-shadow .16s,transform .16s}
+.cg-bang tbody tr:hover{background:linear-gradient(90deg,#FFFBF0,#FCFAF4 60%);transform:translateX(2px);
+  box-shadow:inset 3px 0 0 var(--gold-500),0 2px 10px rgba(140,106,29,.08)}
+.cg-bang tbody tr:hover .mono b{color:var(--gold-700)}
+.cg-bang td .mono b{transition:color .16s}
+
+/* ── Badge trạng thái: mỗi cái một bóng LED nhỏ (tĩnh, không tốn máy) ── */
+.cg-tt::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;
+  vertical-align:middle;background:currentColor;box-shadow:0 0 6px currentColor}
+.cg-tt--I{background:linear-gradient(180deg,#fff,#F7F4EC);border-color:var(--gold-300,#E4C56A);color:var(--gold-700)}
+
+/* ── Badge nhân viên: chữ cái đầu trong vòng kim, nhấc nhẹ khi rê chuột ── */
+.cg-nvd__b{transition:.16s transform,.16s box-shadow;background:linear-gradient(180deg,#FFFBF0,var(--gold-100))}
+.cg-nvd__b:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(140,106,29,.16)}
+.cg-nvd__b i{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;margin-right:1px;
+  border-radius:50%;font-style:normal;font-size:9.5px;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,var(--gold-500),var(--gold-700));box-shadow:0 0 0 1px rgba(255,255,255,.7) inset}
+
+/* ── Thanh cuộn mảnh, màu kim ── */
+.cg-cuon::-webkit-scrollbar,.cg-song::-webkit-scrollbar{width:7px;height:7px}
+.cg-cuon::-webkit-scrollbar-thumb,.cg-song::-webkit-scrollbar-thumb{border-radius:7px;
+  background:linear-gradient(180deg,var(--gold-300,#E4C56A),var(--gold-500))}
+.cg-cuon::-webkit-scrollbar-track,.cg-song::-webkit-scrollbar-track{background:rgba(234,228,214,.5);border-radius:7px}
+
+/* ── Thẻ giao dịch: viền trái của phiếu CÒN CHỜ thở nhẹ; thẻ nhô lên khi rê chuột ── */
+.cg-gd{transition:transform .16s,box-shadow .16s}
+.cg-gd:hover{transform:translateX(-2px);box-shadow:-3px 4px 16px rgba(140,106,29,.12)}
+.cg-gd--tt-waiting{animation:cg-vien-cho 2.4s ease-in-out infinite}
+@keyframes cg-vien-cho{0%,100%{border-left-color:var(--cam)}50%{border-left-color:#F0C46A}}
+.cg-gd__vach{box-shadow:0 0 8px rgba(201,160,44,.45)}
+.cg-gd--ra .cg-gd__vach{box-shadow:0 0 8px rgba(179,64,42,.40)}
+
+/* ── Chân trang: đồng hồ chữ kim, đèn Realtime có quầng ── */
+.cg-chan{backdrop-filter:blur(6px)}
+#cg-dong-ho{font-variant-numeric:tabular-nums;letter-spacing:.08em;color:var(--gold-700);
+  border-color:var(--gold-300,#E4C56A);background:linear-gradient(180deg,#fff,#FFFBF0)}
+.cg-pill--ok i{box-shadow:0 0 8px var(--xanh)}
+.cg-pill--loi i{box-shadow:0 0 8px var(--do)}
+
+/* ── Ai tắt hiệu ứng chuyển động trong Windows thì trang đứng yên hoàn toàn ── */
+@media (prefers-reduced-motion:reduce){
+  .cg-nen::before,.cg-top::after,.cg-the::before,.cg-cham::after,.cg-lenh__quet::after,.cg-gd--tt-waiting,
+  .cg-gd__cho i,.cg-gd__noi,.cg-quet-tia,.cg-cham--song,.cg-pill i{animation:none!important}
+}
+
+/* ── Khu vực còn TRỐNG: khung nét đứt + một vạch kim quét qua, để màn hình không bị "chết" ── */
+.cg-trong{position:relative;margin:4px 2px;padding:14px 10px;text-align:center;border:1px dashed var(--line);
+  border-radius:8px;background:linear-gradient(180deg,#fff,rgba(247,239,216,.35))}
+.cg-trong::before{content:'';position:absolute;left:8px;right:8px;top:0;height:1px;pointer-events:none;
+  background-repeat:no-repeat;background-size:30% 100%;
+  background-image:linear-gradient(90deg,transparent,var(--gold-500),transparent);
+  animation:cg-led 4.5s linear infinite}
+
+/* ── Số đếm bên tiêu đề: viên kim nhỏ, bản GIAO DỊCH đổi sang sắc xanh ── */
+.cg-dem{background:linear-gradient(180deg,#FFFBF0,var(--gold-100));border:1px solid var(--gold-300,#E4C56A);
+  font-weight:700;box-shadow:0 1px 0 rgba(255,255,255,.8) inset}
+.cg-the--gd .cg-dem{background:linear-gradient(180deg,#F5FBF7,#E8F4EC);border-color:#BFE3CB;color:var(--xanh)}
+
+/* ════════ NỀN ĐỘNG 4 LỚP (GĐ chốt 26/09/2026: rõ ràng · nổi bật · dynamic) ════════
+   Lớp A và B là các quầng sáng lớn trôi NGƯỢC CHIỀU nhau nên hình nền không bao giờ lặp lại y hệt;
+   lớp TIA là vệt quét chạy từ trên xuống như máy scan; lớp HẠT là bụi vàng bay lên.
+   Cả bốn chỉ chạy bằng transform (GPU), không dùng filter:blur — mềm mà không nặng máy quầy.       */
+.cg-nen>i{position:absolute;display:block;pointer-events:none;will-change:transform}
+
+/* A · hai quầng vàng kim lớn, đảo chậm 28 giây */
+.cg-nen__a{inset:-25%;
+  background:radial-gradient(560px 360px at 22% 26%,rgba(201,160,44,.50),transparent 64%),
+             radial-gradient(460px 320px at 72% 76%,rgba(228,197,106,.46),transparent 62%),
+             radial-gradient(300px 220px at 48% 52%,rgba(255,248,227,.55),transparent 66%);
+  animation:cg-nen-a 24s ease-in-out infinite alternate}
+@keyframes cg-nen-a{from{transform:translate3d(-5%,-4%,0) scale(1);opacity:.85}
+  to{transform:translate3d(6%,5%,0) scale(1.16);opacity:1}}
+
+/* B · quầng xanh thương hiệu + hổ phách, trôi NGƯỢC chiều 38 giây */
+.cg-nen__b{inset:-25%;
+  background:radial-gradient(500px 340px at 84% 20%,rgba(46,125,70,.30),transparent 62%),
+             radial-gradient(420px 280px at 10% 84%,rgba(192,122,26,.30),transparent 60%);
+  animation:cg-nen-b 38s ease-in-out infinite alternate}
+@keyframes cg-nen-b{from{transform:translate3d(4%,3%,0) scale(1.08)}
+  to{transform:translate3d(-5%,-4%,0) scale(1)}}
+
+/* TIA · vệt quét chạy từ đỉnh xuống đáy — ĐANG TẮT (GĐ chốt 26/09/2026: chói mắt khi nhìn cả ngày).
+   ⚠ CÔNG TẮC DUY NHẤT nằm ở dòng display dưới đây, không phải trong HTML (thẻ <i class="cg-nen__tia">
+   vẫn còn trong check_gold.html). Muốn bật lại ở mức MỜ NHẤT: bỏ dòng display:none, giữ nguyên opacity .1
+   — muốn rõ như bản cũ thì đổi opacity thành 1. Phần tử display:none KHÔNG chạy animation, không tốn máy.
+   ⚠ Selector phải là `.cg-nen>i.cg-nen__tia` mới đè nổi `display:block` của `.cg-nen>i` bên trên. */
+.cg-nen>i.cg-nen__tia{display:none}
+.cg-nen__tia{left:0;right:0;top:0;height:260px;opacity:.1;
+  background:linear-gradient(180deg,transparent,rgba(201,160,44,.30) 42%,rgba(255,250,232,.55) 50%,
+             rgba(255,250,232,.55) 53%,rgba(201,160,44,.26) 60%,transparent);
+  animation:cg-nen-tia 7.5s cubic-bezier(.4,0,.6,1) infinite}
+@keyframes cg-nen-tia{0%{transform:translate3d(0,-260px,0)}100%{transform:translate3d(0,100vh,0)}}
+
+/* HẠT · bụi vàng bay lên, dịch đúng một ô 150px nên nối liền mạch, 42 giây một vòng */
+.cg-nen__hat{inset:-160px;background-repeat:repeat;background-size:150px 150px;
+  background-image:
+    radial-gradient(1.6px 1.6px at 18px 26px,rgba(201,160,44,.55),transparent),
+    radial-gradient(1.3px 1.3px at 96px 62px,rgba(140,106,29,.42),transparent),
+    radial-gradient(2px 2px at 58px 118px,rgba(228,197,106,.60),transparent),
+    radial-gradient(1.2px 1.2px at 128px 14px,rgba(46,125,70,.30),transparent);
+  animation:cg-nen-hat 42s linear infinite}
+@keyframes cg-nen-hat{to{transform:translate3d(0,-150px,0)}}
+
+/* VÒNG · hai vòng sóng kim lan ra từ khoảng trống giữa dưới màn hình, lệch pha nhau nửa nhịp */
+.cg-nen__vong{left:50%;bottom:16%;width:0;height:0}
+.cg-nen__vong::before,.cg-nen__vong::after{content:'';position:absolute;left:-360px;top:-360px;
+  width:720px;height:720px;border-radius:50%;border:1px solid rgba(201,160,44,.55);
+  box-shadow:0 0 34px rgba(201,160,44,.22) inset;opacity:0;animation:cg-nen-vong 8s ease-out infinite}
+.cg-nen__vong::after{border-color:rgba(46,125,70,.38);animation-delay:4s}
+@keyframes cg-nen-vong{0%{transform:scale(.12);opacity:0}
+  14%{opacity:.85}100%{transform:scale(1);opacity:0}}
+
+/* Tắt sạch khi máy yêu cầu giảm chuyển động */
+@media (prefers-reduced-motion:reduce){
+  .cg-nen::after,.cg-nen__a,.cg-nen__b,.cg-nen__hat{animation:none!important}
+  .cg-nen__tia,.cg-nen__vong{display:none}
+}
+
+/* Dòng phiên cầm đồ đã hủy trong popup CẦM ĐỒ (26/09/2026) */
+.cg-bang tbody tr.cg-huy{opacity:.55}
+.cg-bang tbody tr.cg-huy .mono b{text-decoration:line-through}
+/* Cột TỔNG của popup CẦM ĐỒ: đỏ khi tiệm CHI ra, xanh khi khách trả VÀO (GĐ chốt 26/09/2026) */
+.cg-so--ra{color:var(--do)}
+.cg-so--vao{color:var(--xanh)}
+.cg-tt{white-space:nowrap}      /* badge trạng thái/nghiệp vụ không bị bẻ đôi dòng */
+
+/* ════ THẺ THU GỌN — chờ quá 15 phút thì thẻ còn HAI DÒNG (GĐ chốt 26/09/2026) ════
+      dòng 1:  mã · dịch vụ ............... trạng thái · giờ
+      dòng 2:  NHÂN VIÊN ......... VIỆC CÒN LẠI · tổng tiền
+   Dòng 2 hiện TÊN NHÂN VIÊN chứ không phải tên khách (GĐ chốt 26/09/2026: việc tồn lâu thì cần biết
+   ai đang giữ). Ẩn khách, TM/CK và cặp "Nhận …/Thối …" vì thẻ đầy đủ đã hiện suốt 15 phút đầu; việc gói
+   trong span .cg-gd__viec ("Chưa xác nhận TM" · "Chờ CK" · "Thối …" · "Đưa khách …" · "Xong").
+   Bật/tắt bằng JS (veSong) chứ không vẽ lại thẻ, nên không nháy "vừa đổi". */
+.cg-gd__viec{display:none}
+.cg-gd--gon{display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 6px;padding-top:3px;padding-bottom:6px}
+.cg-gd--gon::after{content:'';flex-basis:100%;height:0;order:5}       /* ngắt xuống dòng 2 */
+.cg-gd--gon>span:empty{display:none}
+.cg-gd--gon .cg-gd__kh,.cg-gd--gon .cg-gd__tm,.cg-gd--gon .cg-gd__ck,
+.cg-gd--gon .cg-gd__nhan,.cg-gd--gon .cg-gd__do{display:none}
+.cg-gd--gon .cg-gd__viec{display:inline-block;order:7}                /* đặt SAU rule ẩn .cg-gd__do */
+.cg-gd--gon .cg-gd__ma{order:1}
+.cg-gd--gon .cg-gd__dv{order:2}
+.cg-gd--gon .cg-gd__tt{order:3;margin-left:auto}
+.cg-gd--gon time{order:4}
+.cg-gd--gon .cg-gd__nv{order:6;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  font-size:12px;color:var(--ink)}
+.cg-gd--gon .cg-gd__tong{order:8;font-size:13.5px}
+
+/* ── Popup thống kê VÀNG theo loại (GĐ chốt 27/09/2026) ── */
+.cg-top__nut--giua{margin-left:auto}
+.cg-vang-nhan{background:linear-gradient(180deg,#FBF4E2,var(--gold-100));letter-spacing:.08em;
+  font-size:11px;color:var(--gold-700);text-align:left}
+.cg-vang-tong td{border-top:2px solid var(--gold-500);background:#FFFBF0;font-weight:600}
+.cg-bang--nho + .cg-bang--nho{margin-top:10px}
+
+/* Thanh QUÉT nằm trong thẻ MÓN HÀNG (GĐ chốt 27/09/2026): bỏ nền kính riêng, ôm sát khung thẻ */
+.cg-the--sp .cg-lenh{margin:0 0 5px;padding:5px 6px;background:linear-gradient(180deg,#FFFDF6,#FBF6E9);
+  border-color:var(--gold-300,#E4C56A);box-shadow:none;backdrop-filter:none}
+.cg-the--sp .cg-lenh__o--ma{min-width:180px}
+
+/* ── Ô NGÀY trên header + nút ‹ › Hôm nay (GĐ chốt 27/09/2026) ── */
+.cg-top__ngay{display:flex;align-items:center;gap:3px}
+.cg-top__ngay input{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;
+  background:#fff;color:var(--ink)}
+.cg-top__ngay input:focus{outline:0;border-color:var(--gold-500);box-shadow:0 0 0 3px rgba(201,160,44,.18)}
+.cg-ngay-nut{font:inherit;font-size:12px;min-width:26px;padding:3px 7px;border:1px solid var(--line);border-radius:6px;
+  background:#fff;color:var(--gold-700);cursor:pointer;transition:.16s transform,.16s background}
+.cg-ngay-nut:hover{background:var(--gold-100);transform:translateY(-1px)}
+.cg-ngay-nut:disabled{opacity:.35;cursor:default;transform:none;background:#fff}
+.cg-ngay-nut--nay{font-weight:600}
+
+/* ── Lớp phủ popup bắt đầu DƯỚI header (JS đo --cg-top-h) → nút header vẫn bấm được khi popup mở ── */
+.cg-lop{top:var(--cg-top-h,0px)}
+.cg-hop{max-height:calc(100vh - var(--cg-top-h,0px) - 24px)}
+/* Dòng tổng theo nhóm tuổi 610 · 980 · 9999 trên popup Vàng thâu (27/09/2026) */
+.cg-chip--tuoi{align-items:center}
+.cg-chip--tuoi span{background:#fff;border-color:var(--gold-300,#E4C56A)}
+.cg-chip--tuoi b{color:var(--gold-700);margin-right:3px}
+/* Header popup Vàng thâu: 3 dòng Tổng thâu · Tổng đổi · TỔNG theo nhóm tuổi (27/09/2026) */
+.cg-tuoi{display:flex;flex-direction:column;gap:3px;margin-bottom:6px;font-size:12px}
+.cg-tuoi__dong{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px}
+.cg-tuoi__dong span{border:1px solid var(--gold-300,#E4C56A);background:#fff;border-radius:10px;padding:1px 9px;
+  font-variant-numeric:tabular-nums}
+.cg-tuoi__dong span b{color:var(--gold-700);margin-right:3px}
+.cg-tuoi__nhan{min-width:82px;color:var(--gold-700)}
+.cg-tuoi__dong--tong span{background:var(--gold-100);font-weight:700;border-color:var(--gold-500)}

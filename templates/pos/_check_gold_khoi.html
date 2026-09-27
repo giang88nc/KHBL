@@ -1,12 +1,14 @@
 {% load pos_extras %}{% comment %}
 KHỐI LÀM VIỆC CHECK GOLD V4 (23/09/2026):
-· TRÁI  = HÀNG ĐÃ LẤY RA KHỎI TỦ (quét lần 2 = trả về tủ). Mặc định lọc "Trong kho"; trạng thái đọc lại từ KK.
+· TRÁI  = thanh QUÉT + HÀNG ĐÃ LẤY RA KHỎI TỦ (quét lần 2 = trả về tủ). Mặc định lọc "Trong kho".
+  ⚠ Thanh quét nằm TRONG khối này (GĐ chốt 27/09/2026) nên mỗi lượt swap là một form MỚI: JS trong
+  check_gold.html phải uỷ quyền sự kiện qua document, đừng giữ tham chiếu tới #cg-quet / #cg-ma.
 · PHẢI  = DÒNG GIAO DỊCH (khj_bl.money_flow) kiểu bảng bình luận livestream — JS tự chèn/nháy, không tải lại cả bảng.
 · Panel HÓA ĐƠN hiện khi quét mã hóa đơn; có nút SỬA (ghi KK qua cổng an toàn).
+· Thông báo sau mỗi lượt QUÉT nằm NGAY TRÊN DÒNG tiêu đề MÓN HÀNG (GĐ chốt 26/09/2026), không còn băng tin
+  riêng ở đầu khối; dưới tiêu đề là dòng badge "nhân viên — số món" dựng bằng JS theo đúng bộ lọc đang bật.
 {% endcomment %}
 <div data-chu-ky="{{ chu_ky }}"></div>
-{% if tin %}<p class="cg-tin cg-tin--{{ muc|default:'ok' }}" role="status">{{ tin }}</p>{% endif %}
-{% if loi %}<p class="cg-tin cg-tin--loi" role="alert">✕ {{ loi }}</p>{% endif %}
 
 {% if hd %}
 <section class="cg-the cg-the--hd cg-vao">
@@ -39,13 +41,29 @@ KHỐI LÀM VIỆC CHECK GOLD V4 (23/09/2026):
 <div class="cg-doi">
   <section class="cg-the cg-the--sp">
     <h2><span class="cg-cham"></span>MÓN HÀNG <span class="cg-dem" id="cg-dem-sp">{{ rows|length }}</span>
+      {% if loi %}<span class="cg-tin cg-tin--dong cg-tin--loi" role="alert" title="{{ loi }}">✕ {{ loi }}</span>
+      {% elif tin %}<span class="cg-tin cg-tin--dong cg-tin--{{ muc|default:'ok' }}" role="status" title="{{ tin }}">{{ tin }}</span>{% endif %}
       <span class="cg-cong-cu">
         <input id="cg-tim" placeholder="Tìm mã hoặc tên…" autocomplete="off">
         <span class="cg-loc" data-cg-loc><button type="button" data-tt="I">Trong kho</button><button type="button" data-tt="S">Đã bán</button><button type="button" data-tt="O">Đã xuất</button><button type="button" data-tt="">Tất cả</button></span>
       </span></h2>
+    <form id="cg-quet" class="cg-lenh" hx-post="{% url 'pos:check_gold_quet' %}" hx-target="#cg-khoi"
+          hx-swap="innerHTML" hx-indicator="#cg-quet" hx-include="#cg-ngay">
+      {% csrf_token %}
+      <label class="cg-lenh__o"><span>Nhân viên</span>
+        <select name="nv" id="cg-nv">
+          <option value="">— Chưa chọn —</option>
+          {% for e in nhan_vien_ds %}<option value="{{ e.EmpName }}" {% if e.EmpName == nv %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+        </select></label>
+      <label class="cg-lenh__o cg-lenh__o--ma"><span>Quét mã sản phẩm hoặc mã hóa đơn</span>
+        <input name="ma" id="cg-ma" autocomplete="off" autofocus placeholder="SCAN MÃ…"><i class="cg-quet-tia"></i></label>
+      <button type="submit" class="cg-lenh__quet">QUÉT</button>
+      <button type="button" class="cg-lenh__lam-moi" id="cg-lam-moi" title="Tải lại">⟳</button>
+    </form>
+    <p class="cg-nvd" id="cg-nv-dem" hidden></p>
     {% if rows %}<div class="cg-cuon"><table class="cg-bang" id="cg-bang">
       <thead><tr><th>GIỜ</th><th>MÃ</th><th>VÀNG</th><th>TÊN SP</th><th class="cg-so">TL (chỉ)</th><th>NHÂN VIÊN</th><th>TRẠNG THÁI</th><th>NGÀY XUẤT · KHÁCH</th></tr></thead>
-      <tbody>{% for r in rows %}<tr data-tt="{{ r.tt }}" class="cg-vao" style="animation-delay:{{ forloop.counter0|add:1 }}0ms">
+      <tbody>{% for r in rows %}<tr data-tt="{{ r.tt }}" data-nv="{{ r.nv }}" class="cg-vao" style="animation-delay:{{ forloop.counter0|add:1 }}0ms">
         <td class="cg-mo">{{ r.quet_luc|date:"H:i" }}</td>
         <td class="mono"><b>{{ r.ma }}</b></td>
         <td>{{ r.vang|default:"—" }}</td>
@@ -53,9 +71,13 @@ KHỐI LÀM VIỆC CHECK GOLD V4 (23/09/2026):
         <td class="cg-so">{{ r.chi }}</td>
         <td class="cg-mo">{{ r.nv|default:"—" }}</td>
         <td><span class="cg-tt cg-tt--{{ r.tt|default:'x' }}">{{ r.tt_nhan }}</span></td>
-        <td class="cg-mo">{% if r.ngay_xuat %}{{ r.ngay_xuat|date:"d/m/Y" }}{% if r.khach %} · {{ r.khach }}{% endif %}{% else %}—{% endif %}</td>
+        {# chưa xuất (còn trong kho) thì ô này ghi GIỜ QUÉT lấy món ra khỏi tủ — GĐ chốt 26/09/2026 #}
+        <td class="cg-mo">{% if r.ngay_xuat %}{{ r.ngay_xuat|date:"d/m/Y" }}{% if r.khach %} · {{ r.khach }}{% endif %}
+          {% else %}{{ r.quet_luc|date:"d/m/Y H:i" }}{% endif %}</td>
       </tr>{% endfor %}</tbody>
-    </table></div>{% else %}<p class="cg-trong">Chưa quét món nào ra khỏi tủ trong ngày.</p>{% endif %}
+    </table></div>
+    <p class="cg-trong" id="cg-khong-khop" hidden>Không có món nào khớp bộ lọc đang chọn.</p>
+    {% else %}<p class="cg-trong">Chưa quét món nào ra khỏi tủ trong ngày.</p>{% endif %}
   </section>
 
   <section class="cg-the cg-the--gd">
