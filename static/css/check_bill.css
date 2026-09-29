@@ -127,3 +127,12 @@
 .cb-hop__nut button{font:inherit;font-size:12px;padding:5px 12px;border:1px solid #EAE4D6;background:#fff;border-radius:5px;cursor:pointer}
 .cb-hop__luu{background:#C9A02C;border-color:#8C6A1D;font-weight:600}
 .cb-sua{font:inherit;font-size:11px;margin-left:4px;padding:0 5px;border:1px solid #EAE4D6;background:#fff;border-radius:4px;cursor:pointer;color:#8C6A1D}
+
+/* DÒ CẦM ĐỒ (29/09/2026): nghiệp vụ mang màu chiều tiền — đỏ tiệm CHI ra · xanh khách trả VÀO */
+.cb-doi--cd{margin-top:8px}
+.cb-nv{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:9px;white-space:nowrap}
+.cb-nv--ra{background:#FCF1EF;color:#B3402A;border:1px solid #E7B7AC}
+.cb-nv--vao{background:#EAF5EE;color:#1F5C34;border:1px solid #B5D8C1}
+.cb-tien--ra{color:#B3402A}.cb-tien--vao{color:#2E7D46}
+/* Thẻ số liệu khi DÒ CẦM ĐỒ (29/09/2026): Chi ra đỏ · Thu vào xanh */
+.cb-kpi__o--ra b{color:#B3402A}.cb-kpi__o--vao b{color:#2E7D46}

@@ -153,3 +153,50 @@ class CkSuaMaTests(TestCase):
         with patch('apps.pmv.gateway.pmv_in_allocate') as alloc, self.assertRaises(CB.LoiKiem):
             CB.sua_ma_va_ghi_kk(self.kk(pay=1000000), 5, '26-09-23-000096', 'test')   # CK > PayAmount
         alloc.assert_not_called()
+
+
+class DoCamDoTests(TestCase):
+    """DÒ CẦM ĐỒ (29/09/2026): nút mới cạnh "Dò phiếu bán", khối riêng đọc khj_cd, không phụ thuộc máy KK."""
+
+    def test_hai_nut_va_khoi_cam_do(self):
+        from django.test import Client
+        gd = [{'gio': '14:39', 'ma': 'KH1', 'nghiep_vu': 'Cầm mới', 'ra_tien': True, 'nv': 'Liên', 'khach': 'Chị A',
+               'tong': Decimal(200), 'tien_mat': Decimal(200), 'ck': Decimal(0), 'lai': Decimal(0),
+               'doi_soat': 'Tiền mặt', 'doi_soat_lop': 'I', 'huy': False, 'thu_khach': None},
+              {'gio': '15:00', 'ma': 'KH2', 'nghiep_vu': 'Chuộc đồ', 'ra_tien': False, 'nv': 'Liên', 'khach': 'Anh B',
+               'tong': Decimal(300), 'tien_mat': Decimal(280), 'ck': Decimal(20), 'lai': Decimal(0),
+               'doi_soat': 'Tiền mặt', 'doi_soat_lop': 'I', 'huy': False, 'thu_khach': Decimal(290)}]
+        ck = [{'gio': '14:39', 'ma_ct': '260929007147', 'sku': 'KH1', 'nghiep_vu': 'Cầm mới', 'ra_tien': True,
+               'khach': 'Chị A', 'nv': 'Liên', 'ck': Decimal(0), 'nhan': Decimal(200), 'gio_bao': '14:39',
+               'khcd': '', 'trang_thai': 'ghi_tm', 'mo_ta': 'THANH TOAN TIEN VANG 007147'}]
+        tong = {'so': 1, 'chi': Decimal(200), 'thu': Decimal(0), 'tien_mat': Decimal(200), 'ck': Decimal(0),
+                'lai': Decimal(0), 'ck_so': 0, 'ck_tien': Decimal(0), 'ck_cho': 0, 'ck_la': 0, 'ck_ghi_tm': 1,
+                'thu_khach': Decimal(290), 'theo_nv': [('Cầm mới', 1), ('Chuộc đồ', 1)], 'ck_ngan_hang': Decimal(200)}
+        c = Client()
+        with patch('apps.pos.services.client', return_value=GiaKK([])),                 patch('apps.pos.check_bill.do_cam_do', return_value={'cd_gd': gd, 'cd_tong': tong, 'cd_ck': ck}):
+            h = c.get('/banle/bao-cao/check-bill/?d=2026-09-29').content.decode()
+            self.assertIn('Dò phiếu bán', h)                     # đổi tên nút cũ
+            self.assertIn('Dò cầm đồ', h)                        # nút mới
+            self.assertNotIn('GIAO DỊCH CẦM ĐỒ', h)              # tắt mặc định
+            h = c.get('/banle/bao-cao/check-bill/?d=2026-09-29&cd=1').content.decode()
+            self.assertIn('GIAO DỊCH CẦM ĐỒ', h)
+            self.assertIn('CK CẦM ĐỒ TRONG NGÀY', h)
+            self.assertIn('KHCD ghi tiền mặt', h)                # phiên CK thật nhưng KHCD ghi tiền mặt
+            self.assertIn('✕ Ẩn dò cầm đồ', h)
+            self.assertIn('THU KHÁCH', h)
+            self.assertIn('PHIÊN CẦM ĐỒ', h)                     # thẻ số liệu đổi sang sổ cầm đồ
+            self.assertNotIn('ĐÃ KIỂM', h)                       # thẻ phiếu bán ẩn khi đang dò cầm đồ
+            self.assertNotIn('CK PHIÊN', h)                      # cột đã bỏ
+            self.assertIn('cb-tien--ra', h)                      # ngân hàng chi ra tô đỏ
+            # hai chế độ loại trừ nhau: gửi cả hai cờ thì chỉ còn cầm đồ
+            h = c.get('/banle/bao-cao/check-bill/?d=2026-09-29&cd=1&do=1').content.decode()
+            self.assertIn('🔍 Dò phiếu bán', h)
+            self.assertIn('✕ Ẩn dò cầm đồ', h)
+
+    def test_so_cam_do_hong_khong_no_500(self):
+        """Máy kiểm dùng SQLite, không có khj_cd → khối báo lỗi tử tế, trang vẫn 200."""
+        from django.test import Client
+        with patch('apps.pos.services.client', return_value=GiaKK([])):
+            r = Client().get('/banle/bao-cao/check-bill/?d=2026-09-29&cd=1')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('Không đọc được sổ cầm đồ', r.content.decode())

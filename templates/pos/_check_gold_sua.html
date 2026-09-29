@@ -1,55 +1,128 @@
 {% load pos_extras %}{% comment %}
-POPUP SỬA HÓA ĐƠN (CHECK GOLD V4, 23/09/2026) — như V3 nhưng ghi qua cổng an toàn gateway.pmv_billsell_edit:
-khóa ghi PMV · kiểm trigger · chỉ 6 cột · ràng buộc TIỀN MẶT + CHUYỂN KHOẢN = TỔNG · đọc lại đối chiếu · audit.
+POPUP SỬA HÓA ĐƠN (CHECK GOLD V4) — sắp lại 29/09/2026 theo 3 khối, mọi lần ghi đi qua CỔNG AN TOÀN có sẵn:
+  ① KHÁCH & NHÂN VIÊN — khách · NV bán (gateway.pmv_billsell_edit) · NV hỗ trợ (sổ KHBL gold_bill.emp_sup_id);
+  ② THANH TOÁN — tiền mặt + chuyển khoản PHẢI bằng tổng (gõ ô này, ô kia tự tính; lệch thì khóa nút LƯU),
+     TK nhận + nội dung CK, tiền khách đưa → trả lại khách tự tính (pmv_invoice_update);
+  ③ THÔNG TIN ĐƠN (Desc3) — kênh · social · khách gửi · đơn cưới + ngày cưới · ghi chú (pmv_invoice_update,
+     đúng thuật toán mobile_invoice.changes: giữ nguyên các khóa Desc3 khác).
 {% endcomment %}
 <div class="cg-lop" onclick="if(event.target===this)this.remove()">
   <div class="cg-hop cg-hop--sua">
     {% if not hd %}<h3>SỬA HÓA ĐƠN<button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
       <p class="cg-tin cg-tin--loi">✕ {{ loi }}</p>
     {% else %}
-    <form hx-post="{% url 'pos:check_gold_sua_luu' hd.BillCode %}" hx-target="#cg-khoi" hx-swap="innerHTML">
+    <form id="cg-sua" hx-post="{% url 'pos:check_gold_sua_luu' hd.BillCode %}" hx-target="#cg-khoi" hx-swap="innerHTML">
       {% csrf_token %}
       <input type="hidden" name="d" value="{{ ngay|date:'Y-m-d' }}"><input type="hidden" name="nv" value="{{ nv }}">
       <input type="hidden" name="trn_id" value="{{ hd.TrnID }}">
       <h3>SỬA HÓA ĐƠN <b class="mono">{{ hd.BillCode }}</b>
-        <small>{{ hd.TrnDate|date:"d/m/Y" }} {{ hd.TrnTime|slice:":5" }} · tổng {{ hd.PayAmount|tien_tran }} ₫</small>
+        <small>{{ hd.TrnDate|date:"d/m/Y" }} {{ hd.TrnTime|slice:":5" }}</small>
         <button type="button" class="cg-hop__dong" onclick="document.getElementById('cg-modal').innerHTML=''">✕</button></h3>
       {% if loi %}<p class="cg-tin cg-tin--loi" role="alert">✕ {{ loi }}</p>{% endif %}
-      <div class="cg-luoi">
-        <label class="cg-o-nhap cg-o-nhap--rong"><span>Khách hàng</span>
-          <input id="cg-kh-tim" placeholder="Gõ tên, SĐT hoặc CCCD…" autocomplete="off"
-                 value="{{ hd.CustName }}{% if hd.Phone %} · {{ hd.Phone }}{% endif %}">
-          <input type="hidden" name="cust_id" id="cg-kh-id" value="{{ hd.CustID }}">
-          <div class="cg-goi-y" id="cg-kh-goi-y" hidden></div></label>
-        <label class="cg-o-nhap"><span>Nhân viên bán</span>
-          <select name="emp_id">
-            <option value="">— Không đổi —</option>
-            {% for e in nhan_vien_ds %}<option value="{{ e.EmpID }}" {% if e.EmpName == hd.EmpName %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
-          </select></label>
-        <label class="cg-o-nhap"><span>Tài khoản nhận CK</span>
-          <select name="desc4">
-            <option value="">— Không có —</option>
-            {% for b in bank_ds %}<option value="{{ b.NumberBank }}" {% if b.NumberBank|stringformat:"s" == hd.Desc4|stringformat:"s" %}selected{% endif %}>{{ b.BankName }} · {{ b.NumberBank }}</option>{% endfor %}
-          </select></label>
-        <label class="cg-o-nhap"><span>Ghi chú CK (Desc5)</span>
-          <input name="desc5" value="{{ hd.Desc5|default:'' }}" autocomplete="off"></label>
-        <label class="cg-o-nhap"><span>Tiền mặt</span>
-          <input name="cash_pay" id="cg-tm" class="cg-tien" inputmode="numeric" value="{{ hd.CashPay|tien_tran }}"></label>
-        <label class="cg-o-nhap"><span>Chuyển khoản</span>
-          <input name="card_pay" id="cg-ck" class="cg-tien" inputmode="numeric" value="{{ hd.CardPay|tien_tran }}"></label>
+
+      <div class="cg-sua3">
+        {# ① KHÁCH & NHÂN VIÊN #}
+        <fieldset class="cg-sua3__khoi">
+          <legend>Khách &amp; nhân viên</legend>
+          <label class="cg-o-nhap"><span>Khách hàng</span>
+            <input id="cg-kh-tim" placeholder="Gõ tên, SĐT hoặc CCCD…" autocomplete="off"
+                   value="{{ hd.CustName }}{% if hd.Phone %} · {{ hd.Phone }}{% endif %}">
+            <input type="hidden" name="cust_id" id="cg-kh-id" value="{{ hd.CustID }}">
+            <div class="cg-goi-y" id="cg-kh-goi-y" hidden></div></label>
+          <label class="cg-o-nhap"><span>Nhân viên bán</span>
+            <select name="emp_id">
+              {% for e in nhan_vien_ds %}<option value="{{ e.EmpID }}" {% if e.EmpID|stringformat:"s"|cut:" " == hd.EmpID|stringformat:"s"|cut:" " %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+            </select></label>
+          <label class="cg-o-nhap"><span>Nhân viên hỗ trợ</span>
+            <select name="emp_sup_id"{% if not hd.co_so_khbl %} disabled title="Hóa đơn lập trên PMV — không có trong sổ KHBL"{% endif %}>
+              <option value="">— Không có —</option>
+              {% for e in nhan_vien_ds %}<option value="{{ e.EmpID }}" {% if e.EmpID|stringformat:"s"|cut:" " == hd.emp_sup_id %}selected{% endif %}>{{ e.EmpName }}</option>{% endfor %}
+            </select>
+            {% if not hd.co_so_khbl %}<small class="cg-sua3__ghi">Hóa đơn lập trên PMV — chưa lưu được NV hỗ trợ.</small>{% endif %}</label>
+        </fieldset>
+
+        {# ② THANH TOÁN #}
+        <fieldset class="cg-sua3__khoi">
+          <legend>Thanh toán</legend>
+          <div class="cg-sua3__tong"><span>{% if hd.PayAmount < 0 %}Tiệm trả khách{% else %}Khách phải trả{% endif %}</span>
+            <b class="mono">{{ hd.pay_abs|tien_tran }}</b></div>
+          <div class="cg-sua3__hang">
+            <label class="cg-o-nhap"><span>Tiền mặt</span>
+              <input name="cash_pay" id="cg-tm" class="cg-tien" inputmode="numeric" value="{{ hd.CashPay|tien_tran }}"></label>
+            <label class="cg-o-nhap"><span>Chuyển khoản</span>
+              <input name="card_pay" id="cg-ck" class="cg-tien" inputmode="numeric" value="{{ hd.CardPay|tien_tran }}"></label>
+          </div>
+          <p class="cg-sua3__khop" id="cg-khop"></p>
+          <label class="cg-o-nhap"><span>Tài khoản nhận CK</span>
+            <select name="desc4">
+              <option value="">— Không có —</option>
+              {% for b in bank_ds %}<option value="{{ b.NumberBank }}" {% if b.NumberBank|stringformat:"s"|cut:" " == hd.Desc4|stringformat:"s"|cut:" " %}selected{% endif %}>{{ b.BankName }} · {{ b.NumberBank }}</option>{% endfor %}
+            </select></label>
+          <label class="cg-o-nhap"><span>Nội dung CK</span>
+            <input name="desc5" value="{{ hd.Desc5|default:'' }}" autocomplete="off"></label>
+          <div class="cg-sua3__hang" id="cg-tien-khach"{% if hd.PayAmount < 0 %} hidden{% endif %}>
+            <label class="cg-o-nhap"><span>Khách đưa (tiền mặt)</span>
+              <input name="tender" id="cg-dua" class="cg-tien" inputmode="numeric" value="{{ hd.TienKhachTraThuc|tien_tran }}"></label>
+            <label class="cg-o-nhap"><span>Trả lại khách</span>
+              <input id="cg-tra" class="cg-tien" value="{{ hd.TienTraLai|tien_tran }}" readonly tabindex="-1"></label>
+          </div>
+        </fieldset>
+
+        {# ③ THÔNG TIN ĐƠN (Desc3) — khóa cả khối (không gửi lên) khi Desc3 cũ không đọc được hoặc hóa đơn tiệm trả khách #}
+        <fieldset class="cg-sua3__khoi"{% if hd.d3.loi or hd.PayAmount < 0 %} disabled{% endif %}>
+          <legend>Thông tin đơn</legend>
+          {% if hd.d3.loi %}<p class="cg-tin cg-tin--loi">Desc3 cũ không phải dạng dữ liệu của app — phải sửa riêng, chưa ghi đè ở đây.</p>
+          {% elif hd.PayAmount < 0 %}<p class="cg-sua3__ghi">Hóa đơn tiệm trả khách — chưa sửa thông tin đơn ở đây.</p>{% endif %}
+          <div class="cg-o-nhap"><span>Kênh bán</span>
+            <div class="cg-sua3__chon">
+              <label><input type="radio" name="channel" value="store" {% if hd.d3.channel != 'online' %}checked{% endif %}> Tại tiệm</label>
+              <label><input type="radio" name="channel" value="online" {% if hd.d3.channel == 'online' %}checked{% endif %}> Online</label>
+            </div></div>
+          <div class="cg-o-nhap" id="cg-online"><span>Kênh online</span>
+            <div class="cg-sua3__chon">
+              {% for s in social_ds %}<label><input type="radio" name="social" value="{{ s }}" {% if hd.d3.social == s %}checked{% endif %}> {{ s }}</label>{% endfor %}
+              <label class="cg-sua3__gui"><input type="checkbox" name="customer_hold" value="1" {% if hd.d3.customer_hold %}checked{% endif %}> Khách gửi hàng tại tiệm</label>
+            </div></div>
+          <div class="cg-sua3__hang">
+            <div class="cg-o-nhap"><span>Đơn cưới</span>
+              <div class="cg-sua3__chon"><label><input type="checkbox" name="is_wedding" value="1" id="cg-cuoi" {% if hd.d3.wedding %}checked{% endif %}> Có</label></div></div>
+            <label class="cg-o-nhap" id="cg-ngay-cuoi"><span>Ngày cưới</span>
+              <input type="date" name="wedding" value="{{ hd.d3.NgayCuoi }}"></label>
+          </div>
+          <label class="cg-o-nhap"><span>Ghi chú</span>
+            <textarea name="note" rows="2" maxlength="2000">{{ hd.d3.note }}</textarea></label>
+        </fieldset>
       </div>
-      <p class="cg-hop__ghi">Tiền mặt + chuyển khoản phải bằng <b id="cg-tong-chu">{{ hd.PayAmount|tien_tran }}</b> ₫.
-        Gõ một ô thì ô kia tự tính. Lưu là ghi thẳng lên máy KK (có ghi nhật ký).</p>
+
       <div class="cg-hop__nut"><button type="button" class="cg-nut" onclick="document.getElementById('cg-modal').innerHTML=''">Đóng</button>
-        <button type="submit" class="cg-nut cg-nut--vang">LƯU LÊN KK</button></div>
+        <button type="submit" class="cg-nut cg-nut--vang" id="cg-luu">LƯU LÊN KK</button></div>
     </form>
     <script>
     (function(){
-      var tong={{ hd.PayAmount|floatformat:"0" }}, tm=document.getElementById('cg-tm'), ck=document.getElementById('cg-ck');
-      function so(el){ return Number((el.value||'').replace(/\D/g,''))||0; }
+      var tong={{ hd.PayAmount|floatformat:"0" }}, f=document.getElementById('cg-sua');
+      var tm=document.getElementById('cg-tm'), ck=document.getElementById('cg-ck'), khop=document.getElementById('cg-khop');
+      var dua=document.getElementById('cg-dua'), tra=document.getElementById('cg-tra'), luu=document.getElementById('cg-luu');
+      function so(el){ return Number((el.value||'').replace(/[^0-9]/g,''))||0; }
       function ve(el,v){ el.value=Math.max(0,Math.round(v)).toLocaleString('vi-VN'); }
-      tm.addEventListener('input',function(){ ve(ck,tong-so(tm)); });
-      ck.addEventListener('input',function(){ ve(tm,tong-so(ck)); });
+      // Tiền mặt + chuyển khoản PHẢI bằng tổng: lệch thì báo đỏ và khóa nút LƯU
+      function kiem(){
+        var lech=so(tm)+so(ck)-Math.abs(tong);
+        khop.className='cg-sua3__khop '+(lech?'cg-sua3__khop--lech':'cg-sua3__khop--ok');
+        khop.textContent=lech?('⚠ Tiền mặt + CK '+(lech>0?'dư ':'thiếu ')+Math.abs(lech).toLocaleString('vi-VN')+' so với tổng'):'✓ Tiền mặt + CK = tổng hóa đơn';
+        luu.disabled=!!lech;
+        if(tong>=0) document.getElementById('cg-tien-khach').hidden=so(tm)===0;
+        ve(tra,Math.max(0,so(dua)-so(tm)));
+      }
+      tm.addEventListener('input',function(){ ve(tm,so(tm)); ve(ck,Math.abs(tong)-so(tm)); kiem(); });
+      ck.addEventListener('input',function(){ ve(ck,so(ck)); ve(tm,Math.abs(tong)-so(ck)); kiem(); });
+      dua.addEventListener('input',function(){ ve(dua,so(dua)); kiem(); });
+      // Online mới có social + khách gửi; Đơn cưới mới có ngày cưới
+      function hien(){
+        var online=(f.querySelector('input[name=channel]:checked')||{}).value==='online';
+        document.getElementById('cg-online').hidden=!online;
+        document.getElementById('cg-ngay-cuoi').hidden=!document.getElementById('cg-cuoi').checked;
+      }
+      f.addEventListener('change',hien); hien(); kiem();
       // gợi ý khách hàng (>= 2 ký tự)
       var o=document.getElementById('cg-kh-tim'), hop=document.getElementById('cg-kh-goi-y'), id=document.getElementById('cg-kh-id'), hen;
       o.addEventListener('input',function(){

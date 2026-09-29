@@ -71,7 +71,7 @@ body{margin:0;background:var(--nen);color:var(--ink);font-family:'Be Vietnam Pro
 .cg-loc button.is-on{background:var(--gold-100);border-color:var(--gold-500);color:var(--gold-700);font-weight:600}
 
 /* bảng */
-.cg-cuon{overflow:auto;max-height:60vh}
+.cg-cuon{overflow:auto;max-height:77vh}
 .cg-cuon--cao{max-height:70vh}
 .cg-bang{width:100%;border-collapse:collapse;font-size:12.5px}
 .cg-bang thead th{position:sticky;top:0;background:var(--gold-100);color:var(--gold-700);text-align:left;
@@ -511,3 +511,53 @@ body{background:transparent}
 .cg-tuoi__dong span b{color:var(--gold-700);margin-right:3px}
 .cg-tuoi__nhan{min-width:82px;color:var(--gold-700)}
 .cg-tuoi__dong--tong span{background:var(--gold-100);font-weight:700;border-color:var(--gold-500)}
+
+/* ════ PHIẾU BÁN vừa quét: 3 cột Hóa đơn · Nhân viên + tiền · Sản phẩm (GĐ chốt 29/09/2026) ════ */
+.cg-hd3{display:grid;grid-template-columns:minmax(200px,.9fr) minmax(230px,1fr) minmax(300px,1.6fr);gap:8px;margin-top:4px}
+@media (max-width:1000px){.cg-hd3{grid-template-columns:1fr}}
+.cg-hd3__cot{border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:linear-gradient(180deg,#fff,#FFFCF4)}
+.cg-hd3__cot h3{margin:0 0 5px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-700);
+  padding-bottom:3px;border-bottom:1px solid var(--gold-100)}
+.cg-hd3__ma{margin:0 0 4px;font-size:17px;font-weight:800;letter-spacing:.04em;color:var(--ink)}
+.cg-hd3__dl,.cg-hd3__tien{margin:0;display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+.cg-hd3__dl div,.cg-hd3__tien div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.cg-hd3__dl dt,.cg-hd3__tien dt{color:var(--mo);margin:0;white-space:nowrap}
+.cg-hd3__dl dd,.cg-hd3__tien dd{margin:0;text-align:right}
+.cg-hd3__tien{margin-top:6px;padding-top:5px;border-top:1px dashed var(--line)}
+.cg-hd3__tien dd small{color:var(--mo);font-size:10.5px}
+.cg-hd3__tong{margin:3px 0;padding:3px 6px;border-radius:6px;background:var(--gold-100)}
+.cg-hd3__tong dt{color:var(--gold-700)!important;font-weight:700}
+.cg-hd3__tong dd{font-size:15px;font-weight:800;color:var(--gold-700)}
+.cg-hd3__do dt,.cg-hd3__do dd{color:var(--do)!important;font-weight:700}
+.cg-hd3__nhom{margin:6px 0 2px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--gold-700);text-transform:uppercase}
+.cg-hd3__nhom:first-of-type{margin-top:0}
+.cg-bang--hd{margin:0}
+.cg-bang--hd td{padding:3px 4px}
+.cg-bang--hd td small{display:block;font-size:10.5px;color:var(--mo);font-weight:400}
+.cg-the--hd-huy .cg-hd3{opacity:.6}
+/* nhóm con trong cột PHIẾU BÁN + nhãn phương thức thanh toán (29/09/2026) */
+.cg-hd3__cot .cg-hd3__nhom{margin:7px 0 2px;padding-top:4px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:6px}
+.cg-hd3__pt{font-size:10.5px;letter-spacing:0;text-transform:none;padding:0 8px;border-radius:9px;
+  background:var(--gold-100);border:1px solid var(--gold-300,#E4C56A);color:var(--gold-700)}
+
+/* ════ POPUP SỬA HÓA ĐƠN — 3 khối Khách & NV · Thanh toán · Thông tin đơn (29/09/2026) ════ */
+.cg-hop--sua{width:min(1040px,96vw)}
+.cg-sua3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:900px){.cg-sua3{grid-template-columns:1fr}}
+.cg-sua3__khoi{margin:0;padding:6px 9px 8px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:6px;
+  background:linear-gradient(180deg,#fff,#FFFCF4);min-width:0}
+.cg-sua3__khoi legend{padding:0 6px;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-700)}
+.cg-sua3__khoi[disabled]{opacity:.55}
+.cg-sua3__hang{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cg-sua3__hang[hidden],.cg-o-nhap[hidden]{display:none}
+.cg-sua3__tong{display:flex;justify-content:space-between;align-items:baseline;padding:4px 8px;border-radius:6px;background:var(--gold-100)}
+.cg-sua3__tong span{font-size:11.5px;font-weight:700;color:var(--gold-700)}
+.cg-sua3__tong b{font-size:16px;color:var(--gold-700)}
+.cg-sua3__khop{margin:-2px 0 0;font-size:11.5px;font-weight:600}
+.cg-sua3__khop--ok{color:var(--xanh)}.cg-sua3__khop--lech{color:var(--do)}
+.cg-sua3__chon{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--ink)}
+.cg-sua3__chon label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.cg-sua3__gui{flex-basis:100%}
+.cg-sua3__ghi{font-size:11px;color:var(--mo)}
+.cg-o-nhap textarea{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;resize:vertical}
+#cg-luu:disabled{opacity:.45;cursor:not-allowed}

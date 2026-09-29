@@ -10,31 +10,81 @@ KHỐI LÀM VIỆC CHECK GOLD V4 (23/09/2026):
 {% endcomment %}
 <div data-chu-ky="{{ chu_ky }}"></div>
 
-{% if hd %}
-<section class="cg-the cg-the--hd cg-vao">
-  <h2><span class="cg-cham"></span>HÓA ĐƠN {{ hd.BillCode }}
+{% if hd %}{# PHIẾU BÁN vừa quét — 3 cột (GĐ chốt 29/09/2026): HÓA ĐƠN · NHÂN VIÊN + TIỀN · SẢN PHẨM #}
+<section class="cg-the cg-the--hd cg-vao{% if hd.da_huy %} cg-the--hd-huy{% endif %}">
+  <h2><span class="cg-cham"></span>PHIẾU BÁN
     <span class="cg-nhan {% if hd.da_huy %}cg-nhan--d{% endif %}">{% if hd.da_huy %}Đã hủy{% else %}{{ hd.trang_thai }}{% endif %}</span>
-    <small>{{ hd.TrnDate|date:"d/m/Y" }} {{ hd.TrnTime|slice:":5" }} · NV {{ hd.EmpName|default:"—" }}</small>
     <span class="cg-hd-nut">
       {% if not hd.da_huy %}<button type="button" class="cg-nut cg-nut--vang"
         hx-get="{% url 'pos:check_gold_sua' hd.BillCode %}?d={{ ngay|date:'Y-m-d' }}&nv={{ nv|urlencode }}"
         hx-target="#cg-modal">✎ Sửa hóa đơn</button>{% endif %}
       <button type="button" class="cg-nut" hx-get="{% url 'pos:check_gold' %}?d={{ ngay|date:'Y-m-d' }}&nv={{ nv|urlencode }}"
         hx-target="#cg-khoi">✕ Đóng</button></span></h2>
-  <dl class="cg-hd-tt">
-    <div><dt>Khách</dt><dd>{{ hd.CustName|default:"Khách lẻ" }}</dd></div>
-    <div><dt>ĐT · CCCD</dt><dd class="mono">{{ hd.Phone|default:"—" }} · {{ hd.CMND|default:"—" }}</dd></div>
-    <div><dt>Tổng thanh toán</dt><dd class="mono"><b>{{ hd.PayAmount|tien_tran }}</b></dd></div>
-    <div><dt>Tiền mặt</dt><dd class="mono">{{ hd.CashPay|tien_tran }}</dd></div>
-    <div><dt>Chuyển khoản</dt><dd class="mono">{{ hd.CardPay|tien_tran }}{% if hd.Desc4 %} · {{ hd.Desc4 }}{% endif %}</dd></div>
-    <div><dt>Vàng mới · vàng cũ</dt><dd class="mono">{{ hd.SellTotalAmount|tien_tran }} · {{ hd.BuyTotalAmount|tien_tran }}</dd></div>
-  </dl>
-  {% if hd.ban %}<table class="cg-bang cg-bang--nho"><thead><tr><th>HÀNG BÁN RA</th><th>MÃ</th><th class="cg-so">TL (chỉ)</th><th class="cg-so">CÔNG</th><th class="cg-so">THÀNH TIỀN</th></tr></thead>
-    <tbody>{% for i in hd.ban %}<tr><td>{{ i.ProductDesc|default:"—" }}</td><td class="mono">{{ i.ProductCode }}</td>
-      <td class="cg-so">{{ i.chi }}</td><td class="cg-so">{{ i.TaskPrice|tien_tran }}</td><td class="cg-so">{{ i.SellAmount|tien_tran }}</td></tr>{% endfor %}</tbody></table>{% endif %}
-  {% if hd.thu %}<table class="cg-bang cg-bang--nho"><thead><tr><th>HÀNG THU VÀO</th><th class="cg-so">TL (chỉ)</th><th class="cg-so">ĐƠN GIÁ</th><th class="cg-so">THÀNH TIỀN</th></tr></thead>
-    <tbody>{% for i in hd.thu %}<tr><td>{{ i.GoldCode|default:"—" }}</td><td class="cg-so">{{ i.chi }}</td>
-      <td class="cg-so">{{ i.BuyRate|tien_tran }}</td><td class="cg-so">{{ i.BuyAmount|tien_tran }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+
+  <div class="cg-hd3">
+    {# ① HÓA ĐƠN = thông tin hóa đơn + khách + nhân viên (GĐ chốt 29/09/2026) #}
+    <div class="cg-hd3__cot">
+      <h3>Hóa đơn</h3>
+      <p class="cg-hd3__ma mono">{{ hd.BillCode }}</p>
+      <dl class="cg-hd3__dl">
+        <div><dt>Ngày giờ</dt><dd>{{ hd.TrnDate|date:"d/m/Y" }} · {{ hd.TrnTime|slice:":5" }}</dd></div>
+        {% for nhan, gia_tri in hd.them %}<div><dt>{{ nhan }}</dt><dd>{{ gia_tri }}</dd></div>{% endfor %}
+      </dl>
+      <p class="cg-hd3__nhom">Khách hàng</p>
+      <dl class="cg-hd3__dl">
+        <div><dt>Tên</dt><dd><b>{{ hd.CustName|default:"Khách lẻ" }}</b></dd></div>
+        <div><dt>Điện thoại</dt><dd class="mono">{{ hd.Phone|default:"—" }}</dd></div>
+        {% if hd.CMND %}<div><dt>CCCD</dt><dd class="mono">{{ hd.CMND }}</dd></div>{% endif %}
+      </dl>
+      <p class="cg-hd3__nhom">Nhân viên</p>
+      <dl class="cg-hd3__dl">
+        <div><dt>NV bán</dt><dd><b>{{ hd.EmpName|default:"—" }}</b></dd></div>
+        <div><dt>NV hỗ trợ</dt><dd>{{ hd.nv_ho_tro|default:"—" }}</dd></div>
+      </dl>
+    </div>
+
+    {# ② THANH TOÁN = số tiền + phương thức + tiền nhận / trả khách #}
+    <div class="cg-hd3__cot">
+      <h3>Thanh toán</h3>
+      <dl class="cg-hd3__dl">
+        <div><dt>Vàng mới</dt><dd class="mono">{{ hd.SellTotalAmount|tien_tran }}</dd></div>
+        <div><dt>Vàng cũ</dt><dd class="mono">− {{ hd.BuyTotalAmount|tien_tran }}</dd></div>
+        {% if hd.Discount %}<div><dt>Giảm giá</dt><dd class="mono">− {{ hd.Discount|tien_tran }}</dd></div>{% endif %}
+        {% if hd.TaskPriceAdd %}<div><dt>Công thêm</dt><dd class="mono">+ {{ hd.TaskPriceAdd|tien_tran }}</dd></div>{% endif %}
+        <div class="cg-hd3__tong"><dt>{% if hd.PayAmount < 0 %}Tiệm trả khách{% else %}Khách phải trả{% endif %}</dt>
+          <dd class="mono">{{ hd.pay_abs|tien_tran }}</dd></div>
+      </dl>
+      <p class="cg-hd3__nhom">Phương thức <span class="cg-hd3__pt">{{ hd.phuong_thuc }}</span></p>
+      <dl class="cg-hd3__dl">
+        <div><dt>Tiền mặt</dt><dd class="mono">{{ hd.CashPay|tien_tran }}</dd></div>
+        <div><dt>Chuyển khoản</dt><dd class="mono">{{ hd.CardPay|tien_tran }}{% if hd.Desc4 %}<small> · {{ hd.Desc4 }}</small>{% endif %}</dd></div>
+      </dl>
+      {% if hd.CashPay or hd.TienKhachTraThuc or hd.TienTraLai %}<p class="cg-hd3__nhom">Tiền khách</p>
+      <dl class="cg-hd3__dl">
+        <div><dt>Nhận của khách</dt><dd class="mono">{{ hd.TienKhachTraThuc|tien_tran }}</dd></div>
+        <div{% if hd.TienTraLai %} class="cg-hd3__do"{% endif %}><dt>Trả lại khách</dt><dd class="mono">{{ hd.TienTraLai|tien_tran }}</dd></div>
+      </dl>{% endif %}
+    </div>
+
+    {# ③ SẢN PHẨM #}
+    <div class="cg-hd3__cot cg-hd3__cot--sp">
+      <h3>Sản phẩm</h3>
+      {% if hd.ban %}<p class="cg-hd3__nhom">Bán ra · {{ hd.ban|length }} món · {{ hd.tl_ban|floatformat:"2" }} chỉ</p>
+      <table class="cg-bang cg-bang--hd"><tbody>{% for i in hd.ban %}<tr>
+        <td><b>{{ i.ProductDesc|default:"—" }}</b><small class="mono">{{ i.ProductCode }} · {{ i.GoldCode }}</small></td>
+        <td class="cg-so">{{ i.chi|floatformat:"2" }}<small>chỉ</small></td>
+        <td class="cg-so"><b>{{ i.SellAmount|tien_tran }}</b>{% if i.TaskPrice %}<small>công {{ i.TaskPrice|tien_tran }}</small>{% endif %}</td>
+      </tr>{% endfor %}</tbody></table>{% endif %}
+      {% for nhom, ds in hd_nhom_doi %}{% if ds %}
+      <p class="cg-hd3__nhom">{{ nhom }} · {{ ds|length }} dòng</p>
+      <table class="cg-bang cg-bang--hd"><tbody>{% for i in ds %}<tr>
+        <td><b>{{ i.GoldDesc|default:i.GoldCode }}</b><small>{{ i.chi_vang|floatformat:"2" }} vàng{% if i.chi_hot %} + {{ i.chi_hot|floatformat:"2" }} hột{% endif %} · giá {{ i.BuyRate|tien_tran }}</small></td>
+        <td class="cg-so">{{ i.chi|floatformat:"2" }}<small>chỉ</small></td>
+        <td class="cg-so"><b>{{ i.BuyAmount|tien_tran }}</b></td>
+      </tr>{% endfor %}</tbody></table>{% endif %}{% endfor %}
+      {% if not hd.ban and not hd.thu %}<p class="cg-trong">Hóa đơn không có dòng hàng.</p>{% endif %}
+    </div>
+  </div>
 </section>
 {% endif %}
 

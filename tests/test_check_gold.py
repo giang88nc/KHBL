@@ -539,6 +539,44 @@ class CheckGoldTests(TestCase):
         self.assertEqual(ds, {'P1': 'Cầm đồ · Cầm mới', 'P2': 'Cầm đồ · Cầm thêm',
                               'P3': 'Cầm đồ · Gia hạn', 'P4': 'Cầm đồ · Chuộc đồ'})
 
+    def test_desc3_thong_tin_them(self):
+        """Desc3 (JSON app ghi) hiện thành các dòng thông tin thêm, chỉ mục có nội dung (29/09/2026)."""
+        d = ('{"channel":"store","social":null,"customer_hold":false,"wedding":true,"wedding_quantity":"4",'
+             '"wedding_bill_total":"39540000.000","type":["Đơn cưới"],"NgayCuoi":"2026-11-11","note":""}')
+        self.assertEqual(G._desc3(d), [('Kênh', 'Tại tiệm'), ('Loại đơn', 'Đơn cưới'), ('Ngày cưới', '11/11/2026'),
+                                       ('Số món cưới', '4'), ('Tổng đơn cưới', '39.540.000 ₫')])
+        self.assertEqual(G._desc3('{"channel":"online","social":"Zalo","customer_hold":true,"note":"giao chiều"}'),
+                         [('Kênh', 'Online · Zalo'), ('Khách gửi hàng', 'Đang gửi tại tiệm'), ('Ghi chú', 'giao chiều')])
+        self.assertEqual(G._desc3('khách quen'), [('Ghi chú', 'khách quen')])
+        self.assertEqual(G._desc3(None), [])
+
+    def test_phieu_ban_quet_hien_3_cot(self):
+        """GĐ chốt 29/09/2026: phiếu bán vừa quét chia 3 cột — Hóa đơn · Nhân viên + tiền · Sản phẩm."""
+        hd = {'TrnID': 'T1', 'BillCode': '26-09-29-000100', 'TrnDate': dt.date(2026, 9, 29), 'TrnTime': '10:05:00',
+              'CustName': 'Chị Hoa', 'Phone': '0909', 'CMND': '', 'EmpName': 'Lý Thới', 'nv_ho_tro': 'Bích Tuyền',
+              'SellTotalAmount': Decimal(10000), 'BuyTotalAmount': Decimal(4000), 'Discount': Decimal(0),
+              'TaskPriceAdd': Decimal(0), 'PayAmount': Decimal(6000), 'pay_abs': Decimal(6000),
+              'CashPay': Decimal(1000), 'CardPay': Decimal(5000), 'Desc4': '', 'TienKhachTraThuc': Decimal(2000),
+              'TienTraLai': Decimal(1000), 'da_huy': False, 'trang_thai': 'Hoàn thành', 'tl_ban': 1.0,
+              'ban': [{'ProductDesc': 'Nhẫn 1 chỉ', 'ProductCode': '9N6001', 'GoldCode': 'N9999', 'chi': 1.0,
+                       'TaskPrice': Decimal(0), 'SellAmount': Decimal(10000)}],
+              'thu': [1, 2],
+              'doi_ngang': [{'GoldDesc': 'Dẻ 99.99', 'GoldCode': 'D9999', 'chi': 0.2, 'chi_vang': 0.2, 'chi_hot': 0,
+                             'BuyRate': Decimal(14000), 'BuyAmount': Decimal(2800)}],
+              'doi_thau': [{'GoldDesc': 'DẺ 18K', 'GoldCode': 'D18K', 'chi': 0.2, 'chi_vang': 0.15, 'chi_hot': 0.05,
+                            'BuyRate': Decimal(8100), 'BuyAmount': Decimal(1200)}]}
+        with patch('apps.pos.check_gold.hoa_don', return_value=hd), patch('apps.pos.services.client', return_value=kk()):
+            h = self.client.get('/banle/bao-cao/check-gold/hd/26-09-29-000100/?d=2026-09-29', HTTP_HOST='127.0.0.1',
+                                HTTP_HX_REQUEST='true').content.decode()
+        hd['phuong_thuc'] = 'Tiền mặt + CK'
+        with patch('apps.pos.check_gold.hoa_don', return_value=hd), patch('apps.pos.services.client', return_value=kk()):
+            h = self.client.get('/banle/bao-cao/check-gold/hd/26-09-29-000100/?d=2026-09-29', HTTP_HOST='127.0.0.1',
+                                HTTP_HX_REQUEST='true').content.decode()
+        for chu in ('PHIẾU BÁN', 'Hóa đơn', 'Khách hàng', 'Nhân viên', 'Thanh toán', 'Phương thức', 'Tiền mặt + CK',
+                    'Tiền khách', 'Sản phẩm', 'Bích Tuyền', 'Nhận của khách',
+                    'Trả lại khách', 'Đổi ngang vàng', 'Đổi thâu vào', 'Nhẫn 1 chỉ', 'Khách phải trả'):
+            self.assertIn(chu, h, chu)
+
     def test_trang_khong_can_dang_nhap_va_khong_ghi_kk(self):
         with patch('apps.pos.services.client', return_value=kk()):
             r = self.client.get('/banle/bao-cao/check-gold/', HTTP_HOST='127.0.0.1')
@@ -585,6 +623,57 @@ class CheckGoldTests(TestCase):
         r = self.client.get('/banle/bao-cao/check-gold/ds/cam/', HTTP_HOST='127.0.0.1')
         self.assertEqual(r.status_code, 200)
         self.assertIn('CẦM ĐỒ', r.content.decode())
+
+    def test_sua_hoa_don_desc3_tien_khach_va_nv_ho_tro(self):
+        """GĐ chốt 29/09/2026: form SỬA ghi thêm Desc3 + tiền khách (cổng pmv_invoice_update, đúng thuật toán
+        mobile_invoice) và NV hỗ trợ (sổ KHBL); ô tiền dạng 39.540.000 đọc đúng; kiểm hết rồi mới ghi."""
+        from apps.pos.models import GoldBill
+        hd = {'TrnID': 'TRB9', 'BillCode': '26-09-29-000009', 'PayAmount': Decimal(1000000), 'CashPay': Decimal(1000000),
+              'CardPay': Decimal(0), 'CustID': 'CU1', 'EmpID': 'E1', 'Desc4': '', 'Desc5': '',
+              'emp_sup_id': '', 'co_so_khbl': True}
+        goc = {'TrnID': 'TRB9', 'BillCode': '26-09-29-000009', 'CustID': 'CU1', 'EmpID': 'E1', 'Status': 'C',
+               'CashPay': Decimal(1000000), 'CardPay': Decimal(0), 'PayAmount': Decimal(1000000), 'IsDel': '0',
+               'TienKhachTraThuc': Decimal(0), 'TienTraLai': Decimal(0),
+               'Desc3': '{"channel":"store","wedding":false,"type":[],"NgayCuoi":null,"note":"","customer_pickups":[1]}'}
+        posted = {'cash_pay': '400.000', 'card_pay': '600.000', 'cust_id': 'CU1', 'emp_id': 'E1', 'desc4': '',
+                  'desc5': '', 'emp_sup_id': 'E2', 'channel': 'store', 'is_wedding': '1', 'wedding': '2026-11-11',
+                  'note': 'giao chiều', 'tender': '500.000'}
+        with patch('apps.pos.check_gold.hoa_don', return_value=hd),                 patch('apps.pos.mobile_invoice.load_retail', return_value=goc),                 patch('apps.pos.mobile_invoice.retail_quantity', return_value=3),                 patch('apps.pmv.gateway.pmv_billsell_edit') as ghi_tien,                 patch('apps.pmv.gateway.pmv_invoice_update') as ghi_d3,                 patch.object(GoldBill.all_objects, 'filter') as loc:
+            tin = G.sua_hoa_don(None, 'TRB9', hd['BillCode'], posted)
+        self.assertIn('thông tin đơn', tin)
+        self.assertIn('NV hỗ trợ', tin)
+        self.assertEqual(ghi_tien.call_args[0][1], {'CashPay': Decimal(400000), 'CardPay': Decimal(600000)})
+        gui = ghi_d3.call_args[0][4]                                      # đúng bộ khóa mobile_invoice
+        self.assertEqual((gui['channel'], gui['is_wedding'], gui['wedding'], gui['tender']),
+                         ('store', '1', '2026-11-11', '500000'))
+        loc.return_value.update.assert_called_once_with(emp_sup_id='E2')
+
+        # lệch tổng → báo lỗi, KHÔNG ghi gì
+        with patch('apps.pos.check_gold.hoa_don', return_value=hd),                 patch('apps.pmv.gateway.pmv_billsell_edit') as ghi_tien,                 patch('apps.pmv.gateway.pmv_invoice_update') as ghi_d3:
+            with self.assertRaises(G.LoiQuet):
+                G.sua_hoa_don(None, 'TRB9', hd['BillCode'], dict(posted, card_pay='500.000'))
+        ghi_tien.assert_not_called(); ghi_d3.assert_not_called()
+
+    def test_form_sua_giu_tk_va_nv_dang_ghi(self):
+        """TK nhận CK / NV bán / NV hỗ trợ đang ghi trên hóa đơn mà không còn trong danh sách đang bật vẫn phải có
+        trong ô chọn — không thì bấm LƯU là âm thầm xóa hoặc đổi sang người khác (thực đo 29/09/2026)."""
+        may = SimpleNamespace(query=lambda sql, params=(): (
+            [{'NumberBank': '111', 'AccName': 'A', 'BankName': 'ACB'}] if 'I_BankCard' in sql
+            else [{'EmpID': 'E1', 'EmpName': 'Liên'}]))
+        hd = {'Desc4': '50361307', 'EmpID': 'E9', 'EmpName': 'Hạnh', 'emp_sup_id': 'E1', 'nv_ho_tro': 'Liên'}
+        self.assertEqual([b['NumberBank'] for b in G._ds_tk(may, hd)], ['50361307', '111'])
+        self.assertEqual([e['EmpID'] for e in G._ds_nv(may, hd)], ['E9', 'E1'])       # E1 có sẵn, không nhân đôi
+        self.assertEqual(G._ds_nv(may, hd)[0]['EmpName'], 'Hạnh (đã nghỉ)')
+        self.assertEqual([b['NumberBank'] for b in G._ds_tk(may, {'Desc4': '111'})], ['111'])
+
+    def test_moi_view_check_gold_khong_can_dang_nhap(self):
+        """Trang đứng riêng, KHÔNG đăng nhập: chèn hàm mới ngay trên một view từng làm TRÔI decorator
+        (@login_not_required) sang hàm mới — 2 lần trong tháng 9/2026. Soi thẳng cờ trên từng view."""
+        for ten in ('trang', 'quet_view', 'go_view', 'theo_doi', 'sua_form', 'sua_luu', 'tim_khach',
+                    'hoa_don_view', 'manifest', 'popup'):
+            self.assertFalse(getattr(getattr(G, ten), 'login_required', True), ten)
+        for ten in ('_ds_tk', '_ds_nv', '_the_json', 'giao_dich'):
+            self.assertFalse(hasattr(getattr(G, ten), 'login_required'), ten + ' không phải view')
 
     def test_sua_hoa_don_rang_buoc_tien_va_goi_dung_cong(self):
         hd = {'TrnID': 'TRB1', 'BillCode': '26-09-23-000009', 'PayAmount': Decimal(1000), 'CashPay': Decimal(1000),

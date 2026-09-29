@@ -418,8 +418,17 @@ def giao_dich(ngay, tu_id=0):
 
 
 def sua_hoa_don(c, trn_id, bill_code, posted):
-    """Sửa hóa đơn bán trên KK (như V3) — nhưng qua cổng an toàn gateway.pmv_billsell_edit."""
+    """Sửa hóa đơn bán trên KK — mọi lần ghi đều đi qua CỔNG AN TOÀN có sẵn, không mở đường ghi mới:
+
+      ① khách · NV bán · TK nhận CK · nội dung CK · tách TIỀN MẶT / CHUYỂN KHOẢN → gateway.pmv_billsell_edit
+         (ràng buộc CashPay + CardPay = PayAmount, không âm, khóa ghi, kiểm trigger, đọc lại, audit);
+      ② THÔNG TIN ĐƠN Desc3 (kênh · social · khách gửi · đơn cưới + ngày cưới · ghi chú) + TIỀN KHÁCH ĐƯA →
+         gateway.pmv_invoice_update — ĐÚNG thuật toán mobile_invoice.changes (GĐ chốt 29/09/2026): giữ nguyên
+         các khóa Desc3 khác (lịch sử khách lấy hàng…), trả lại khách tự tính = khách đưa − tiền mặt;
+      ③ NV HỖ TRỢ — máy KK không có chỗ, ghi vào sổ KHBL gold_bill.emp_sup_id.
+    Kiểm HẾT trước rồi mới ghi, để form sai ở ② không làm ① đã lên KK nửa chừng."""
     from apps.pmv import gateway
+    from . import mobile_invoice as MI
     hd = hoa_don(c, bill_code)
     if not hd or str(hd['TrnID']).strip() != str(trn_id).strip():
         raise LoiQuet('Hóa đơn vừa thay đổi trên KK. Mở lại rồi sửa.')
@@ -429,18 +438,57 @@ def sua_hoa_don(c, trn_id, bill_code, posted):
         if giu != str(hd.get(cot) or '').strip():
             doi[cot] = giu
     tong = M.dec(hd['PayAmount'])
-    tien_mat, ck = M.dec(posted.get('cash_pay')), M.dec(posted.get('card_pay'))
+    # ô tiền trên form hiện dạng 39.540.000 — bỏ dấu chấm nghìn trước khi đọc (M.dec không hiểu dấu chấm)
+    tien_mat, ck = (M.dec(re.sub(r'[^0-9-]', '', str(posted.get(k) or '')) or 0) for k in ('cash_pay', 'card_pay'))
     if tien_mat + ck != tong:
         raise LoiQuet(f'Tiền mặt + chuyển khoản phải bằng tổng thanh toán {M.money_vn(tong)}.')
+    if tien_mat < 0 or ck < 0:
+        raise LoiQuet('Tiền mặt và chuyển khoản không được âm.')
     if tien_mat != M.dec(hd['CashPay']) or ck != M.dec(hd['CardPay']):
         doi['CashPay'], doi['CardPay'] = tien_mat, ck
-    if not doi:
+
+    # ② Desc3 + tiền khách — chỉ khi form gửi kèm (form SỬA luôn gửi 'channel'); kiểm trước trên bản dự kiến
+    d3_post, d3_doi = None, False
+    if 'channel' in posted:
+        if tong < 0:
+            raise LoiQuet('Hóa đơn tiệm trả khách (tổng âm) chưa sửa được thông tin đơn ở đây.')
+        d3_post = MI.retail_post(posted)
+        d3_post['tender'] = re.sub(r'\D', '', d3_post.get('tender') or '') or '0'
+        try:
+            goc = MI.load_retail(trn_id, bill_code)
+            du_kien = {**goc, 'CashPay': tien_mat, 'CardPay': ck}
+            sl = MI.retail_quantity(trn_id) if d3_post.get('is_wedding') == '1' else None
+            moi = MI.changes('gold_bill_retail', du_kien, d3_post, bill_quantity=sl)
+        except ValueError as exc:
+            raise LoiQuet(str(exc))
+        d3_doi = (MI.document(moi.get('Desc3')) != MI.document(goc.get('Desc3'))
+                  or any(M.dec(moi[k]) != M.dec(goc.get(k)) for k in ('TienKhachTraThuc', 'TienTraLai') if k in moi))
+
+    # ③ NV hỗ trợ
+    sup = str(posted.get('emp_sup_id') or '').strip() if 'emp_sup_id' in posted else None
+    sup_doi = sup is not None and sup != str(hd.get('emp_sup_id') or '').strip()
+    if sup_doi and not hd.get('co_so_khbl'):
+        raise LoiQuet('Hóa đơn này không có trong sổ KHBL (lập trên PMV) — chưa lưu được NV hỗ trợ.')
+
+    if not doi and not d3_doi and not sup_doi:
         return 'Không có thay đổi nào.'
+    da = []
     try:
-        gateway.pmv_billsell_edit(trn_id, doi)
+        if doi:
+            gateway.pmv_billsell_edit(trn_id, doi)
+            da += sorted(doi)
+        if d3_doi:
+            goc = MI.load_retail(trn_id, bill_code)          # đọc lại SAU khi tách tiền để dấu (stamp) khớp
+            gateway.pmv_invoice_update('gold_bill_retail', str(goc['TrnID']), str(goc['BillCode']).strip(),
+                                       MI.stamp(goc), d3_post)
+            da.append('thông tin đơn')
+        if sup_doi:
+            from .models import GoldBill
+            GoldBill.all_objects.filter(trn_id=trn_id).update(emp_sup_id=sup)
+            da.append('NV hỗ trợ')
     except Exception as exc:
-        raise LoiQuet(str(exc))
-    return f'✓ Đã lưu hóa đơn {bill_code}: ' + ', '.join(sorted(doi))
+        raise LoiQuet((f'Đã lưu {", ".join(da)} nhưng ' if da else '') + str(exc))
+    return f'✓ Đã lưu hóa đơn {bill_code}: ' + ', '.join(da)
 
 
 def quet(c, raw, nhan_vien, ngay):
@@ -500,8 +548,10 @@ def hoa_don(c, bill_code):
         "SELECT TOP 1 b.TrnID, b.BillCode, b.TrnDate, b.TrnTime, b.CustID, ISNULL(c.CustName,'') AS CustName, "
         "ISNULL(c.Phone,'') AS Phone, ISNULL(c.CMND,'') AS CMND, ISNULL(c.Address,'') AS Address, "
         "b.SellTotalAmount, b.BuyTotalAmount, b.TotalAmount, b.Discount, b.PayAmount, b.Status, b.IsDel, "
-        "ISNULL(b.CashPay,0) AS CashPay, ISNULL(b.CardPay,0) AS CardPay, b.Desc4, b.Desc5, "
-        "ISNULL(e.EmpName,'') AS EmpName FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
+        "ISNULL(b.CashPay,0) AS CashPay, ISNULL(b.CardPay,0) AS CardPay, b.Desc3, b.Desc4, b.Desc5, b.CreatedDate, "
+        "ISNULL(b.TienKhachTraThuc,0) AS TienKhachTraThuc, ISNULL(b.TienTraLai,0) AS TienTraLai, "
+        "ISNULL(b.TaskPriceAdd,0) AS TaskPriceAdd, ISNULL(b.TienCoc,0) AS TienCoc, "
+        "b.EmpID, ISNULL(e.EmpName,'') AS EmpName FROM TRN_RT_BUYSELL b WITH (NOLOCK) "
         "LEFT JOIN I_CUSTOMER c WITH (NOLOCK) ON c.CustID = b.CustID "
         "LEFT JOIN T_EMPLOYEE e WITH (NOLOCK) ON e.EmpID = b.EmpID "
         "WHERE b.BillCode=? ORDER BY b.TrnDate DESC, b.TrnTime DESC, b.TrnID DESC", (bill_code,))
@@ -513,14 +563,103 @@ def hoa_don(c, bill_code):
     trn = str(h['TrnID']).strip()
     ban = c.query("SELECT ProductCode, ProductDesc, GoldCode, TotalWeight, PriceUnit, TaskPrice, SellAmount "
                   "FROM TRN_RT_BUYSELL_SELL WITH (NOLOCK) WHERE TrnID=?", (trn,))
-    thu = c.query("SELECT GoldCode, GoldWeight, DiamondWeight, TotalGoldWeight, BuyRate, BuyAmount "
-                  "FROM TRN_RT_BUYSELL_BUYGOLD WITH (NOLOCK) WHERE TrnID=?", (trn,))
+    # Dẻ khách đưa vào: ĐỔI NGANG khi tính theo GIÁ BÁN RA đang hiệu lực lúc lập hóa đơn, còn lại là ĐỔI THÂU —
+    # cùng luật với popup Vàng thâu (ds_vang_thau), GĐ chốt 27/09/2026.
+    thu = c.query(
+        "SELECT bg.GoldCode, ISNULL(g.GoldDesc,'') AS GoldDesc, bg.GoldWeight, bg.DiamondWeight, bg.TotalGoldWeight, "
+        "bg.BuyRate, bg.BuyAmount, CASE WHEN bg.BuyRate >= ISNULL(x.SellRate, 999999999999) THEN 1 ELSE 0 END AS Ngang "
+        "FROM TRN_RT_BUYSELL_BUYGOLD bg WITH (NOLOCK) LEFT JOIN I_GOLD g WITH (NOLOCK) ON g.GoldCode = bg.GoldCode "
+        "OUTER APPLY (SELECT TOP 1 r.SellRate FROM ("
+        "  SELECT GoldCcy, RateDate, RateTime, SellRate FROM I_XRATE WITH (NOLOCK) "
+        "  UNION ALL SELECT GoldCcy, RateDate, RateTime, SellRate FROM I_XRATE_HIST WITH (NOLOCK)) r "
+        "  WHERE r.GoldCcy = bg.GoldCode "
+        "  AND DATEADD(second, DATEDIFF(second, 0, CAST(r.RateTime AS datetime)), r.RateDate) <= ? "
+        "  ORDER BY r.RateDate DESC, r.RateTime DESC) x "
+        "WHERE bg.TrnID=?", (h.get('CreatedDate'), trn))
     h['ban'] = [dict(r, chi=chi(r['TotalWeight'])) for r in ban]
-    h['thu'] = [dict(r, chi=chi(r['TotalGoldWeight'] or r['GoldWeight'])) for r in thu]
+    h['thu'] = [dict(r, chi=chi(r['TotalGoldWeight'] or r['GoldWeight']), chi_vang=chi(r['GoldWeight']),
+                     chi_hot=chi(r['DiamondWeight']), ngang=bool(r['Ngang'])) for r in thu]
+    h['doi_ngang'] = [r for r in h['thu'] if r['ngang']]
+    h['doi_thau'] = [r for r in h['thu'] if not r['ngang']]
+    h['pay_abs'] = abs(M.dec(h['PayAmount']))
+    h['them'] = _desc3(h.get('Desc3'))
+    h['d3'] = _desc3_dict(h.get('Desc3'))
+    tm, ck = M.dec(h['CashPay']) != 0, M.dec(h['CardPay']) != 0
+    h['phuong_thuc'] = 'Tiền mặt + CK' if tm and ck else ('Chuyển khoản' if ck else ('Tiền mặt' if tm else 'Không thu tiền'))
+    h['tl_ban'] = round(sum(r['chi'] for r in h['ban']), 2)
+    h['tl_thu'] = round(sum(r['chi'] for r in h['thu']), 2)
+    # NV HỖ TRỢ không có chỗ trên máy KK — KHBL giữ ở gold_bill.emp_sup_id (hóa đơn lập trên KHBL)
+    h['nv_ho_tro'], h['emp_sup_id'], h['co_so_khbl'] = '', '', False
+    try:
+        from . import services as S
+        from .models import GoldBill
+        dong = GoldBill.all_objects.filter(trn_id=trn).values_list('emp_sup_id', flat=True)
+        h['co_so_khbl'] = dong.exists()
+        sup = dong.first()
+        h['emp_sup_id'] = str(sup or '').strip()
+        if sup:
+            ten = {str(e['EmpID']).strip(): e['EmpName'] for e in S.nhan_vien_ban()}
+            h['nv_ho_tro'] = ten.get(str(sup).strip(), str(sup).strip())
+    except Exception:
+        log.exception('CHECK GOLD: không đọc được NV hỗ trợ của %s', trn)
     return h
 
 
 # ─────────────────────────── 3 danh sách nhanh trong ngày ───────────────────────────
+def _desc3_dict(raw):
+    """Desc3 → dict các ô của form SỬA (kênh · social · khách gửi · đơn cưới · ngày cưới · ghi chú)."""
+    import json
+    try:
+        d = json.loads(str(raw or '').strip() or '{}')
+    except ValueError:
+        return {'loi': True, 'channel': 'store', 'note': str(raw or '')}
+    d = d if isinstance(d, dict) else {}
+    loai = d.get('type') or []
+    return {'loi': False,
+            'channel': d.get('channel') or ('online' if 'Đơn online' in loai else 'store'),
+            'social': d.get('social') or '', 'customer_hold': d.get('customer_hold') is True,
+            'wedding': d.get('wedding') is True or 'Đơn cưới' in loai,
+            'NgayCuoi': str(d.get('NgayCuoi') or '')[:10], 'note': d.get('note') or ''}
+
+
+def _desc3(raw):
+    """Desc3 của hóa đơn = JSON app ghi (kênh bán · đơn cưới · khách gửi hàng · ghi chú) → [(nhãn, giá trị)] chỉ
+    những mục CÓ nội dung (GĐ chốt 29/09/2026). Không phải JSON thì trả nguyên văn làm "Ghi chú"."""
+    import json
+    s = str(raw or '').strip()
+    if not s:
+        return []
+    try:
+        d = json.loads(s)
+    except ValueError:
+        return [('Ghi chú', s)]
+    if not isinstance(d, dict):
+        return [('Ghi chú', s)]
+    ra = []
+    kenh = d.get('channel')
+    if kenh:
+        ra.append(('Kênh', 'Online · ' + (d.get('social') or 'Online') if kenh == 'online'
+                   else ('Tại tiệm' if kenh == 'store' else str(kenh))))
+    loai = [str(x) for x in (d.get('type') or []) if x]
+    if loai:
+        ra.append(('Loại đơn', ', '.join(loai)))
+    if d.get('wedding'):
+        if d.get('NgayCuoi'):
+            try:
+                ra.append(('Ngày cưới', dt.date.fromisoformat(str(d['NgayCuoi'])[:10]).strftime('%d/%m/%Y')))
+            except ValueError:
+                ra.append(('Ngày cưới', str(d['NgayCuoi'])))
+        if d.get('wedding_quantity'):
+            ra.append(('Số món cưới', str(d['wedding_quantity'])))
+        if d.get('wedding_bill_total'):
+            ra.append(('Tổng đơn cưới', M.money_vn(d['wedding_bill_total'])))
+    if d.get('customer_hold') is True:
+        ra.append(('Khách gửi hàng', 'Đang gửi tại tiệm'))
+    if str(d.get('note') or '').strip():
+        ra.append(('Ghi chú', str(d['note']).strip()))
+    return ra
+
+
 def ds_chuyen_khoan(ngay):
     """CK trong ngày — khj_bl.bank_notifications (KHÔNG hỏi KK), kèm mã chứng từ skill đã tách."""
     with connection.cursor() as cur:
@@ -629,7 +768,7 @@ def _gom_cam_do(rows):
             tong['cho_ck'] += 1
         luc = timezone.localtime(r['happened_at']) if timezone.is_aware(r['happened_at']) else r['happened_at']
         ra.append({
-            'gio': luc.strftime('%H:%M'), 'ma': r.get('sku') or f"#{r['id']}",
+            'id': r['id'], 'gio': luc.strftime('%H:%M'), 'ma': r.get('sku') or f"#{r['id']}",
             'nghiep_vu': CD_NGHIEP_VU.get(nghiep_vu, str(nghiep_vu)),
             'khach': snap.get('name') or snap.get('CustName') or snap.get('customer_name') or 'Khách lẻ',
             'dt': r.get('phone') or '', 'nv': r.get('employee_name') or '',
@@ -811,7 +950,9 @@ def _khoi(request, ngay, nv, tin='', muc='', hd=None):
     Thanh quét nằm TRONG khối (GĐ chốt 27/09/2026) nên mọi đường dựng lại khối đều phải kèm danh sách
     nhân viên, không riêng trang đầu."""
     from . import services as S
-    ctx = {'ngay': ngay, 'nv': nv, 'tin': tin, 'muc': muc, 'hd': hd, 'hom_nay': timezone.localdate()}
+    ctx = {'ngay': ngay, 'nv': nv, 'tin': tin, 'muc': muc, 'hd': hd, 'hom_nay': timezone.localdate(),
+           'hd_nhom_doi': [('Đổi ngang vàng', hd.get('doi_ngang') or []), ('Đổi thâu vào', hd.get('doi_thau') or [])]
+           if hd else []}
     # Danh sách nhân viên đổi rất thưa mà khối này dựng lại sau MỖI lượt quét → nhớ 5 phút cho đỡ phiền máy KK
     from django.core.cache import cache
     ds_nv = cache.get('cg_nhan_vien')
@@ -895,6 +1036,31 @@ def theo_doi(request):
                          'gon': [g['id'] for g in gd if g['gon']]})
 
 
+def _ds_tk(c, hd):
+    """Danh sách TK nhận CK cho form SỬA. ⚠ TK đang ghi trên hóa đơn (Desc4) mà không còn trong I_BankCard đang bật
+    vẫn phải có trong danh sách và được chọn sẵn — thiếu nó thì ô chọn rơi về "Không có" và bấm LƯU là XÓA MẤT
+    Desc4 (thực đo 29/09/2026: HĐ 26-09-29-000215 ghi 50361307, danh sách không có)."""
+    ds = list(c.query("SELECT NumberBank, AccName, BankName FROM I_BankCard WITH (NOLOCK) WHERE Active=1 "
+                      "ORDER BY NumberBank DESC"))
+    tk = str((hd or {}).get('Desc4') or '').strip()
+    if tk and all(str(b['NumberBank']).strip() != tk for b in ds):
+        ds.insert(0, {'NumberBank': tk, 'AccName': '', 'BankName': 'TK đang ghi trên hóa đơn'})
+    return ds
+
+
+def _ds_nv(c, hd):
+    """Danh sách NV cho form SỬA — cùng lý do với _ds_tk: NV bán / NV hỗ trợ đang ghi trên hóa đơn mà nay đã nghỉ
+    (không còn Active) vẫn phải có trong ô chọn, không thì bấm LƯU sẽ âm thầm đổi sang người khác."""
+    ds = list(nhan_vien_ds(c))
+    co = {str(e['EmpID']).strip() for e in ds}
+    for ma, ten in ((str((hd or {}).get('EmpID') or '').strip(), (hd or {}).get('EmpName')),
+                    (str((hd or {}).get('emp_sup_id') or '').strip(), (hd or {}).get('nv_ho_tro'))):
+        if ma and ma not in co:
+            ds.insert(0, {'EmpID': ma, 'EmpName': f'{ten or ma} (đã nghỉ)'})
+            co.add(ma)
+    return ds
+
+
 @login_not_required
 @require_GET
 def sua_form(request, bill_code):
@@ -903,9 +1069,8 @@ def sua_form(request, bill_code):
     c = S.client('check_gold')
     try:
         hd = hoa_don(c, bill_code)
-        nv = nhan_vien_ds(c)
-        bank = c.query("SELECT NumberBank, AccName, BankName FROM I_BankCard WITH (NOLOCK) WHERE Active=1 "
-                       "ORDER BY NumberBank DESC")
+        nv = _ds_nv(c, hd)
+        bank = _ds_tk(c, hd)
     except Exception as exc:
         log.exception('CHECK GOLD: mở popup sửa hóa đơn lỗi')
         from .customer import error_message
@@ -913,8 +1078,10 @@ def sua_form(request, bill_code):
     if not hd:
         return render(request, 'pos/_check_gold_sua.html', {'loi': f'Không tìm thấy hóa đơn {bill_code}.',
                                                             'ngay': _ngay(request)})
+    from .mobile_invoice import SOCIALS
     return render(request, 'pos/_check_gold_sua.html', {'hd': hd, 'nhan_vien_ds': nv, 'bank_ds': bank,
-                                                        'ngay': _ngay(request), 'nv': _nv(request)})
+                                                        'ngay': _ngay(request), 'nv': _nv(request),
+                                                        'social_ds': SOCIALS})
 
 
 @login_not_required
@@ -928,11 +1095,10 @@ def sua_luu(request, bill_code):
         tin = sua_hoa_don(c, request.POST.get('trn_id', ''), bill_code, request.POST)
     except LoiQuet as exc:
         hd = hoa_don(c, bill_code)
+        from .mobile_invoice import SOCIALS
         return render(request, 'pos/_check_gold_sua.html', {'hd': hd, 'loi': str(exc), 'ngay': ngay, 'nv': nv,
-                                                            'nhan_vien_ds': nhan_vien_ds(c),
-                                                            'bank_ds': c.query("SELECT NumberBank, AccName, BankName "
-                                                                               "FROM I_BankCard WITH (NOLOCK) WHERE Active=1 "
-                                                                               "ORDER BY NumberBank DESC")})
+                                                            'nhan_vien_ds': _ds_nv(c, hd), 'social_ds': SOCIALS,
+                                                            'bank_ds': _ds_tk(c, hd)})
     except Exception as exc:
         log.exception('CHECK GOLD: lưu hóa đơn lỗi')
         from .customer import error_message

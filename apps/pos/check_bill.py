@@ -3,8 +3,11 @@
 
 Quy trình: quét mã vạch từng tờ hóa đơn → đối chiếu TRN_RT_BUYSELL trên máy KK → ghi sổ `check_bill` (khj_bl).
 Trang tự tính: HĐ còn thiếu (có trên KK mà chưa quét), HĐ đã kiểm nhưng nay KK báo hủy.
-Nút "Dò phiếu" (21/09/2026): 2 bảng — HĐ còn thiếu kèm PayAmount | CashPay | CardPay | C.Lệch, và CK TRONG NGÀY
+Nút "Dò phiếu bán" (21/09/2026): 2 bảng — HĐ còn thiếu kèm PayAmount | CashPay | CardPay | C.Lệch, và CK TRONG NGÀY
 lấy từ money_flow IN đã XÁC NHẬN nhận tiền thành công (cùng nguồn "đã nhận" của trang mobile — amounts_by_flow).
+Nút "Dò cầm đồ" (29/09/2026): 2 bảng — GIAO DỊCH CẦM ĐỒ trong ngày (khj_cd.cd_loan_logs, dùng chung hàm của CHECK
+GOLD) và CK CẦM ĐỒ (cd_payments phần chuyển khoản, đối chiếu báo có bank_notifications loại CD theo mã chứng từ).
+Không hỏi máy KK nên vẫn chạy khi KK trục trặc.
 
 Khác bản cũ, CÓ CHỦ Ý:
   · Sổ nằm ở khj_bl (bảng riêng KHBL), không ghi pmv_report @3306.
@@ -165,6 +168,118 @@ def bang_ngay(c, ngay, do=False):
     return ra
 
 
+def _ten_khach(snap):
+    """Tên khách trong cd_loans.customer_snapshot (JSON) — cùng các khóa mà popup cầm đồ CHECK GOLD đọc."""
+    import json
+    if isinstance(snap, (str, bytes)):
+        try:
+            snap = json.loads(snap or '{}')
+        except ValueError:
+            snap = {}
+    snap = snap if isinstance(snap, dict) else {}
+    return snap.get('name') or snap.get('CustName') or snap.get('customer_name') or ''
+
+
+def ck_cam_do(ngay):
+    """CK CẦM ĐỒ trong ngày (GĐ chốt 29/09/2026) — CHỈ ĐỌC khj_cd + bank_notifications.
+
+    Mỗi phần CHUYỂN KHOẢN của một phiên (cd_payments.cardPay, bản cũ channel='BANK') là 1 dòng, đối chiếu với báo
+    có/báo nợ ngân hàng có ma_chung_tu = payment_ref (skill tách mã gắn loại 'CD'):
+        khop    — ngân hàng đã báo ĐÚNG số tiền, đúng chiều;
+        lech    — có báo nhưng số tiền khác;
+        cho     — chưa thấy báo nào.
+        ghi_tm  — ngân hàng có chuyển khoản cho phiên nhưng KHCD ghi phiên là TIỀN MẶT (cardPay = 0);
+        la      — báo có/báo nợ loại CD không dò ra phiên nào (khoản lạ cần dò tay).
+    """
+    from .check_gold import CD_NGHIEP_VU
+    d1, d2 = ngay.isoformat(), (ngay + dt.timedelta(days=1)).isoformat()
+    tien_ck = "COALESCE(p.cardPay, CASE WHEN p.channel='BANK' THEN p.amount ELSE 0 END)"
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT p.id, l.happened_at, l.operation_id, l.employee_name, n.sku, n.phone, n.customer_snapshot, "
+            "p.direction, " + tien_ck + " AS ck, p.reconciliation_state, p.payment_ref "
+            "FROM khj_cd.cd_payments p JOIN khj_cd.cd_loan_logs l ON l.id = p.log_id "
+            "JOIN khj_cd.cd_loans n ON n.id = l.loan_id "
+            "WHERE l.happened_at >= %s AND l.happened_at < %s AND " + tien_ck + " > 0 "
+            "ORDER BY l.happened_at DESC, p.id DESC", [d1, d2])
+        cot = [c[0] for c in cur.description]
+        phien = [dict(zip(cot, r)) for r in cur.fetchall()]
+        cur.execute("SELECT id, direction, trans_amount, ma_chung_tu, transaction_time, description FROM bank_notifications "
+                    "WHERE loai_chung_tu = 'CD' AND transaction_time >= %s AND transaction_time < %s", [d1, d2])
+        cot = [c[0] for c in cur.description]
+        bao = [dict(zip(cot, r)) for r in cur.fetchall()]
+    ten = {r['id']: _ten_khach(r['customer_snapshot']) for r in phien}
+    theo_ma = {}
+    for b in bao:
+        theo_ma.setdefault(str(b['ma_chung_tu'] or '').strip(), []).append(b)
+    ra, da_gan = [], set()
+    for r in phien:
+        ma = str(r['payment_ref'] or '').strip()
+        huong = 'in' if str(r['direction']).upper() == 'IN' else 'out'
+        ung = [b for b in theo_ma.get(ma, []) if str(b['direction']).lower() == huong]
+        da_gan.update(b['id'] for b in ung)
+        ck = M.dec(r['ck'])
+        nhan = sum((M.dec(b['trans_amount']) for b in ung), Decimal(0))
+        trang_thai = 'cho' if not ung else ('khop' if nhan == ck else 'lech')
+        luc = r['happened_at']
+        ra.append(dict(gio=luc.strftime('%H:%M') if hasattr(luc, 'strftime') else str(luc)[11:16],
+                       ma_ct=ma, sku=r['sku'] or '', nghiep_vu=CD_NGHIEP_VU.get(int(r['operation_id'] or 0), ''),
+                       ra_tien=huong == 'out', khach=ten.get(r['id']) or 'Khách lẻ', nv=r['employee_name'] or '',
+                       ck=ck, nhan=nhan, gio_bao=str(ung[0]['transaction_time'])[11:16] if ung else '',
+                       khcd=str(r['reconciliation_state'] or ''), trang_thai=trang_thai))
+    # Báo có/báo nợ CD còn lại: mã chứng từ = yymmdd + id phiên (6 số, vd 260929007147) — dò ngược ra phiên. Thực đo
+    # 29/09/2026: 3 phiên CẦM MỚI 17–200 triệu tiệm đã CHUYỂN KHOẢN cho khách nhưng KHCD ghi cả phiên là TIỀN MẶT
+    # (cardPay = 0) → đường khớp theo payment_ref ở trên bỏ sót, đúng loại lỗi mà màn dò phải bắt được.
+    con = [b for b in bao if b['id'] not in da_gan]
+    tien_to = ngay.strftime('%y%m%d')
+    log_ids = {int(str(b['ma_chung_tu'])[-6:]) for b in con
+               if str(b['ma_chung_tu'] or '').startswith(tien_to) and str(b['ma_chung_tu'])[-6:].isdigit()}
+    phien_log = {}
+    if log_ids:
+        with connection.cursor() as cur:
+            cur.execute("SELECT l.id, l.operation_id, l.employee_name, n.sku, n.customer_snapshot "
+                        "FROM khj_cd.cd_loan_logs l JOIN khj_cd.cd_loans n ON n.id = l.loan_id "
+                        "WHERE l.id IN (" + ','.join(['%s'] * len(log_ids)) + ")", list(log_ids))
+            phien_log = {r[0]: r for r in cur.fetchall()}
+    la = []
+    for b in con:
+        ma = str(b['ma_chung_tu'] or '')
+        pl = phien_log.get(int(ma[-6:])) if ma.startswith(tien_to) and ma[-6:].isdigit() else None
+        la.append(dict(gio=str(b['transaction_time'])[11:16], ma_ct=ma,
+                       sku=(pl[3] if pl else '') or '', nghiep_vu=CD_NGHIEP_VU.get(int(pl[1] or 0), '') if pl else '',
+                       ra_tien=str(b['direction']).lower() == 'out', khach=_ten_khach(pl[4]) if pl else '',
+                       nv=(pl[2] if pl else '') or '', ck=Decimal(0), nhan=M.dec(b['trans_amount']),
+                       gio_bao=str(b['transaction_time'])[11:16], khcd='',
+                       trang_thai='ghi_tm' if pl else 'la', mo_ta=b['description'] or ''))
+    return ra + la
+
+
+def do_cam_do(ngay):
+    """Khối DÒ CẦM ĐỒ: giao dịch trong ngày (hàm dùng chung với popup CHECK GOLD) + CK cầm đồ + số tổng.
+
+    THU KHÁCH (29/09/2026) = tiền mặt khách đưa thực mà quầy đã xác nhận — cột money_flow.cus_cash của dòng chiếu
+    phiên KHCD (source_type cd_loan_log, source_id = id phiên), cùng nguồn "Nhận …" của thẻ CHECK GOLD. Chỉ có
+    nghĩa với phiên tiền VÀO; phiên tiệm chi ra để trống."""
+    from collections import Counter
+    from .check_gold import ds_cam_do
+    from .models import MoneyFlow
+    gd, tong = ds_cam_do(ngay)
+    thu = dict(MoneyFlow.objects.filter(source_system='KHCD', source_type='cd_loan_log',
+                                        source_id__in=[str(r['id']) for r in gd]).values_list('source_id', 'cus_cash'))
+    for r in gd:
+        r['thu_khach'] = None if r['ra_tien'] else M.dec(thu.get(str(r['id'])))
+    tong['thu_khach'] = sum((r['thu_khach'] for r in gd if r['thu_khach'] and not r['huy']), Decimal(0))
+    tong['theo_nv'] = Counter(r['nghiep_vu'] for r in gd if not r['huy']).most_common()
+    ck = ck_cam_do(ngay)
+    tong.update(ck_so=sum(1 for r in ck if r['trang_thai'] not in ('la', 'ghi_tm')),
+                ck_tien=sum((r['ck'] for r in ck), Decimal(0)),
+                ck_cho=sum(1 for r in ck if r['trang_thai'] in ('cho', 'lech')),
+                ck_la=sum(1 for r in ck if r['trang_thai'] == 'la'),
+                ck_ghi_tm=sum(1 for r in ck if r['trang_thai'] == 'ghi_tm'),
+                ck_ngan_hang=sum((r['nhan'] for r in ck), Decimal(0)))
+    return {'cd_gd': gd, 'cd_tong': tong, 'cd_ck': ck}
+
+
 def _ck_ngan_hang(ngay):
     """Mọi khoản CK VÀO trong ngày ở khj_bl.bank_notifications (giờ VN) — chỉ đọc."""
     with connection.cursor() as cur:
@@ -235,15 +350,29 @@ def _do(request):
     return (request.GET.get('do') or request.POST.get('do')) == '1'
 
 
+def _cd(request):
+    """Cờ DÒ CẦM ĐỒ — cùng cách giữ trạng thái với cờ dò phiếu bán."""
+    return (request.GET.get('cd') or request.POST.get('cd')) == '1'
+
+
 def _render(request, ngay, tin=None, loi=None, full=False):
     from django.shortcuts import render
     from . import services as S
-    ctx = {'ngay': ngay, 'hom_nay': timezone.localdate(), 'tin': tin, 'loi_quet': loi, 'do': _do(request)}
+    ctx = {'ngay': ngay, 'hom_nay': timezone.localdate(), 'tin': tin, 'loi_quet': loi, 'do': _do(request),
+           'cd': _cd(request)}
+    if ctx['do'] and ctx['cd']:                   # hai chế độ dò loại trừ nhau (GĐ chốt 29/09/2026) — ưu tiên cầm đồ
+        ctx['do'] = False
     try:
         ctx.update(bang_ngay(S.client('check_bill'), ngay, do=ctx['do']))
     except Exception as exc:                      # KK trục trặc: báo rõ, sổ đã kiểm vẫn còn nguyên
         log.exception('CHECK BILL: không đọc được KK ngày %s', ngay)
         ctx['loi'] = _loi_kk(exc)
+    if ctx['cd']:                                 # dò cầm đồ đọc khj_cd + MySQL, KHÔNG phụ thuộc máy KK
+        try:
+            ctx.update(do_cam_do(ngay))
+        except Exception as exc:
+            log.exception('CHECK BILL: dò cầm đồ lỗi ngày %s', ngay)
+            ctx['cd_loi'] = str(exc)
     tep = 'pos/check_bill.html' if full else 'pos/_check_bill_so_lieu.html'
     return render(request, tep, ctx)
 

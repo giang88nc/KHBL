@@ -6,8 +6,23 @@ Khối SỐ LIỆU của CHECK BILL V2 — HTMX thay trọn khối này sau mỗ
 {% if loi_quet %}<div class="cb-tin cb-tin--loi" role="alert">✕ {{ loi_quet }}</div>{% endif %}
 {% if loi %}<div class="cb-tin cb-tin--loi" role="alert">Không đọc được máy KK: {{ loi }} — sổ đã kiểm vẫn còn nguyên, thử lại sau.</div>{% endif %}
 
+{% if cd and cd_tong %}{# DÒ CẦM ĐỒ: thẻ số liệu đầu trang đổi sang sổ cầm đồ (29/09/2026) #}
+<div class="cb-kpi cb-kpi--cd">
+  <div class="cb-kpi__o"><span>PHIÊN CẦM ĐỒ</span><b>{{ cd_tong.so }}<small> phiên</small></b>
+    <small>{% for ten, so in cd_tong.theo_nv %}{{ ten }} {{ so }}{% if not forloop.last %} · {% endif %}{% endfor %}</small></div>
+  <div class="cb-kpi__o cb-kpi__o--ra"><span>CHI RA</span><b>{{ cd_tong.chi|tien_tran }}<small> ₫</small></b>
+    <small>tiệm đưa khách (cầm mới · cầm thêm)</small></div>
+  <div class="cb-kpi__o cb-kpi__o--vao"><span>THU VÀO</span><b>{{ cd_tong.thu|tien_tran }}<small> ₫</small></b>
+    <small>Lãi {{ cd_tong.lai|tien_tran }} ₫</small></div>
+  <div class="cb-kpi__o"><span>TIỀN MẶT</span><b>{{ cd_tong.tien_mat|tien_tran }}<small> ₫</small></b>
+    <small>Σ Nhận của khách {{ cd_tong.thu_khach|tien_tran }} ₫</small></div>
+  <div class="cb-kpi__o {% if cd_tong.ck_cho or cd_tong.ck_ghi_tm or cd_tong.ck_la %}cb-kpi__o--lech{% endif %}"><span>CHUYỂN KHOẢN</span>
+    <b>{{ cd_tong.ck|tien_tran }}<small> ₫</small></b>
+    <small>Σ Ngân hàng {{ cd_tong.ck_ngan_hang|tien_tran }} ₫{% if cd_tong.ck_ghi_tm %} · <em>⚠ {{ cd_tong.ck_ghi_tm }} phiên ghi tiền mặt</em>{% elif cd_tong.ck_cho %} · <em>{{ cd_tong.ck_cho }} chưa khớp</em>{% else %} · ✓ khớp{% endif %}</small></div>
+</div>
+{% endif %}
 {% if kpi %}
-<div class="cb-kpi">
+{% if not cd %}<div class="cb-kpi">
   <div class="cb-kpi__o cb-kpi__o--tien-do">
     <span>ĐÃ KIỂM</span>
     <b>{{ kpi.so_da }}<small> / {{ kpi.so_kk }} HĐ</small></b>
@@ -25,22 +40,22 @@ Khối SỐ LIỆU của CHECK BILL V2 — HTMX thay trọn khối này sau mỗ
   <div class="cb-kpi__o {% if kpi.ck_nhan != kpi.ck %}cb-kpi__o--lech{% endif %}"><span>CHUYỂN KHOẢN</span>
     <b>{{ kpi.ck|tien_tran }}<small> ₫</small></b>
     <small>Σ Ngân hàng nhận {{ kpi.ck_nhan|tien_tran }} ₫{% if kpi.ck_lech %} · <em>Lệch {{ kpi.ck_lech|tien_tran }} ₫</em>{% else %} · ✓ khớp{% endif %}</small></div>
-</div>
+</div>{% endif %}
 
 {% if huy %}
 <div class="cb-the cb-the--canh-bao">
   <h2>⚠ ĐÃ KIỂM NHƯNG KK NAY BÁO HỦY / KHÔNG CÒN <small>{{ huy|length }} hóa đơn — kiểm tra lại tờ giấy</small></h2>
   <table class="cb-bang"><tbody>{% for x in huy %}<tr><td class="cb-ma">{{ x.bill_code }}</td><td class="cb-so">{{ x.tong|tien_tran }}</td>
     <td>kiểm {{ x.kiem_luc|date:"H:i" }} · {{ x.nguoi_kiem }}</td>
-    <td class="cb-hanh-dong"><button type="button" class="cb-xoa" title="Bỏ kiểm" hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td></tr>{% endfor %}</tbody></table>
+    <td class="cb-hanh-dong"><button type="button" class="cb-xoa" title="Bỏ kiểm" hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do,#cb-cd" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td></tr>{% endfor %}</tbody></table>
 </div>
 {% endif %}
 
 {% if do %}{# DÒ PHIẾU (21/09/2026): chỉ hiện khi bấm nút — HĐ còn thiếu + CK trong ngày (money_flow IN đã xác nhận) #}
 <div class="cb-doi">
   <div class="cb-the cb-the--thieu">
-    <h2>HĐ CÒN THIẾU <span class="cb-dem {% if thieu %}cb-dem--do{% endif %}">{{ thieu|length }}</span>
-      <small>có trên máy KK, chưa quét tờ giấy{% if kpi.thieu_lech %} · <b class="cb-lech">⚠ {{ kpi.thieu_lech }} HĐ lệch tiền</b>{% endif %}</small></h2>
+    <h2>DANH SÁCH HÓA ĐƠN <span class="cb-dem {% if thieu %}cb-dem--do{% endif %}">{{ thieu|length }}</span>
+      <small>chưa kiểm phiếu {% if kpi.thieu_lech %} · <b class="cb-lech">⚠ {{ kpi.thieu_lech }} HĐ lệch tiền</b>{% endif %}</small></h2>
     {% if thieu %}<div class="cb-cuon"><table class="cb-bang">
       <thead><tr><th>MÃ HĐ</th><th>GIỜ</th><th>NHÂN VIÊN · KHÁCH</th><th class="cb-so">PayAmount</th><th class="cb-so" title="TienKhachTraThuc — tiền khách đưa thực">THU KHÁCH</th><th class="cb-so">CashPay</th>
         <th class="cb-so">CardPay</th><th class="cb-so" title="PayAmount − CashPay − CardPay">C.LỆCH</th><th>LOẠI</th></tr></thead>
@@ -89,7 +104,7 @@ Khối SỐ LIỆU của CHECK BILL V2 — HTMX thay trọn khối này sau mỗ
           <small class="{% if x.ck_lech %}cb-lech{% else %}cb-khop{% endif %}">{% if x.ck_lech %}⚠ nhận {{ x.ck_nhan_moi|tien_tran }}{% else %}✓ đã nhận{% endif %}</small></td>{% endif %}
         <td class="cb-mo">{{ x.kiem_luc|date:"H:i" }}<small>· {{ x.nguoi_kiem }}</small></td>
         <td class="cb-hanh-dong"><button type="button" class="cb-xoa" title="Bỏ kiểm tờ này" aria-label="Bỏ kiểm {{ x.bill_code }}"
-            hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td>
+            hx-post="{% url 'pos:check_bill_xoa' x.pk %}" hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do,#cb-cd" hx-confirm="Bỏ kiểm {{ x.bill_code }}?">✕</button></td>
       </tr>{% endfor %}</tbody>
     </table></div>{% else %}<p class="cb-trong">Chưa có tờ nào.</p>{% endif %}
   </div>
@@ -99,8 +114,47 @@ Khối SỐ LIỆU của CHECK BILL V2 — HTMX thay trọn khối này sau mỗ
 {% if kpi.so_da %}
 <div class="cb-chan">
   <button type="button" class="cb-kiem-lai" hx-post="{% url 'pos:check_bill_kiem_lai' %}" hx-vals='{"d": "{{ ngay|date:"Y-m-d" }}"}'
-          hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do"
+          hx-target="#cb-so-lieu" hx-swap="innerHTML" hx-include="#cb-do,#cb-cd"
           hx-confirm="KIỂM LẠI cả ngày {{ ngay|date:'d/m/Y' }}? Toàn bộ {{ kpi.so_da }} tờ đã kiểm sẽ bị xóa để quét lại từ đầu.">↺ Kiểm lại cả ngày</button>
+</div>
+{% endif %}
+{% endif %}
+
+{% if cd %}{# DÒ CẦM ĐỒ (29/09/2026): đọc khj_cd, không phụ thuộc máy KK — xem check_bill.do_cam_do #}
+{% if cd_loi %}<div class="cb-tin cb-tin--loi" role="alert">Không đọc được sổ cầm đồ: {{ cd_loi }}</div>{% else %}
+<div class="cb-doi cb-doi--cd">
+  <div class="cb-the cb-the--cd">
+    <h2>GIAO DỊCH CẦM ĐỒ <span class="cb-dem">{{ cd_tong.so }}</span>
+      <small>Chi ra {{ cd_tong.chi|tien_tran }} ₫ · Thu vào {{ cd_tong.thu|tien_tran }} ₫ · TM {{ cd_tong.tien_mat|tien_tran }} · CK {{ cd_tong.ck|tien_tran }} · Lãi {{ cd_tong.lai|tien_tran }} ₫</small></h2>
+    {% if cd_gd %}<div class="cb-cuon"><table class="cb-bang">
+      <thead><tr><th>GIỜ</th><th>MÃ PHIẾU</th><th>NGHIỆP VỤ</th><th>NHÂN VIÊN · KHÁCH</th><th class="cb-so">TỔNG</th>
+        <th class="cb-so" title="Tiền mặt khách đưa thực — quầy đã xác nhận (chỉ phiên tiền vào)">THU KHÁCH</th>
+        <th class="cb-so">CashPay</th><th class="cb-so">CardPay</th><th class="cb-so">LÃI</th><th>ĐỐI SOÁT</th></tr></thead>
+      <tbody>{% for r in cd_gd %}<tr{% if r.huy %} class="cb-dong--huy"{% endif %}>
+        <td class="cb-mo">{{ r.gio }}</td><td class="cb-ma">{{ r.ma }}</td>
+        <td><span class="cb-nv cb-nv--{% if r.ra_tien %}ra{% else %}vao{% endif %}">{{ r.nghiep_vu }}</span></td>
+        <td class="cb-ten" title="{{ r.nv }} · {{ r.khach }}"><b>{{ r.nv|default:"—" }}</b><small>· {{ r.khach }}</small></td>
+        <td class="cb-so cb-tien--{% if r.ra_tien %}ra{% else %}vao{% endif %}"><b>{{ r.tong|tien_tran }}</b></td>
+        <td class="cb-so">{% if r.thu_khach is None %}<span class="cb-mo">—</span>{% else %}{{ r.thu_khach|tien_tran }}{% endif %}</td>
+        <td class="cb-so">{{ r.tien_mat|tien_tran }}</td><td class="cb-so">{{ r.ck|tien_tran }}</td>
+        <td class="cb-so">{{ r.lai|tien_tran }}</td>
+        <td>{% if r.huy %}<span class="cb-lech">Đã hủy</span>{% elif r.doi_soat_lop == 'S' %}<span class="cb-khop">✓ {{ r.doi_soat }}</span>{% elif r.ck %}<span class="cb-lech">{{ r.doi_soat }}</span>{% else %}<span class="cb-mo">{{ r.doi_soat }}</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="cb-trong">Chưa có phiên cầm đồ nào trong ngày.</p>{% endif %}
+  </div>
+  <div class="cb-the cb-the--ck">
+    <h2>CK CẦM ĐỒ TRONG NGÀY <span class="cb-dem">{{ cd_tong.ck_so }}</span>
+      <small>{{ cd_tong.ck_tien|tien_tran }} ₫ · đối chiếu báo có ngân hàng loại CD{% if cd_tong.ck_cho %} · <b class="cb-lech">{{ cd_tong.ck_cho }} chưa khớp</b>{% endif %}{% if cd_tong.ck_ghi_tm %} · <b class="cb-lech">⚠ {{ cd_tong.ck_ghi_tm }} phiên KHCD ghi tiền mặt nhưng ngân hàng đã CK</b>{% endif %}{% if cd_tong.ck_la %} · <b class="cb-lech">{{ cd_tong.ck_la }} báo có lạ</b>{% endif %}</small></h2>
+    {% if cd_ck %}<div class="cb-cuon"><table class="cb-bang">
+      <thead><tr><th>GIỜ</th><th>MÃ CHỨNG TỪ</th><th>NGHIỆP VỤ · MÃ PHIẾU</th><th class="cb-so" title="Xanh = tiền VÀO tài khoản · Đỏ = tiệm chuyển RA">NGÂN HÀNG</th><th>ĐỐI CHIẾU</th></tr></thead>
+      <tbody>{% for r in cd_ck %}<tr title="{% if r.mo_ta %}Nội dung CK: {{ r.mo_ta }}{% else %}{{ r.nv }} · {{ r.khach }} · KHCD: {{ r.khcd|default:'—' }}{% endif %}">
+        <td class="cb-mo">{{ r.gio }}</td><td class="cb-ma">{{ r.ma_ct|default:"—" }}</td>
+        <td>{% if r.nghiep_vu %}<span class="cb-nv cb-nv--{% if r.ra_tien %}ra{% else %}vao{% endif %}">{{ r.nghiep_vu }}</span> <small class="cb-mo">{{ r.sku }}</small>{% else %}<span class="cb-mo">— không gắn phiên —</span>{% endif %}</td>
+        <td class="cb-so">{% if r.nhan %}<b class="cb-tien--{% if r.ra_tien %}ra{% else %}vao{% endif %}">{% if r.ra_tien %}−{% endif %}{{ r.nhan|tien_tran }}</b> <small class="cb-mo">{{ r.gio_bao }}</small>{% else %}<span class="cb-lech" title="Phiên ghi CK {{ r.ck|tien_tran }} ₫ nhưng chưa thấy ngân hàng báo">— (phiên {{ r.ck|tien_tran }})</span>{% endif %}</td>
+        <td>{% if r.trang_thai == 'khop' %}<span class="cb-khop">✓ khớp</span>{% elif r.trang_thai == 'lech' %}<span class="cb-lech">⚠ lệch tiền</span>{% elif r.trang_thai == 'ghi_tm' %}<span class="cb-lech">⚠ KHCD ghi tiền mặt</span>{% elif r.trang_thai == 'la' %}<span class="cb-lech">báo có lạ</span>{% else %}<span class="cb-lech">chưa thấy báo có</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="cb-trong">Không có khoản CK cầm đồ nào trong ngày.</p>{% endif %}
+  </div>
 </div>
 {% endif %}
 {% endif %}

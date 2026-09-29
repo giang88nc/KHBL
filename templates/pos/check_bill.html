@@ -12,7 +12,7 @@ Khung ngoài: tiêu đề + chọn ngày + THANH QUÉT (đứng yên, luôn gi�
 <link rel="icon" href="{% static 'img/favicon.png' %}">
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
 <link rel="stylesheet" href="{% static 'css/khbl.css' %}?v=20260911.coc-identity">
-<link rel="stylesheet" href="{% static 'css/check_bill.css' %}?v=20260923.1">
+<link rel="stylesheet" href="{% static 'css/check_bill.css' %}?v=20260929.2">
 <script defer src="{% static 'js/vendor/htmx.min.js' %}"></script>
 </head>
 <body class="cb-body" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -26,7 +26,7 @@ Khung ngoài: tiêu đề + chọn ngày + THANH QUÉT (đứng yên, luôn gi�
       <a class="cb-ngay__nut" href="?d={{ ngay|date:'Y-m-d'|default:'' }}" data-lui="1" title="Ngày trước" aria-label="Ngày trước">‹</a>
       <label><span>Ngày làm việc</span>
         <input type="date" value="{{ ngay|date:'Y-m-d' }}" max="{{ hom_nay|date:'Y-m-d' }}"
-               onchange="if(this.value)location.search='?d='+this.value+(document.getElementById('cb-do').value==='1'?'&do=1':'')"></label>
+               onchange="if(this.value)location.search='?d='+this.value+(document.getElementById('cb-do').value==='1'?'&do=1':'')+(document.getElementById('cb-cd').value==='1'?'&cd=1':'')"></label>
       <a class="cb-ngay__nut" href="#" data-toi="1" title="Ngày sau" aria-label="Ngày sau">›</a>
       {% if ngay != hom_nay %}<a class="cb-hom-nay" href="?">Hôm nay</a>{% endif %}
     </div>
@@ -36,12 +36,17 @@ Khung ngoài: tiêu đề + chọn ngày + THANH QUÉT (đứng yên, luôn gi�
         hx-indicator="#cb-quet" hx-disabled-elt="find button">
     <input type="hidden" name="d" value="{{ ngay|date:'Y-m-d' }}">
     <input type="hidden" id="cb-do" name="do" value="{{ do|yesno:'1,0' }}">
+    <input type="hidden" id="cb-cd" name="cd" value="{{ cd|yesno:'1,0' }}">
     <span class="cb-quet__ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 5v14M6 5v14M9 5v14M12 5v14M16 5v14M19 5v14M21 5v14"/></svg></span>
     <input id="cb-ma" name="ma" autocomplete="off" inputmode="numeric" autofocus required
            placeholder="Quét mã vạch hoặc nhập mã hóa đơn" aria-label="Mã hóa đơn">
     <button class="cb-quet__nut" type="submit">KIỂM</button>
     <button id="cb-do-nut" class="cb-do-nut{% if do %} on{% endif %}" type="button" aria-pressed="{{ do|yesno:'true,false' }}"
-            title="Hiện / ẩn: HĐ còn thiếu + CK trong ngày">{% if do %}✕ Ẩn dò phiếu{% else %}🔍 Dò phiếu{% endif %}</button>
+            data-co="cb-do" data-bat="✕ Ẩn dò phiếu bán" data-tat="🔍 Dò phiếu bán"
+            title="Hiện / ẩn: HĐ còn thiếu + CK trong ngày">{% if do %}✕ Ẩn dò phiếu bán{% else %}🔍 Dò phiếu bán{% endif %}</button>
+    <button id="cb-cd-nut" class="cb-do-nut{% if cd %} on{% endif %}" type="button" aria-pressed="{{ cd|yesno:'true,false' }}"
+            data-co="cb-cd" data-bat="✕ Ẩn dò cầm đồ" data-tat="🔍 Dò cầm đồ"
+            title="Hiện / ẩn: giao dịch cầm đồ + CK cầm đồ trong ngày">{% if cd %}✕ Ẩn dò cầm đồ{% else %}🔍 Dò cầm đồ{% endif %}</button>
     <span class="cb-quet__cho" aria-hidden="true">Đang đối chiếu KK…</span>
   </form>
 
@@ -61,20 +66,25 @@ Khung ngoài: tiêu đề + chọn ngày + THANH QUÉT (đứng yên, luôn gi�
       o.frequency.value=loi?220:880; g.gain.value=.06; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+(loi?.35:.09));
     }catch(_){}
   });
-  // DÒ PHIẾU: bật/tắt 2 bảng (HĐ còn thiếu + CK trong ngày); cờ nằm trong form quét nên quét tiếp vẫn giữ trạng thái
-  var co=document.getElementById('cb-do'), nut=document.getElementById('cb-do-nut');
-  nut.addEventListener('click',function(){
-    var bat=co.value!=='1'; co.value=bat?'1':'0';
-    nut.classList.toggle('on',bat); nut.setAttribute('aria-pressed',bat); nut.textContent=bat?'✕ Ẩn dò phiếu':'🔍 Dò phiếu';
-    htmx.ajax('GET','{% url "pos:check_bill" %}?d={{ ngay|date:"Y-m-d" }}&do='+co.value,{target:'#cb-so-lieu',swap:'innerHTML'});
-    tapTrung();
-  });
+  // DÒ PHIẾU BÁN / DÒ CẦM ĐỒ: mỗi nút bật/tắt khối của nó; cờ nằm trong form quét nên quét tiếp vẫn giữ trạng thái.
+  // 29/09/2026 (GĐ chốt): hai chế độ LOẠI TRỪ nhau — bật cái này là tắt cái kia; thẻ KPI đầu trang theo chế độ đang bật.
+  var co=document.getElementById('cb-do'), coCd=document.getElementById('cb-cd');
+  function datNut(nut,bat){ document.getElementById(nut.dataset.co).value=bat?'1':'0';
+    nut.classList.toggle('on',bat); nut.setAttribute('aria-pressed',bat); nut.textContent=bat?nut.dataset.bat:nut.dataset.tat; }
+  ['cb-do-nut','cb-cd-nut'].forEach(function(id){ var nut=document.getElementById(id);
+    nut.addEventListener('click',function(){
+      var bat=document.getElementById(nut.dataset.co).value!=='1';
+      datNut(nut,bat);
+      if(bat) datNut(document.getElementById(id==='cb-do-nut'?'cb-cd-nut':'cb-do-nut'),false);
+      htmx.ajax('GET','{% url "pos:check_bill" %}?d={{ ngay|date:"Y-m-d" }}&do='+co.value+'&cd='+coCd.value,{target:'#cb-so-lieu',swap:'innerHTML'});
+      tapTrung();
+    }); });
   // Ngày trước / sau — tính ở máy khách, không cần route riêng
   var d=new Date('{{ ngay|date:"Y-m-d" }}T00:00:00');
   function hai(v){ return (v<10?'0':'')+v; }
   // KHÔNG dùng toISOString(): đó là giờ UTC, ở VN (+7) sẽ lùi mất 1 ngày
   function chuyen(n){ var x=new Date(d); x.setDate(x.getDate()+n); var s=x.getFullYear()+'-'+hai(x.getMonth()+1)+'-'+hai(x.getDate());
-    if(s>'{{ hom_nay|date:"Y-m-d" }}')return; location.search='?d='+s+(co.value==='1'?'&do=1':''); }
+    if(s>'{{ hom_nay|date:"Y-m-d" }}')return; location.search='?d='+s+(co.value==='1'?'&do=1':'')+(coCd.value==='1'?'&cd=1':''); }
   document.querySelector('[data-lui]').addEventListener('click',function(e){e.preventDefault();chuyen(-1);});
   document.querySelector('[data-toi]').addEventListener('click',function(e){e.preventDefault();chuyen(1);});
   // 22/09/2026: BỎ tự đưa con trỏ về ô quét khi bấm lên nền trang (GĐ chốt) — bôi đen/chép số trên bảng không bị cướp focus
