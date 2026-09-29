@@ -115,3 +115,12 @@ Các bảng khác đối soát / hiển thị nên **đọc 3 cột này** thay 
 
 `manage.py test tests.test_ma_chung_tu_ck tests.test_thau_payments tests.test_ck_tra_khach tests.test_mobile_standalone_qr
 --settings=config.settings.test_price_save` (KHÔNG chạy unittest/discover — xóa DB thật).
+
+## Bẫy one-shot + VỚT LẠI (29/09/2026)
+- `gan_ma` chỉ xử lý dòng `nhan_dien_luc IS NULL` — MỘT LẦN. Webhook SePay V2 có khi chèn dòng lúc chưa có
+  `transferType` → `direction='unknown'` → `nhan_dien` trả rỗng → dòng bị đóng dấu KHÔNG mã vĩnh viễn, dù sau đó
+  chiều tiền được cập nhật `in`/`out` (ca thật #30351 HĐ 260929000162 · #30352 CĐ 26090137707172: đối soát vẫn ✓
+  vì ghép theo id ngân hàng, nhưng cột MÃ HĐ trống).
+- Vá: `vot_lai(cur, so_ngay=3)` — job 15s gọi ngay sau `gan_ma`: dòng đã đóng dấu, `ma_chung_tu IS NULL`,
+  `loai_chung_tu` rỗng, chiều `in/out`, trong 3 ngày → nhận diện lại, CHỈ ghi khi nay ra đúng 1 mã. Không bao giờ
+  đè mã đã có, không đụng dòng `NHIEU`. Test: `GanMaTests.test_vot_lai_dong_chieu_unknown`.

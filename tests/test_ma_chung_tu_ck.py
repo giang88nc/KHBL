@@ -141,6 +141,22 @@ class GanMaTests(TestCase):
             self.assertEqual(MC.gan_ma(c)['_so_dong'], 0)                             # đã xử lý → không làm lại
 
 
+    def test_vot_lai_dong_chieu_unknown(self):
+        # 29/09/2026: webhook chèn dòng lúc SePay chưa báo chiều tiền → gan_ma đóng dấu rỗng; chiều cập nhật sau → vớt lại
+        from django.db import connection
+        with connection.cursor() as c:
+            c.execute("INSERT INTO bank_notifications (id,direction,description,transaction_time) "
+                      "VALUES (8,'unknown','CK HD 260921000162','2026-09-21 18:15:37')")
+            MC.gan_ma(c)
+            c.execute('SELECT ma_chung_tu, loai_chung_tu FROM bank_notifications WHERE id=8')
+            self.assertEqual(c.fetchone(), (None, ''))
+            self.assertEqual(MC.vot_lai(c, so_ngay=100000), 0)                      # còn 'unknown' → chưa vớt
+            c.execute("UPDATE bank_notifications SET direction='in' WHERE id=8")
+            self.assertEqual(MC.vot_lai(c, so_ngay=100000), 1)
+            c.execute('SELECT id, ma_chung_tu, loai_chung_tu FROM bank_notifications WHERE id IN (4,5,8) ORDER BY id')
+            self.assertEqual(c.fetchall(), [(4, None, 'NHIEU'), (5, None, ''), (8, '260921000162', 'HD')])
+            self.assertEqual(MC.vot_lai(c, so_ngay=100000), 0)                      # đã có mã → không làm lại
+
     def test_api_noi_bo_sau_upsert(self):
         from django.db import connection
         from django.test import Client, override_settings

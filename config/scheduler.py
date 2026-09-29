@@ -50,6 +50,7 @@ def _job_gan_ma_ck():
     from apps.pos import ma_chung_tu_ck as MC
     with transaction.atomic(), connection.cursor() as cur:
         MC.gan_ma(cur, gioi_han=1000)
+        MC.vot_lai(cur)                 # 29/09: vớt dòng bị đóng dấu lúc chiều tiền còn 'unknown'
 
 
 def _job_sync_money_flow_nhanh():

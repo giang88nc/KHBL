@@ -8,7 +8,8 @@
                               14 số  = cầm đồ (YYMM + phiếu 5 số + phiên 5 số, vd 26090178206824)
                               KHBL + 10 số = QR độc lập (giây epoch, vd KHBL1790054215)
       OUT (direction='out') : THANH TOAN TIEN VANG + 4 số = 4 số cuối bill_code HĐ ĐẦU (STT trong ngày) → thâu / đổi dư
-                              THANH TOAN TIEN VANG 1 + 5 số = 5 số cuối MÃ PHIÊN cầm đồ (vd …VANG 101234) — CHƯA nối phiếu
+                              THANH TOAN TIEN VANG + 6 số = log phiên cầm đồ KHCD (vd …VANG 101234, …VANG 006830) — CHƯA nối phiếu
+      direction khác 'in'/'out' (SePay thiếu transferType → 'unknown') : KHÔNG nhận diện gì
   · CHỈ nhận dạng mới — các dạng cũ (QR BH/CD/DC/KH+12 ký tự, KH2Q…, TDC…, yymmddHHmm+CD/CT/KC, 'VANG 1-…')
     KHÔNG nhận diện nữa → "Không rõ nguồn". Hằng QR_DOC_LAP / MA_COC còn giữ CHỈ vì luồng đối soát
     mobile_qr / deposit_bank vẫn cần cho phiếu đã phát trước ngày đổi — không dùng trong nhan_dien.
@@ -59,7 +60,10 @@ def nhan_dien(mo_ta, huong=IN, ngay=None):
     from .money_in import codes as so_chung_tu
     nd = str(mo_ta or '').upper()
     ra = []
-    if str(huong or '').lower() == OUT:
+    huong = str(huong or '').lower()
+    if huong not in (IN, OUT):          # 29/09/2026: không rõ chiều tiền (thiếu transferType) → KHÔNG đoán, không gán mã
+        return []
+    if huong == OUT:
         dau = ngay.strftime('%y%m%d') if ngay else ''
         for m in OUT_CAM_DO.findall(nd):
             ra.append(Ma(CHI_CD, dau + m if dau else m, 'TIEN VANG + 6 số phiên cầm đồ'))
@@ -203,3 +207,28 @@ def gan_ma(cur, tu=None, gioi_han=5000, ghi=True, ids=None):
                         'WHERE id=%s AND nhan_dien_luc IS NULL', [ma, loai, bay_gio, r['id']])
     dem['_so_dong'] = len(rows)
     return dem
+
+
+def vot_lai(cur, so_ngay=3, ghi=True):
+    """VỚT LẠI (29/09/2026): dòng ĐÃ đóng dấu nhan_dien_luc mà KHÔNG ra mã (loai_chung_tu rỗng) trong `so_ngay` gần nhất
+    → nhận diện LẠI, CHỈ ghi khi nay ra đúng 1 mã. Vá lỗ one-shot của gan_ma: webhook chèn dòng lúc SePay chưa gửi
+    transferType (direction='unknown' → nhan_dien trả rỗng → bị đóng dấu vĩnh viễn), sau đó chiều tiền được cập nhật
+    'in'/'out' nhưng không ai nhận diện lại (ca #30351/#30352 ngày 29/09). Không bao giờ đè mã đã có hay dòng NHIEU."""
+    import datetime as dt
+    from django.utils import timezone
+    tu = (timezone.localdate() - dt.timedelta(days=so_ngay)).isoformat()
+    cur.execute("SELECT id, direction, description, transaction_time FROM bank_notifications "
+                "WHERE nhan_dien_luc IS NOT NULL AND ma_chung_tu IS NULL AND COALESCE(loai_chung_tu,'')='' "
+                "AND direction IN ('in','out') AND transaction_time >= %s ORDER BY id", [tu])
+    rows = [dict(zip(('id', 'direction', 'description', 'transaction_time'), r)) for r in cur.fetchall()]
+    bay_gio = timezone.localtime().replace(tzinfo=None, microsecond=0)
+    vot = 0
+    for r in rows:
+        ma, loai = ket_qua(r)
+        if not ma:
+            continue
+        vot += 1
+        if ghi:
+            cur.execute("UPDATE bank_notifications SET ma_chung_tu=%s, loai_chung_tu=%s, nhan_dien_luc=%s "
+                        "WHERE id=%s AND ma_chung_tu IS NULL AND COALESCE(loai_chung_tu,'')=''", [ma, loai, bay_gio, r['id']])
+    return vot

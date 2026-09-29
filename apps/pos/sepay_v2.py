@@ -47,10 +47,21 @@ def _v1_ma(description):
     return '', ''
 
 
-def _v1_trang_thai(raw, huong):
-    if huong != 'in':
+def _v1_trang_thai(raw, huong, mo_ta=''):
+    if huong == 'out':
         return 'ignored', 'Tiền ra'
+    if huong != 'in':
+        return 'unmatched', 'Không rõ chiều tiền (thiếu transferType)'
     code = raw.upper()
+    if not code:
+        # 29/09/2026: mã KIỂU MỚI (12 số trần · KHBL+10 · 14 số cầm đồ) không có "+ 6 số" nên luật V1 không bắt được —
+        # hỏi bộ nhận diện chung để cột match_status không còn báo "Chưa xác định?" sai cho gần hết tiền vào.
+        from . import ma_chung_tu_ck as MC
+        ds = MC.nhan_dien(mo_ta, MC.IN)
+        if len(ds) == 1:
+            return 'matched', ds[0].ten
+        if len(ds) > 1:
+            return 'unmatched', 'Nhiều mã chứng từ — kiểm tra tay'
     if 'CT' in code or code.startswith('TDC'):
         return 'matched', 'Cọc tiền'
     if 'CD' in code:
@@ -84,10 +95,11 @@ def dong_tu_sepay(data):
     ref = str(data.get('id') or data.get('referenceCode') or '').strip()   # id sự kiện = khóa chống trùng (như V1)
     if not ref:
         raise ValueError('Thiếu id/referenceCode của SePay')
-    huong = str(data.get('transferType') or 'in').strip().lower()
+    huong = str(data.get('transferType') or '').strip().lower()
+    huong = huong if huong in ('in', 'out') else 'unknown'      # 29/09/2026: thiếu/lạ KHÔNG còn mặc định là tiền vào
     mo_ta = data.get('content') or ''
     raw, norm = _v1_ma(mo_ta)
-    st, msg = _v1_trang_thai(raw, huong)
+    st, msg = _v1_trang_thai(raw, huong, mo_ta)
     return dict(provider=PROVIDER, ref_code=ref, bank_number=data.get('accountNumber'), bank_name=data.get('gateway'),
                 acc_name=None, trans_amount=_tien(data.get('transferAmount')), balance_after=_tien(data.get('accumulated')),
                 description=mo_ta, full_code=f'{raw}{norm}', bill_code_raw=raw, bill_code_norm=norm,
