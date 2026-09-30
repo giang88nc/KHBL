@@ -870,6 +870,120 @@ def pmv_out_allocate_retail(expected, bank, *, target='kk', verify_only=False):
             cn.close()
 
 
+# ─────── PHIẾU THÂU — CK ghi SAU đối soát (GĐ chốt 29/09/2026: "thống nhất như bán") ───────
+# THANH TOÁN phiếu thâu không còn gọi CARDPAY_Ins: KK nằm như chi trọn TIỀN MẶT (CashPay=0, CardPay=0 — đúng dạng
+# phiếu tiền mặt thật trên KK). Đối soát khớp giao dịch ngân hàng RA xong mới đặt CardPay = −CK, CashPay = −(tổng − CK)
+# (CK đủ → CashPay 0, y dạng phiếu CK do CARDPAY_Ins ghi). Chỉ HAI cột tiền, không proc, không két — y khuôn
+# pmv_out_allocate_retail. Nhóm nhiều dòng: đặt cả nhóm trong MỘT giao dịch SQL, đọc lại từng dòng.
+OUT_BUYGOLD_COLUMNS = ('TrnID', 'BillCode', 'TrnDate', 'TrnDateTime_Upd', 'Status', 'IsDel', 'TotalAmount',
+                       'CashPay', 'CardPay')
+
+
+def pmv_out_snapshot_buygold(trn_ids, *, target='kk'):
+    """Đọc hẹp các phiếu thâu của nhóm (đã chốt, còn hiệu lực). Trả list dict theo đúng thứ tự trn_ids."""
+    ids = [str(t or '').strip() for t in trn_ids if str(t or '').strip()]
+    if not ids:
+        raise ValueError('Thiếu phiếu thâu.')
+    rows = pmv_read(f"SELECT {','.join(OUT_BUYGOLD_COLUMNS)} FROM TRN_RT_BUYGOLD WITH (NOLOCK) "
+                    f"WHERE TrnID IN ({','.join('?' * len(ids))})", tuple(ids), tag='ck-thau', target=target,
+                    audit=False, query_timeout=10)
+    by = {r['TrnID']: r for r in rows}
+    if len(rows) != len(ids) or set(by) != set(ids):
+        raise ValueError('Không xác định đủ phiếu thâu của nhóm.')
+    out = []
+    for t in ids:
+        r = by[t]
+        if r['Status'] != 'C' or str(r['IsDel']) != '0':
+            raise ValueError(f'Phiếu thâu {r.get("BillCode") or t} chưa chốt hoặc đã hủy.')
+        if Decimal(r['TotalAmount'] or 0) <= 0:
+            raise ValueError(f'Phiếu thâu {r.get("BillCode") or t} có tổng tiền không hợp lệ.')
+        out.append({k: str(v) if v is not None else '' for k, v in r.items()})
+    return out
+
+
+def chia_ck_thau(expected, bank_total):
+    """Chia tổng CK đã khớp cho các phiếu trong nhóm: lần lượt theo thứ tự, mỗi phiếu tối đa bằng tổng tiền của nó.
+    Trả list số CK DƯƠNG từng phiếu. Vượt tổng cả nhóm → lỗi."""
+    con = Decimal(str(bank_total))
+    if con < 0 or con != con.to_integral_value():
+        raise ValueError('Tổng CK không hợp lệ.')
+    ra = []
+    for r in expected:
+        phan = min(con, Decimal(r['TotalAmount']))
+        ra.append(phan)
+        con -= phan
+    if con > 0:
+        raise ValueError('Tổng CK đã đối soát lớn hơn tổng tiền nhóm phiếu thâu.')
+    return ra
+
+
+def _tach_tien_thau(total, ck):
+    """(CashPay, CardPay) đúng dạng KK: CK 0 → (0, 0) như phiếu tiền mặt · có CK → (−(tổng−CK), −CK)."""
+    return (Decimal(0), Decimal(0)) if not ck else (-(total - ck), -ck)
+
+
+def pmv_out_allocate_buygold(expected, bank_total, *, target='kk', verify_only=False):
+    """Đặt tiền CK = bank_total (DƯƠNG, tổng các liên kết còn hiệu lực; 0 khi gỡ hết) cho nhóm phiếu thâu.
+    Đặt TỔNG (không cộng dồn) nên chạy lại an toàn. Phiếu đổi bất kỳ cột nào khác so với snapshot thì dừng."""
+    from .models import PmvState
+    if verify_only and target != 'sandbox':
+        raise ValueError('Chạy thử chỉ dành cho bản thử.')
+    if target not in ('kk', 'sandbox') or (target == 'kk' and not duoc_ghi_kk()) or PmvState.get('pmv_write_lock', '0') == '1':
+        raise PmvBlocked('Chốt ghi PMV đang đóng; giữ yêu cầu chờ đồng bộ.')
+    if not expected or any(set(r) != set(OUT_BUYGOLD_COLUMNS) for r in expected):
+        raise ValueError('Snapshot nguồn không đúng cấu trúc.')
+    phan = chia_ck_thau(expected, bank_total)
+    columns = list(OUT_BUYGOLD_COLUMNS)
+    cn = None
+    try:
+        cn = _connect_dich(target, autocommit=False)
+        cn.timeout = 15
+        cur = cn.cursor()
+        cur.execute("SELECT name FROM sys.triggers WHERE parent_id=OBJECT_ID('TRN_RT_BUYGOLD') AND is_disabled=0")
+        if cur.fetchone():
+            raise ValueError('Bảng phiếu thâu có trigger mới; cần kiểm tra tác động trước khi ghi trực tiếp.')
+        ghi = []
+        for r, ck in zip(expected, phan):
+            cur.execute(f"SELECT {','.join(columns)} FROM TRN_RT_BUYGOLD WITH (UPDLOCK,HOLDLOCK) WHERE TrnID=?",
+                        (r['TrnID'],))
+            rows = cur.fetchall()
+            if len(rows) != 1:
+                raise ValueError('Mã phiếu thâu không còn duy nhất.')
+            actual = {k: str(v) if v is not None else '' for k, v in zip(columns, rows[0])}
+            if any(actual[k] != r[k] for k in columns if k not in ('CashPay', 'CardPay')):
+                raise ValueError('Phiếu thâu thay đổi trong lúc đối soát; chưa ghi tiền.')
+            total = Decimal(r['TotalAmount'])
+            muc = _tach_tien_thau(total, ck)
+            hien = (Decimal(actual['CashPay'] or 0), Decimal(actual['CardPay'] or 0))
+            truoc = (Decimal(r['CashPay'] or 0), Decimal(r['CardPay'] or 0))
+            if hien not in (truoc, muc):
+                raise ValueError('Tiền phiếu thâu đã được tác vụ khác sửa.')
+            if hien != muc:
+                cur.execute('UPDATE TRN_RT_BUYGOLD SET CashPay=?,CardPay=? WHERE TrnID=? AND BillCode=?',
+                            (muc[0], muc[1], r['TrnID'], r['BillCode']))
+                if cur.rowcount != 1:
+                    raise ValueError('Không cập nhật đúng một phiếu thâu.')
+            cur.execute('SELECT CashPay,CardPay FROM TRN_RT_BUYGOLD WHERE TrnID=? AND BillCode=?', (r['TrnID'], r['BillCode']))
+            if tuple(Decimal(str(v or 0)) for v in cur.fetchone()) != muc:
+                raise ValueError('Đọc lại tiền phiếu thâu không khớp.')
+            ghi.append(f'{r["BillCode"]}: CashPay={muc[0]}; CardPay={muc[1]}')
+        if verify_only:
+            cn.rollback()
+        else:
+            cn.commit()
+        _audit('EXEC', 'ck-thau', f'[{target}] TRN_RT_BUYGOLD ' + ' | '.join(ghi)
+               + f'; no till{" (thử, đã rollback)" if verify_only else ""}')
+    except Exception as exc:
+        if cn is not None:
+            cn.rollback()
+        _audit('EXEC', 'ck-thau', f'[{target}] TRN_RT_BUYGOLD {",".join(r.get("BillCode", "") for r in expected)}',
+               ok=False, error=exc)
+        raise
+    finally:
+        if cn is not None:
+            cn.close()
+
+
 def pmv_deposit_zalo(trn_id, next_day, number, *, target, tag='datcoc-zalo'):
     """Mốc nhắc được duyệt: chỉ Description + dấu phiên bản; không gọi proc tài chính."""
     import datetime as dt

@@ -28,6 +28,37 @@ BANK_FIELDS = ('id,provider,ref_code,bank_number,bank_name,trans_amount,transact
                'ma_chung_tu,loai_chung_tu')
 
 
+# ─────── CK PHIẾU THÂU GHI SAU ĐỐI SOÁT (GĐ chốt 29/09/2026) ───────
+# Từ nhóm thâu có pk ≥ mốc này: THANH TOÁN để KK nằm tiền mặt, CardPay chỉ ghi khi đối soát khớp (như bán-đổi).
+# Nhóm CŨ hơn mốc giữ nguyên cách cũ (CardPay đã ghi lúc thanh toán) — GĐ chốt không ghi lại KK ngày đã qua.
+# Mốc do views_thau.thau_thanh_toan tự đặt ở lần THANH TOÁN đầu tiên chạy mã mới (PmvState, không cần migration).
+MOC_CK_SAU = 'thau_ck_sau_doi_soat_tu_nhom'
+
+
+def moc_ck_sau():
+    try:
+        return int(PmvState.get(MOC_CK_SAU, '0') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def ck_sau_doi_soat(group, moc=None):
+    """Nhóm THÂU này theo cách mới (KK tiền mặt → khớp mới ghi CardPay)?"""
+    moc = moc_ck_sau() if moc is None else moc
+    return bool(group and moc and getattr(group, "nghiep_vu", ThauNhom.THAU) == ThauNhom.THAU and group.pk >= moc)
+
+
+def muc_kk_hop_le(links, paid):
+    """Số CK trên KK được coi là DO ĐỐI SOÁT GHI: 0 · tổng hiện tại · từng khoản · mọi tổng cộng dồn theo thứ tự nối
+    (GĐ chốt 29/09/2026: một phiếu CK nhiều lần → cộng dồn). Số lạ ngoài tập này = ai đó sửa tay trên PMV."""
+    ok, cong = {Decimal(0), Decimal(paid or 0)}, Decimal(0)
+    for l in sorted(links or [], key=lambda l: l.pk or 0):
+        ok.add(Decimal(l.amount))
+        cong += Decimal(l.amount)
+        ok.add(cong)
+    return ok
+
+
 def serial(value):
     return json.loads(json.dumps(value, default=str, sort_keys=True))
 
@@ -54,27 +85,36 @@ def catalog(d1, d2):
     cached = {g.trn_id: g for g in GoldBill.objects.filter(trn_id__in=[r['TrnID'] for r in raw])
               .only('trn_id', 'tien_ck', 'tong').order_by()}
     orders = compact(raw, groups)
+    moc = moc_ck_sau()
     for row in orders:
         row['nghiep_vu'] = ThauNhom.THAU
         ids = sorted(m['TrnID'] for m in row['members'])
         group = membership.get(row['TrnID'])
         receiver = {k: getattr(group, k, '') for k in ('ck_bank', 'ck_stk', 'ck_ten', 'ck_nd')}
-        required = sum((-M.dec(m.get('CardPay')) for m in row['members'] if M.dec(m.get('CardPay')) < 0), M.D0)
+        kk_ck = sum((-M.dec(m.get('CardPay')) for m in row['members'] if M.dec(m.get('CardPay')) < 0), M.D0)
+        moi = ck_sau_doi_soat(group, moc)
+        # cách MỚI: số cần CK lấy từ NHÓM (KK chỉ có CardPay sau khi khớp) · cách CŨ: CardPay ghi lúc thanh toán
+        required = M.dec(group.tien_ck) if moi else kk_ck
         problems = []
         if row['partial_group'] or len(raw) >= 1000:
             problems.append('Danh sách chưa chứa đầy đủ nhóm hoặc đã đạt giới hạn 1.000 phiếu.')
         if any(m['Status'] != 'C' or str(m['IsDel']) != '0' for m in row['members']):
             problems.append('Phiếu chưa chốt hoặc đã bị hủy.')
-        if group and M.dec(group.tien_ck) != required:
+        if group and not moi and M.dec(group.tien_ck) != required:
             problems.append('Tiền CK lưu ở nhóm khác PMV.')
         anchor = group.trn_ids[0] if group else ids[0]
         gb = cached.get(anchor)
         if gb and (M.dec(gb.tien_ck) != required or M.dec(gb.tong) != M.dec(row['SoTien'])):
             problems.append('Thông tin gold_bill khác tổng nhóm PMV.')
+        # cách mới: snapshot KHÔNG gồm CardPay — chính việc ghi CK sau khớp làm cột đó đổi (y như bán-đổi)
+        cot = ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'SoTien') if moi else               ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'CardPay', 'SoTien')
         snapshot = {'ids': ids, 'receiver': receiver, 'required': str(required),
-                    'bills': serial([{k: m.get(k) for k in ('TrnID', 'BillCode', 'CreatedDate', 'Status', 'IsDel', 'CardPay', 'SoTien')}
-                                     for m in sorted(row['members'], key=lambda m: m['TrnID'])])}
-        row.update(order_key=key(ids), ids=ids, required=required, snapshot=snapshot, problems=problems, live=live, bank=group)
+                    'bills': serial([{k: m.get(k) for k in cot} for m in sorted(row['members'], key=lambda m: m['TrnID'])])}
+        if moi:
+            snapshot['ck_sau'] = True
+            row['tien_ck'] = required       # cột CHUYỂN KHOẢN hiện số CẦN chuyển, không phải CardPay KK (còn 0 tới khi khớp)
+        row.update(order_key=key(ids), ids=ids, required=required, snapshot=snapshot, problems=problems, live=live, bank=group,
+                   kk_ck=kk_ck, ck_sau=moi)
     doi = catalog_doi(d1, d2) + catalog_camdo(d1, d2)
     if doi:     # chỉ xếp lại khi thật có hóa đơn đổi — danh sách chỉ-thâu giữ nguyên thứ tự cũ
         orders = sorted(orders + doi, key=lambda o: (str(o.get('TrnDate') or ''), str(o.get('TrnTime') or ''),
@@ -174,8 +214,9 @@ def catalog_camdo(d1, d2):
 
 
 def tai_khoan_cam_do():
-    """Tài khoản chi tiền cầm đồ = gold_bank type 'pawn' đang dùng (127606)."""
-    return tuple(str(r['bank_number']) for r in query("SELECT bank_number FROM gold_bank WHERE Active=1 AND LOWER(type)='pawn'"))
+    """Tài khoản được CHI tiền cầm đồ = MỌI tài khoản gold_bank đang dùng (GĐ chốt 30/09/2026: "linh động CK" — trước đó
+    chỉ TK type 'pawn' 127606, nên 3 khoản chi cầm đồ 29/09 chuyển từ 666141168 không khớp được)."""
+    return tuple(str(r['bank_number']) for r in query("SELECT bank_number FROM gold_bank WHERE Active=1"))
 
 
 def tranh_chap(order, item, claimants):
@@ -299,7 +340,7 @@ def eligible(bank, accounts=None, nghiep_vu=None, tk_cam_do=()):
     Tham số accounts giữ cho chỗ gọi cũ nhưng KHÔNG dùng nữa: danh sách tài khoản lấy từ hằng trên chứ không
     từ bảng gold_bank, để khỏi vô tình nhận tiền ra từ tài khoản khác của tiệm.
     """
-    tk = tk_cam_do if nghiep_vu == ThauNhom.CAMDO else TAI_KHOAN_TRA     # cầm đồ chi từ TK cầm đồ (22/09/2026)
+    tk = tk_cam_do if nghiep_vu == ThauNhom.CAMDO else TAI_KHOAN_TRA     # cầm đồ: mọi TK đang dùng (30/09/2026)
     return (str(bank.get('direction', '')).lower() == 'out'
             and M.dec(bank['trans_amount']) > 0
             and str(bank.get('bank_number') or '') in tk
@@ -356,8 +397,11 @@ def inspect(d1, d2):
             foreign = foreign or ((bank['bill_code_raw'] or '').startswith('TBG') and bank['bill_code_raw'] not in order['ids'])
             item = dict(bank, exact=exact == 'ma', conflict=bool(foreign or (bank['ref_code'] and refs[ref] > 1)))
             candidates.append(item)
-            claims[bank['id']] += 1
-            claimants.setdefault(bank['id'], []).append((order.get('nghiep_vu'), order['required'], order['order_key']))
+            # 30/09/2026: CHỈ phiếu khớp ĐỦ mã (cùng ngày) mới là bên tranh chấp — phiếu khác ngày chỉ trùng đuôi không bao
+            # giờ nối được (quy tắc "chỉ trong ngày"), để nó tính thì giao dịch đúng ngày bị kẹt "mơ hồ" khi job quét 3 ngày.
+            if exact == 'ma':
+                claims[bank['id']] += 1
+                claimants.setdefault(bank['id'], []).append((order.get('nghiep_vu'), order['required'], order['order_key']))
         order['candidates'] = candidates
     for order in orders:
         related = [l for l in history if set(l.trn_ids) & set(order['ids'])]
@@ -372,8 +416,7 @@ def inspect(d1, d2):
                 problems.append('Giao dịch ngân hàng đã thay đổi hoặc không còn hợp lệ.')
             if bank and bank.get('ref_code') and refs[(bank['provider'], bank['bank_number'], bank['ref_code'])] > 1:
                 problems.append('Mã giao dịch ngân hàng bị trùng sau khi liên kết.')
-        if order.get('nghiep_vu') == ThauNhom.DOI and order['kk_ck'] not in (
-                {Decimal(0), paid} | {Decimal(l.amount) for l in related}):
+        if (order.get('nghiep_vu') == ThauNhom.DOI or order.get('ck_sau')) and                 Decimal(order['kk_ck']) not in muc_kk_hop_le(related, paid):
             problems.append('CK trên KK khác số đã đối soát — cần kiểm tra.')
         if order['required'] == 0 and not active:
             status = 'review' if problems and any('CK' in p for p in problems) else 'na'
@@ -390,12 +433,65 @@ def inspect(d1, d2):
             status = 'review' if order['candidates'] else 'unconfirmed'
         for item in order['candidates']:
             item['ambiguous'] = tranh_chap(order, item, claimants)   # chỉ-thâu: y hệt claims > 1 như trước
-            item['can_link'] = not problems and not active and not item['conflict'] and M.dec(item['trans_amount']) == order['required']
+            # GĐ chốt 29/09/2026: (2) CK NHIỀU LẦN → cộng dồn: mỗi giao dịch được nối khi tổng đã nối + nó ≤ số cần CK
+            # (3) CHỈ TRONG NGÀY: giao dịch phải trùng đủ mã 12 số (cùng ngày phiếu) — khớp đuôi khác ngày chỉ hiện để xem
+            tien = M.dec(item['trans_amount'])
+            item['can_link'] = (not problems and not item['conflict'] and item['exact'] and tien > 0
+                                and paid + tien <= order['required'])
+            if not item['exact']:
+                item['ly_do_khong_noi'] = 'Khác ngày phiếu — chỉ đối soát giao dịch trong ngày.'
+            elif paid + tien > order['required']:
+                item['ly_do_khong_noi'] = 'Vượt số còn phải chuyển.'
             item['token'] = signing.dumps({'snapshot': order['snapshot'], 'bank': evidence(item)}, salt='thau-payment')
+        order['kk_nhan'] = nhan_ghi_kk(order, paid)
         order.update(payment_status=status, payment_label=LABELS[status], paid=paid,
                      remaining=max(Decimal(0), order['required']-paid), problems=problems,
-                     links=related, auto_blocked=bool(related), claims=claims)
+                     # người đã GỠ liên kết là có lý do → không tự nối lại; liên kết còn hiệu lực không chặn (cộng dồn)
+                     links=related, auto_blocked=any(not l.active_notification_id for l in related), claims=claims)
     return orders, live
+
+
+def nhan_ghi_kk(order, paid):
+    """Nhãn "KK đang ghi gì" cho danh sách (GĐ chốt 29/09/2026). None = không áp dụng (phiếu thâu cách cũ, cầm đồ)."""
+    if order.get('nghiep_vu') != ThauNhom.DOI and not order.get('ck_sau'):
+        return None
+    kk = Decimal(order.get('kk_ck') or 0)
+    if kk == paid:
+        return {'ok': True, 'text': f'KK: CK {M.money_vn(kk)}' if kk else 'KK: tiền mặt — chờ CK'}
+    return {'ok': False, 'text': f'KK: chờ ghi CK {M.money_vn(paid)} (đang {M.money_vn(kk)})'}
+
+
+def tien_ra_chua_noi(d1, d2):
+    """TIỀN RA TRONG NGÀY CHƯA NỐI PHIẾU (GĐ chốt 29/09/2026 — trang Thâu vào 2): mọi giao dịch RA từ tài khoản trả
+    thâu/đổi + tài khoản cầm đồ trong khoảng ngày, chưa có liên kết còn hiệu lực, kèm lý do để người kiểm biết vì sao.
+    CHỈ ĐỌC. Trả list dict (mới nhất trước)."""
+    tk = set(TAI_KHOAN_TRA) | set(tai_khoan_cam_do())
+    if not tk:
+        return []
+    start = dt.date.fromisoformat(d1).isoformat()
+    end = (dt.date.fromisoformat(d2) + dt.timedelta(days=1)).isoformat()
+    banks = query(f'SELECT {BANK_FIELDS} FROM bank_notifications WHERE transaction_time >= %s AND transaction_time < %s '
+                  "AND LOWER(direction)='out' AND bank_number IN (" + ','.join(['%s'] * len(tk)) + ') ORDER BY id DESC',
+                  [start, end, *sorted(tk)])
+    da_noi = set(ThauPaymentLink.objects.filter(active_notification_id__isnull=False)
+                 .values_list('active_notification_id', flat=True))
+    ra = []
+    for b in banks:
+        if b['id'] in da_noi:
+            continue
+        nd = (b.get('description') or '').upper()
+        ma = ma_bank(b)
+        loai = next(iter(ma))[0] if len(ma) == 1 else ('NHIEU' if ma else '')
+        if LOAI_TRU in nd:
+            ly_do = 'Chi khác ("TIEN VANG 1-")'
+        elif loai == 'NHIEU':
+            ly_do = 'Nội dung có nhiều mã — xác nhận tay'
+        elif loai:
+            ly_do = 'Có mã nhưng chưa khớp phiếu trong ngày (sai mã / sai tiền / vượt số cần chuyển)'
+        else:
+            ly_do = 'Không mang mã phiếu — tiền ra ngoài nghiệp vụ'
+        ra.append(dict(b, gio=bank_time(b), loai=loai, ma=next(iter(ma))[1] if len(ma) == 1 else '', ly_do=ly_do, co_ma=bool(loai)))
+    return ra
 
 
 def create_link(order, bank, user=None, reason='', mode='auto'):
@@ -429,21 +525,86 @@ def write_buygold_account(order, bank):
         return ' ⚠ Đã đối soát nhưng chưa ghi được số tài khoản chuyển lên KK.'
 
 
-def ghi_kk_sau(d1, d2, ids):
-    """Sau khi nối / gỡ tay: nhóm là hóa đơn BÁN-ĐỔI thì ghi ngay CardPay lên KK theo tổng liên kết còn hiệu lực.
-    Phiếu thâu (CardPay đã ghi lúc THANH TOÁN) không đụng gì. Lỗi không làm hỏng thao tác vừa xong — job 5 phút
-    doi_soat_ck sẽ ghi lại. Trả câu nối thêm vào thông báo."""
-    from . import ck_tra_khach as CK
-    if not CK.nhom_doi((list(ids) or [''])[0]):
-        return ''
+def tu_doi_soat(orders, ly_do, thu=False, toi_da=30):
+    """TỰ NỐI (dùng chung cho trang tự quét 15 giây và job doi_soat_ck 5 phút — MỘT bộ luật, GĐ chốt 29/09/2026).
+
+    Mỗi nhóm: lần lượt các giao dịch khớp ĐỦ mã trong ngày, có mã tham chiếu, không tranh chấp; nối khi tổng đã nối
+    + giao dịch ≤ số cần CK (CK nhiều lần cộng dồn). Nhóm từng bị GỠ liên kết thì để người tự xác nhận.
+    Trả list (order, bank) vừa nối (thu=True: chỉ liệt kê, không ghi)."""
+    xong, da_noi = [], set()
+    for od in orders:
+        if od['auto_blocked']:
+            continue
+        hop = sorted((b for b in od['candidates'] if b['can_link'] and not b['ambiguous'] and b['exact']
+                      and b.get('ref_code') and b['id'] not in da_noi),
+                     key=lambda b: (str(b.get('transaction_time') or ''), b['id']))
+        paid = Decimal(od['paid'] or 0)
+        for b in hop:
+            tien = M.dec(b['trans_amount'])
+            if paid + tien > od['required']:
+                continue
+            if not thu:
+                try:
+                    create_link(od, b, reason=ly_do)
+                except ValueError:          # dữ liệu vừa đổi giữa chừng — để lượt sau
+                    continue
+                write_buygold_account(od, b)
+            paid += tien
+            da_noi.add(b['id'])
+            xong.append((od, b))
+            if len(xong) >= toi_da:
+                return xong
+    return xong
+
+
+LY_DO_WEBHOOK = 'Webhook SePay: đối soát ngay khi nhận tiền ra — khớp mã trong ngày, không vượt số cần CK, không tranh chấp.'
+
+
+def doi_soat_ngay(ngay, ly_do=LY_DO_WEBHOOK, thu_lai=6, cho=5):
+    """ĐỐI SOÁT LẦN ĐẦU ngay khi webhook SePay V2 nhận giao dịch RA (GĐ chốt 30/09/2026): nối + ghi CardPay (cộng dồn) /
+    báo KHCD cho đúng NGÀY của giao dịch. Chung khóa single_run với job doi_soat_ck 5 phút + trang tự quét — bận thì chờ
+    `cho` giây thử lại tối đa `thu_lai` lần, vẫn bận thì bỏ (job 5 phút là lưới an toàn). Trả số giao dịch vừa nối."""
+    import time
+    d = ngay.isoformat() if hasattr(ngay, 'isoformat') else str(ngay)[:10]
+    for lan in range(max(1, thu_lai)):
+        with single_run() as duoc:
+            if duoc:
+                orders, live = inspect(d, d)
+                if not live:
+                    return 0
+                noi = tu_doi_soat(orders, ly_do)
+                if noi:
+                    dong_bo_sau(d, d, [t for od, _ in noi for t in od['ids']])
+                return len(noi)
+        if lan + 1 < thu_lai:
+            time.sleep(cho)
+    return 0
+
+
+def dong_bo_sau(d1, d2, ids=None):
+    """Sau khi nối / gỡ: (1) ghi CK lên KK = TỔNG liên kết còn hiệu lực cho hóa đơn bán-đổi + phiếu thâu cách mới;
+    (2) BÁO NGƯỢC KHCD cho nhóm cầm đồ (cầm đồ không có trên KK). Lỗi không làm hỏng thao tác vừa xong — job 5 phút
+    doi_soat_ck ghi bù. Trả câu nối thêm vào thông báo."""
+    from . import ck_tra_khach as CK, khcd_bao_nguoc as KB
     try:
         orders, live = inspect(d1, d2)
-        xong, loi = CK.dong_bo_ck_kk(orders, chi_ids=ids) if live else (0, ['không đọc được máy KK'])
     except Exception as exc:
-        xong, loi = 0, [str(exc)]
-    if loi:
-        return ' ⚠ Chưa ghi được CK lên máy KK — lượt chạy ngầm sẽ thử lại.'
-    return ' Đã cập nhật CK trên máy KK.' if xong else ''
+        import logging
+        logging.getLogger(__name__).warning('Đồng bộ sau đối soát: %s', exc)
+        return ' ⚠ Chưa ghi được kết quả sang KK/KHCD — lượt chạy ngầm sẽ thử lại.'
+    tin = ''
+    can_kk = [o for o in orders if (o.get('nghiep_vu') == ThauNhom.DOI or o.get('ck_sau'))
+              and (not ids or set(ids) & set(o['ids']))]
+    if can_kk:
+        xong, loi = CK.dong_bo_ck_kk(can_kk) if live else (0, ['không đọc được máy KK'])
+        tin += ' ⚠ Chưa ghi được CK lên máy KK — lượt chạy ngầm sẽ thử lại.' if loi else (
+            ' Đã cập nhật CK trên máy KK.' if xong else '')
+    cam = [o for o in orders if o.get('nghiep_vu') == ThauNhom.CAMDO and (not ids or set(ids) & set(o['ids']))]
+    if cam:
+        xong, loi = KB.dong_bo(cam)
+        tin += ' ⚠ Chưa báo được sang Cầm đồ — lượt chạy ngầm sẽ thử lại.' if loi else (
+            ' Đã báo kết quả sang Cầm đồ.' if xong else '')
+    return tin
 
 
 @login_not_required     # 22/09/2026: trang Thâu vào 2 công khai trong tiệm — lượt TỰ đối soát (automatic=1) không cần đăng nhập
@@ -489,7 +650,7 @@ def action(request):
                     link.revoke_reason = reason
                     link.save(update_fields=['active_notification_id', 'revoked_at', 'revoked_by', 'revoke_reason'])
                 return JsonResponse({'changed': 1, 'message': 'Đã gỡ liên kết và lưu lịch sử; không hoàn tiền ngân hàng.'
-                                     + ghi_kk_sau(d1, d2, link.trn_ids)})
+                                     + dong_bo_sau(d1, d2, link.trn_ids)})
             orders, live = inspect(d1, d2)
             # Mutations must re-read the live ledger, never confirm against stale history.
             if not live:
@@ -507,16 +668,11 @@ def action(request):
                     raise ValueError('Nhập căn cứ xác nhận (tối đa 500 ký tự).')
                 create_link(order, bank, request.user, reason, 'manual')
                 return JsonResponse({'changed': 1, 'message': 'Đã xác nhận liên kết giao dịch ngân hàng.'
-                                     + ghi_kk_sau(d1, d2, order['ids']) + write_buygold_account(order,bank)})
-            changed = 0
-            for order in orders:
-                matches = [b for b in order['candidates'] if b['can_link'] and not b['ambiguous'] and b['exact'] and b.get('ref_code')]
-                if len(matches) == 1 and not order['auto_blocked']:
-                    create_link(order, matches[0], reason='Khớp mã phiếu trong nội dung ngân hàng, đủ tiền, không tranh chấp.')
-                    write_buygold_account(order,matches[0])
-                    changed += 1
-                    if changed >= 30:
-                        break
+                                     + write_buygold_account(order,bank) + dong_bo_sau(d1, d2, order['ids'])})
+            noi = tu_doi_soat(orders, 'Khớp mã phiếu trong nội dung ngân hàng (trong ngày), không vượt số cần CK, không tranh chấp.')
+            changed = len(noi)
+            if changed:
+                dong_bo_sau(d1, d2, [t for od, _ in noi for t in od['ids']])
             revision = hashlib.sha256(json.dumps(serial([(o['order_key'], o['snapshot'], o['payment_status'], o['paid'], o['problems']) for o in orders]), sort_keys=True).encode()).hexdigest()
             return JsonResponse({'changed': changed, 'revision': revision, 'message': f'Đối soát xong: {changed} nhóm mới được xác nhận.'})
     except (ValueError, signing.BadSignature, ThauPaymentLink.DoesNotExist) as exc:

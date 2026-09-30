@@ -4,6 +4,7 @@ Lớp ĐỌC dữ liệu bán lẻ từ PMV (chỉ đọc, qua gateway). Mọi c
 - WITH (NOLOCK) trên mọi bảng dữ liệu — 2 máy trạm đang bán hàng thật
 Số liệu/cột đã kiểm chứng bằng khảo sát 03/09/2026 (xem docs/PHAN_TICH_HOAT_DONG_PMVGOLDRT.md).
 """
+import re
 import hashlib
 import logging
 
@@ -74,6 +75,27 @@ def ap_gia_mysql(row, code_key="GoldCode"):
         raise PriceError(f"Chưa có giá hợp lệ trong bảng giá cho {row.get(code_key) or 'mã vàng này'}. Hãy kiểm tra Bảng giá.")
     row["SellRate"], row["BuyRate"] = g["SellRate"], g["BuyRate"]
     row["gia_mysql"] = True
+    return row
+
+
+# VÀNG MIẾNG SJC (GĐ chốt 29/09/2026): trên KK các món mã 2S… / 9S… mang GoldCode N9999 (cùng tuổi 9999) nhưng BÁN RA
+# theo GIÁ SJC riêng. Chỉ đổi GIÁ của món khi quét — GoldCode, tồn kho, hạn mức đổi ngang… vẫn theo N9999 như KK.
+MA_SJC = re.compile(r"^[29]S", re.I)
+GIA_SJC = "SJC"
+
+
+def la_ma_sjc(ma):
+    return bool(MA_SJC.match((ma or "").strip()))
+
+
+def ap_gia_sjc(row):
+    """Món vàng miếng SJC → SellRate/BuyRate = giá SJC trong bảng giá MySQL. Thiếu giá SJC thì CHẶN (không lấy giá 9999)."""
+    from .prices import PriceError
+    g = gia_mysql().get(GIA_SJC)
+    if not g:
+        raise PriceError("Chưa có giá SJC hợp lệ trong bảng giá — không bán mã vàng miếng SJC theo giá 9999. Hãy kiểm tra Bảng giá.")
+    row["SellRate"], row["BuyRate"] = g["SellRate"], g["BuyRate"]
+    row["gia_sjc"] = True
     return row
 
 
@@ -171,7 +193,10 @@ def _quet(ma, till_id="", cust_id=WALK_IN):
     # Giá bán của món = giá MySQL theo tuổi vàng (nguồn chính); proc chỉ cấp khung món + công.
     from .prices import PriceError
     try:
-        return ap_gia_mysql(row), None
+        row = ap_gia_mysql(row)
+        if la_ma_sjc(row.get("ProductCode") or ma):
+            row = ap_gia_sjc(row)
+        return row, None
     except PriceError as exc:
         return None, {'code': 'GIA-MYSQL', 'desc': str(exc), 'style': 'do'}
 

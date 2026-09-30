@@ -150,8 +150,11 @@ class ThauPaymentsTests(TransactionTestCase):
         self.assertEqual(self.inspect()[0]['candidates'], [])
 
     def test_amount_difference_and_partial_group_blocked(self):
-        self.bank(amount=99)
+        # GĐ chốt 29/09/2026: CK NHIỀU LẦN cộng dồn → giao dịch NHỎ hơn số cần CK được nối (một phần); LỚN hơn thì không
+        self.bank(amount=101)
         self.assertFalse(self.inspect()[0]['candidates'][0]['can_link'])
+        with connection.cursor() as c: c.execute('UPDATE bank_notifications SET trans_amount=99')
+        self.assertTrue(self.inspect()[0]['candidates'][0]['can_link'])
         self.groups = [SimpleNamespace(pk=1,trn_ids=[self.raw[0]['TrnID'],'MISSING'],tien_ck=100,ck_bank='',ck_stk='',ck_ten='',ck_nd='')]
         self.assertEqual(self.inspect()[0]['payment_status'], 'review')
 
@@ -261,13 +264,17 @@ class ThauPaymentsTests(TransactionTestCase):
         ThauNhom.objects.filter(pk=self.g.pk).update(created_at=timezone.make_aware(dt.datetime(2026, 9, 9, 7, 55)))
 
     def test_cam_do_hien_va_khop_tk_cam_do(self):
+        # GĐ chốt 30/09/2026: chi cầm đồ được đi từ MỌI TK gold_bank đang dùng (linh động CK); TK đã tắt thì không nhận
         self.cam_do()
+        with connection.cursor() as c:
+            c.execute("INSERT INTO gold_bank VALUES ('999000',0,'gold')")
         self.bank(id=5, description='THANH TOAN TIEN VANG 006830-090926-08:00', amount=5000000, tk='127606')
-        self.bank(id=6, description='THANH TOAN TIEN VANG 006830-090926-08:00', amount=5000000)   # TK thâu: không nhận
+        self.bank(id=6, description='THANH TOAN TIEN VANG 006830-090926-08:01', amount=3000000)              # TK thâu 666141168: NHẬN
+        self.bank(id=8, description='THANH TOAN TIEN VANG 006830-090926-08:02', amount=5000000, tk='999000')  # TK đã tắt: không nhận
         o = [x for x in self.inspect() if x['nghiep_vu'] == 'camdo'][0]
         self.assertEqual((o['TrnID'], o['required'], o['SoTien']), ('KH22609020928', Decimal(5000000), Decimal(5000000)))
-        self.assertEqual([c['id'] for c in o['candidates']], [5])
-        self.assertTrue(o['candidates'][0]['can_link'])
+        self.assertEqual(sorted(c['id'] for c in o['candidates']), [5, 6])
+        self.assertTrue(all(c['can_link'] for c in o['candidates']))
 
     def test_cam_do_4_so_khong_nham(self):
         self.cam_do()
@@ -301,3 +308,114 @@ class ThauPaymentsTests(TransactionTestCase):
             self.assertEqual(r.json()['changed'], 1)
             r = Client().post('/banle/thau-vao-2/doi-soat/', {'d1': self.day, 'd2': self.day, 'action': 'scan'})
             self.assertEqual(r.status_code, 403)    # bấm tay vẫn cần quyền
+
+
+class DoiSoatRaCongDonTests(ThauPaymentsTests):
+    """GĐ chốt 29/09/2026: (1) thâu mới — KK tiền mặt, khớp mới ghi CardPay · (2) CK nhiều lần cộng dồn · (3) chỉ trong ngày."""
+
+    def moi(self, tien_ck=100):
+        """Phiếu thâu CÁCH MỚI: KK CardPay = 0 (tiền mặt), số cần CK nằm ở nhóm."""
+        from apps.pmv.models import PmvState
+        PmvState.set(P.MOC_CK_SAU, 1)
+        self.raw[0]['CardPay'] = Decimal(0)
+        self.groups = [SimpleNamespace(pk=1, nghiep_vu='thau', trn_ids=[self.raw[0]['TrnID']], tien_ck=tien_ck,
+                                       ck_bank='ACB', ck_stk='1', ck_ten='A', ck_nd='')]
+
+    def test_moi_lay_so_can_ck_tu_nhom(self):
+        self.moi()
+        od = self.inspect()[0]
+        self.assertTrue(od['ck_sau'])
+        self.assertEqual((od['required'], od['kk_ck'], od['problems']), (100, 0, []))
+        self.assertNotIn('CardPay', od['snapshot']['bills'][0])
+        self.assertEqual(od['kk_nhan']['text'], 'KK: tiền mặt — chờ CK')
+
+    def test_cong_don_hai_lan_roi_du(self):
+        self.moi()
+        self.bank(id=1, amount=60); self.bank(id=2, amount=40, ref='REF2')
+        noi = P.tu_doi_soat(self.inspect(), 'test')
+        self.assertEqual(len(noi), 2)
+        od = self.inspect()[0]
+        self.assertEqual((od['payment_status'], od['paid']), ('confirmed', 100))
+        self.assertFalse(od['kk_nhan']['ok'])           # KK còn 0 → nhãn đỏ chờ ghi
+
+    def test_vuot_so_can_ck_khong_noi_them(self):
+        self.moi()
+        self.bank(id=1, amount=60); self.bank(id=2, amount=60, ref='REF2')
+        self.assertEqual(len(P.tu_doi_soat(self.inspect(), 'test')), 1)
+        od = self.inspect()[0]
+        self.assertEqual((od['payment_status'], od['paid'], od['remaining']), ('partial', 60, 40))
+        self.assertFalse(od['candidates'][0]['can_link'])
+        self.assertEqual(od['candidates'][0]['ly_do_khong_noi'], 'Vượt số còn phải chuyển.')
+
+    def test_khac_ngay_khong_noi_ca_tay(self):
+        self.moi()
+        with connection.cursor() as c:
+            c.execute('INSERT INTO bank_notifications (id,provider,ref_code,bank_number,bank_name,trans_amount,transaction_time,direction,description,bill_code_raw) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                      [9, 'sepay', 'R9', self.TK, 'ACB', 100, '2026-09-10 09:00:00', 'out', self.nd_chuan(), ''])
+        od = P.inspect(self.day, '2026-09-10')[0][0]
+        self.assertTrue(od['candidates'] and not od['candidates'][0]['exact'])
+        self.assertFalse(od['candidates'][0]['can_link'])
+        self.assertEqual(P.tu_doi_soat([od], 'test'), [])
+
+    def test_kk_so_la_thi_can_kiem_tra(self):
+        self.moi()
+        self.raw[0]['CardPay'] = Decimal(-37)        # ai đó sửa tay PMV
+        self.assertEqual(self.inspect()[0]['payment_status'], 'review')
+
+    def test_kk_bang_tong_cong_don_la_hop_le(self):
+        self.moi()
+        self.bank(id=1, amount=60); P.tu_doi_soat(self.inspect(), 'test')
+        self.raw[0]['CardPay'] = Decimal(-60)         # job đã ghi lần 1
+        self.bank(id=2, amount=40, ref='REF2'); P.tu_doi_soat(self.inspect(), 'test')
+        od = self.inspect()[0]                         # KK 60 = tổng cộng dồn cũ → vẫn hợp lệ, chờ ghi 100
+        self.assertEqual((od['payment_status'], od['problems']), ('confirmed', []))
+        self.raw[0]['CardPay'] = Decimal(-100)
+        self.assertTrue(self.inspect()[0]['kk_nhan']['ok'])
+
+    def test_ghi_ck_kk_goi_dung_ham_phieu_thau(self):
+        from apps.pos import ck_tra_khach as CK
+        self.moi()
+        self.bank(id=1, amount=60); P.tu_doi_soat(self.inspect(), 'test')
+        od = self.inspect()[0]
+        snap = [dict(TrnID=self.raw[0]['TrnID'], BillCode='x', TrnDate='', TrnDateTime_Upd='', Status='C', IsDel='0',
+                     TotalAmount='100', CashPay='0', CardPay='0')]
+        with patch('apps.pmv.gateway.pmv_out_snapshot_buygold', return_value=snap), \
+                patch('apps.pmv.gateway.pmv_out_allocate_buygold') as ghi:
+            self.assertTrue(CK.ghi_ck_kk(od))
+        ghi.assert_called_once_with(snap, Decimal(60))
+
+    def test_nhom_cu_giu_nguyen_cach_cu(self):
+        from apps.pmv.models import PmvState
+        PmvState.set(P.MOC_CK_SAU, 5)                  # nhóm pk=1 < mốc → cách cũ: required = CardPay KK
+        self.groups = [SimpleNamespace(pk=1, nghiep_vu='thau', trn_ids=[self.raw[0]['TrnID']], tien_ck=100,
+                                       ck_bank='', ck_stk='', ck_ten='', ck_nd='')]
+        od = self.inspect()[0]
+        self.assertFalse(od['ck_sau'])
+        self.assertIsNone(od['kk_nhan'])
+        self.assertEqual(od['required'], 100)
+
+
+class ChiaCkThauTests(TransactionTestCase):
+    def test_chia_va_tach_tien(self):
+        from apps.pmv import gateway as G
+        rows = [dict(TotalAmount='70'), dict(TotalAmount='50')]
+        self.assertEqual(G.chia_ck_thau(rows, 100), [70, 30])
+        self.assertEqual(G.chia_ck_thau(rows, 0), [0, 0])
+        with self.assertRaises(ValueError):
+            G.chia_ck_thau(rows, 121)
+        self.assertEqual(G._tach_tien_thau(Decimal(70), Decimal(0)), (0, 0))        # tiền mặt: y phiếu KK thật
+        self.assertEqual(G._tach_tien_thau(Decimal(70), Decimal(70)), (0, -70))     # CK đủ: CashPay 0
+        self.assertEqual(G._tach_tien_thau(Decimal(50), Decimal(30)), (-20, -30))
+
+
+class TranhChapChiTrongNgayTests(ThauPaymentsTests):
+    def test_phieu_khac_ngay_trung_duoi_khong_gay_mo_ho(self):
+        """30/09/2026: phiếu ngày khác chỉ trùng đuôi 4 số KHÔNG được làm giao dịch đúng ngày thành "mơ hồ"."""
+        self.raw.append(dict(self.bill('TBG260900000002'), BillCode='26-09-08-000001',
+                             CreatedDate=dt.datetime(2026, 9, 8, 9)))
+        self.bank()
+        od = [o for o in P.inspect('2026-09-08', self.day)[0] if o['ids'] == ['TBG260900000001']][0]
+        item = od['candidates'][0]
+        self.assertTrue(item['exact'] and item['can_link'])
+        self.assertFalse(item['ambiguous'])
+        self.assertEqual(len(P.tu_doi_soat([od], 'test')), 1)

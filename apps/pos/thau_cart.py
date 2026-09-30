@@ -166,6 +166,8 @@ def nap(request, rows, nhom=None, emp=""):
     add = sum((M.dec(r.get("AddMoney")) for r in rows), M.D0)
     g["bu"], g["bot"] = _chuoi(add if add > 0 else M.D0), _chuoi(-add if add < 0 else M.D0)
     ck = sum((-M.dec(r.get("CardPay")) for r in rows if M.dec(r.get("CardPay")) < 0), M.D0)
+    if not ck and nhom is not None and M.dec(getattr(nhom, "tien_ck", 0)) > 0:
+        ck = M.dec(nhom.tien_ck)    # 29/09/2026: CK ghi lên KK SAU đối soát — trước đó số CK nằm ở nhóm, KK còn 0
     tong_tt = sum((M.dec(r.get("TotalAmount")) for r in rows), M.D0)
     g["pay_method"] = "bank" if ck >= tong_tt and ck > 0 else "cash"
     g["tien_mat"] = _chuoi(tong_tt - ck) if 0 < ck < tong_tt else ""

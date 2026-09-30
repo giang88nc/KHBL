@@ -9,7 +9,8 @@ Việc V2 làm — CHỈ 3 bước, trả lời trong vài ms (SePay tính giao 
   1. Đọc JSON SePay (tự đọc lại từ đầu — không dùng kết quả tách mã của V1).
   2. UPSERT theo khóa (provider='sepay', ref_code = id sự kiện SePay) — SePay / V1 gửi lại bao nhiêu lần cũng 1 dòng.
   3. Tách mã chứng từ NGAY trong cùng transaction → cột ma_chung_tu / loai_chung_tu (skill nhan-dien-ma-chung-tu-ck).
-KHÔNG ghi KK, KHÔNG ghi CashPay/CardPay: việc đó là đối soát qua nội dung CK, xác nhận trên bản Mobile (GĐ chốt).
+KHÔNG ghi KK trong request. Giao dịch RA mới → luồng nền gọi thau_payments.doi_soat_ngay (đối soát lần đầu: nối phiếu, ghi
+CardPay cộng dồn / báo KHCD — GĐ chốt 30/09/2026); job doi_soat_ck 5 phút là lượt đối soát thứ hai (lưới an toàn).
 
 Cột cũ bill_code_raw / bill_code_norm / full_code / match_status giữ ĐÚNG nghĩa V1 (chép nguyên luật _extract_code_parts,
 _build_match_status của BANLE_V5/app/routes/sepayVN.py) — các luồng KHBL đang đọc cột này không bị gãy khi chuyển tiếp.
@@ -173,4 +174,31 @@ def webhook(request):
     except Exception:
         log.exception('SePay V2: lỗi upsert')
         return JsonResponse({'success': False, 'message': 'Temporary server error'}, status=500)   # SePay/V1 gửi lại
+    if moi:
+        doi_soat_nen(data)
     return JsonResponse({'success': True, 'message': 'Webhook saved' if moi else 'Duplicate webhook', 'id': bid})
+
+
+def doi_soat_nen(data):
+    """Giao dịch RA vừa lưu → ĐỐI SOÁT LẦN ĐẦU ở luồng nền (GĐ chốt 30/09/2026): nối phiếu + ghi CardPay cộng dồn / báo KHCD.
+    Chạy SAU khi trả lời SePay nên không làm chậm/hỏng webhook; mọi lỗi chỉ ghi log — job doi_soat_ck 5 phút chạy lại."""
+    try:
+        d = dong_tu_sepay(data)
+    except ValueError:
+        return
+    if d['direction'] != 'out' or not d['transaction_time']:
+        return
+    ngay = d['transaction_time'][:10]
+
+    def chay():
+        from . import thau_payments as TP
+        try:
+            n = TP.doi_soat_ngay(ngay)
+            if n:
+                log.info('SePay V2: đối soát ngay %s → nối %s giao dịch', ngay, n)
+        except Exception:
+            log.exception('SePay V2: đối soát ngay lỗi (job 5 phút sẽ chạy lại)')
+        finally:
+            connection.close()          # luồng riêng có kết nối DB riêng — trả lại, không để rò
+    import threading
+    threading.Thread(target=chay, name='sepay-v2-doi-soat', daemon=True).start()

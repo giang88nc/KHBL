@@ -1028,6 +1028,8 @@ def _phieu_ctx(rows, nhom=None):
     tong = sum((M.dec(r.get("TotalAmount")) for r in rows), M.D0)
     add = sum((M.dec(r.get("AddMoney")) for r in rows), M.D0)
     ck = sum((-M.dec(r.get("CardPay")) for r in rows if M.dec(r.get("CardPay")) < 0), M.D0)
+    if not ck and nhom is not None and M.dec(getattr(nhom, "tien_ck", 0)) > 0:
+        ck = M.dec(nhom.tien_ck)    # 29/09/2026: CK ghi lên KK SAU đối soát — tờ in vẫn ghi đúng số chuyển khoản
     lines = []
     for r in rows:
         lines.append({"desc": r.get("GoldDesc") or r.get("GoldCode"), "gold": r.get("GoldCode"), "unit": r.get("WeightUnit") or "L",
@@ -1044,7 +1046,11 @@ def _phieu_ctx(rows, nhom=None):
 
 @require_POST
 def thau_thanh_toan(request):
-    """Lưu từng dòng (Ins/Upd) rồi CHỐT CẢ NHÓM: CompleteMore 'A@B@' → CARDPAY_Ins (dòng có CK) → T_TILL_TXN_Proc 'A@B@'."""
+    """Lưu từng dòng (Ins/Upd) rồi CHỐT CẢ NHÓM: CompleteMore 'A@B@' → T_TILL_TXN_Proc 'A@B@'.
+
+    GĐ chốt 29/09/2026 — "thống nhất như bán": THANH TOÁN để KK nằm TIỀN MẶT (không gọi CARDPAY_Ins nữa). Số CK
+    cần chuyển giữ ở thau_nhom.tien_ck; đối soát khớp giao dịch ngân hàng RA mới ghi CardPay (cộng dồn các lần CK)
+    — xem thau_payments.dong_bo_sau → ck_tra_khach.ghi_ck_kk → gateway.pmv_out_allocate_buygold."""
     g = TC.get(request)
     if "document_phone" in request.POST and g.get("cust"):
         from .document_contacts import normalize_phone
@@ -1075,9 +1081,7 @@ def thau_thanh_toan(request):
                              dw=M.dec(x["tl_hot"]), rate=M.dec(x["gia"]), pct=100, add_money=add,
                              notes=g.get("ghi_chu") or "", unit=x["unit"], c=c, contact_intent=intent, on_created=created)
             ids.append(row["TrnID"])
-            if ck > 0:
-                ck_map[row["TrnID"]] = ck
-        B.chot_thau_nhom(ids, till_id=ph["till_id"], user_id=ph["user_id"], ck_theo_phieu=ck_map, c=c)
+        B.chot_thau_nhom(ids, till_id=ph["till_id"], user_id=ph["user_id"], ck_theo_phieu=None, c=c)   # KK: tiền mặt
     except Exception as exc:
         cache.delete(khoa)
         # dòng đã Ins mà chốt hỏng: giữ trn_id vào giỏ để THANH TOÁN lại không tạo trùng
@@ -1099,6 +1103,10 @@ def thau_thanh_toan(request):
                                    ck_bank=g.get("ck_bank") or "", ck_stk=g.get("ck_stk") or "",
                                    ck_nd=TC.ck_nd_day_du(g, rows[0].get("BillCode") or "") if t["tien_ck"] else "",
                                    ck_ten=g.get("ck_ten") or "")
+    from apps.pmv.models import PmvState
+    from . import thau_payments as TP
+    if not TP.moc_ck_sau():         # mốc chuyển sang "CK ghi sau đối soát": nhóm đầu tiên thanh toán bằng mã mới
+        PmvState.set(TP.MOC_CK_SAU, nhom.pk)
     gateway.canh_bao("thau_tt", f"THÂU {', '.join(nhom.bill_codes)} — tiệm trả {M.money_vn(t['khach_tra'])} "
                                 f"(CK {M.money_vn(t['tien_ck'])}); người: {request.user.username}")
     _ghi_gold_bill(request, g, ids[0], rows)

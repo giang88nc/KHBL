@@ -17,6 +17,7 @@ from .invoice_display import groups_for, membership_for, compact
 
 NGHIEP_VU_LOC = (ThauNhom.THAU, ThauNhom.DOI, ThauNhom.CAMDO)
 SLOTS = [('hinh1', 'Hình 1'), ('hinh2', 'Hình 2'), ('qr', 'QR chuyển khoản')]
+KHCD_NHAN = {'RECORDED': 'tiền mặt — chờ CK', 'PARTIAL': 'đã CK một phần', 'RECONCILED': 'đã CK đủ'}
 
 
 def enrich(rows, membership):
@@ -80,7 +81,26 @@ def listing(request):
         import logging
         logging.getLogger(__name__).exception('Không đọc được danh sách thâu 2')
         error = 'Không đọc được danh sách. Vui lòng thử lại.'
-    ctx = dict(rows=rows, d1=d1, d2=d2, today=today, method=method, khach=customer, nghiep_vu=nghiep_vu,
+    # 29/09/2026 (GĐ chốt): trạng thái báo ngược KHCD cho cầm đồ + khối TIỀN RA chưa nối phiếu (chỉ đọc)
+    tien_ra, tien_ra_loi = [], ''
+    if not error:
+        from . import khcd_bao_nguoc as KB
+        cd = KB.trang_thai(rows)
+        for r in rows:
+            if r.get('nghiep_vu') == ThauNhom.CAMDO and r['TrnID'] in cd:
+                st, ck = cd[r['TrnID']]
+                r['khcd_nhan'] = {'ok': (st == 'RECONCILED' and ck == r['paid']) or (st == 'PARTIAL' and ck == r['paid'])
+                                  or (st == 'RECORDED' and not r['paid']),
+                                  'text': f"KHCD: {KHCD_NHAN.get(st, st)}{' · CK ' + M.money_vn(ck) if ck else ''}"}
+        if method != 'cash' and nghiep_vu in ('', ThauNhom.THAU, ThauNhom.DOI, ThauNhom.CAMDO):
+            try:
+                tien_ra = TP.tien_ra_chua_noi(d1, d2)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Không đọc được tiền ra chưa nối')
+                tien_ra_loi = 'Tạm chưa đọc được danh sách tiền ra chưa nối phiếu.'
+    ctx = dict(rows=rows, d1=d1, d2=d2, today=today, tien_ra=tien_ra, tien_ra_loi=tien_ra_loi,
+               tien_ra_co_ma=sum(1 for b in tien_ra if b['co_ma']), method=method, khach=customer, nghiep_vu=nghiep_vu,
                nghiep_vu_ds=[(k, v) for k, v in ThauNhom.NGHIEP_VU if k in NGHIEP_VU_LOC],
                trang_thai=status, source='kk' if live else 'hist', error=error,
                payment_status=request.GET.get('payment_status', ''), payment_labels=TP.LABELS.items(), can_manage=TP.permitted(request.user))

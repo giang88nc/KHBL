@@ -840,6 +840,61 @@ bằng nhau (16.657 → 16.657). Cột `is_test` **KHÔNG TỒN TẠI** trong DD
 > bộ gửi cho mẫu này (mẫu đang DISABLE) thì các tin đó đi thật, nên càng phải chốt bỏ đường `deposit_messages` trước.
 > Bộ kiểm `manage.py test tests.test_deposit_sms --settings=config.settings.test_price_save`.
 
+## 4h. ĐỐI SOÁT TIỀN RA (OUT) + WEBHOOK SEPAY V2 (GĐ chốt 29/09/2026)
+
+**4 quy tắc**: ① THANH TOÁN phiếu thâu **thống nhất như bán-đổi** — KK nằm TIỀN MẶT (`views_thau.thau_thanh_toan`
+không gọi `CARDPAY_Ins` nữa, `ck_theo_phieu=None`), số cần CK giữ ở `thau_nhom.tien_ck`; đối soát khớp mới ghi CardPay
+· ② một phiếu CK NHIỀU lần → **cộng dồn** các giao dịch đã khớp (`can_link` = đủ mã + tổng đã nối + nó ≤ cần CK)
+· ③ **chỉ trong ngày** (đủ mã 12 số cùng ngày phiếu; khớp đuôi khác ngày chỉ hiện để xem, không nối được kể cả tay)
+· ④ chi **cầm đồ KHÔNG có trên KK** → chỉ báo ngược KHCD.
+- **Chuyển cách cũ → mới theo MỐC**: `PmvState['thau_ck_sau_doi_soat_tu_nhom']` = pk nhóm thâu ĐẦU TIÊN thanh toán bằng
+  mã mới (tự đặt). Nhóm pk < mốc giữ cách cũ (CardPay đã ghi lúc thanh toán) — GĐ chốt KHÔNG ghi lại KK ngày đã qua.
+  Báo ngược KHCD chỉ áp nhóm cầm đồ lập từ 29/09/2026 (`khcd_bao_nguoc.AP_DUNG_TU`).
+- **ĐỐI SOÁT 2 LƯỢT (GĐ chốt 30/09/2026)**: ① webhook V2 lưu giao dịch RA MỚI → luồng nền `sepay_v2.doi_soat_nen` →
+  `thau_payments.doi_soat_ngay(ngày giao dịch)` = đối soát LẦN ĐẦU ngay (nối + CardPay cộng dồn / báo KHCD), chạy SAU khi đã
+  trả lời SePay, chung khóa `single_run` (bận thì chờ 5s × 6 lần rồi bỏ); ② job `doi_soat_ck` 5 phút đối soát LẦN NỮA (lưới an toàn).
+- **Một bộ luật cho cả 3 đường tự nối**: `thau_payments.tu_doi_soat` (webhook + trang tự quét 15s + job `doi_soat_ck` 5 phút) →
+  `dong_bo_sau` = (a) `ck_tra_khach.ghi_ck_kk`: bán-đổi → `gateway.pmv_out_allocate_retail`; phiếu thâu mới →
+  **`gateway.pmv_out_allocate_buygold`** (CardPay = −CK, CashPay = −(tổng−CK); CK 0 → (0,0) đúng dạng phiếu tiền mặt;
+  nhóm nhiều dòng chia lần lượt `chia_ck_thau`; đặt TỔNG nên chạy lại an toàn) · (b) **`khcd_bao_nguoc.dong_bo`** →
+  `khj_cd.cd_payments` dòng tách tiền OUT: cardPay = tổng khớp, cashPay = amount − cardPay, RECORDED/PARTIAL/RECONCILED
+  (KHCD tự khóa sửa/xóa phiên khi PARTIAL/RECONCILED). KK chỉ được coi là "do đối soát ghi" khi bằng 0 / từng khoản /
+  tổng cộng dồn (`muc_kk_hop_le`) — số lạ ⇒ "Cần kiểm tra", không ghi đè.
+- **KÉT (T_TILL_TXN) KHÔNG chỉnh** — y bán-đổi (dòng VND két vẫn = tổng như chi tiền mặt). GĐ chốt 30/09: tiệm không dùng
+  két KK → bỏ qua, không làm gì thêm.
+- **GĐ chốt 30/09/2026**: (1) hệ thống KHÔNG dùng két KK → việc két không chỉnh khi ghi CK sau đối soát là CHẤP NHẬN, đóng câu
+  hỏi. (2) chi cầm đồ được đối soát từ **MỌI TK gold_bank Active=1** (`tai_khoan_cam_do`, "linh động CK" — không còn chỉ TK
+  pawn 127606). Chạy ngay 30/09: 7 khoản chi cầm đồ 28–30/09 (đều từ 666141168) nối được; 4 phiên từ 29/09 báo KHCD
+  RECONCILED, 3 phiên 28/09 chỉ nối bên KHBL (trước `AP_DUNG_TU`).
+- **Trang `/banle/thau-vao-2/`**: cột CHUYỂN KHOẢN thêm "Đã chuyển X · còn Y", nhãn `KK: …` (đỏ = KK chưa khớp số đối
+  soát), nhãn `KHCD: …`; dưới bảng khối **TIỀN RA CHƯA NỐI PHIẾU** (`tien_ra_chua_noi`, chỉ đọc, có lý do).
+  (Thực đo 29/09 từng thấy chi cầm đồ từ TK 666141168 không khớp — đã mở ở mục chốt 30/09 bên trên.)
+- **SePay**: V1 (BANLE_V5) trả 200 khi V2 từ chối dữ liệu (400) / dữ liệu hỏng — hết vòng SePay gửi lại mãi; chỉ 503 khi
+  V2 sập/5xx/sai token. Thiếu `transferType` ⇒ `unknown` (không đoán là tiền vào, `nhan_dien` trả rỗng). `match_status`
+  nhận thêm mã kiểu mới qua `ma_chung_tu_ck.nhan_dien`.
+- Bộ kiểm: `manage.py test tests.test_thau_payments tests.test_ck_tra_khach tests.test_khcd_bao_nguoc tests.test_sepay_v2
+  tests.test_ma_chung_tu_ck --settings=config.settings.test_price_save`.
+- ⚠ Bẫy đã dính 30/09: job quét 3 ngày → phiếu KHÁC ngày trùng đuôi 4 số từng được tính là bên tranh chấp, giao dịch
+  đúng ngày bị kẹt "mơ hồ" không tự nối. Nay `inspect` chỉ đếm tranh chấp giữa các phiếu khớp ĐỦ mã (`exact == 'ma'`).
+  Chạy thật đầu tiên 30/09: TBG260900001444 ← bank#30462 → KK `CashPay=0, CardPay=−26.600.000`, MaPhieuChi 666141168.
+- **SEPAY V2 LÀ NGUỒN CHÍNH & XUYÊN SUỐT (GĐ chốt 30/09/2026)**: SePay chỉ gọi V2 qua link KIMHANH cũ
+  `https://unopposable-parheliacal-waylon.ngrok-free.dev/webhook/sepay2` (Caddy 1277 khối `sepay_gateway` →
+  `127.0.0.1:8101`, `header_up Host 127.0.0.1`), API Key dùng lại của V1 (`SEPAY_API_KEY` trong KHBL/.env). V1 KHÔNG tắt
+  hẳn: `pmv_report.bank_notifications` thành BẢN CHÉP 1 chiều cho MISA (importM, cột `misa_*`) + BANLE (enddaily,
+  check_gold/N9999, dashboard, Kho→Banking, ACB1) — luồng nền trong BANLE 5000 `BANLE_V5/app/services/sepay_v2_ve_pmv.py`
+  (công tắc `SEPAY_NGUON_CHINH=V2` trong BANLE_V5/.env): CHỈ CHÈN dòng mới theo (provider, ref_code), KHÔNG chép id,
+  không đụng `misa_*`/`is_check`/`is_scan`/dòng đã có; 3 giây/lượt + rà 3 ngày mỗi 10 phút. ⚠ Hai bảng từ nay KHÁC id —
+  không nối theo id; chép ngược pmv_report → khj_bl (`bank_notification_mirror.upsert_khj_bl_*`,
+  `scripts/sync_bank_notifications.py`) bị CẤM khi công tắc bật (sẽ đè giao dịch khác trong sổ gốc KHBL).
+
+## 4i. GIÁ VÀNG MIẾNG SJC KHI QUÉT MÃ (GĐ chốt 29/09/2026)
+
+Trên KK mọi món mã **`2S…` / `9S…`** (124 món, đo 29/09) mang GoldCode **N9999** nhưng phải BÁN RA theo **giá SJC**.
+`services._quet` (đường quét DUY NHẤT của màn Bán hàng) sau `ap_gia_mysql` gọi **`ap_gia_sjc`** khi `la_ma_sjc(mã)`
+(regex `^[29]S`, không phân biệt hoa thường) → SellRate/BuyRate = dòng `SJC` của bảng giá MySQL. **Chỉ đổi GIÁ** —
+GoldCode, tồn kho, hạn mức đổi ngang vẫn theo N9999. Thiếu giá SJC ⇒ CHẶN quét (không lùi về giá 9999).
+Bộ kiểm `manage.py test tests.test_gia_sjc --settings=config.settings.test_price_save`.
+
 ## 5. RULES BẮT BUỘC (vi phạm = hỏng dữ liệu tiệm vàng thật)
 
 0. **Ô ẢNH CCCD ⇒ LUÔN CÓ NÚT ✂ TÁCH THẺ** (GĐ chốt 10/09/2026: "tool cắt hình này luôn đi chung với ô hình chứa

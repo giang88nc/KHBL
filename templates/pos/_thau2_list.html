@@ -12,6 +12,11 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 · Mã QR của phiếu khác ngày hôm nay: làm mờ + nhãn HẾT HẠN, không bấm mở.
 · 19/09/2026 (GĐ chốt): danh sách gồm cả hóa đơn BÁN-ĐỔI dư tiệm chuyển khoản trả khách — badge "Đổi" cạnh mã,
   bộ lọc Nghiệp vụ (Tất cả · Thâu vào · Bán đổi dư); hai tệp xuất cũng theo đúng bộ lọc này.
+· 29/09/2026 (GĐ chốt ĐỐI SOÁT TIỀN RA): cột CHUYỂN KHOẢN thêm — CK nhiều lần: "Đã chuyển X · còn Y" (cộng dồn các
+  giao dịch đã khớp) · nhãn KK (bán-đổi + phiếu thâu mới: KK nằm TIỀN MẶT tới khi khớp, rồi mới ghi CardPay; đỏ = KK
+  chưa khớp số đối soát, job 5 phút ghi bù) · nhãn KHCD cho cầm đồ (cầm đồ KHÔNG có trên KK, kết quả báo ngược sang
+  khj_cd.cd_payments). Dưới bảng: khối TIỀN RA CHƯA NỐI PHIẾU (giao dịch RA từ TK trả thâu/đổi + TK cầm đồ trong khoảng
+  ngày, chưa liên kết, kèm lý do) — chỉ đọc, mặc định mở khi có dòng mang mã phiếu (cần người kiểm).
 {% endcomment %}
 {% load pos_extras %}
 <section id="thau2-list" data-today="{{ today }}" data-payment-url="{% url 'pos:thau_vao_2_payment' %}" data-can-manage="0" data-auto-scan="1">
@@ -42,8 +47,22 @@ DANH SÁCH PHIẾU THÂU (trang /thau-vao-2/). Mọi ghi chú gom ở đây, KH�
 <td>{% include 'pos/_thau2_bank.html' %}</td>
 <td><div class="th2-thumbs">{% for im in r.images %}<button type="button" class="{% if im.slot == 'qr' and r.qr_het_han and not r.gd_khop %}th2-qr-cu{% endif %}" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root" title="{% if im.slot == 'qr' %}{% if r.gd_khop %}Đã xác nhận chuyển khoản{% elif r.qr_het_han %}Mã QR của ngày trước, chưa xác nhận được tiền{% else %}{{ im.label }}{% endif %}{% else %}{{ im.label }}{% endif %}"><img src="{{ im.url }}" alt="{{ im.label }}" loading="lazy">{% if im.slot == 'qr' %}{% if r.gd_khop %}<span class="th2-qr-dau th2-qr-dau--ok">✔️</span>{% elif r.qr_het_han %}<span class="th2-qr-dau th2-qr-dau--loi">❌</span>{% endif %}{% endif %}</button>{% empty %}<span class="dim">—</span>{% endfor %}</div></td>
 <td class="r th2-total">{{ r.SoTien|tien_tran }}</td><td class="r th2-transfer">{{ r.tien_ck|tien_tran }}{% if r.gd_khop %}  <small class="th2-pay-state th2-pay-state--confirmed" title="Đã khớp giao dịch ngân hàng{% if r.gd_khop.so_lk > 1 %} ({{ r.gd_khop.so_lk }} giao dịch){% endif %}">💳{{ r.gd_khop.ref_code }} · {{ r.gd_khop.trans_amount|tien_tran }}</small>
-{% else %}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small>{% endif %}</td>
+{% else %}<small class="th2-pay-state th2-pay-state--{{ r.payment_status }}">{{ r.payment_label }}</small>{% endif %}{% if r.payment_status == 'partial' %}<small class="th2-pay-state th2-pay-state--partial">Đã chuyển {{ r.paid|tien_tran }} · còn {{ r.remaining|tien_tran }}</small>{% endif %}{% if r.kk_nhan %}<small class="khbl-badge {% if r.kk_nhan.ok %}khbl-badge--xanh{% else %}khbl-badge--do{% endif %}" title="{% if r.kk_nhan.ok %}Máy KK khớp số đã đối soát{% else %}Máy KK chưa khớp số đã đối soát — lượt chạy ngầm 5 phút sẽ ghi bù; còn đỏ lâu thì kiểm tra tay{% endif %}">{{ r.kk_nhan.text }}</small>{% endif %}{% if r.khcd_nhan %}<small class="khbl-badge {% if r.khcd_nhan.ok %}khbl-badge--xanh{% else %}khbl-badge--do{% endif %}" title="Kết quả đối soát đã báo sang Cầm đồ (cầm đồ không có trên KK)">{{ r.khcd_nhan.text }}</small>{% endif %}</td>
 <td>{% if r.mixed_status %}Nhiều trạng thái{% elif r.IsDel != '0' %}Đã hủy{% elif r.Status == 'C' %}<span class="khbl-badge khbl-badge--xanh">Đã chốt</span>{% else %}<span class="khbl-badge khbl-badge--cam">Còn chờ</span>{% endif %}</td>
 <td><button class="khbl-btn khbl-btn--sm khbl-btn--outline" hx-get="{% url 'pos:thau_vao_2_xem' %}?trn_id={{ r.TrnID }}&source={{ source }}&d1={{ d1 }}&d2={{ d2 }}" hx-target="#modal-root">XEM</button></td>
 </tr>{% empty %}<tr><td colspan="9" class="pg-tb__trong">Không có phiếu phù hợp với bộ lọc.</td></tr>{% endfor %}
-</tbody></table></div></section>
+</tbody></table></div>
+{% if tien_ra_loi %}<p class="khbl-alert khbl-alert--do">{{ tien_ra_loi }}</p>{% endif %}
+{% if tien_ra %}<details class="th2-tien-ra"{% if tien_ra_co_ma %} open{% endif %}>
+<summary><b>TIỀN RA CHƯA NỐI PHIẾU</b> — {{ tien_ra|length }} giao dịch{% if tien_ra_co_ma %} · <span class="khbl-badge khbl-badge--do">{{ tien_ra_co_ma }} có mã phiếu, cần kiểm</span>{% endif %}</summary>
+<div class="th2-table"><table class="pg-tb"><thead><tr><th>GIỜ</th><th>TÀI KHOẢN</th><th class="r">SỐ TIỀN</th><th>NỘI DUNG NGÂN HÀNG</th><th>MÃ NHẬN DIỆN</th><th>LÝ DO CHƯA NỐI</th></tr></thead><tbody>
+{% for b in tien_ra %}<tr>
+<td>{{ b.gio|date:"H:i" }}{% if d1 != d2 %}<small>{{ b.gio|date:"d/m/Y" }}</small>{% endif %}</td>
+<td>{{ b.bank_number }}<small>{{ b.bank_name|default:"" }}</small></td>
+<td class="r">{{ b.trans_amount|tien_tran }}</td>
+<td><small>{{ b.description }}</small></td>
+<td>{% if b.loai %}<span class="khbl-badge {% if b.co_ma %}khbl-badge--cam{% endif %}">{{ b.loai }}</span> {{ b.ma }}{% else %}<span class="dim">—</span>{% endif %}</td>
+<td>{% if b.co_ma %}<b>{{ b.ly_do }}</b>{% else %}<span class="dim">{{ b.ly_do }}</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div></details>{% endif %}
+</section>

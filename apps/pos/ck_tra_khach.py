@@ -632,41 +632,56 @@ def ban_ck_qr_luu(request):
 
 # ─────────────────────────── ghi CK lên máy KK sau đối soát ───────────────────────────
 def ghi_ck_kk(order):
-    """Nhóm bán-đổi: đặt CardPay trên KK = −(tổng liên kết ngân hàng còn hiệu lực). Trả True khi vừa ghi.
+    """Đặt CK trên KK = TỔNG liên kết ngân hàng còn hiệu lực (GĐ chốt 29/09/2026: cộng dồn). Trả True khi vừa ghi.
 
-    Chỉ chạy khi nhóm không có vấn đề. CardPay hiện tại trên KK phải là 0 hoặc đúng số của một liên kết từng
-    có (đang hoặc đã gỡ) — tức do chính luồng này ghi; con số lạ (ai đó sửa tay trên PMV) thì DỪNG, báo kiểm tra.
+    · Hóa đơn BÁN-ĐỔI: CardPay TRN_RT_BUYSELL = −tổng (phương án a, 19/09/2026).
+    · PHIẾU THÂU cách mới (order['ck_sau']): CardPay/CashPay từng dòng TRN_RT_BUYGOLD của nhóm (thống nhất như bán).
+    Chỉ chạy khi nhóm không có vấn đề. CK hiện tại trên KK phải là số DO ĐỐI SOÁT GHI (0 / từng khoản / tổng cộng dồn)
+    — con số lạ (ai đó sửa tay trên PMV) thì DỪNG, báo kiểm tra.
     """
     from apps.pmv import gateway
+    from .thau_payments import muc_kk_hop_le
 
-    if order.get("nghiep_vu") != DOI or order.get("problems") or len(order.get("ids") or []) != 1:
+    if order.get("problems"):
         return False
     paid = Decimal(order.get("paid") or 0)
-    snap = gateway.pmv_out_snapshot_retail(order["ids"][0])
-    hien = -Decimal(snap["CardPay"] or 0)
-    if hien == paid:
-        return False
-    tung_co = {Decimal(0)} | {Decimal(l.amount) for l in order.get("links") or []}
-    if hien not in tung_co:
-        raise ValueError(f"CK trên KK ({hien}) không do đối soát ghi — cần kiểm tra tay.")
-    if paid > -Decimal(snap["PayAmount"]):
-        raise ValueError("Tổng đã đối soát lớn hơn số tiệm trả khách.")
-    gateway.pmv_out_allocate_retail(snap, -paid)
-    return True
+    links = order.get("links") or []
+    if order.get("nghiep_vu") == DOI and len(order.get("ids") or []) == 1:
+        snap = gateway.pmv_out_snapshot_retail(order["ids"][0])
+        hien = -Decimal(snap["CardPay"] or 0)
+        if hien == paid:
+            return False
+        if hien not in muc_kk_hop_le(links, paid):
+            raise ValueError(f"CK trên KK ({hien}) không do đối soát ghi — cần kiểm tra tay.")
+        if paid > -Decimal(snap["PayAmount"]):
+            raise ValueError("Tổng đã đối soát lớn hơn số tiệm trả khách.")
+        gateway.pmv_out_allocate_retail(snap, -paid)
+        return True
+    if order.get("ck_sau") and order.get("ids"):
+        snap = gateway.pmv_out_snapshot_buygold(order["ids"])
+        hien = sum((-Decimal(r["CardPay"] or 0) for r in snap), Decimal(0))
+        muc = gateway.chia_ck_thau(snap, paid)          # kiểm luôn: tổng CK không vượt tổng nhóm
+        if all(-Decimal(r["CardPay"] or 0) == m for r, m in zip(snap, muc)):
+            return False
+        if hien not in muc_kk_hop_le(links, paid):
+            raise ValueError(f"CK trên KK ({hien}) không do đối soát ghi — cần kiểm tra tay.")
+        gateway.pmv_out_allocate_buygold(snap, paid)
+        return True
+    return False
 
 
 def dong_bo_ck_kk(orders, chi_ids=None):
-    """Chạy ghi_ck_kk cho mọi nhóm bán-đổi (hoặc chỉ nhóm chứa chi_ids). Lỗi từng nhóm chỉ ghi log — lượt
-    chạy ngầm 5 phút sau sẽ thử lại. Trả (số nhóm vừa ghi, danh sách lỗi)."""
+    """Chạy ghi_ck_kk cho mọi nhóm bán-đổi + phiếu thâu cách mới (hoặc chỉ nhóm chứa chi_ids). Lỗi từng nhóm chỉ ghi
+    log — lượt chạy ngầm 5 phút sau sẽ thử lại. Trả (số nhóm vừa ghi, danh sách lỗi)."""
     xong, loi = 0, []
     for od in orders:
-        if od.get("nghiep_vu") != DOI:
+        if od.get("nghiep_vu") != DOI and not od.get("ck_sau"):
             continue
         if chi_ids and not set(chi_ids) & set(od.get("ids") or []):
             continue
         try:
             xong += bool(ghi_ck_kk(od))
         except Exception as exc:
-            logger.warning("Ghi CK trả khách lên KK %s: %s", od.get("ids"), exc)
+            logger.warning("Ghi CK lên KK %s: %s", od.get("ids"), exc)
             loi.append(f"{','.join(od.get('ids') or [])}: {exc}")
     return xong, loi

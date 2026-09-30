@@ -6,10 +6,12 @@ Trước đây việc đối soát chỉ chạy khi có người mở trang /tha
 cho JS tự gọi mỗi 5 giây). GĐ chốt bỏ nút đi, để máy chủ tự làm — nên phần đó chuyển vào đây và scheduler gọi
 định kỳ; trang chỉ còn việc hiển thị kết quả.
 
-Vẫn dùng ĐÚNG bộ luật của thau_payments, không nới lỏng gì:
-  · chỉ nối khi nội dung ngân hàng nhắc đúng mã phiếu, số tiền bằng đúng tổng cần chuyển của nhóm;
+Vẫn dùng ĐÚNG bộ luật của thau_payments (TP.tu_doi_soat — chung với trang tự quét), GĐ chốt 29/09/2026:
+  · chỉ nối giao dịch TRONG NGÀY: nội dung ngân hàng mang đủ mã 12 số (cùng ngày phiếu);
+  · CK nhiều lần cho một phiếu → CỘNG DỒN: mỗi giao dịch được nối khi tổng đã nối + nó ≤ số cần chuyển;
   · giao dịch phải có mã tham chiếu, chưa bị nhóm nào nhận, không tranh chấp với nhóm khác;
-  · nhóm đã có liên kết (kể cả đã gỡ) thì KHÔNG tự nối lại — người ta gỡ là có lý do, để họ tự xác nhận.
+  · nhóm từng bị GỠ liên kết thì KHÔNG tự nối lại — người ta gỡ là có lý do, để họ tự xác nhận.
+Sau đó ghi kết quả: bán-đổi + phiếu thâu → CardPay trên KK · cầm đồ → báo ngược KHCD (cầm đồ không có trên KK).
 Mỗi lượt chốt tối đa 30 nhóm cho nhẹ máy KK; còn dư thì lượt sau chạy tiếp.
 
     manage.py doi_soat_ck                # hôm nay
@@ -45,36 +47,19 @@ class Command(BaseCommand):
             if not live:
                 self.stdout.write(self.style.WARNING("Đang đọc kho lịch sử, không phải máy KK — bỏ lượt để khỏi chốt nhầm."))
                 return
-            xong = cho = 0
-            for od in orders:
-                hop = [b for b in od["candidates"]
-                       if b["can_link"] and not b["ambiguous"] and b["exact"] and b.get("ref_code")]
-                if len(hop) != 1 or od["auto_blocked"]:
-                    cho += od["required"] > 0 and od["payment_status"] in ("unconfirmed", "review")
-                    continue
-                if o["thu"]:
-                    self.stdout.write(f"  [thử] {','.join(od['ids'])} ← bank#{hop[0]['id']} {hop[0]['trans_amount']}")
-                    xong += 1
-                    continue
-                try:
-                    TP.create_link(od, hop[0], reason=LY_DO)
-                    xong += 1
-                    self.stdout.write(f"  nối {','.join(od['ids'])} ← bank#{hop[0]['id']} {hop[0]['trans_amount']}")
-                except ValueError as exc:      # dữ liệu vừa đổi giữa chừng — để lượt sau, không phải lỗi
-                    self.stdout.write(f"  bỏ qua {','.join(od['ids'])}: {exc}")
-                if xong >= TOI_DA:
-                    break
+            # MỘT bộ luật với trang tự quét (TP.tu_doi_soat — GĐ chốt 29/09/2026: trong ngày, CK nhiều lần cộng dồn)
+            noi = TP.tu_doi_soat(orders, LY_DO, thu=o["thu"], toi_da=TOI_DA)
+            for od, b in noi:
+                self.stdout.write(f"  {'[thử] ' if o['thu'] else ''}nối {','.join(od['ids'])} ← bank#{b['id']} {b['trans_amount']}")
+            cho = sum(1 for od in orders if od["required"] > 0 and od["payment_status"] in ("unconfirmed", "review", "partial"))
             self.stdout.write(self.style.SUCCESS(
-                f"Đối soát {d1:%d/%m}–{d2:%d/%m}: {xong} nhóm{' (chỉ thử)' if o['thu'] else ' vừa xác nhận'}, "
-                f"{cho} nhóm còn chờ người kiểm."))
-            # HÓA ĐƠN BÁN-ĐỔI dư (GĐ chốt 19/09/2026, phương án a): CardPay trên KK = tổng liên kết còn hiệu lực.
-            # Chạy mọi lượt (không chỉ khi vừa nối) nên cũng tự bù lượt ghi hỏng trước đó và nhóm vừa gỡ liên kết.
-            # Không có hóa đơn đổi nào thì bỏ qua — lượt chỉ-thâu không đọc thêm máy KK.
-            if not o["thu"] and any(od.get("nghiep_vu") == "doi" for od in orders):
-                from apps.pos import ck_tra_khach as CK
-                orders2, live2 = TP.inspect(d1.isoformat(), d2.isoformat())
-                if live2:
-                    ghi, loi = CK.dong_bo_ck_kk(orders2)
-                    if ghi or loi:
-                        self.stdout.write(f"  CK trả khách lên KK: {ghi} hóa đơn vừa ghi"
-                                          + (f", {len(loi)} lỗi: {'; '.join(loi)}" if loi else ""))
+                f"Đối soát {d1:%d/%m}–{d2:%d/%m}: {len(noi)} giao dịch{' (chỉ thử)' if o['thu'] else ' vừa nối'}, "
+                f"{cho} nhóm còn chờ / thiếu tiền."))
+            if o["thu"]:
+                return
+            # GHI KẾT QUẢ mọi lượt (không chỉ khi vừa nối) — tự bù lượt ghi hỏng trước đó và nhóm vừa gỡ liên kết:
+            #   bán-đổi + phiếu thâu cách mới → CardPay trên KK = tổng liên kết · cầm đồ → báo ngược KHCD (không KK).
+            if any(od.get("nghiep_vu") in ("doi", "camdo") or od.get("ck_sau") for od in orders):
+                tin = TP.dong_bo_sau(d1.isoformat(), d2.isoformat())
+                if tin:
+                    self.stdout.write("  " + tin.strip())

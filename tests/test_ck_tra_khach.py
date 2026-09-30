@@ -245,8 +245,12 @@ class DoiSoatDoiTests(TransactionTestCase):
         self.assertEqual((od['payment_status'], od['paid']), ('confirmed', 6_000_000))
 
     def test_lech_tien_khong_noi(self):
-        self.bank(amount=5_000_000)
+        # GĐ chốt 29/09/2026: CK nhiều lần cộng dồn → nhỏ hơn số cần CK được nối một phần; vượt thì không
+        self.bank(amount=7_000_000)
         self.assertFalse(self.orders()[TRB]['candidates'][0]['can_link'])
+        from django.db import connection
+        with connection.cursor() as c: c.execute('UPDATE bank_notifications SET trans_amount=5000000')
+        self.assertTrue(self.orders()[TRB]['candidates'][0]['can_link'])
 
     def test_trung_duoi_voi_phieu_thau_khac_tien_khong_tranh_chap(self):
         self.thau_raw = [dict(TrnID=TBG, BillCode='26-09-08-000058', CreatedDate=dt.datetime(2026, 9, 9, 11),
