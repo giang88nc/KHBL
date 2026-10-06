@@ -1,4 +1,4 @@
-"""WSGI cho KHBL — waitress serve qua TURN_ON_KHBL.bat."""
+"""WSGI cho KHBL — waitress serve qua RESET_KHBL.bat (ops/vanhanh)."""
 import os
 
 from django.core.wsgi import get_wsgi_application

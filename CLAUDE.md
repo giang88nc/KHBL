@@ -293,7 +293,7 @@ trước số đó. Lưu xong ô hiện `BillCode` thật.
 | ĐƠN MỚI / THÊM MỚI | **xóa trắng CẢ nhân viên bán** (GĐ chốt 07/09 — `cart.clear(giu_nv=False)`) |
 | THANH TOÁN / & IN | `bill.luu` (Ins hoặc Upd) rồi `bill.chot` → **form XÓA TRẮNG** (kể cả NV) sẵn cho khách kế; bản in mở `ban_in?trn_id=` (đọc lại từ PMV qua `cart.tu_phieu`/`tong_cua`, không đụng session). Muốn xem lại đơn vừa chốt → DANH SÁCH → MỞ |
 | IN HÓA ĐƠN | in phiếu ĐANG LẬP trên form, không xóa gì |
-| **🔒 KHÓA / 🔓 MỞ** (07/09/2026 — GĐ chốt, thay nút "MỞ LẠI ĐỂ SỬA") | icon cạnh mã đơn trên khối VÀNG BÁN (`.pg-khoa`, chỉ hiện khi có `trn_id`): đơn ĐÃ CHỐT = **🔒 nút** → popup `_khoa_modal.html` (`ban_mo_khoa` GET) nhập **PASSCODE** → POST `ban_mo_lai` kiểm `_passcode_dung` — thứ tự: **passcode RIÊNG từng user** (model `UnlockPasscode` bảng `unlock_passcodes`, migration pos-0003, băm Django; đặt/đổi qua nút **🔑 topbar** → popup `_passcode_modal.html`, view `passcode_form`/`passcode_save` url `tai-khoan/passcode/`: tự đổi phải nhập passcode hiện tại — chưa có thì mật khẩu web; **superuser** chọn user bất kỳ đặt không cần hiện tại; 4–20 ký tự nhập 2 lần) > `KHBL_UNLOCK_PASSCODE` .env > TRỐNG → mật khẩu web của chính người đăng nhập → đúng mới `bill.mo_lai` (hoàn két, về nháp) + OOB + đóng popup (`dong_modal`); sai → popup render lại kèm lỗi, không đụng KK. Đơn nháp = 🔓 icon tĩnh. **Đơn KHÓA = không thao tác gì được**: server chặn ở `_dang_khoa()` cho quét/xóa món/dẻ/TÍNH LẠI/đổi NV-khách/tiền/bớt lẻ (thông điệp `KHOA_MSG`), UI: ô quét disabled, nút × ẩn, khối VÀNG ĐỔI bọc `<fieldset disabled>`, ô NV/khách disabled, `.pg-box--khoa` mờ |
+| **🔒 KHÓA / 🔓 MỞ** (07/09/2026 — GĐ chốt, thay nút "MỞ LẠI ĐỂ SỬA") | icon cạnh mã đơn trên khối VÀNG BÁN (`.pg-khoa`, chỉ hiện khi có `trn_id`): đơn ĐÃ CHỐT = **🔒 nút** → popup `_khoa_modal.html` (`ban_mo_khoa` GET) nhập **PASSCODE** → POST `ban_mo_lai` kiểm `_passcode_dung` — thứ tự: **passcode RIÊNG từng user** (model `UnlockPasscode` bảng `unlock_passcodes`, migration pos-0003, băm Django; đặt/đổi qua nút **🔑 topbar** → popup `_passcode_modal.html`, view `passcode_form`/`passcode_save` url `tai-khoan/passcode/`: tự đổi phải nhập passcode hiện tại — chưa có thì mật khẩu web; **superuser** chọn user bất kỳ đặt không cần hiện tại; 4–20 ký tự nhập 2 lần) > `KHBL_UNLOCK_PASSCODE` .env > TRỐNG → **TỪ CHỐI** (05/10/2026: BỎ lối lùi về mật khẩu web — user phải tự đặt passcode ở nút 🔑; popup báo `MSG_CHUA_PASSCODE`) → đúng mới `bill.mo_lai` (hoàn két, về nháp) + OOB + đóng popup (`dong_modal`); sai → popup render lại kèm lỗi, không đụng KK. Đơn nháp = 🔓 icon tĩnh. **Đơn KHÓA = không thao tác gì được**: server chặn ở `_dang_khoa()` cho quét/xóa món/dẻ/TÍNH LẠI/đổi NV-khách/tiền/bớt lẻ (thông điệp `KHOA_MSG`), UI: ô quét disabled, nút × ẩn, khối VÀNG ĐỔI bọc `<fieldset disabled>`, ô NV/khách disabled, `.pg-box--khoa` mờ |
 | XÓA | phiếu chưa lưu thì dọn form; đã lưu thì `bill.huy` (hàng về kho). Đơn ĐÃ CHỐT → nút disable, phải 🔒 mở khóa (bước 1) rồi mới XÓA (bước 2/2) |
 
 **Chân trang** (07/09/2026, tách thành mảnh OOB **`_ban_foot.html` `#pos-foot`** — trước nằm cứng trong ban.html
@@ -664,7 +664,7 @@ Smoke C8c, C10–C13 (83 kịch bản: popup chung, alias, mốc lệch, audit a
   version vendor 60'** (giữ — cầu chì khóa ghi khi vendor nâng cấp). **Job thu thập hành vi 2' ĐÃ TẮT** + trace
   KK tắt (việc học đã xong; code + dòng add_job comment sẵn để bật lại). Học hành vi mới = **tay**: ĐÁNH DẤU
   TRƯỚC (tự BẬT trace) → thao tác PMVGoldRT → ĐÁNH DẤU SAU (tự TẮT trace) → HỌC → quy trình. Web 8100 tự bật
-  cùng Windows (`KHBL_Server.vbs` Startup → TURN_ON + watchdog), chỉ tắt bằng TURN_OFF.
+  cùng Windows (tác vụ boot → KHOI_DONG → `RESET_KHBL /bat` + vòng giám sát), tắt hẳn bằng `RESET_KHBL /tat`.
 - **SQL-auth `kimhanh2/KimHanh2` ĐÃ DÙNG ĐƯỢC** (06/09/2026): GĐ bật Mixed Mode bằng
   `xp_instance_regwrite … LoginMode=2` rồi `Restart-Service 'MSSQL$SQL2014'` (SSMS 2008 R2 cũ hơn engine 2014
   nên dialog Properties không dùng được — dùng lệnh). Xác minh: `IsIntegratedSecurityOnly=0`, login vào
@@ -973,14 +973,28 @@ Bộ kiểm `manage.py test tests.test_gia_sjc --settings=config.settings.test_p
 
 ## 7. VẬN HÀNH SERVER
 
-Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress port **8100**
-(threads=4) + scheduler + watchdog (60s/lần gọi lại TURN_ON). Xem trạng thái: port 8100
-(`netstat`) hoặc `http://localhost:8100/` hoặc logs.
+**VẬN HÀNH MỚI (07/10/2026 — GĐ chốt "mỗi dự án CHỈ 1 file RESET"):** `TURN_ON_KHBL.bat` · `TURN_OFF_KHBL.bat` ·
+`WATCHDOG_KHBL.bat` · `run_hidden_khbl.vbs` **ĐÃ XÓA** (còn trong lịch sử Git). Cửa vào DUY NHẤT: **`RESET_KHBL.bat`**.
+Hệ KHBL = **4 tiến trình ẨN ở phiên nền**: Caddy HTTPS `*:8100` · waitress `127.0.0.1:8101` (threads=8) ·
+scheduler (**giữ cổng khóa `127.0.0.1:8109`** ngay đầu `run_scheduler` — bản thứ 2 tự THOÁT, không bao giờ 2 scheduler
+chạy đối soát/ghi KK đôi; đổi cổng: `KHBL_SCHEDULER_KHOA_CONG` trong .env + `ops/vanhanh/cauhinh_khbl.ps1`) ·
+vòng giám sát (`ops/vanhanh/vanhanh.ps1 -Lenh giamsat`, khóa `8119`, 60s/lần bật lại cái chết).
+Xem trạng thái: **`RESET_KHBL.bat /kiem`** (chạy được ở quyền thường) hoặc `logs/vanhanh_khbl.log`.
 
-| File tại gốc | Chức năng |
+| File / lệnh | Chức năng |
 |---|---|
-| `TURN_ON_KHBL.bat` | Bật **4 tiến trình ẩn**: waitress `127.0.0.1:8101` · **Caddy HTTPS `*:8100`** · scheduler · watchdog. Chờ MySQL80, chống bật trùng từng tiến trình |
-| `TURN_OFF_KHBL.bat` | Tắt watchdog TRƯỚC rồi Caddy KHBL (nhận diện qua CommandLine chứa `PYTHON\KHBL` — KHÔNG đụng Caddy KIMHANH) + mọi listener :8100/:8101 + scheduler |
+| **`RESET_KHBL.bat`** (bấm đúp) | RESET đầy đủ: kiểm điều kiện (thiếu MySQL80/venv/caddy → KHÔNG tắt gì) → TẮT (giám sát trước) → kiểm tắt sạch → BẬT → kiểm OK (cổng + `https://localhost:8100/` + giám sát), `pause` |
+| `RESET_KHBL.bat /reset` | Như trên, không `pause` — **Claude dùng**: `cmd /c D:\PYTHON\KHBL\RESET_KHBL.bat /reset` (từ PowerShell, KHÔNG Git Bash) |
+| `/bat` · `/tat` · `/kiem` | Chỉ bật cái thiếu · tắt hẳn bảo trì · chỉ xem |
+| `ops/vanhanh/vanhanh.ps1` | Động cơ — **BẢN SAO GIỐNG HỆT** `D:\PYTHON\KHJ\ops\vanhanh\vanhanh.ps1` (sửa ở KHJ rồi chép sang KHBL + KHCD; `KHJ\scripts\kiem_sau_khoi_dong.ps1` so sha256) |
+| `ops/vanhanh/cauhinh_khbl.ps1` | Thành phần · cổng · lệnh bật · dấu hiệu nhận diện; `TruocKhiBat` chép CA nội bộ từ KIMHANH nếu thiếu |
+
+Quyền thường bấm RESET **không hỏi UAC**: bat kích tác vụ Windows chạy-theo-lệnh `KimHanh2-VanHanh-KHBL` (S4U mức Admin,
+không lịch — đăng ký bởi `D:\PYTHON\KHJ\CAU_HINH_TU_HOI_PHUC.bat`); tiến trình bật ra ở phiên nền, **không nằm trong job
+của app gọi** (hết lỗi "đóng app Claude là tiệm sập"). Nhận diện bằng CỔNG, chỉ giết khi dòng lệnh khớp dấu hiệu VÀ thuộc
+`D:\PYTHON\KHBL`; **KHÔNG BAO GIỜ đụng cầu nối khách hàng 18202** (chạy bằng venv KHBL nhưng THUỘC KHCD — RESET_KHCD lo;
+đã kiểm 07/10: RESET_KHBL xong PID 18202 giữ nguyên). Bật cùng Windows: tác vụ `KimHanh2-ToanHeThong-Boot` →
+`KHJ\KHOI_DONG_TOAN_HE_THONG.bat` → `RESET_KHBL.bat /bat`.
 | `LAN_HTTPS_KIT\CAI_HTTPS_PC_LAN.bat` | Chạy 1 lần trên mỗi PC LAN (tự xin UAC): ghi `hosts` `192.168.1.6 tiemvangkimhanh2` + nạp CA + mở `https://tiemvangkimhanh2:8100`. Copy NGUYÊN thư mục `LAN_HTTPS_KIT` sang PC. ⚠ 09/09/2026 PC LAN nổ `Set-Content : Stream was not readable` khi ghi hosts (PS 5.1 mở được file nhưng luồng không đọc được — file bị tiến trình khác/diệt virus giữ hoặc đặt thuộc tính) → script đổi sang `[IO.File]::WriteAllText` (đã đo: vẫn ghi được khi tiến trình khác giữ file share Write/ReadWrite mà Set-Content thất bại), bỏ tạm thuộc tính Hidden/ReadOnly/System rồi trả lại, thử lại 4 lần, lỗi thì báo rõ tắt 'bảo vệ hosts' của diệt virus (Bkav/Kaspersky/Avast) |
 
 **HTTPS LAN — GĐ chốt 08/09/2026 (A: Caddy riêng + dùng chung CA KIMHANH · B: IP tĩnh 192.168.1.6)**
@@ -991,7 +1005,7 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
   gitignore) nghe `*:8100`, `reverse_proxy 127.0.0.1:8101` + `X-Forwarded-Proto https`; waitress **không còn nghe LAN**.
   `admin off` vì KIMHANH giữ 127.0.0.1:2019. Log `logs/caddy.log` + `logs/caddy-access.log`.
 - **CA nội bộ dùng chung KIMHANH**: "Caddy Local Authority - 2026 ECC Root" (hạn 05/2036) — `root.crt/root.key` copy sang
-  `runtime/caddy-data/pki/authorities/local/` (gitignore; TURN_ON tự copy lại từ KIMHANH nếu thiếu). Caddy tự sinh
+  `runtime/caddy-data/pki/authorities/local/` (gitignore; RESET_KHBL — `TruocKhiBat` trong cauhinh — tự copy lại từ KIMHANH nếu thiếu). Caddy tự sinh
   intermediate + leaf cho từng tên (`tls internal`, leaf 12h tự gia hạn — bình thường). CA công khai phát tại
   `static/cert/kimhanh-lan-root-ca.crt` và trong `LAN_HTTPS_KIT/`. PC đã cài kit HTTPS KIMHANH (:1276) thì đã tin CA,
   kit KHBL chỉ thêm dòng hosts.
@@ -1006,15 +1020,11 @@ Hệ chạy = **3 tiến trình ẨN** (qua `run_hidden_khbl.vbs`): web waitress
 - Chẩn đoán: `netstat -ano | findstr :8100` phải ra `0.0.0.0:8100` (Caddy) và `:8101` ra `127.0.0.1:8101` (waitress).
   Sửa `Caddyfile` → `caddy validate --config ops\caddy\Caddyfile --adapter caddyfile` rồi RESET. Firewall Windows máy này
   đang TẮT; nếu bật lại phải mở TCP 8100 (KIMHANH có `install_firewall_admin.bat` mẫu cho 1276).
-| `RESET_KHBL.bat` | Tắt → chờ 3s → bật (sau khi sửa file `.py`) |
-| `WATCHDOG_KHBL.bat` | Vòng canh gác — KHÔNG chạy tay |
-| `run_hidden_khbl.vbs` | Chạy lệnh ẩn hoàn toàn — KHÔNG chạy tay |
-
 - ⚠ **BẪY 08/09/2026 — LAN "refused to connect" dù web đang chạy**: một waitress LẠ (chạy tay/phiên khác) bind
-  `--listen=127.0.0.1:8100` chiếm cổng → guard `findstr ":8100 " LISTENING` của TURN_ON tưởng web đã chạy và BỎ QUA,
-  hệ chỉ còn nghe loopback, PC quầy `192.168.1.6:8100` bị từ chối. Chẩn đoán: `netstat -ano | findstr :8100` phải ra
-  `0.0.0.0:8100` (không phải `127.0.0.1:8100`). Xử lý: kill PID đó → RESET. TURN_ON nay tự kill listener chỉ-loopback
-  trước khi bật. Firewall Windows máy này đang TẮT cả 3 profile nên không phải nguyên nhân.
+  `--listen=127.0.0.1:8100` chiếm cổng → guard cũ tưởng web đã chạy và BỎ QUA, hệ chỉ còn nghe loopback, PC quầy
+  `192.168.1.6:8100` bị từ chối. Từ 07/10 động cơ RESET kiểm CHỦ cổng: 8100 không phải Caddy KHBL (dấu hiệu
+  `Caddyfile`) → báo **LỖI "UNG DUNG KHAC giu cong 8100"** rõ ràng (không giết bừa) — kill PID đó tay rồi RESET.
+  Firewall Windows máy này đang TẮT cả 3 profile nên không phải nguyên nhân.
 - Mặc định **PROD** (`config.settings.prod` trong manage.py + wsgi.py, DEBUG=False).
   Dev tạm: `set DJANGO_SETTINGS_MODULE=config.settings.dev`.
 - Job nền: **02:00 backup_pmv** (KHJ HR backup 01:30 cùng máy — né giờ nhau) ·
