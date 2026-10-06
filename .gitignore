@@ -24,3 +24,6 @@ media/
 
 # Local SQL backups contain bank/customer data.
 /backups/
+
+# Bo cai SQL Server 2014 Express 1,2 GB - KHONG dua vao Git (go khoi lich su 07/10/2026)
+setup/SQLEXPR_x64_ENU/
